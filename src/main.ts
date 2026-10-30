@@ -1008,7 +1008,7 @@ canvas.addEventListener("pointermove", (e) => {
       }
       break;
     case "basket":
-      if (pt.moved && pt.hit?.type === "basket" && (now - pt.t0 > 400 || dy > 0 || bandAt(pt.y) !== "counter")) {
+      if (pt.moved && pt.hit?.type === "basket" && (now - pt.t0 > 400 || dy > 0 || Math.abs(dx) > Math.abs(dy) || bandAt(pt.y) !== "counter")) {
         const b = counter.baskets[pt.hit.idx];
         if (b.loaded) {
           b.loaded = false;
@@ -1831,7 +1831,7 @@ function updateGrillTags(): void {
       el.hidden = true;
       return;
     }
-    const v = it.obj.position.clone().add(new THREE.Vector3(0, 0.2, 0.75)).project(counter.camera);
+    const v = it.obj.position.clone().add(new THREE.Vector3(0, 0.2, 0.66)).project(counter.camera);
     const x = ((v.x + 1) / 2) * bands.counter.w;
     const patty = it.piece.kind === "patty";
     el.hidden = x < 0 || x > bands.counter.w || (it.flipT >= 0 && !patty);

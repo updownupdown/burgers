@@ -7,6 +7,7 @@ import { townById } from "./game/stops";
 import { HOLD_GRACE, HOLD_RUIN, payout, scorePlate, starsFor } from "./game/scoring";
 import {
   CARTON_COST,
+  CROWD,
   CUP_COST,
   FRIES_BATCH_COST,
   KIND_COST,
@@ -112,7 +113,7 @@ function shopStop() {
 }
 
 function plannedCustomers(plan: Plan): number {
-  return Math.max(4, Math.round(stop().customers * trafficMult(plan, save.rep, menuOf(stop(), plan).length)));
+  return Math.max(4, Math.round(stop().customers * trafficMult(plan, save.rep, menuOf(stop(), plan).length, stop().crowd)));
 }
 
 // ---------------------------------------------------------------------------
@@ -206,7 +207,7 @@ function spawnCustomer(slotIdx: number): void {
   s.plate = emptyPlate();
   // Recipes you haven't made a couple of times yet start with the full layer list showing.
   s.expanded = game.tutorial || (save.known[order.name] ?? 0) < 2;
-  s.maxPatience = (50 + order.layers.length * 7 + (order.fries ? 12 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1);
+  s.maxPatience = (50 + order.layers.length * 7 + (order.fries ? 12 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1) * CROWD[stop().crowd].patience;
   if (game.tutorial && game.spawned === 0) s.maxPatience = 600;
   s.patience = s.maxPatience;
   s.leaving = false;
@@ -260,13 +261,13 @@ function serve(i: number): void {
   const r = scorePlate(s.order, s.plate);
   if (game.plan) {
     // Ingredient quality and prices tilt every rating.
-    r.score = Math.max(0, Math.min(100, r.score + ratingBonus(game.plan)));
+    r.score = Math.max(0, Math.min(100, r.score + ratingBonus(game.plan, stop().crowd)));
     r.stars = starsFor(r.score);
     game.ratings.push(r.stars);
     game.reviews.push({ stars: r.stars, text: reviewFor(r.stars, r.notes, game.plan, game.rng), stop: stop().name });
   }
   const { pay, tip: baseTip } = payout(s.order, r.score, s.patience / s.maxPatience);
-  const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1));
+  const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1) * CROWD[stop().crowd].tips);
   game.money += pay;
   game.tips += tip;
   game.served++;
@@ -1269,7 +1270,7 @@ function startShift(plan: Plan | null = null): void {
     costs: 0,
     reviews: [],
     ratings: [],
-    customers: plan ? plannedCustomers(plan) : stop().customers,
+    customers: plan ? plannedCustomers(plan) : Math.round(stop().customers * CROWD[stop().crowd].traffic),
   });
   applyStop();
   counter.fryBoost = has("turbo") ? 1.35 : 1;

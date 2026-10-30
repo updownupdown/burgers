@@ -1,3 +1,4 @@
+import type { CrowdId } from "./business";
 import type { Kind } from "./types";
 
 export interface Recipe {
@@ -36,6 +37,8 @@ export interface Stop {
   roads: string[];
   /** The region's big city: passing it opens the next region. */
   capital?: boolean;
+  /** Who turns up here (see CROWD in business.ts). */
+  crowd: CrowdId;
 }
 
 export type RegionId = "mountains" | "coast" | "desert";
@@ -57,6 +60,7 @@ export const REGIONS: Region[] = [
 const REGION_STARTS: Stop[] = [
   {
     id: "pinecrest",
+    crowd: "families",
     name: "Pinecrest",
     blurb: "Pinecrest is a mountain town full of hungry hikers. Keep them fed until closing time.",
     backdrop: "mountains",
@@ -77,6 +81,7 @@ const REGION_STARTS: Stop[] = [
   },
   {
     id: "saltwater",
+    crowd: "party",
     name: "Saltwater Bay",
     blurb: "Saltwater Bay is a beach town of surfers, lifeguards and one very bold crab.",
     backdrop: "beach",
@@ -98,6 +103,7 @@ const REGION_STARTS: Stop[] = [
   },
   {
     id: "redmesa",
+    crowd: "families",
     name: "Red Mesa",
     blurb: "Red Mesa is a desert crossroads where the cowhands like it hot.",
     backdrop: "desert",
@@ -139,6 +145,7 @@ export const STOPS: Stop[] = [
   {
     ...PINES,
     id: "elkpass",
+    crowd: "commuters",
     name: "Elk Pass",
     blurb: "Elk Pass is a highway rest stop. Drivers want food fast and back on the road.",
     newThing: undefined,
@@ -151,6 +158,7 @@ export const STOPS: Stop[] = [
   {
     ...PINES,
     id: "cedarfalls",
+    crowd: "families",
     name: "Cedar Falls",
     blurb: "Cedar Falls is a lakeside campground. Families, fishing rods and very hungry kids.",
     newThing: "New here: the Campfire Melt. Melt the cheese on the patty while it's on the grill.",
@@ -163,6 +171,7 @@ export const STOPS: Stop[] = [
   {
     ...PINES,
     id: "summit",
+    crowd: "foodies",
     name: "Summit City",
     blurb: "Summit City is the big town in the hills. Do well here and the coast road opens.",
     newThing: undefined,
@@ -178,6 +187,7 @@ export const STOPS: Stop[] = [
   {
     ...COAST,
     id: "gullpoint",
+    crowd: "commuters",
     name: "Gull Point",
     blurb: "Gull Point is a fishing harbour. Early starts, big appetites, no patience for fuss.",
     newThing: undefined,
@@ -190,6 +200,7 @@ export const STOPS: Stop[] = [
   {
     ...COAST,
     id: "driftwood",
+    crowd: "party",
     name: "Driftwood",
     blurb: "Driftwood is a surf camp. Everyone's sandy, sunburnt and starving.",
     newThing: undefined,
@@ -202,6 +213,7 @@ export const STOPS: Stop[] = [
   {
     ...COAST,
     id: "harbor",
+    crowd: "foodies",
     name: "Harbor City",
     blurb: "Harbor City is the coast's big city. Do well here and the desert highway opens.",
     newThing: "New here: the Harbor Classic, with melted cheese.",
@@ -217,6 +229,7 @@ export const STOPS: Stop[] = [
   {
     ...DESERT,
     id: "cactus",
+    crowd: "commuters",
     name: "Cactus Junction",
     blurb: "Cactus Junction is a truck stop where three highways meet.",
     newThing: undefined,
@@ -229,6 +242,7 @@ export const STOPS: Stop[] = [
   {
     ...DESERT,
     id: "dustbowl",
+    crowd: "party",
     name: "Dust Bowl Flats",
     blurb: "Dust Bowl Flats is a rodeo town. They like their burgers big and their peppers hot.",
     newThing: undefined,
@@ -241,6 +255,7 @@ export const STOPS: Stop[] = [
   {
     ...DESERT,
     id: "sunvalley",
+    crowd: "foodies",
     name: "Sun Valley",
     blurb: "Sun Valley is the end of the road. Finish here and the trip is complete.",
     newThing: "New here: the Sun Valley Supreme.",

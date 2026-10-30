@@ -1,5 +1,5 @@
 import type { Plan, Review } from "./game/business";
-import { menuOf, PRICE, QUALITY, recipeCost, ratingBonus } from "./game/business";
+import { CROWD, menuOf, PRICE, QUALITY, recipeCost, ratingBonus } from "./game/business";
 import type { Upgrade } from "./game/progress";
 import { REGIONS, STOPS, type Stop } from "./game/stops";
 import type { Order, Plate } from "./game/types";
@@ -41,10 +41,11 @@ export function planHtml(p: { stop: Stop; plan: Plan; rep: number; reviews: Revi
   const menu = menuOf(p.stop, p.plan);
   const avgCost = menu.reduce((s, r) => s + recipeCost(r, p.plan.quality), 0) / menu.length;
   const avgPrice = (menu.reduce((s, r) => s + r.price, 0) / menu.length) * PRICE[p.plan.price].mult;
-  const bonus = ratingBonus(p.plan);
+  const bonus = ratingBonus(p.plan, p.stop.crowd);
   return `<div class="card plan">
     <p class="sub">Before opening · ${esc(p.stop.name)}</p>
     <h2>Plan the shift</h2>
+    <p class="crowd"><b>${CROWD[p.stop.crowd].label}:</b> ${esc(CROWD[p.stop.crowd].blurb)}</p>
     <p class="rep">Reputation <b>${p.rep.toFixed(1)} ★</b>${p.reviews.length ? ` from ${p.reviews.length} reviews` : " (new truck)"}</p>
     <h3>Ingredients</h3>
     ${seg("plan-q", p.plan.quality, Object.entries(QUALITY).map(([k, q]) => [k, q.label]))}
@@ -297,6 +298,7 @@ export function titleHtml(t: {
     <div class="townCard">
       <h3>${esc(sel.name)} <span class="rg">${esc(region.name)}${sel.capital ? " · big city" : ""}</span></h3>
       <p>${esc(sel.blurb)}</p>
+      <p class="crowd"><b>${CROWD[sel.crowd].label}:</b> ${esc(CROWD[sel.crowd].blurb)}</p>
       ${best !== undefined ? `<p class="note">Best shift here: ${best.toFixed(1)} ★</p>` : ""}
       ${canGo && sel.newThing ? `<p class="new">${esc(sel.newThing)}</p>` : ""}
     </div>

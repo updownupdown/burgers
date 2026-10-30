@@ -30,6 +30,22 @@ export const PRICE: Record<PriceLevel, { label: string; mult: number; value: num
   high: { label: "High", mult: 1.3, value: -1, traffic: 0.72, blurb: "Fewer, pickier customers." },
 };
 
+export type CrowdId = "commuters" | "families" | "foodies" | "party";
+
+/**
+ * Who turns up in a town. Traffic, patience and tips apply in every mode; how much prices
+ * and ingredient quality sway them only matters in business mode.
+ */
+export const CROWD: Record<
+  CrowdId,
+  { label: string; blurb: string; traffic: number; patience: number; tips: number; priceSensitivity: number; qualityWeight: number }
+> = {
+  commuters: { label: "Commuters", blurb: "Lots of them, in a hurry, watching their wallets.", traffic: 1.2, patience: 0.8, tips: 0.8, priceSensitivity: 1.3, qualityWeight: 0.6 },
+  families: { label: "Families", blurb: "A steady stream, patient, love their sides.", traffic: 1, patience: 1.15, tips: 1, priceSensitivity: 1, qualityWeight: 1 },
+  foodies: { label: "Foodies", blurb: "Fewer people with deeper pockets. They notice good ingredients.", traffic: 0.8, patience: 1, tips: 1.5, priceSensitivity: 0.5, qualityWeight: 1.6 },
+  party: { label: "Party crowd", blurb: "Huge, hungry and not fussy, but every cent counts.", traffic: 1.35, patience: 0.9, tips: 0.7, priceSensitivity: 1.4, qualityWeight: 0.5 },
+};
+
 /** Rating points (out of 100) each step of taste or value is worth. */
 const STEP = 8;
 
@@ -73,15 +89,18 @@ export function menuOf(stop: Stop, plan: Plan): Recipe[] {
 }
 
 /** Points added to (or taken from) every order's score. Premium food at high prices nets out to zero. */
-export function ratingBonus(plan: Plan): number {
-  return STEP * (QUALITY[plan.quality].taste + PRICE[plan.price].value);
+export function ratingBonus(plan: Plan, crowd: CrowdId = "families"): number {
+  const c = CROWD[crowd];
+  return Math.round(STEP * (QUALITY[plan.quality].taste * c.qualityWeight + PRICE[plan.price].value * c.priceSensitivity));
 }
 
 /** A bigger menu and a better reputation both bring more people to the window. */
-export function trafficMult(plan: Plan, reputation: number, menuSize: number): number {
+export function trafficMult(plan: Plan, reputation: number, menuSize: number, crowd: CrowdId = "families"): number {
   const variety = Math.min(1.12, 0.78 + 0.08 * menuSize);
   const rep = 0.75 + 0.15 * reputation;
-  return PRICE[plan.price].traffic * variety * rep;
+  // Price-sensitive crowds react more strongly to cheap or dear menus.
+  const price = Math.pow(PRICE[plan.price].traffic, CROWD[crowd].priceSensitivity);
+  return price * variety * rep;
 }
 
 /** Ingredient cost of one burger as ordered, for the planning screen. */

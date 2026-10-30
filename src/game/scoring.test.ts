@@ -249,3 +249,19 @@ describe("business mode", () => {
     expect(r.rep).toBeLessThan(3);
   });
 });
+
+describe("crowds", () => {
+  it("foodies reward premium ingredients more than commuters do", () => {
+    const plan = { quality: "premium" as const, price: "fair" as const, menu: [] };
+    expect(ratingBonus(plan, "foodies")).toBeGreaterThan(ratingBonus(plan, "commuters"));
+  });
+
+  it("price-sensitive crowds thin out more at high prices", () => {
+    const high = { quality: "standard" as const, price: "high" as const, menu: [] };
+    expect(trafficMult(high, 2, 4, "party")).toBeLessThan(trafficMult(high, 2, 4, "foodies"));
+  });
+
+  it("gives every town a crowd", () => {
+    for (const t of STOPS) expect(t.crowd).toBeTruthy();
+  });
+});

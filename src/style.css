@@ -461,3 +461,4 @@ html, body {
 .map .truck { transition: transform 0.5s ease; pointer-events: none; }
 .townCard { display: grid; gap: 6px; }
 .townCard h3 .rg { font: 700 12px var(--body); color: var(--muted); margin-left: 4px; }
+.card .crowd { font-size: 13px; background: #eef4e4; border-radius: 10px; padding: 6px 9px; }

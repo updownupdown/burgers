@@ -255,7 +255,9 @@ function spawnCustomer(slotIdx: number): void {
   s.plate = emptyPlate();
   // Recipes you haven't made a couple of times yet start with the full layer list showing.
   s.expanded = game.tutorial || (save.known[order.name] ?? 0) < 2;
-  s.maxPatience = (50 + order.layers.length * 7 + order.layers.filter((l) => l.kind === "patty").length * 22 + (order.fries ? 12 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1) * CROWD[stop().crowd].patience;
+  // Every extra slice of a counted topping is another trip to the bin.
+  const slices = order.layers.reduce((n, l) => n + Math.max(0, (l.count ?? 1) - 1), 0);
+  s.maxPatience = (50 + order.layers.length * 7 + slices * 2 + order.layers.filter((l) => l.kind === "patty").length * 22 + (order.fries ? 12 : 0) + (order.poutine ? 10 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1) * CROWD[stop().crowd].patience;
   if (game.tutorial && game.spawned === 0) s.maxPatience = 600;
   s.patience = s.maxPatience;
   s.leaving = false;
@@ -413,7 +415,7 @@ function tutorialHint(): string | null {
   if (!s) return null;
   const layers = s.plate.layers;
   const pattyOnGrill = counter.grillItems.find((g) => g.piece.kind === "patty");
-  if (counter.page !== HOME_PAGE) return "Swipe back to the Grill.";
+  if (counter.page !== HOME_PAGE) return "Tap Grill in the bar below to go back.";
   if (layers.length === 0) return "Drag a bun up onto the plate in the tray.";
   const hasPatty = layers.some((l) => l.piece.kind === "patty");
   if (!hasPatty) {

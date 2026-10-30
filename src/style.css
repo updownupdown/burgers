@@ -374,6 +374,9 @@ html, body {
 .gtag.hot { background: var(--tomato); }
 .gtag.warm { background: #c9651f; }
 .gtag[hidden] { display: none; }
+.gtag.stack.low { background: #c9651f; }
+.gtag.supply { background: #6b4329; }
+.ticket .sides .sz { font-style: normal; font-weight: 800; background: var(--ink); color: var(--cream); border-radius: 3px; padding: 0 2px; margin-right: 2px; font-size: 0.85em; }
 
 /* Landscape phones: the kitchen only fits upright. */
 .rotate { display: none; }

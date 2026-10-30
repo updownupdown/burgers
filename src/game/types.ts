@@ -39,13 +39,25 @@ export interface Layer {
   offZ: number;
 }
 
+export type Size = "S" | "M" | "L";
+export type FriesSize = "S" | "L";
+export const SIZE_LABEL: Record<Size, string> = { S: "Small", M: "Medium", L: "Large" };
+/** Share of a fryer basket each carton holds. */
+export const FRIES_PORTION: Record<FriesSize, number> = { S: 0.5, L: 1 };
+/** Small cups fill faster than large ones. */
+export const CUP_SPEED: Record<Size, number> = { S: 1.35, M: 1, L: 0.78 };
+
 export interface Fries {
   cook: number;
+  size: FriesSize;
+  /** How full the carton is, 0..1. */
+  fill: number;
 }
 
 export interface Drink {
   flavor: DrinkId;
   fill: number;
+  size: Size;
 }
 
 export interface Plate {
@@ -79,6 +91,8 @@ export interface Order {
   layers: ExpectedLayer[];
   fries: boolean;
   drink: DrinkId | null;
+  friesSize: FriesSize;
+  drinkSize: Size;
 }
 
 export const GRILLABLE: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon", "egg", "pineapple"]);

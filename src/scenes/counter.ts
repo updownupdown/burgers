@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { FRY_RATE, GRILL_RATE, MELT_RATE } from "../game/cooking";
-import type { DrinkId, Kind, Layer, Piece, SauceKind } from "../game/types";
-import { newPiece } from "../game/types";
-import { bottle, makeCup, makeFood, makeFries, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
+import type { DrinkId, FriesSize, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
+import { CUP_SPEED, newPiece } from "../game/types";
+import { bottle, CUP_SCALE, makeCarton, makeCup, makeFood, makeFries, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { PlateView } from "./tray";
 
@@ -24,6 +24,12 @@ export const HOLD_SPOTS = [0.05, 1.15, 2.25].map((z) => ({ x: 2.62, z }));
 const HOLD_SCALE = 0.52;
 /** The right end of the grill can be turned down to a warm hold. */
 export const WARM_X0 = 0.35;
+
+/** Cups and cartons in each stack at the start of a shift, and in a fresh sleeve. */
+const STACK_START = 3;
+export const SLEEVE = 5;
+/** Dollars of soda lost per second of overflow. */
+const SPILL_COST = 1.5;
 
 export interface GrillItem {
   piece: Piece;
@@ -47,15 +53,45 @@ export interface Basket {
   obj: THREE.Group;
   fries: FriesObject;
   y: number;
+  /** Share of a full batch still in the basket. */
+  amount: number;
+}
+
+/** A stack of empty cups or fries cartons. Once it runs out, a wrapped sleeve from the supplies cabinet refills it. */
+export interface Stack {
+  kind: "cup" | "carton";
+  size: Size;
+  count: number;
+  /** A wrapped sleeve is sitting here; `tear` counts the taps spent opening it. */
+  sleeve: boolean;
+  tear: number;
+  obj: THREE.Group;
+  x: number;
+  z: number;
+}
+
+/** A spot at the front of the fryer where a carton waits to be filled. */
+export interface Pack {
+  size: FriesSize | null;
+  cook: number;
+  fill: number;
+  obj: THREE.Object3D | null;
+  x: number;
+  z: number;
 }
 
 export interface Tap {
   flavor: DrinkId;
   fill: number;
   pouring: boolean;
-  cup: CupObject;
+  cup: CupObject | null;
+  size: Size | null;
   stream: THREE.Mesh;
   spill: number;
+  /** Soda on the drip tray from an overflow, 0..1. Has to be wiped before the next cup. */
+  puddle: number;
+  puddleObj: THREE.Mesh;
+  x: number;
 }
 
 export type Hit =
@@ -66,7 +102,10 @@ export type Hit =
   | { type: "basket"; idx: number }
   | { type: "tap"; idx: number }
   | { type: "cup"; idx: number }
-  | { type: "hold"; idx: number };
+  | { type: "hold"; idx: number }
+  | { type: "stack"; idx: number }
+  | { type: "supplies"; kind: "cup" | "carton" }
+  | { type: "pack"; idx: number };
 
 /** A burger being put together (or food parked) under the heat lamp. */
 export interface HoldSpot {
@@ -115,6 +154,10 @@ export class CounterView {
   private warmGlow!: THREE.Mesh;
   baskets: Basket[] = [];
   taps: Tap[] = [];
+  stacks: Stack[] = [];
+  packs: Pack[] = [];
+  /** Running cost of soda poured onto the drip tray this shift. */
+  spillCost = 0;
   bottles: Record<SauceKind, THREE.Group>;
   private bottleHome: Record<SauceKind, THREE.Vector3>;
   private puffs: THREE.Mesh[] = [];
@@ -256,14 +299,17 @@ export class CounterView {
     pile.rotation.y = 0.4;
     this.scene.add(pile);
     this.proxy(new THREE.BoxGeometry(2.1, 1.4, 1.5), new THREE.Vector3(x0 - 1.7, 0.6, -2.2), { type: "friesBin" });
-    // Carton stack, decoration
-    for (let i = 0; i < 3; i++) {
-      const c = mesh(faceted(new THREE.CylinderGeometry(0.42, 0.32, 0.6, 4, 1, true)), "#d8473a", { side: THREE.DoubleSide });
-      c.rotation.y = Math.PI / 4;
-      c.scale.z = 0.6;
-      c.position.set(x0 + 1.8 + i * 0.12, 0.3 + i * 0.18, -2.3);
-      this.scene.add(c);
+    // Carton stacks at the back, packing spots and the supplies cabinet along the front.
+    this.addStack("carton", "S", x0 + 1.1, -2.2);
+    this.addStack("carton", "L", x0 + 2.4, -2.2);
+    for (const px of [-2.45, -0.75]) {
+      const mat = mesh(faceted(new THREE.BoxGeometry(1.3, 0.04, 0.95)), "#f1e6cf", { ink: false });
+      mat.position.set(x0 + px, 0.02, 3.1);
+      this.scene.add(mat);
+      this.packs.push({ size: null, cook: 0, fill: 0, obj: null, x: x0 + px, z: 3.1 });
+      this.proxy(new THREE.BoxGeometry(1.4, 1.2, 1.0), new THREE.Vector3(x0 + px, 0.5, 3.1), { type: "pack", idx: this.packs.length - 1 });
     }
+    this.addSupplies("carton", x0 + 2.1, 3.15, 1.8, 0.85);
     for (let i = 0; i < 2; i++) {
       const vx = x0 + (i ? 1.55 : -1.55);
       const vat = mesh(faceted(new THREE.BoxGeometry(2.6, 0.9, 2.5)), "#c7cfcd");
@@ -278,10 +324,10 @@ export class CounterView {
       frame.position.y = 0.27;
       basket.add(frame);
       wire.position.y = 0.27;
-      const handle = mesh(faceted(new THREE.BoxGeometry(0.16, 0.12, 1.6)), "#23292b");
-      handle.position.set(0, 0.55, 1.5);
-      const grip = mesh(faceted(new THREE.BoxGeometry(0.22, 0.2, 0.6)), "#e5432b");
-      grip.position.set(0, 0.6, 2.25);
+      const handle = mesh(faceted(new THREE.BoxGeometry(0.16, 0.12, 1.2)), "#23292b");
+      handle.position.set(0, 0.55, 1.3);
+      const grip = mesh(faceted(new THREE.BoxGeometry(0.22, 0.2, 0.5)), "#e5432b");
+      grip.position.set(0, 0.6, 1.9);
       basket.add(wire, handle, grip);
       const fries = makeFries(false);
       fries.scale.set(1.9, 0.9, 1.7);
@@ -290,7 +336,7 @@ export class CounterView {
       basket.add(fries);
       basket.position.set(vx, 1.0, 0.45);
       this.scene.add(basket);
-      this.baskets.push({ loaded: false, cook: 0, down: false, goldenRung: false, obj: basket, fries, y: 1.0 });
+      this.baskets.push({ loaded: false, cook: 0, down: false, goldenRung: false, obj: basket, fries, y: 1.0, amount: 0 });
       this.proxy(new THREE.BoxGeometry(2.4, 1.6, 3.4), new THREE.Vector3(vx, 1.0, 0.9), { type: "basket", idx: i });
     }
   }
@@ -321,17 +367,160 @@ export class CounterView {
       const nozzle = mesh(faceted(new THREE.BoxGeometry(0.42, 0.22, 0.9)), "#8c9496");
       nozzle.position.set(x, 1.0, -1.25);
       this.scene.add(nozzle);
-      const cup = makeCup(flavor, false);
-      cup.scale.setScalar(0.8);
-      cup.position.set(x, 0.1, -0.45);
-      this.scene.add(cup);
       const stream = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1, 6), toon(DRINK_LABEL_COLOR[flavor]));
       stream.visible = false;
       this.scene.add(stream);
-      this.taps.push({ flavor, fill: 0, pouring: false, cup, stream, spill: 0 });
+      const puddleObj = new THREE.Mesh(new THREE.CircleGeometry(1, 18), new THREE.MeshBasicMaterial({ color: DRINK_LABEL_COLOR[flavor], transparent: true, opacity: 0.7 }));
+      puddleObj.rotation.x = -Math.PI / 2;
+      puddleObj.position.set(x, 0.11, -0.4);
+      puddleObj.visible = false;
+      this.scene.add(puddleObj);
+      this.taps.push({ flavor, fill: 0, pouring: false, cup: null, size: null, stream, spill: 0, puddle: 0, puddleObj, x });
       this.proxy(new THREE.BoxGeometry(1.9, 1.0, 1.7), new THREE.Vector3(x, 1.2, -2.4), { type: "tap", idx: i });
       this.proxy(new THREE.BoxGeometry(1.7, 1.2, 1.6), new THREE.Vector3(x, 0.5, -0.3), { type: "cup", idx: i });
     });
+    (["S", "M", "L"] as Size[]).forEach((size, i) => this.addStack("cup", size, x0 - 2.4 + i * 1.3, 1.75));
+    this.addSupplies("cup", x0 + 2.0, 2.0, 2.3, 1.2);
+  }
+
+  private addStack(kind: Stack["kind"], size: Size, x: number, z: number): void {
+    const base = mesh(faceted(new THREE.CylinderGeometry(0.55, 0.55, 0.04, 16)), "#e9e2d2", { ink: false });
+    base.position.set(x, 0.02, z);
+    this.scene.add(base);
+    const obj = new THREE.Group();
+    obj.position.set(x, 0.04, z);
+    this.scene.add(obj);
+    const s: Stack = { kind, size, count: STACK_START, sleeve: false, tear: 0, obj, x, z };
+    this.stacks.push(s);
+    this.syncStack(s);
+    this.proxy(new THREE.BoxGeometry(1.2, 1.6, 1.2), new THREE.Vector3(x, 0.6, z), { type: "stack", idx: this.stacks.length - 1 });
+  }
+
+  /** The cabinet under the counter where wrapped sleeves of cups and cartons are kept. */
+  private addSupplies(kind: Stack["kind"], x: number, z: number, w: number, d: number): void {
+    const box = mesh(faceted(new THREE.BoxGeometry(w, 0.22, d)), "#8a5a37");
+    box.position.set(x, 0.11, z);
+    const lid = mesh(faceted(new THREE.BoxGeometry(w - 0.2, 0.03, d - 0.2)), "#6b4329", { ink: false });
+    lid.position.set(x, 0.23, z);
+    this.scene.add(box, lid);
+    for (let i = 0; i < 2; i++) {
+      const sleeve = this.sleeveMesh(kind);
+      sleeve.rotation.z = Math.PI / 2;
+      sleeve.position.set(x + (i - 0.5) * w * 0.4, 0.5, z + (i ? 0.1 : -0.1) * d);
+      this.scene.add(sleeve);
+    }
+    this.proxy(new THREE.BoxGeometry(w + 0.1, 1.2, d + 0.2), new THREE.Vector3(x, 0.4, z), { type: "supplies", kind });
+  }
+
+  /** A plastic-wrapped tube of cups or cartons. */
+  sleeveMesh(kind: Stack["kind"]): THREE.Object3D {
+    const g = new THREE.Group();
+    const inner = mesh(faceted(new THREE.CylinderGeometry(0.34, 0.3, 0.9, 12)), kind === "cup" ? "#f3f1ea" : "#d8473a");
+    const wrap = mesh(faceted(new THREE.CylinderGeometry(0.38, 0.38, 0.95, 12)), "#bfe3f2", { opacity: 0.55, ink: false });
+    g.add(inner, wrap);
+    g.scale.setScalar(0.85);
+    return g;
+  }
+
+  /** Redraw a cup or carton stack after its count changes. */
+  syncStack(s: Stack): void {
+    for (const c of [...s.obj.children]) {
+      s.obj.remove(c);
+      disposeObject(c);
+    }
+    if (s.sleeve) {
+      const sleeve = this.sleeveMesh(s.kind);
+      sleeve.position.y = 0.45;
+      // A torn sleeve sags open a little.
+      sleeve.children[1].scale.set(1 + s.tear * 0.3, 1 - s.tear * 0.4, 1 + s.tear * 0.3);
+      s.obj.add(sleeve);
+      return;
+    }
+    for (let i = 0; i < s.count; i++) {
+      const o = s.kind === "cup" ? makeCup(null, false, s.size) : makeCarton(s.size as FriesSize);
+      o.scale.multiplyScalar(0.7);
+      o.position.y = i * (s.kind === "cup" ? 0.09 : 0.07);
+      s.obj.add(o);
+    }
+  }
+
+  /** Put an empty cup under a nozzle. */
+  placeCup(i: number, size: Size): void {
+    const t = this.taps[i];
+    this.removeCup(i);
+    const cup = makeCup(t.flavor, false, size);
+    cup.scale.setScalar(0.8);
+    cup.position.set(t.x, 0.1, -0.45);
+    this.scene.add(cup);
+    t.cup = cup;
+    t.size = size;
+    t.fill = 0;
+  }
+
+  removeCup(i: number): void {
+    const t = this.taps[i];
+    if (t.cup) {
+      this.scene.remove(t.cup);
+      disposeObject(t.cup);
+    }
+    t.cup = null;
+    t.size = null;
+    t.fill = 0;
+    t.pouring = false;
+  }
+
+  /** Redraw a packing spot: an empty carton, a part-filled one, or nothing. */
+  syncPack(i: number): void {
+    const p = this.packs[i];
+    if (p.obj) {
+      this.scene.remove(p.obj);
+      disposeObject(p.obj);
+      p.obj = null;
+    }
+    if (!p.size) return;
+    let o: THREE.Object3D;
+    if (p.fill > 0) {
+      const f = makeFries(true, p.size, p.fill);
+      f.userData.setCook(p.cook);
+      f.scale.setScalar(1.2 * f.userData.sizeScale);
+      o = f;
+    } else {
+      o = makeCarton(p.size);
+      o.scale.multiplyScalar(1.2);
+    }
+    o.position.set(p.x, 0.04, p.z);
+    this.scene.add(o);
+    p.obj = o;
+  }
+
+  /** Fresh supplies for a new shift. */
+  resetStations(): void {
+    for (const s of this.stacks) Object.assign(s, { count: STACK_START, sleeve: false, tear: 0 });
+    this.stacks.forEach((s) => this.syncStack(s));
+    this.taps.forEach((t, i) => {
+      this.removeCup(i);
+      t.puddle = 0;
+    });
+    this.packs.forEach((p, i) => {
+      Object.assign(p, { size: null, cook: 0, fill: 0 });
+      this.syncPack(i);
+    });
+    this.spillCost = 0;
+  }
+
+  /** Packing spot under a world point, or -1. */
+  overPack(world: THREE.Vector3): number {
+    return this.packs.findIndex((p) => Math.abs(world.x - p.x) < 0.75 && Math.abs(world.z - p.z) < 0.7);
+  }
+
+  /** Nozzle slot under a world point, or -1. */
+  overTap(world: THREE.Vector3): number {
+    return this.taps.findIndex((t) => Math.abs(world.x - t.x) < 0.85 && world.z > -1.3 && world.z < 0.5);
+  }
+
+  /** Stack under a world point, or -1. */
+  overStack(world: THREE.Vector3): number {
+    return this.stacks.findIndex((s) => Math.hypot(world.x - s.x, world.z - s.z) < 0.7);
   }
 
   /** World position under each drink cup, for the HTML flavour labels. */
@@ -644,31 +833,39 @@ export class CounterView {
           this.events.golden();
         }
       }
-      if (b.loaded) b.fries.userData.setCook(b.cook);
+      if (b.loaded) {
+        b.fries.userData.setCook(b.cook);
+        const k = 0.55 + 0.45 * b.amount;
+        b.fries.scale.set(1.9 * k, 0.9, 1.7 * k);
+      }
     }
 
     // Drinks
     for (const t of this.taps) {
-      if (t.pouring) {
-        t.fill += dt * 0.42;
+      if (t.pouring && t.size) {
+        t.fill += dt * 0.42 * CUP_SPEED[t.size];
         if (this.autoStopPour && t.fill >= 0.9) t.pouring = false;
-        if (t.fill > 1.1) {
-          t.fill = 0;
-          t.pouring = false;
+        if (t.fill > 1) {
+          // Overflow: the cup stays full, the rest goes on the drip tray and costs money.
+          if (t.spill <= 0) this.events.spill();
+          t.fill = 1;
           t.spill = 1;
-          this.events.spill();
+          t.puddle = Math.min(1, t.puddle + dt * 0.7);
+          this.spillCost += dt * SPILL_COST;
         }
       }
-      t.cup.userData.setFill(t.fill);
-      t.stream.visible = t.pouring;
-      if (t.pouring) {
-        const topY = 0.1 + 0.8 * Math.min(1, t.fill) * 0.94;
+      t.cup?.userData.setFill(t.fill);
+      t.stream.visible = t.pouring && !!t.cup;
+      if (t.stream.visible) {
+        const topY = 0.1 + 0.8 * CUP_SCALE[t.size ?? "M"][1] * Math.min(1, t.fill) * 0.94;
         const h = Math.max(0.05, 0.92 - topY);
         t.stream.scale.set(1, h, 1);
-        t.stream.position.set(t.cup.position.x, topY + h / 2, -0.82);
+        t.stream.position.set(t.x, topY + h / 2, -0.82);
       }
       t.spill = Math.max(0, t.spill - dt * 2);
-      t.cup.rotation.z = Math.sin(this.time * 40) * 0.05 * t.spill;
+      if (t.cup) t.cup.rotation.z = Math.sin(this.time * 40) * 0.05 * t.spill;
+      t.puddleObj.visible = t.puddle > 0.01;
+      t.puddleObj.scale.setScalar(0.35 + 0.75 * t.puddle);
     }
   }
 }

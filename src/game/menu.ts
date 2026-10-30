@@ -1,8 +1,8 @@
-import type { Doneness, DrinkId, ExpectedLayer, Kind, Modifier, Order } from "./types";
+import type { Doneness, DrinkId, ExpectedLayer, FriesSize, Kind, Modifier, Order, Size } from "./types";
 import type { Recipe, Stop } from "./stops";
 
-export const FRIES_PRICE = 3;
-export const DRINK_PRICE = 2;
+export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, L: 4 };
+export const DRINK_PRICE: Record<Size, number> = { S: 1, M: 2, L: 3 };
 
 export type Rng = () => number;
 
@@ -32,7 +32,16 @@ export function applyMods(base: Kind[], mods: Modifier[]): Kind[] {
   return out;
 }
 
-export function orderFromRecipe(id: number, recipe: Recipe, doneness: Doneness, fries: boolean, drink: DrinkId | null, mods: Modifier[] = []): Order {
+export function orderFromRecipe(
+  id: number,
+  recipe: Recipe,
+  doneness: Doneness,
+  fries: boolean,
+  drink: DrinkId | null,
+  mods: Modifier[] = [],
+  friesSize: FriesSize = "S",
+  drinkSize: Size = "M",
+): Order {
   const kinds = applyMods(recipe.layers, mods);
   const layers: ExpectedLayer[] = kinds.map((kind, i) => {
     if (kind === "patty") return recipe.smash ? { kind, doneness, smashed: true } : { kind, doneness };
@@ -41,8 +50,8 @@ export function orderFromRecipe(id: number, recipe: Recipe, doneness: Doneness, 
     return { kind };
   });
   const extras = mods.filter((m) => m.type !== "no").length;
-  const price = recipe.price + extras + (fries ? FRIES_PRICE : 0) + (drink ? DRINK_PRICE : 0);
-  return { id, name: recipe.name, price, mods, layers, fries, drink };
+  const price = recipe.price + extras + (fries ? FRIES_PRICE[friesSize] : 0) + (drink ? DRINK_PRICE[drinkSize] : 0);
+  return { id, name: recipe.name, price, mods, layers, fries, drink, friesSize, drinkSize };
 }
 
 /** Toppings a customer may ask to leave off or double up. Buns and patties are never optional. */
@@ -88,5 +97,8 @@ export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Orde
   const drink = rng() < 0.2 + level * 0.5 ? DRINKS[Math.floor(rng() * DRINKS.length)] : null;
   // Modifiers keep tickets short: a known recipe plus "no pickles" rather than a new list.
   const mods = level < 0.1 ? [] : pickMods(recipe, stop.pantry, rng, level);
-  return orderFromRecipe(id, recipe, doneness, fries, drink, mods);
+  const friesSize: FriesSize = rng() < 0.5 ? "S" : "L";
+  const r = rng();
+  const drinkSize: Size = r < 0.3 ? "S" : r < 0.7 ? "M" : "L";
+  return orderFromRecipe(id, recipe, doneness, fries, drink, mods, friesSize, drinkSize);
 }

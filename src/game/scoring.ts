@@ -1,6 +1,6 @@
 import { avgCook, bunToast, isMelted } from "./cooking";
 import type { ExpectedLayer, Layer, Order, Piece, Plate } from "./types";
-import { DONENESS_TARGET, KIND_LABEL } from "./types";
+import { DONENESS_TARGET, KIND_LABEL, SIZE_LABEL } from "./types";
 
 export interface ScoreResult {
   /** 0..100 */
@@ -176,8 +176,15 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
     if (!plate.fries) notes.push("forgot the fries");
     else {
       const c = plate.fries.cook;
-      const q = c >= 1.05 ? 0.2 : c < 0.5 ? 0.4 : 1;
+      let q = c >= 1.05 ? 0.2 : c < 0.5 ? 0.4 : 1;
       if (q < 1) notes.push(c >= 1.05 ? "burnt fries" : "soggy fries");
+      if (plate.fries.size !== order.friesSize) {
+        q *= 0.5;
+        notes.push(`wanted ${SIZE_LABEL[order.friesSize].toLowerCase()} fries`);
+      } else if (plate.fries.fill < 0.95) {
+        q *= 0.6;
+        notes.push("skimpy fries");
+      }
       sideScore += q;
     }
   }
@@ -189,8 +196,12 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
       sideScore += 0.3;
     } else {
       const f = plate.drink.fill;
-      const q = f < 0.6 ? 0.4 : f < 0.78 ? 0.75 : 1;
+      let q = f < 0.6 ? 0.4 : f < 0.78 ? 0.75 : 1;
       if (q < 1) notes.push("drink not full");
+      if (plate.drink.size !== order.drinkSize) {
+        q *= 0.5;
+        notes.push(`wanted a ${SIZE_LABEL[order.drinkSize].toLowerCase()} drink`);
+      }
       sideScore += q;
     }
   }

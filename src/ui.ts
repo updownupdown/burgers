@@ -149,8 +149,13 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, expande
       <div class="pips" aria-label="${okFlags.filter(Boolean).length} of ${order.layers.length} layers">${pips}</div>`;
   }
   const sides: string[] = [];
-  if (order.fries) sides.push(`<span class="${plate.fries ? "ok" : ""}"><b style="background:#f3d36b"></b>Fries</span>`);
-  if (order.drink) sides.push(`<span class="${plate.drink?.flavor === order.drink ? "ok" : ""}"><b style="background:${DRINK_COLOR[order.drink]}"></b>${DRINK_LABEL[order.drink]}</span>`);
+  // Sizes lead so they're the first thing read: "L Fries", "S Pine Fizz".
+  if (order.fries)
+    sides.push(`<span class="${plate.fries?.size === order.friesSize ? "ok" : ""}"><b style="background:#f3d36b"></b><i class="sz">${order.friesSize}</i>Fries</span>`);
+  if (order.drink)
+    sides.push(
+      `<span class="${plate.drink?.flavor === order.drink && plate.drink.size === order.drinkSize ? "ok" : ""}"><b style="background:${DRINK_COLOR[order.drink]}"></b><i class="sz">${order.drinkSize}</i>${DRINK_LABEL[order.drink]}</span>`,
+    );
   const pct = Math.max(0, Math.min(1, patience));
   const color = pct > 0.5 ? "#4caf50" : pct > 0.25 ? "#f0a92b" : "#e5432b";
   return `<div class="pat"><i style="width:${(pct * 100).toFixed(0)}%;background:${color}"></i></div>
@@ -191,6 +196,7 @@ export function summaryHtml(s: {
   stars: number[];
   earned: number;
   tips: number;
+  spills: number;
   best: string | null;
   outcome: "passed" | "failed" | "trip";
   next: Stop | null;
@@ -228,7 +234,8 @@ export function summaryHtml(s: {
       <dt>Average rating</dt><dd>${avg.toFixed(1)} ★</dd>
       <dt>Sales</dt><dd>$${s.earned}</dd>
       <dt>Tips</dt><dd>$${s.tips}</dd>
-      <dt>Total</dt><dd>$${s.earned + s.tips}</dd>
+      ${s.spills ? `<dt>Spilled soda</dt><dd>−$${s.spills}</dd>` : ""}
+      <dt>Total</dt><dd>$${s.earned + s.tips - s.spills}</dd>
       ${s.best ? `<dt>Best order</dt><dd>${esc(s.best)}</dd>` : ""}
     </dl>
     ${s.outcome !== "failed" ? offerHtml(s.offer) : ""}

@@ -95,7 +95,7 @@ export class PlateView {
       if (l.piece.stroke) this.entries[i]?.obj.userData.update(l.piece);
     });
 
-    const fk = p.fries ? `f${p.fries.cook.toFixed(2)}` : "";
+    const fk = p.fries ? `f${p.fries.cook.toFixed(2)}${p.fries.size}${p.fries.fill.toFixed(2)}` : "";
     if (fk !== this.friesKey) {
       if (this.fries) {
         this.group.remove(this.fries);
@@ -103,15 +103,15 @@ export class PlateView {
       }
       this.fries = null;
       if (p.fries) {
-        this.fries = makeFries(true);
+        this.fries = makeFries(true, p.fries.size, p.fries.fill);
         this.fries.userData.setCook(p.fries.cook);
-        this.fries.scale.setScalar(0.62);
+        this.fries.scale.setScalar(0.62 * this.fries.userData.sizeScale);
         this.fries.position.set(-0.78, 0.1, -0.72);
         this.group.add(this.fries);
       }
       this.friesKey = fk;
     }
-    const ck = p.drink ? `${p.drink.flavor}${p.drink.fill.toFixed(2)}` : "";
+    const ck = p.drink ? `${p.drink.flavor}${p.drink.fill.toFixed(2)}${p.drink.size}` : "";
     if (ck !== this.cupKey) {
       if (this.cup) {
         this.group.remove(this.cup);
@@ -119,7 +119,7 @@ export class PlateView {
       }
       this.cup = null;
       if (p.drink) {
-        this.cup = makeCup(p.drink.flavor, true);
+        this.cup = makeCup(p.drink.flavor, true, p.drink.size);
         this.cup.userData.setFill(p.drink.fill);
         this.cup.scale.setScalar(0.62);
         this.cup.position.set(0.8, 0.1, -0.72);

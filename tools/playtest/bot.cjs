@@ -20,6 +20,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
   const act = async (pts, ms) => { await gesture(p, pts, ms); await step(p, ACTION); };
   const spots = [[-2.5, 0.7], [-1.2, 0.7], [0.1, 0.7], [1.3, 0.7], [-2.5, 2.1], [-1.2, 2.1], [0.1, 2.1], [1.3, 2.1]];
   const log = [];
+  let refills = 0;
   let guard = 0;
   while (guard++ < 400) {
     const st = await state(p);
@@ -50,12 +51,16 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
         if (n.smashed) await hold(p, fresh.scr[0], fresh.scr[1], 600);
       }
     }
-    // 2. Fries
+    // 2. Fries: start a batch in a free basket (leftovers from a small carton may still be in the other).
+    let freshB = -1;
     if (order.fries) {
       await page(2);
-      const [fx, fy] = await ev(() => window.__bv.project('counter', 14 - 1.7, 0.6, -2.2));
-      const [kx, ky] = await ev(() => window.__bv.project('counter', 14 - 1.55, 1.0, 0.45));
-      await act(line(fx, fy, kx, ky, 10));
+      freshB = await ev(() => window.__bv.counter.baskets.findIndex(b => !b.loaded));
+      if (freshB >= 0) {
+        const [fx, fy] = await ev(() => window.__bv.project('counter', 14 - 1.7, 0.6, -2.2));
+        const [kx, ky] = await ev((i) => window.__bv.project('counter', 14 + (i ? 1.55 : -1.55), 1.0, 0.45), freshB);
+        await act(line(fx, fy, kx, ky, 10));
+      }
       await page(1);
     }
     // 3. Build bottom-up.
@@ -121,22 +126,56 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
         await act(line(bx, by, px, py, 10));
       }
     }
-    // 4. Fries
+    // Take an empty cup or carton, unwrapping a fresh sleeve when the stack is out.
+    const takeEmpty = async (kind, size, to) => {
+      const si = await ev(([k, z]) => window.__bv.counter.stacks.findIndex(s => s.kind === k && s.size === z), [kind, size]);
+      const s = await ev((i) => { const s = window.__bv.counter.stacks[i]; return { x: s.x, z: s.z, count: s.count }; }, si);
+      const [sx, sy] = await ev(([x, z]) => window.__bv.project('counter', x, 0.4, z), [s.x, s.z]);
+      if (!s.count) {
+        const sup = kind === 'cup' ? [-14 + 2.0, 2.0] : [14 + 2.1, 3.15];
+        const [ux, uy] = await ev(([x, z]) => window.__bv.project('counter', x, 0.4, z), sup);
+        await act(line(ux, uy, sx, sy, 10));
+        await act([[sx, sy], [sx, sy]], 30);
+        await act([[sx, sy], [sx, sy]], 30);
+        refills++;
+      }
+      await act(line(sx, sy, to[0], to[1], 10));
+    };
+    // 4. Fries: carton on the packing spot, fill it from the baskets, carton to the tray.
     if (order.fries) {
       await page(2);
-      for (let w = 0; w < 80; w++) { const c = await ev(() => window.__bv.counter.baskets[0].cook); if (c >= 0.6) break; await step(p, 0.25); }
-      const [kx, ky] = await ev(() => window.__bv.project('counter', 14 - 1.55, 1.0, 0.45));
-      await act(line(kx, ky, px, py, 12));
+      const [kx2, ky2] = await ev(() => { const k = window.__bv.counter.packs[0]; return window.__bv.project('counter', k.x, 0.3, k.z); });
+      await takeEmpty('carton', order.friesSize, [kx2, ky2]);
+      for (let tries = 0; tries < 6; tries++) {
+        const pk = await ev(() => window.__bv.counter.packs[0].fill);
+        if (pk >= 0.99) break;
+        const bs = await ev(() => window.__bv.counter.baskets.map(b => ({ loaded: b.loaded, down: b.down, cook: b.cook, amount: b.amount })));
+        let bi = bs.findIndex(b => b.loaded && !b.down && b.cook >= 0.5 && b.cook < 1.05);
+        if (bi < 0) bi = bs.findIndex(b => b.loaded && b.down);
+        if (bi < 0) {
+          // Nothing left anywhere: start another batch.
+          const free = bs.findIndex(b => !b.loaded);
+          const [fx, fy] = await ev(() => window.__bv.project('counter', 14 - 1.7, 0.6, -2.2));
+          const [bx2, by2] = await ev((i) => window.__bv.project('counter', 14 + (i ? 1.55 : -1.55), 1.0, 0.45), free);
+          await act(line(fx, fy, bx2, by2, 10));
+          continue;
+        }
+        for (let w = 0; w < 80; w++) { const c = await ev((i) => window.__bv.counter.baskets[i].cook, bi); if (c >= 0.6) break; await step(p, 0.25); }
+        const [bx, by] = await ev((i) => window.__bv.project('counter', 14 + (i ? 1.55 : -1.55), 1.0, 0.45), bi);
+        await act(line(bx, by, kx2, ky2, 10));
+      }
+      await act(line(kx2, ky2, px, py, 12));
       await page(1);
     }
-    // 5. Drink
+    // 5. Drink: cup from the right stack, pour to about 90%, cup to the tray.
     if (order.drink) {
       await page(0);
       const idx = ['pine', 'lemon', 'cola'].indexOf(order.drink);
       const x = -14 + (idx - 1) * 2.05;
-      const [tx, ty] = await ev((x) => window.__bv.project('counter', x, 1.2, -2.4), x);
-      await hold(p, tx, ty, 2100);
       const [cx, cy] = await ev((x) => window.__bv.project('counter', x, 0.5, -0.3), x);
+      await takeEmpty('cup', order.drinkSize, [cx, cy]);
+      const [tx, ty] = await ev((x) => window.__bv.project('counter', x, 1.2, -2.4), x);
+      await hold(p, tx, ty, Math.round(0.9 / (0.42 * { S: 1.35, M: 1, L: 0.78 }[order.drinkSize]) * 1000));
       await act(line(cx, cy, px, py, 12));
       await page(1);
     }
@@ -149,7 +188,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
     if (log.length === 3) await p.screenshot({ path: out + 'bot-mid.png' });
   }
   const fin = await state(p);
-  console.log('FINAL', JSON.stringify({ t: fin.t, phase: fin.phase, served: fin.served, lost: fin.lost, money: fin.money, tips: fin.tips }));
+  console.log('FINAL', JSON.stringify({ t: fin.t, phase: fin.phase, served: fin.served, lost: fin.lost, money: fin.money, tips: fin.tips, refills, spill: await ev(() => window.__bv.counter.spillCost) }));
   console.log('SAVE', await ev(() => localStorage.getItem('bv-save-v1')));
   console.log('SUMMARY', await ev(() => document.querySelector('[data-r=summary]').innerText.replace(/\s+/g, ' ').slice(0, 400)));
   await p.screenshot({ path: out + 'bot-end.png' });

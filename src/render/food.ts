@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { avgCook, bunToast, isMelted } from "../game/cooking";
-import type { DrinkId, Kind, Piece } from "../game/types";
+import type { DrinkId, FriesSize, Kind, Piece, Size } from "../game/types";
 import { DRINK_COLOR } from "../game/types";
 import { faceted, mesh, outline, ramp, shareGeometry, toon } from "./materials";
 
@@ -424,14 +424,36 @@ export function stackHeight(piece: Pick<Piece, "kind" | "smashed">, role: BunRol
 // ---- sides -----------------------------------------------------------------
 
 export interface FriesObject extends THREE.Group {
-  userData: { setCook: (t: number) => void };
+  userData: { setCook: (t: number) => void; sizeScale: number };
 }
 
-export function makeFries(withCarton: boolean): FriesObject {
+const FRY_STICK = shareGeometry(faceted(new THREE.BoxGeometry(0.09, 0.75, 0.09)));
+const CARTON = shareGeometry(faceted(new THREE.CylinderGeometry(0.42, 0.32, 0.6, 4, 1, true)));
+const CARTON_BAND = shareGeometry(faceted(new THREE.CylinderGeometry(0.405, 0.37, 0.12, 4, 1, true)));
+
+/** An empty fries carton, for stacks and the packing spots. */
+export function makeCarton(size: FriesSize): THREE.Group {
+  const g = new THREE.Group();
+  const carton = mesh(CARTON, "#d8473a", { side: THREE.DoubleSide });
+  carton.rotation.y = Math.PI / 4;
+  carton.scale.z = 0.6;
+  carton.position.y = 0.3;
+  const band = mesh(CARTON_BAND, "#f6e7c8", { side: THREE.DoubleSide, ink: false });
+  band.rotation.y = Math.PI / 4;
+  band.scale.z = 0.62;
+  band.position.y = 0.38;
+  g.add(carton, band);
+  g.scale.setScalar(size === "S" ? 0.8 : 1);
+  return g;
+}
+
+/** `fill` (0..1) hides sticks for a part-filled carton or a part-emptied basket. */
+export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1): FriesObject {
   const g = new THREE.Group() as FriesObject;
   const mat = toon("#f6efc9", { unique: true });
-  const stick = faceted(new THREE.BoxGeometry(0.09, 0.75, 0.09));
-  for (let i = 0; i < 16; i++) {
+  const stick = FRY_STICK;
+  const n = Math.round(16 * Math.min(1, Math.max(0, fill)));
+  for (let i = 0; i < n; i++) {
     const m = new THREE.Mesh(stick, mat);
     const a = i * 2.4;
     const r = 0.08 + (i % 4) * 0.07;
@@ -442,18 +464,11 @@ export function makeFries(withCarton: boolean): FriesObject {
     g.add(m);
   }
   if (withCarton) {
-    const carton = mesh(faceted(new THREE.CylinderGeometry(0.42, 0.32, 0.6, 4, 1, true)), "#d8473a", { side: THREE.DoubleSide });
-    carton.rotation.y = Math.PI / 4;
-    carton.scale.z = 0.6;
-    carton.position.y = 0.3;
-    g.add(carton);
-    const band = mesh(faceted(new THREE.CylinderGeometry(0.405, 0.37, 0.12, 4, 1, true)), "#f6e7c8", { side: THREE.DoubleSide, ink: false });
-    band.rotation.y = Math.PI / 4;
-    band.scale.z = 0.62;
-    band.position.y = 0.38;
-    g.add(band);
+    g.add(makeCarton("L"));
   }
-  g.userData = { setCook: (t) => mat.color.copy(friesRamp(t, tmpA)) };
+  // Small cartons are the same shape, just smaller: callers multiply their scale by this.
+  g.userData.sizeScale = size === "S" ? 0.8 : 1;
+  g.userData.setCook = (t) => mat.color.copy(friesRamp(t, tmpA));
   return g;
 }
 
@@ -461,26 +476,39 @@ export interface CupObject extends THREE.Group {
   userData: { setFill: (f: number) => void; flavor: DrinkId };
 }
 
-export function makeCup(flavor: DrinkId, lid: boolean): CupObject {
+const CUP = shareGeometry(faceted(new THREE.CylinderGeometry(0.4, 0.3, 1.0, 14, 1, true)));
+const CUP_LIQUID = shareGeometry(faceted(new THREE.CylinderGeometry(0.37, 0.3, 1, 14)));
+const CUP_LID = shareGeometry(faceted(new THREE.CylinderGeometry(0.43, 0.43, 0.06, 14)));
+const CUP_STRAW = shareGeometry(faceted(new THREE.CylinderGeometry(0.035, 0.035, 0.6, 6)));
+const CUP_STRIPE = shareGeometry(faceted(new THREE.CylinderGeometry(0.385, 0.35, 0.18, 14, 1, true)));
+/** Cup sizes differ in height more than width, so they still nest the same way. */
+export const CUP_SCALE: Record<Size, [number, number]> = { S: [0.84, 0.72], M: [0.92, 0.86], L: [1, 1] };
+
+/** A cup; with no flavour it's a plain empty cup (for the stacks). */
+export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"): CupObject {
   const g = new THREE.Group() as CupObject;
-  const cup = mesh(faceted(new THREE.CylinderGeometry(0.4, 0.3, 1.0, 14, 1, true)), "#f3f1ea", { side: THREE.DoubleSide });
+  const body = new THREE.Group();
+  const [sw, sh] = CUP_SCALE[size];
+  body.scale.set(sw, sh, sw);
+  g.add(body);
+  const cup = mesh(CUP, "#f3f1ea", { side: THREE.DoubleSide });
   cup.position.y = 0.5;
-  g.add(cup);
-  const stripe = mesh(faceted(new THREE.CylinderGeometry(0.385, 0.35, 0.18, 14, 1, true)), DRINK_COLOR[flavor], { side: THREE.DoubleSide, ink: false });
+  body.add(cup);
+  const stripe = mesh(CUP_STRIPE, flavor ? DRINK_COLOR[flavor] : "#c9c4b8", { side: THREE.DoubleSide, ink: false });
   stripe.position.y = 0.45;
-  g.add(stripe);
-  const liquid = mesh(faceted(new THREE.CylinderGeometry(0.37, 0.3, 1, 14)), DRINK_COLOR[flavor], { ink: false, shadow: false });
-  g.add(liquid);
+  body.add(stripe);
+  const liquid = mesh(CUP_LIQUID, flavor ? DRINK_COLOR[flavor] : "#ffffff", { ink: false, shadow: false });
+  body.add(liquid);
   if (lid) {
-    const top = mesh(faceted(new THREE.CylinderGeometry(0.43, 0.43, 0.06, 14)), "#f8f8f4");
+    const top = mesh(CUP_LID, "#f8f8f4");
     top.position.y = 1.02;
-    const straw = mesh(faceted(new THREE.CylinderGeometry(0.035, 0.035, 0.6, 6)), "#e5432b", { ink: 1.2 });
+    const straw = mesh(CUP_STRAW, "#e5432b", { ink: 1.2 });
     straw.position.set(0.1, 1.25, 0);
     straw.rotation.z = -0.15;
-    g.add(top, straw);
+    body.add(top, straw);
   }
   g.userData = {
-    flavor,
+    flavor: flavor ?? "cola",
     setFill: (f) => {
       const h = Math.max(0.001, Math.min(1, f) * 0.94);
       liquid.visible = f > 0.01;

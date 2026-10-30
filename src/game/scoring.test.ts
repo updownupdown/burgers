@@ -33,6 +33,8 @@ const classic: Order = {
   ],
   fries: false,
   drink: null,
+  friesSize: "S",
+  drinkSize: "M",
 };
 
 function perfectPlate(): Plate {
@@ -102,11 +104,23 @@ describe("scorePlate", () => {
     const order: Order = { ...classic, fries: true, drink: "cola" };
     const plate = perfectPlate();
     expect(scorePlate(order, plate).notes).toEqual(["forgot the fries", "forgot the drink"]);
-    plate.fries = { cook: 0.7 };
-    plate.drink = { flavor: "cola", fill: 0.9 };
+    plate.fries = { cook: 0.7, size: "S", fill: 1 };
+    plate.drink = { flavor: "cola", fill: 0.9, size: "M" };
     expect(scorePlate(order, plate).score).toBe(100);
-    plate.drink = { flavor: "pine", fill: 0.9 };
+    plate.drink = { flavor: "pine", fill: 0.9, size: "M" };
     expect(scorePlate(order, plate).notes).toContain("wrong drink");
+  });
+
+  it("checks side sizes and portions", () => {
+    const order: Order = { ...classic, fries: true, drink: "cola", friesSize: "L", drinkSize: "S" };
+    const plate = perfectPlate();
+    plate.fries = { cook: 0.7, size: "S", fill: 1 };
+    plate.drink = { flavor: "cola", fill: 0.9, size: "L" };
+    const notes = scorePlate(order, plate).notes;
+    expect(notes).toContain("wanted large fries");
+    expect(notes).toContain("wanted a small drink");
+    plate.fries = { cook: 0.7, size: "L", fill: 0.5 };
+    expect(scorePlate(order, plate).notes).toContain("skimpy fries");
   });
 });
 
@@ -178,7 +192,7 @@ describe("road trip progress", () => {
 
 describe("feedback notes", () => {
   it("calls swapped layers out of order rather than missing", () => {
-    const order: Order = { id: 1, name: "t", price: 10, mods: [], layers: [{ kind: "bun" }, { kind: "cheese" }, { kind: "pickle" }, { kind: "bun" }], fries: false, drink: null };
+    const order: Order = { id: 1, name: "t", price: 10, mods: [], layers: [{ kind: "bun" }, { kind: "cheese" }, { kind: "pickle" }, { kind: "bun" }], fries: false, drink: null, friesSize: "S", drinkSize: "M" };
     const r = scorePlate(order, { layers: ["bun", "pickle", "cheese", "bun"].map((k) => ({ piece: piece(k as Kind), offX: 0, offZ: 0 })), fries: null, drink: null });
     expect(r.notes).toContain("layers out of order");
     expect(r.notes.join()).not.toMatch(/missing|extra/);

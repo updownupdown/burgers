@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { Piece, Plate } from "../game/types";
+import { dressCup } from "../render/cup";
 import { makeCup, makeFood, makeFries, stackHeight, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { disposeObject, faceted, mesh } from "../render/materials";
 
@@ -111,7 +112,7 @@ export class PlateView {
       }
       this.friesKey = fk;
     }
-    const ck = p.drink ? `${p.drink.flavor}${p.drink.fill.toFixed(2)}${p.drink.size}` : "";
+    const ck = p.drink ? `${p.drink.flavor}${p.drink.fill.toFixed(2)}${p.drink.size}${+!!p.drink.ice}${+!!p.drink.lid}${+!!p.drink.straw}` : "";
     if (ck !== this.cupKey) {
       if (this.cup) {
         this.group.remove(this.cup);
@@ -119,8 +120,9 @@ export class PlateView {
       }
       this.cup = null;
       if (p.drink) {
-        this.cup = makeCup(p.drink.flavor, true, p.drink.size);
+        this.cup = makeCup(p.drink.flavor, !!p.drink.lid, p.drink.size);
         this.cup.userData.setFill(p.drink.fill);
+        dressCup(this.cup, p.drink);
         this.cup.scale.setScalar(0.62);
         this.cup.position.set(0.8, 0.1, -0.72);
         this.group.add(this.cup);

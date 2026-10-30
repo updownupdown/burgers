@@ -10,6 +10,7 @@ import {
   CARTON_COST,
   CROWD,
   CUP_COST,
+  EXTRA_COST,
   FRIES_BATCH_COST,
   KIND_COST,
   menuOf,
@@ -26,6 +27,7 @@ import {
 } from "./game/business";
 import type { DrinkId, FriesSize, Layer, Order, Piece, Plate, SauceKind, Size } from "./game/types";
 import { FRIES_PORTION, FRIES_SCOOP, GRILLABLE, newPiece } from "./game/types";
+import { dressCup } from "./render/cup";
 import { makeCarton, makeCup, makeFood, makeFries, stackHeight } from "./render/food";
 import { disposeObject } from "./render/materials";
 import { CounterView, GRILL_SCALE, HOME_PAGE, PAGES, pageX, GRILL_TOP, SLEEVE, WARM_X0, type GrillItem, type Hit } from "./scenes/counter";
@@ -401,7 +403,10 @@ type Payload =
   | { type: "stack"; layers: Layer[]; from: number; grill?: { x: number; z: number } }
   | { type: "fries"; cook: number; basket: number | null; amount: number }
   | { type: "carton"; size: FriesSize; cook: number; fill: number; pack: number }
-  | { type: "drink"; flavor: DrinkId; fill: number; tap: number; size: Size }
+  | { type: "drink"; flavor: DrinkId; fill: number; tap: number; size: Size; ice: boolean; lid: boolean; straw: boolean }
+  | { type: "ice" }
+  | { type: "lid" }
+  | { type: "straw" }
   | { type: "empty"; kind: "cup" | "carton"; size: Size; stack: number }
   | { type: "sleeve"; kind: "cup" | "carton" };
 
@@ -479,8 +484,10 @@ function payloadVisual(p: Payload): THREE.Object3D {
     return o;
   }
   if (p.type === "sleeve") return counter.sleeveMesh(p.kind);
-  const c = makeCup(p.flavor, true, p.size);
+  if (p.type === "ice" || p.type === "lid" || p.type === "straw") return counter.extraMesh(p.type);
+  const c = makeCup(p.flavor, p.lid, p.size);
   c.userData.setFill(p.fill);
+  dressCup(c, p);
   return c;
 }
 
@@ -552,6 +559,10 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
     showHint(payload.type === "sleeve" ? "Unwrap that at the stack first." : "Fill it first!", 1.5);
     return false;
   }
+  if (payload.type === "ice" || payload.type === "lid" || payload.type === "straw") {
+    showHint(`That goes on a cup at the drinks counter.`, 1.5);
+    return false;
+  }
   if (payload.type === "carton") {
     if (s.plate.fries) {
       showHint("This plate already has fries.", 2);
@@ -563,7 +574,8 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
       showHint("This plate already has a drink.", 2);
       return false;
     }
-    s.plate.drink = { flavor: payload.flavor, fill: payload.fill, size: payload.size };
+    s.plate.drink = { flavor: payload.flavor, fill: payload.fill, size: payload.size, ice: payload.ice, lid: payload.lid, straw: payload.straw };
+    if (!payload.lid) hintOnce("lid", "Drinks need a lid and a straw before they go out.", 3);
   }
   syncTray(slot, false);
   sfx.plop();
@@ -678,6 +690,7 @@ function finishHold(pt: Pointer): void {
     if (payload.type === "drink") {
       counter.placeCup(payload.tap, payload.size);
       counter.taps[payload.tap].fill = payload.fill;
+      for (const k of ["ice", "lid", "straw"] as const) if (payload[k]) counter.dressTap(payload.tap, k);
       spend(-payload.fill * SODA_COST[payload.size]);
     }
     if (payload.type === "carton") {
@@ -693,6 +706,32 @@ function finishHold(pt: Pointer): void {
 
 /** Drinks and fryer stations: cups under nozzles, cartons on packing spots, sleeves on empty stacks. */
 function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
+  if (payload.type === "ice" || payload.type === "lid" || payload.type === "straw") {
+    const ti = counter.overTap(g);
+    const t = counter.taps[ti];
+    if (!t) return false;
+    // Ice first, then pour, then the lid, then the straw through it.
+    const problem = !t.cup
+      ? "Put a cup under the nozzle first."
+      : t[payload.type]
+        ? `It already has ${payload.type === "ice" ? "ice" : `a ${payload.type}`}.`
+        : payload.type === "ice" && t.lid
+          ? "Ice goes in before the lid."
+          : payload.type === "lid" && t.fill < 0.05
+            ? "Pour the drink first."
+            : payload.type === "straw" && !t.lid
+              ? "Lid first, then the straw."
+              : "";
+    if (problem) {
+      showHint(problem, 1.8);
+      return false;
+    }
+    counter.dressTap(ti, payload.type);
+    spend(EXTRA_COST[payload.type]);
+    sfx.plop();
+    if (payload.type === "lid") hintOnce("straw", "Now a straw through the lid.", 2.5);
+    return true;
+  }
   if (payload.type === "empty" && payload.kind === "cup") {
     const ti = counter.overTap(g);
     const t = counter.taps[ti];
@@ -858,7 +897,10 @@ canvas.addEventListener("pointerdown", (e) => {
         counter.syncStack(s);
         startHold(pt, { type: "empty", kind: s.kind, size: s.size, stack: hit.idx });
       } else showHint(`Out of ${what}! Grab a wrapped sleeve from the supplies cabinet and drop it here.`, 3);
-    } else if (hit.type === "supplies") {
+    } else if (hit.type === "ice") startHold(pt, { type: "ice" });
+    else if (hit.type === "lids") startHold(pt, { type: "lid" });
+    else if (hit.type === "straws") startHold(pt, { type: "straw" });
+    else if (hit.type === "supplies") {
       startHold(pt, { type: "sleeve", kind: hit.kind });
       // Take the sleeve back up to the counter to restock the stack.
       if (counter.cupboardOpen) toggleCupboard(false);
@@ -875,6 +917,7 @@ canvas.addEventListener("pointerdown", (e) => {
     else if (hit.type === "tap") {
       const t = counter.taps[hit.idx];
       if (!t.cup) showHint("Put a cup under the nozzle first. Cups are in the stacks below.", 2.5);
+      else if (t.lid) showHint("The lid's on.", 1.5);
       else {
         pt.mode = "pour";
         t.pouring = true;
@@ -882,7 +925,7 @@ canvas.addEventListener("pointerdown", (e) => {
     } else if (hit.type === "cup") {
       const t = counter.taps[hit.idx];
       if (t.cup && t.fill > 0.05) {
-        startHold(pt, { type: "drink", flavor: t.flavor, fill: t.fill, tap: hit.idx, size: t.size! });
+        startHold(pt, { type: "drink", flavor: t.flavor, fill: t.fill, tap: hit.idx, size: t.size!, ice: t.ice, lid: t.lid, straw: t.straw });
         spend(t.fill * SODA_COST[t.size!]);
         counter.removeCup(hit.idx);
       } else if (!t.cup && t.puddle > 0.01) {

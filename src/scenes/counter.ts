@@ -3,6 +3,7 @@ import { FRY_RATE, GRILL_RATE, MELT_RATE } from "../game/cooking";
 import type { DrinkId, FriesSize, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
 import { CUP_SPEED, newPiece } from "../game/types";
 import { bottle, CUP_SCALE, makeCarton, makeCup, makeFood, makeFries, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
+import { dressCup } from "../render/cup";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { PlateView } from "./tray";
 
@@ -28,6 +29,8 @@ export const WARM_X0 = 0.35;
 /** Cups and cartons in each stack at the start of a shift, and in a fresh sleeve. */
 /** A full stack of cups or cartons, and what a fresh sleeve from the cupboard refills it to. */
 const STACK_START = 10;
+/** Ice bin, lid stack and straw holder on the drinks page, relative to its centre. */
+const DRINK_EXTRAS = { ice: { x: 2.4, z: 0.9 }, lids: { x: 1.2, z: 2.9 }, straws: { x: 2.6, z: 2.9 } };
 /** Camera position and aim when looking into the cupboard under the counter. */
 const CUPBOARD_CAM = { y: 0.4, z: 13.5 };
 const CUPBOARD_LOOK = { y: -1.7, z: 3.4 };
@@ -96,6 +99,10 @@ export interface Tap {
   puddle: number;
   puddleObj: THREE.Mesh;
   x: number;
+  /** Ice, lid and straw on the cup under this nozzle. */
+  ice: boolean;
+  lid: boolean;
+  straw: boolean;
 }
 
 export type Hit =
@@ -106,6 +113,9 @@ export type Hit =
   | { type: "basket"; idx: number }
   | { type: "tap"; idx: number }
   | { type: "cup"; idx: number }
+  | { type: "ice" }
+  | { type: "lids" }
+  | { type: "straws" }
   | { type: "hold"; idx: number }
   | { type: "stack"; idx: number }
   | { type: "supplies"; kind: "cup" | "carton" }
@@ -384,12 +394,65 @@ export class CounterView {
       puddleObj.position.set(x, 0.11, -0.4);
       puddleObj.visible = false;
       this.scene.add(puddleObj);
-      this.taps.push({ flavor, fill: 0, pouring: false, cup: null, size: null, stream, spill: 0, puddle: 0, puddleObj, x });
+      this.taps.push({ flavor, fill: 0, pouring: false, cup: null, size: null, stream, spill: 0, puddle: 0, puddleObj, x, ice: false, lid: false, straw: false });
       this.proxy(new THREE.BoxGeometry(1.9, 1.0, 1.7), new THREE.Vector3(x, 1.2, -2.4), { type: "tap", idx: i });
       this.proxy(new THREE.BoxGeometry(1.7, 1.2, 1.6), new THREE.Vector3(x, 0.5, -0.3), { type: "cup", idx: i });
     });
     (["S", "M", "L"] as Size[]).forEach((size, i) => this.addStack("cup", size, x0 - 2.4 + i * 1.3, 1.75));
     this.addSupplies("cup", x0 + 2.0, 2.0, 2.3, 1.2);
+    this.buildDrinkExtras();
+  }
+
+  /** Ice, lids and straws, within reach of the cups. */
+  private buildDrinkExtras(): void {
+    const x0 = pageX(0);
+    const at = DRINK_EXTRAS;
+    const ice = mesh(faceted(new THREE.BoxGeometry(1.3, 0.3, 1.0)), "#cfe6ef");
+    ice.position.set(x0 + at.ice.x, 0.15, at.ice.z);
+    for (let i = 0; i < 9; i++) {
+      const cube = this.extraMesh("ice");
+      cube.position.set(x0 + at.ice.x - 0.4 + (i % 3) * 0.4, 0.34 + (i % 2) * 0.05, at.ice.z - 0.3 + Math.floor(i / 3) * 0.3);
+      cube.rotation.y = i;
+      this.scene.add(cube);
+    }
+    const lids = new THREE.Group();
+    for (let i = 0; i < 6; i++) {
+      const l = this.extraMesh("lid");
+      l.position.y = 0.06 + i * 0.07;
+      lids.add(l);
+    }
+    lids.position.set(x0 + at.lids.x, 0, at.lids.z);
+    const straws = new THREE.Group();
+    const holder = mesh(faceted(new THREE.CylinderGeometry(0.32, 0.28, 0.7, 12)), "#e9e2d2");
+    holder.position.y = 0.35;
+    straws.add(holder);
+    for (let i = 0; i < 5; i++) {
+      const s = this.extraMesh("straw");
+      s.position.set(Math.cos(i * 1.3) * 0.12, 0.6, Math.sin(i * 1.3) * 0.12);
+      s.rotation.set(Math.sin(i) * 0.15, 0, Math.cos(i) * 0.15);
+      straws.add(s);
+    }
+    straws.position.set(x0 + at.straws.x, 0, at.straws.z);
+    this.scene.add(ice, lids, straws);
+    this.proxy(new THREE.BoxGeometry(1.5, 1.0, 1.3), new THREE.Vector3(x0 + at.ice.x, 0.4, at.ice.z), { type: "ice" });
+    this.proxy(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.Vector3(x0 + at.lids.x, 0.4, at.lids.z), { type: "lids" });
+    this.proxy(new THREE.BoxGeometry(1.0, 1.6, 1.0), new THREE.Vector3(x0 + at.straws.x, 0.6, at.straws.z), { type: "straws" });
+  }
+
+  /** A scoop of ice, one lid or one straw: on the counter and in hand. */
+  extraMesh(what: "ice" | "lid" | "straw"): THREE.Object3D {
+    if (what === "ice") {
+      const g = new THREE.Group();
+      for (let i = 0; i < 3; i++) {
+        const c = mesh(faceted(new THREE.BoxGeometry(0.22, 0.2, 0.22)), "#e8f6fb", { opacity: 0.85 });
+        c.position.set((i - 1) * 0.2, (i % 2) * 0.12, (i % 2) * 0.1);
+        c.rotation.set(i * 0.7, i, 0);
+        g.add(c);
+      }
+      return g;
+    }
+    if (what === "lid") return mesh(faceted(new THREE.CylinderGeometry(0.5, 0.52, 0.06, 18)), "#f4f2ec");
+    return mesh(faceted(new THREE.CylinderGeometry(0.04, 0.04, 1.3, 6)), "#d24c3f");
   }
 
   private addStack(kind: Stack["kind"], size: Size, x: number, z: number): void {
@@ -464,6 +527,15 @@ export class CounterView {
     t.cup = cup;
     t.size = size;
     t.fill = 0;
+    Object.assign(t, { ice: false, lid: false, straw: false });
+  }
+
+  /** Add ice, a lid or a straw to the cup under a nozzle. */
+  dressTap(i: number, what: "ice" | "lid" | "straw"): void {
+    const t = this.taps[i];
+    t[what] = true;
+    if (what === "lid") t.pouring = false;
+    if (t.cup) dressCup(t.cup, t);
   }
 
   removeCup(i: number): void {
@@ -476,6 +548,7 @@ export class CounterView {
     t.size = null;
     t.fill = 0;
     t.pouring = false;
+    Object.assign(t, { ice: false, lid: false, straw: false });
   }
 
   /** Redraw a packing spot: an empty carton, a part-filled one, or nothing. */

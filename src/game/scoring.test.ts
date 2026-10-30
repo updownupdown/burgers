@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { makeOrder, seededRng } from "./menu";
+import { applyMods, makeOrder, seededRng } from "./menu";
 import { STOPS } from "./stops";
 import { passed, upgradeChoices } from "./progress";
 import { alignLayers, payout, scorePlate } from "./scoring";
@@ -24,6 +24,7 @@ const classic: Order = {
   id: 1,
   name: "Test",
   price: 10,
+  mods: [],
   layers: [
     { kind: "bun", toasted: true },
     { kind: "patty", doneness: "medium" },
@@ -158,9 +159,33 @@ describe("road trip progress", () => {
 
 describe("feedback notes", () => {
   it("calls swapped layers out of order rather than missing", () => {
-    const order: Order = { id: 1, name: "t", price: 10, layers: [{ kind: "bun" }, { kind: "cheese" }, { kind: "pickle" }, { kind: "bun" }], fries: false, drink: null };
+    const order: Order = { id: 1, name: "t", price: 10, mods: [], layers: [{ kind: "bun" }, { kind: "cheese" }, { kind: "pickle" }, { kind: "bun" }], fries: false, drink: null };
     const r = scorePlate(order, { layers: ["bun", "pickle", "cheese", "bun"].map((k) => ({ piece: piece(k as Kind), offX: 0, offZ: 0 })), fries: null, drink: null });
     expect(r.notes).toContain("layers out of order");
     expect(r.notes.join()).not.toMatch(/missing|extra/);
+  });
+});
+
+describe("recipe modifiers", () => {
+  const base: Kind[] = ["bun", "patty", "cheese", "pickle", "ketchup", "bun"];
+  it("removes, doubles and adds toppings", () => {
+    expect(applyMods(base, [{ type: "no", kind: "pickle" }])).toEqual(["bun", "patty", "cheese", "ketchup", "bun"]);
+    expect(applyMods(base, [{ type: "extra", kind: "cheese" }])).toEqual(["bun", "patty", "cheese", "cheese", "pickle", "ketchup", "bun"]);
+    expect(applyMods(base, [{ type: "add", kind: "bacon" }])).toEqual(["bun", "patty", "bacon", "cheese", "pickle", "ketchup", "bun"]);
+  });
+
+  it("never removes buns or patties and only adds what the stop stocks", () => {
+    const rng = seededRng(11);
+    for (const stop of STOPS) {
+      for (let i = 0; i < 200; i++) {
+        const o = makeOrder(i, rng, 1, stop);
+        for (const m of o.mods) {
+          expect(["bun", "patty"]).not.toContain(m.kind);
+          if (m.type === "add") expect(stop.pantry).toContain(m.kind);
+        }
+        expect(o.layers[0].kind).toBe("bun");
+        expect(o.layers[o.layers.length - 1].kind).toBe("bun");
+      }
+    }
   });
 });

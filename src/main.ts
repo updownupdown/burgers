@@ -44,6 +44,8 @@ interface Slot {
   fig: CustomerFigure | null;
   ticketKey: string;
   bubble: HTMLElement | null;
+  /** Ticket shows every layer rather than recipe + modifiers. */
+  expanded: boolean;
 }
 
 const emptyPlate = (): Plate => ({ layers: [], fries: null, drink: null });
@@ -65,7 +67,7 @@ const game = {
   stopIdx: save.stop,
   rng: seededRng(Date.now() % 100000) as Rng,
   slots: [0, 1, 2].map(
-    (): Slot => ({ order: null, plate: emptyPlate(), patience: 0, maxPatience: 1, leaving: false, fig: null, ticketKey: "", bubble: null }),
+    (): Slot => ({ order: null, plate: emptyPlate(), patience: 0, maxPatience: 1, leaving: false, fig: null, ticketKey: "", bubble: null, expanded: false }),
   ),
   hintsShown: new Set<string>(),
   pendingUpdate: null as VersionInfo | null,
@@ -159,6 +161,8 @@ function spawnCustomer(slotIdx: number): void {
   if (game.tutorial && game.spawned === 0) order = orderFromRecipe(order.id, stop().menu[0], "medium", false, null);
   s.order = order;
   s.plate = emptyPlate();
+  // Recipes you haven't made a couple of times yet start with the full layer list showing.
+  s.expanded = game.tutorial || (save.known[order.name] ?? 0) < 2;
   s.maxPatience = (50 + order.layers.length * 7 + (order.fries ? 12 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1);
   if (game.tutorial && game.spawned === 0) s.maxPatience = 600;
   s.patience = s.maxPatience;
@@ -217,6 +221,10 @@ function serve(i: number): void {
   game.tips += tip;
   game.served++;
   game.stars.push(r.stars);
+  if (r.stars >= 2) {
+    save.known[s.order.name] = (save.known[s.order.name] ?? 0) + 1;
+    writeSave(save);
+  }
   if (!game.best || r.score > game.best.score) game.best = { name: `#${s.order.id} ${s.order.name} (${r.score}%)`, score: r.score };
   const praise = ["Perfect!", "Incredible!", "Chef's kiss!", "Just like Grandma's!"];
   const say =
@@ -771,6 +779,8 @@ ui.tabs.forEach((t, i) =>
 ui.tickets.forEach((t, i) =>
   t.addEventListener("pointerdown", () => {
     sfx.unlock();
+    // Tapping the ticket you're already on flips between recipe view and the full list.
+    if (game.active === i) game.slots[i].expanded = !game.slots[i].expanded;
     setActive(i);
   }),
 );
@@ -1120,10 +1130,10 @@ function updateUi(): void {
     t.hidden = !show;
     if (!show || !s.order) return;
     const pct = s.patience / s.maxPatience;
-    const key = `${s.order.id}|${s.plate.layers.map((l) => l.piece.kind).join(",")}|${!!s.plate.fries}|${s.plate.drink?.flavor}|${Math.round(pct * 50)}`;
+    const key = `${s.order.id}|${s.expanded}|${s.plate.layers.map((l) => l.piece.kind).join(",")}|${!!s.plate.fries}|${s.plate.drink?.flavor}|${Math.round(pct * 50)}`;
     if (key !== s.ticketKey) {
-      const fresh = !s.ticketKey.startsWith(`${s.order.id}|`);
-      t.innerHTML = ticketHtml(s.order, s.plate, game.tutorial && game.spawned === 1 && i === game.slots.findIndex((x) => x.order) ? 1 : pct);
+      const fresh = !s.ticketKey.startsWith(`${s.order.id}|${s.expanded}|`);
+      t.innerHTML = ticketHtml(s.order, s.plate, game.tutorial && game.spawned === 1 && i === game.slots.findIndex((x) => x.order) ? 1 : pct, s.expanded);
       s.ticketKey = key;
       // Long orders on short screens get a denser ticket rather than being cut off.
       if (fresh) {

@@ -57,10 +57,18 @@ export interface ExpectedLayer {
   smashed?: boolean;
 }
 
+/** A change to a known recipe: "no pickles", "extra cheese", "add bacon". */
+export interface Modifier {
+  type: "no" | "extra" | "add";
+  kind: Kind;
+}
+
 export interface Order {
   id: number;
   name: string;
   price: number;
+  /** Changes from the menu recipe; `layers` already includes them. */
+  mods: Modifier[];
   /** Bottom to top. */
   layers: ExpectedLayer[];
   fries: boolean;

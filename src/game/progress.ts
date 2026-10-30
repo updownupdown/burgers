@@ -28,12 +28,14 @@ export interface Save {
   trips: number;
   /** Upgrades on offer after a passed shift, until one is picked. */
   offer: UpgradeId[];
+  /** Times each recipe was served well; familiar recipes get compact tickets. */
+  known: Record<string, number>;
 }
 
 const KEY = "bv-save-v1";
 
 export function freshSave(): Save {
-  return { stop: 0, upgrades: [], bank: 0, best: {}, tutorialDone: false, trips: 0, offer: [] };
+  return { stop: 0, upgrades: [], bank: 0, best: {}, tutorialDone: false, trips: 0, offer: [], known: {} };
 }
 
 export function loadSave(): Save {

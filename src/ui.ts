@@ -103,22 +103,48 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
-/** Ticket HTML: the burger top to bottom, ticking off layers already stacked in order. */
-export function ticketHtml(order: Order, plate: Plate, patience: number): string {
-  const lines: string[] = [];
+const MOD_LABEL = { no: "No", extra: "Extra", add: "+" } as const;
+
+/**
+ * Ticket HTML. Compact (default once a recipe is familiar): the recipe name, how to cook
+ * it, the modifiers, and a strip of pips showing stacking progress. Expanded: every layer,
+ * top to bottom, ticked off as it's stacked in order.
+ */
+export function ticketHtml(order: Order, plate: Plate, patience: number, expanded: boolean): string {
   let prefixOk = true;
   const okFlags = order.layers.map((exp, i) => {
     const got = plate.layers[i];
     prefixOk = prefixOk && !!got && got.piece.kind === exp.kind;
     return prefixOk;
   });
-  for (let i = order.layers.length - 1; i >= 0; i--) {
-    const exp = order.layers[i];
-    let extra = "";
-    if (exp.kind === "patty") extra = exp.smashed ? ` <em>Smash</em>` : ` <em>${exp.doneness === "rare" ? "Rare" : exp.doneness === "well" ? "Well" : "Med"}</em>`;
-    if (exp.kind === "pineapple") extra = ` <em>Grilled</em>`;
-    if (exp.kind === "bun" && exp.toasted) extra = ` <em>Toast</em>`;
-    lines.push(`<li class="${okFlags[i] ? "ok" : ""}"><b style="background:${KIND_COLOR[exp.kind]}"></b><span class="l">${KIND_LABEL[exp.kind]}</span>${extra}</li>`);
+  const modded = new Set(order.mods.filter((m) => m.type !== "no").map((m) => m.kind));
+  let body: string;
+  if (expanded) {
+    const lines: string[] = [];
+    for (let i = order.layers.length - 1; i >= 0; i--) {
+      const exp = order.layers[i];
+      let extra = "";
+      if (exp.kind === "patty") extra = exp.smashed ? ` <em>Smash</em>` : ` <em>${exp.doneness === "rare" ? "Rare" : exp.doneness === "well" ? "Well" : "Med"}</em>`;
+      if (exp.kind === "pineapple") extra = ` <em>Grilled</em>`;
+      if (exp.kind === "bun" && exp.toasted) extra = ` <em>Toast</em>`;
+      const cls = [okFlags[i] ? "ok" : "", modded.has(exp.kind) ? "mod" : ""].join(" ").trim();
+      lines.push(`<li class="${cls}"><b style="background:${KIND_COLOR[exp.kind]}"></b><span class="l">${KIND_LABEL[exp.kind]}</span>${extra}</li>`);
+    }
+    const nos = order.mods.filter((m) => m.type === "no").map((m) => `<li class="no"><span class="l">No ${KIND_LABEL[m.kind].toLowerCase()}</span></li>`);
+    body = `<ol>${lines.join("")}${nos.join("")}</ol>`;
+  } else {
+    const patty = order.layers.find((l) => l.kind === "patty");
+    const bun = order.layers.find((l) => l.kind === "bun");
+    const how: string[] = [];
+    if (patty) how.push(patty.smashed ? "Smash" : patty.doneness === "rare" ? "Rare" : patty.doneness === "well" ? "Well" : "Med");
+    if (bun?.toasted) how.push("Toast");
+    const mods = order.mods.map(
+      (m) => `<li class="m ${m.type}"><b style="background:${KIND_COLOR[m.kind]}"></b><span class="l">${MOD_LABEL[m.type]} ${KIND_LABEL[m.kind].toLowerCase()}</span></li>`,
+    );
+    const pips = order.layers.map((l, i) => `<i class="${okFlags[i] ? "ok" : ""}" style="background:${KIND_COLOR[l.kind]}"></i>`).join("");
+    body = `<div class="how">${how.map((h) => `<em>${h}</em>`).join(" ")}</div>
+      ${mods.length ? `<ol>${mods.join("")}</ol>` : ""}
+      <div class="pips" aria-label="${okFlags.filter(Boolean).length} of ${order.layers.length} layers">${pips}</div>`;
   }
   const sides: string[] = [];
   if (order.fries) sides.push(`<span class="${plate.fries ? "ok" : ""}"><b style="background:#f3d36b"></b>Fries</span>`);
@@ -126,8 +152,8 @@ export function ticketHtml(order: Order, plate: Plate, patience: number): string
   const pct = Math.max(0, Math.min(1, patience));
   const color = pct > 0.5 ? "#4caf50" : pct > 0.25 ? "#f0a92b" : "#e5432b";
   return `<div class="pat"><i style="width:${(pct * 100).toFixed(0)}%;background:${color}"></i></div>
-    <div class="name">#${order.id} ${esc(order.name)}</div>
-    <ol>${lines.join("")}</ol>
+    <div class="name"><span class="l">#${order.id} ${esc(order.name)}</span><span class="exp">${expanded ? "▴" : "▾"}</span></div>
+    ${body}
     ${sides.length ? `<div class="sides">${sides.join("")}</div>` : ""}`;
 }
 

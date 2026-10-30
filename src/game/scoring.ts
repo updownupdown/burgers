@@ -1,6 +1,6 @@
 import { avgCook, bunToast } from "./cooking";
 import type { ExpectedLayer, Layer, Order, Piece, Plate } from "./types";
-import { DONENESS_TARGET } from "./types";
+import { DONENESS_TARGET, KIND_LABEL } from "./types";
 
 export interface ScoreResult {
   /** 0..100 */
@@ -123,7 +123,12 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
       const missing = exp.filter((_, i) => !matched.has(i)).map((l) => l.kind);
       notes.push(`missing ${[...new Set(missing)].join(", ")}`);
     }
-    if (act.length > pairs.length) notes.push("extra stuff in there");
+    if (act.length > pairs.length) {
+      const used = new Set(pairs.map(([, j]) => j));
+      const extras = act.filter((_, j) => !used.has(j)).map((l) => l.piece.kind);
+      const unwanted = order.mods.find((m) => m.type === "no" && extras.includes(m.kind));
+      notes.push(unwanted ? `I said no ${KIND_LABEL[unwanted.kind].toLowerCase()}` : "extra stuff in there");
+    }
   }
 
   // Patties matter most, and one ruined layer spoils the whole bite: blend the weighted

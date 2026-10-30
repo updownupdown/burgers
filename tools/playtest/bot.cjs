@@ -179,8 +179,8 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
     // 5. Drink: cup from the right stack, pour to about 90%, cup to the tray.
     if (order.drink) {
       await page(0);
-      const idx = ['pine', 'lemon', 'cola'].indexOf(order.drink);
-      const x = -14 + (idx - 1) * 2.05;
+      const idx = ['pine', 'pink', 'cola', 'water', 'tea'].indexOf(order.drink);
+      const x = -14 + (idx - 2) * 1.4;
       const [cx, cy] = await ev((x) => window.__bv.project('counter', x, 0.5, -0.3), x);
       await takeEmpty('cup', order.drinkSize, [cx, cy]);
       const [tx, ty] = await ev((x) => window.__bv.project('counter', x, 1.2, -2.4), x);

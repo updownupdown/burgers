@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { avgCook, bunToast, isMelted } from "../game/cooking";
-import type { DrinkId, FriesSize, Kind, Piece, Size } from "../game/types";
-import { DRINK_COLOR } from "../game/types";
+import type { FriesSize, Kind, Piece } from "../game/types";
 import { faceted, mesh, outline, ramp, shareGeometry, toon } from "./materials";
 
 /** Thickness each piece adds to a stack, in ingredient units (a patty is ~2 units wide). */
@@ -472,53 +471,8 @@ export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1):
   return g;
 }
 
-export interface CupObject extends THREE.Group {
-  userData: { setFill: (f: number) => void; flavor: DrinkId };
-}
-
-const CUP = shareGeometry(faceted(new THREE.CylinderGeometry(0.4, 0.3, 1.0, 14, 1, true)));
-const CUP_LIQUID = shareGeometry(faceted(new THREE.CylinderGeometry(0.37, 0.3, 1, 14)));
-const CUP_LID = shareGeometry(faceted(new THREE.CylinderGeometry(0.43, 0.43, 0.06, 14)));
-const CUP_STRAW = shareGeometry(faceted(new THREE.CylinderGeometry(0.035, 0.035, 0.6, 6)));
-const CUP_STRIPE = shareGeometry(faceted(new THREE.CylinderGeometry(0.385, 0.35, 0.18, 14, 1, true)));
-/** Cup sizes differ in height more than width, so they still nest the same way. */
-export const CUP_SCALE: Record<Size, [number, number]> = { S: [0.84, 0.72], M: [0.92, 0.86], L: [1, 1] };
-
-/** A cup; with no flavour it's a plain empty cup (for the stacks). */
-export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"): CupObject {
-  const g = new THREE.Group() as CupObject;
-  const body = new THREE.Group();
-  const [sw, sh] = CUP_SCALE[size];
-  body.scale.set(sw, sh, sw);
-  g.add(body);
-  const cup = mesh(CUP, "#f3f1ea", { side: THREE.DoubleSide });
-  cup.position.y = 0.5;
-  body.add(cup);
-  const stripe = mesh(CUP_STRIPE, flavor ? DRINK_COLOR[flavor] : "#c9c4b8", { side: THREE.DoubleSide, ink: false });
-  stripe.position.y = 0.45;
-  body.add(stripe);
-  const liquid = mesh(CUP_LIQUID, flavor ? DRINK_COLOR[flavor] : "#ffffff", { ink: false, shadow: false });
-  body.add(liquid);
-  if (lid) {
-    const top = mesh(CUP_LID, "#f8f8f4");
-    top.position.y = 1.02;
-    const straw = mesh(CUP_STRAW, "#e5432b", { ink: 1.2 });
-    straw.position.set(0.1, 1.25, 0);
-    straw.rotation.z = -0.15;
-    body.add(top, straw);
-  }
-  g.userData = {
-    flavor: flavor ?? "cola",
-    setFill: (f) => {
-      const h = Math.max(0.001, Math.min(1, f) * 0.94);
-      liquid.visible = f > 0.01;
-      liquid.scale.set(0.96 * (0.82 + 0.18 * h), h, 0.96 * (0.82 + 0.18 * h));
-      liquid.position.y = 0.03 + h / 2;
-    },
-  };
-  g.userData.setFill(0);
-  return g;
-}
+// Cups moved to models/drinks.ts; re-exported so existing imports keep working.
+export { CUP_SCALE, makeCup, type CupObject } from "./models/drinks";
 
 export function bottle(color: string, label: string): THREE.Group {
   const g = new THREE.Group();

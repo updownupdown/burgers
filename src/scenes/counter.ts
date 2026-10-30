@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { FRY_RATE, GRILL_RATE, MELT_RATE } from "../game/cooking";
 import type { DrinkId, FriesSize, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
-import { CUP_SPEED, newPiece } from "../game/types";
+import { CUP_SPEED, DRINKS, newPiece } from "../game/types";
 import { bottle, CUP_SCALE, makeCarton, makeCup, makeFood, makeFries, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
+import { makeCupboard, makeIceBin, makeLidStack, makeStrawHolder, type CupboardObject } from "../render/models/drinks";
 import { PlateView } from "./tray";
 
 export const PAGES = ["Drinks", "Grill", "Fryer"] as const;
@@ -130,8 +131,11 @@ const BIN_SLOTS: { x: number; z: number }[] = [
 /** Buns toast and eggs set more slowly than meat, so they're forgiving to leave on. */
 const COOK_SPEED: Record<string, number> = { patty: 1, bacon: 1.1, egg: 0.75, bun: 0.6, pineapple: 0.7 };
 
-const DRINKS: DrinkId[] = ["pine", "lemon", "cola"];
-const DRINK_LABEL_COLOR: Record<DrinkId, string> = { pine: "#4fae5c", lemon: "#e8c43a", cola: "#7a3b26" };
+/** Nozzle spacing on the soda fountain: five across the ~7-unit page. */
+export const TAP_GAP = 1.4;
+const tapX = (i: number) => pageX(0) + (i - (DRINKS.length - 1) / 2) * TAP_GAP;
+/** Button, stream and puddle colours: a shade stronger than the drink itself so they read on the machine. */
+const DRINK_LABEL_COLOR: Record<DrinkId, string> = { pine: "#6aa877", pink: "#ea8ea6", cola: "#4a2522", water: "#8ec6dc", tea: "#b4651e" };
 
 export class CounterView {
   scene = new THREE.Scene();
@@ -156,6 +160,8 @@ export class CounterView {
   taps: Tap[] = [];
   stacks: Stack[] = [];
   packs: Pack[] = [];
+  /** Under-counter supplies cupboard on the drinks page (doors shut until the view drops to it). */
+  cupboard!: CupboardObject;
   /** Running cost of soda poured onto the drip tray this shift. */
   spillCost = 0;
   bottles: Record<SauceKind, THREE.Group>;
@@ -177,8 +183,9 @@ export class CounterView {
     sun.shadow.bias = -0.002;
     this.scene.add(sun);
 
-    const counter = new THREE.Mesh(new THREE.BoxGeometry(60, 0.4, 12), new THREE.MeshToonMaterial({ color: "#c98f55" }));
-    counter.position.y = -0.2;
+    // The slab stops just past the visible front edge, so the cupboard under it can be seen.
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(60, 0.4, 10.6), new THREE.MeshToonMaterial({ color: "#c98f55" }));
+    counter.position.set(0, -0.2, -0.7);
     counter.receiveShadow = true;
     this.scene.add(counter);
     const wall = new THREE.Mesh(new THREE.BoxGeometry(60, 6, 0.4), toon("#3f6a62"));
@@ -353,34 +360,57 @@ export class CounterView {
     const drip = mesh(faceted(new THREE.BoxGeometry(6.2, 0.1, 1.5)), "#3a3f41", { ink: false });
     drip.position.set(x0, 0.05, -0.5);
     this.scene.add(drip);
+    const plateGeo = faceted(new THREE.BoxGeometry(TAP_GAP - 0.2, 0.06, 1.5));
+    const buttonGeo = faceted(new THREE.CylinderGeometry(0.46, 0.5, 0.2, 20));
+    const shineGeo = faceted(new THREE.CylinderGeometry(0.26, 0.26, 0.02, 14));
+    const nozzleGeo = faceted(new THREE.BoxGeometry(0.4, 0.22, 0.9));
     DRINKS.forEach((flavor, i) => {
-      const x = x0 + (i - 1) * 2.05;
-      const plate = mesh(faceted(new THREE.BoxGeometry(1.6, 0.06, 1.5)), "#f8f6ef", { ink: false });
+      const x = tapX(i);
+      const plate = mesh(plateGeo, "#f8f6ef", { ink: false });
       plate.position.set(x, 1.24, -2.4);
       this.scene.add(plate);
-      const button = mesh(faceted(new THREE.CylinderGeometry(0.52, 0.56, 0.2, 20)), DRINK_LABEL_COLOR[flavor]);
+      const button = mesh(buttonGeo, DRINK_LABEL_COLOR[flavor]);
       button.position.set(x, 1.36, -2.5);
       this.scene.add(button);
-      const shine = mesh(faceted(new THREE.CylinderGeometry(0.3, 0.3, 0.02, 14)), "#ffffff", { opacity: 0.35, ink: false });
-      shine.position.set(x - 0.12, 1.47, -2.62);
+      const shine = mesh(shineGeo, "#ffffff", { opacity: 0.35, ink: false });
+      shine.position.set(x - 0.1, 1.47, -2.62);
       this.scene.add(shine);
-      const nozzle = mesh(faceted(new THREE.BoxGeometry(0.42, 0.22, 0.9)), "#8c9496");
+      const nozzle = mesh(nozzleGeo, "#8c9496");
       nozzle.position.set(x, 1.0, -1.25);
       this.scene.add(nozzle);
       const stream = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1, 6), toon(DRINK_LABEL_COLOR[flavor]));
       stream.visible = false;
       this.scene.add(stream);
-      const puddleObj = new THREE.Mesh(new THREE.CircleGeometry(1, 18), new THREE.MeshBasicMaterial({ color: DRINK_LABEL_COLOR[flavor], transparent: true, opacity: 0.7 }));
+      const puddleObj = new THREE.Mesh(new THREE.CircleGeometry(0.62, 18), new THREE.MeshBasicMaterial({ color: DRINK_LABEL_COLOR[flavor], transparent: true, opacity: 0.7 }));
       puddleObj.rotation.x = -Math.PI / 2;
       puddleObj.position.set(x, 0.11, -0.4);
       puddleObj.visible = false;
       this.scene.add(puddleObj);
       this.taps.push({ flavor, fill: 0, pouring: false, cup: null, size: null, stream, spill: 0, puddle: 0, puddleObj, x });
-      this.proxy(new THREE.BoxGeometry(1.9, 1.0, 1.7), new THREE.Vector3(x, 1.2, -2.4), { type: "tap", idx: i });
-      this.proxy(new THREE.BoxGeometry(1.7, 1.2, 1.6), new THREE.Vector3(x, 0.5, -0.3), { type: "cup", idx: i });
+      this.proxy(new THREE.BoxGeometry(TAP_GAP - 0.05, 1.0, 1.7), new THREE.Vector3(x, 1.2, -2.4), { type: "tap", idx: i });
+      this.proxy(new THREE.BoxGeometry(TAP_GAP - 0.05, 1.2, 1.6), new THREE.Vector3(x, 0.5, -0.3), { type: "cup", idx: i });
     });
     (["S", "M", "L"] as Size[]).forEach((size, i) => this.addStack("cup", size, x0 - 2.4 + i * 1.3, 1.75));
     this.addSupplies("cup", x0 + 2.0, 2.0, 2.3, 1.2);
+    // Lids, straws and ice along the front edge, under the cup stacks.
+    const ice = makeIceBin();
+    ice.position.set(x0 - 2.35, 0, 2.95);
+    const lids = makeLidStack(10);
+    lids.position.set(x0 - 0.35, 0, 3.0);
+    const straws = makeStrawHolder();
+    straws.position.set(x0 + 0.6, 0, 3.05);
+    this.scene.add(ice, lids, straws);
+    // The supplies cupboard hangs under the front edge; sleeves sit on its shelves.
+    this.cupboard = makeCupboard();
+    this.cupboard.position.set(x0, 0, 3.6);
+    this.cupboard.userData.shelves.forEach((p, i) => {
+      const sleeve = this.sleeveMesh(i % 3 === 2 ? "carton" : "cup");
+      sleeve.position.copy(p).add(new THREE.Vector3(0, 0.42, 0));
+      this.cupboard.add(sleeve);
+    });
+    // Under the slab everything is in the sun's shadow; skip it so the open cupboard reads.
+    this.cupboard.traverse((o) => void ((o as THREE.Mesh).receiveShadow = false));
+    this.scene.add(this.cupboard);
   }
 
   private addStack(kind: Stack["kind"], size: Size, x: number, z: number): void {
@@ -515,7 +545,7 @@ export class CounterView {
 
   /** Nozzle slot under a world point, or -1. */
   overTap(world: THREE.Vector3): number {
-    return this.taps.findIndex((t) => Math.abs(world.x - t.x) < 0.85 && world.z > -1.3 && world.z < 0.5);
+    return this.taps.findIndex((t) => Math.abs(world.x - t.x) < TAP_GAP / 2 && world.z > -1.3 && world.z < 0.5);
   }
 
   /** Stack under a world point, or -1. */
@@ -523,9 +553,9 @@ export class CounterView {
     return this.stacks.findIndex((s) => Math.hypot(world.x - s.x, world.z - s.z) < 0.7);
   }
 
-  /** World position under each drink cup, for the HTML flavour labels. */
+  /** World position under each drink cup, for the HTML flavour labels; alternate rows so five fit. */
   drinkLabelPoint(i: number): THREE.Vector3 {
-    return new THREE.Vector3(pageX(0) + (i - 1) * 2.05, 0.1, 0.55);
+    return new THREE.Vector3(tapX(i), 0.1, i % 2 ? 0.9 : 0.45);
   }
 
   /** Fill the grill counter's bins for the current stop. */
@@ -857,7 +887,7 @@ export class CounterView {
       t.cup?.userData.setFill(t.fill);
       t.stream.visible = t.pouring && !!t.cup;
       if (t.stream.visible) {
-        const topY = 0.1 + 0.8 * CUP_SCALE[t.size ?? "M"][1] * Math.min(1, t.fill) * 0.94;
+        const topY = 0.1 + 0.8 * CUP_SCALE[t.size ?? "M"][1] * (0.07 + Math.min(1, t.fill) * 0.95);
         const h = Math.max(0.05, 0.92 - topY);
         t.stream.scale.set(1, h, 1);
         t.stream.position.set(t.x, topY + h / 2, -0.82);

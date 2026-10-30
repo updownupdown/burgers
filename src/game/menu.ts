@@ -1,4 +1,5 @@
 import type { Doneness, DrinkId, ExpectedLayer, FriesSize, Kind, Modifier, Order, Size } from "./types";
+import { DRINKS } from "./types";
 import type { Recipe, Stop } from "./stops";
 
 export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, L: 4 };
@@ -13,7 +14,6 @@ export function seededRng(seed: number): Rng {
 }
 
 const DONENESS: Doneness[] = ["rare", "medium", "well"];
-const DRINKS: DrinkId[] = ["pine", "lemon", "cola"];
 
 /** Recipe layers with modifiers applied, bottom to top. */
 export function applyMods(base: Kind[], mods: Modifier[]): Kind[] {

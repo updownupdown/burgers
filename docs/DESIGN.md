@@ -308,3 +308,54 @@ James's build #7 playtest asked for a deeper kitchen and an optional business la
 - **Sides:** drinks are S/M/L and fries S/L. Take an empty cup or carton from its stack first. Stacks start with 3; a wrapped sleeve from the supplies cabinet refills one (two taps to tear it open). A fryer basket holds one large or two small portions. Overflowing keeps pouring onto the drip tray: the soda costs money and the puddle must be scrubbed before that nozzle takes another cup.
 - **Business mode:** before each shift pick ingredient quality (Budget / Standard / Premium), prices (Low / Fair / High) and today's menu. Rating = execution score + 8 points per step of taste (quality) and value (price), so premium food at high prices rates like standard at fair prices but earns more per burger. Traffic scales with prices, menu size and reputation. Ingredients, cups, cartons and soda cost money as they're used, so waste shows in profit. Reviews and reputation persist across shifts.
 - **PWA:** installable, works offline after the first load; the service worker never caches `version.json`, so the update check still works.
+
+## 9. Next: the road map (cities, events, crowds, press)
+
+James's idea (2026-10-30): replace the fixed list of stops with a simple overworld map of cities to unlock and visit, in the spirit of old console world maps but drawn in our own toon style. Cities differ by crowd, some host events worth driving to, and food critics can put the truck in the paper or on TV. This is the meta-progression and the story.
+
+### The map
+
+- A top-down map of one region at a time: towns are nodes joined by roads, and the truck is a token that drives along them. Tap a town to see its card (crowd, specialty, any event coming up), tap Drive to go there.
+- Each town plays one shift. Passing a shift (the current pass rule) opens the roads out of it, so the map fills in as you go. Some towns sit on side roads you can skip; a few are gated ("needs 2.5 ★ reputation", "needs a fryer upgrade").
+- Regions follow the current stops: **Mountains** (Pinecrest), **Coast** (Saltwater Bay), **Desert** (Red Mesa), each with 3–5 towns. Reaching a region's big city finishes it and opens the next region's road.
+- Each town keeps a postcard: best stars, best profit, and a one-line note from the locals. That's the story, told in small pieces rather than cut-scenes.
+- The road trip has a day counter. Each shift is one day and driving to a neighbouring town is free, so the counter only matters for events.
+
+### Crowds
+
+Every town has a crowd profile, so where you park the truck is a choice:
+
+| Profile | Customers | Spends | Cares about | Example |
+| --- | --- | --- | --- | --- |
+| Commuters | many | little | speed (short patience) | highway rest stop |
+| Families | average | average | sides and drinks, forgiving | lakeside campground |
+| Foodies | few | a lot | ingredient quality, picky | wine-country village |
+| Party crowd | lots, in waves | little | big orders, not fussy | beach festival |
+
+In numbers, a profile sets base traffic, how much prices put people off, how much ingredient quality counts in the rating, patience, tip size, and critic chance. The same knobs already exist in business mode (`trafficMult`, `ratingBonus` in `src/game/business.ts`), so crowds plug into them. In the normal mode, crowds still change traffic, patience and tips.
+
+### Events
+
+- Some towns host an event on certain days, shown on the map ahead of time ("Chili Cook-off in Red Mesa, day 9"). Turning up on the day gives a longer, busier shift with that event's crowd and sometimes a themed recipe.
+- An event can be missed. Missing one just means waiting for the next, with no penalty.
+- First set: surf contest (party crowd, cheap and huge), farmers' market (foodies, critic likely), rodeo (big appetites, double patties), county fair (families, lots of sides).
+
+### Critics and popularity
+
+- **Reputation** (already built) is the average review in stars. **Popularity** is new: how many people have heard of the truck.
+- Now and then a critic orders. They look slightly different and their ticket is marked. Their verdict counts like several normal reviews.
+- A great critic review runs as a newspaper clipping, magazine article or local TV spot on the summary screen. Each raises popularity for the next few towns. A bad one does the opposite, more gently.
+- Popularity brings more customers. Reputation and popularity together raise what people will pay: the "fair" price becomes higher as the truck gets famous, so a well-known truck can charge High prices without the value penalty. That turns James's line, "more popularity and higher reviews mean people are willing to pay more", into one number: willingness to pay.
+
+### Build order
+
+1. **Map and unlocks.** Map screen, towns as data, roads open on a pass, postcards. Existing stops become the first town of each region. Works in both modes.
+2. **Crowd profiles.** One profile per town, wired into traffic, patience, tips and the business-mode rating.
+3. **Events.** Day counter, events calendar on the map, event shifts.
+4. **Critics, press, popularity.** Critic customers, clippings and TV spots, popularity, willingness to pay.
+5. More towns and regional recipes as content, then the panini press and menu editor from section 2.
+
+### Open questions for James
+
+1. Should the map show the whole country with locked regions greyed out, or reveal one region at a time?
+2. Should events be on fixed days (so you plan a route), or pop up a day or two ahead (so you react)? Fixed days suit a map you can plan on; I'd start there.

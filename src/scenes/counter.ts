@@ -183,13 +183,15 @@ export class CounterView {
     lip.position.set(x0 + GRILL_CX, GRILL_TOP + 0.1, 2.92);
     this.scene.add(lip);
     // Trash can beside the grill for burnt mistakes.
-    const can = mesh(faceted(new THREE.CylinderGeometry(TRASH.r, TRASH.r * 0.85, 1.1, 14)), "#6f7f7b");
+    const can = mesh(faceted(new THREE.CylinderGeometry(TRASH.r, TRASH.r * 0.85, 1.1, 14)), "#7d8d89", { ink: false });
     can.position.set(x0 + TRASH.x, 0.55, TRASH.z);
     const rim = mesh(faceted(new THREE.TorusGeometry(TRASH.r, 0.06, 5, 16)), "#4c5855", { ink: false });
     rim.rotation.x = Math.PI / 2;
     rim.position.set(x0 + TRASH.x, 1.1, TRASH.z);
     const hole = mesh(faceted(new THREE.CylinderGeometry(TRASH.r - 0.06, TRASH.r - 0.06, 0.02, 14)), "#222826", { ink: false, shadow: false });
     hole.position.set(x0 + TRASH.x, 1.09, TRASH.z);
+    hole.receiveShadow = false;
+    can.receiveShadow = false;
     this.scene.add(can, rim, hole);
 
     const puffMat = new THREE.MeshBasicMaterial({ color: "#f2f2f2", transparent: true, opacity: 0.3, depthWrite: false });

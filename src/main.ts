@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { buzz, Sfx } from "./audio";
-import { pattyLabel } from "./game/cooking";
+import { avgCook, bunToast, pattyLabel } from "./game/cooking";
 import { makeOrder, PINECREST_MENU, seededRng, type Rng } from "./game/menu";
 import { payout, scorePlate } from "./game/scoring";
 import type { DrinkId, Order, Piece, Plate, SauceKind } from "./game/types";
@@ -953,6 +953,7 @@ function updateUi(): void {
   );
 
   ui.tabs.forEach((t, i) => t.setAttribute("aria-selected", String(i === counter.page)));
+  updateGrillTags();
   ui.drinkLabels.forEach((el, i) => {
     const v = counter.drinkLabelPoint(i).project(counter.camera);
     const x = ((v.x + 1) / 2) * bands.counter.w;
@@ -979,6 +980,59 @@ function updateUi(): void {
   const text = now < hintUntil ? hintText : tut;
   if (text) ui.hint.textContent = text;
   ui.hint.hidden = !text || game.phase !== "playing";
+}
+
+/** Small doneness tags floating over grill items, so players don't have to judge colour alone. */
+const grillTags: HTMLElement[] = [];
+function itemTag(p: Piece): string {
+  const short = (t: number) => {
+    const l = pattyLabel(t);
+    return l === "Well done" ? "Well" : l === "Medium" ? "Med" : l;
+  };
+  switch (p.kind) {
+    case "patty":
+      return `<span>▼ ${short(p.cook[0])}</span><span>▲ ${short(p.cook[1])}</span>`;
+    case "bacon": {
+      const t = avgCook(p);
+      return t >= 1 ? "Burnt" : t >= 0.4 ? "Crispy" : p.cook[0] > 0.3 && p.cook[1] < 0.1 ? "Flip me" : "Raw";
+    }
+    case "egg": {
+      const t = Math.max(p.cook[0], p.cook[1]);
+      return t >= 1 ? "Rubbery" : t >= 0.35 ? "Set" : "Runny";
+    }
+    case "bun": {
+      const t = bunToast(p);
+      return t >= 0.95 ? "Burnt" : t >= 0.35 ? "Toasted" : "Toasting";
+    }
+    default:
+      return "";
+  }
+}
+function updateGrillTags(): void {
+  const items = game.phase === "playing" ? counter.grillItems : [];
+  while (grillTags.length < items.length) {
+    const el = document.createElement("div");
+    el.className = "gtag";
+    ui.root.appendChild(el);
+    grillTags.push(el);
+  }
+  grillTags.forEach((el, i) => {
+    const it = items[i];
+    if (!it) {
+      el.hidden = true;
+      return;
+    }
+    const v = it.obj.position.clone().add(new THREE.Vector3(0, 0.2, 0.75)).project(counter.camera);
+    const x = ((v.x + 1) / 2) * bands.counter.w;
+    el.hidden = x < 0 || x > bands.counter.w || it.flipT >= 0;
+    if (el.hidden) return;
+    const html = itemTag(it.piece);
+    if (el.innerHTML !== html) el.innerHTML = html;
+    const burning = Math.max(it.piece.cook[0], it.piece.cook[1]) >= (it.piece.kind === "patty" || it.piece.kind === "bacon" ? 0.92 : 0.95);
+    el.classList.toggle("hot", burning);
+    el.style.left = `${x}px`;
+    el.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
+  });
 }
 
 const clearColor = new THREE.Color("#16231f");

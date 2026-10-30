@@ -35,5 +35,10 @@ export default defineConfig({
     __BUILT_AT__: JSON.stringify(builtAt),
   },
   plugins: [versionFile()],
-  build: { target: "es2020", chunkSizeWarningLimit: 900 },
+  build: {
+    target: "es2020",
+    chunkSizeWarningLimit: 900,
+    // ui.html is the component review page (src/ui/library.ts); it ships beside the game at /ui.html.
+    rollupOptions: { input: { main: "index.html", ui: "ui.html" } },
+  },
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { nextReputation, planFor, ratingBonus, trafficMult } from "./business";
 import { applyMods, makeOrder, seededRng } from "./menu";
-import { STOPS } from "./stops";
+import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent } from "./stops";
 import { passed, upgradeChoices } from "./progress";
 import { alignLayers, payout, scorePlate } from "./scoring";
 import type { Kind, Layer, Order, Piece, Plate } from "./types";
@@ -263,5 +263,24 @@ describe("crowds", () => {
 
   it("gives every town a crowd", () => {
     for (const t of STOPS) expect(t.crowd).toBeTruthy();
+  });
+});
+
+describe("events", () => {
+  it("happen on their day and repeat", () => {
+    const surf = EVENTS.find((e) => e.id === "surf")!;
+    expect(eventOn(surf.town, surf.day)?.id).toBe("surf");
+    expect(eventOn(surf.town, surf.day + 1)).toBeNull();
+    expect(eventOn(surf.town, surf.day + surf.every)?.id).toBe("surf");
+    expect(nextDay(surf, surf.day + 1)).toBe(surf.day + surf.every);
+  });
+
+  it("make a town busier with the event crowd and special", () => {
+    const rodeo = EVENTS.find((e) => e.id === "rodeo")!;
+    const t = townById(rodeo.town);
+    const on = withEvent(t, rodeo);
+    expect(on.customers).toBeGreaterThan(t.customers);
+    expect(on.crowd).toBe(rodeo.crowd);
+    expect(on.menu.some((r) => r.name === rodeo.special!.name)).toBe(true);
   });
 });

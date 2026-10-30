@@ -22,6 +22,8 @@ export interface Save {
   stop?: number;
   /** Where the truck is parked on the road map. */
   town: string;
+  /** Days on the road: every shift is a day. Events happen on set days. */
+  day: number;
   /** Towns the truck can drive to, and towns whose shift has been passed. */
   unlocked: string[];
   passedTowns: string[];
@@ -50,7 +52,7 @@ export interface Save {
 const KEY = "bv-save-v1";
 
 export function freshSave(): Save {
-  return { town: START_TOWN, unlocked: [START_TOWN], passedTowns: [], upgrades: [], bank: 0, best: {}, tutorialDone: false, trips: 0, offer: [], known: {}, biz: false, plan: null, reviews: [], rep: 2, repWeight: 6 };
+  return { town: START_TOWN, day: 1, unlocked: [START_TOWN], passedTowns: [], upgrades: [], bank: 0, best: {}, tutorialDone: false, trips: 0, offer: [], known: {}, biz: false, plan: null, reviews: [], rep: 2, repWeight: 6 };
 }
 
 export function loadSave(): Save {

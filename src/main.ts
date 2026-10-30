@@ -3,7 +3,7 @@ import { buzz, Sfx } from "./audio";
 import { avgCook, bunToast, MELT_RATE, pattyLabel } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { freshSave, loadSave, passed, passTown, upgradeChoices, UPGRADES, writeSave, type UpgradeId } from "./game/progress";
-import { townById } from "./game/stops";
+import { eventOn, townById, withEvent, type TownEvent } from "./game/stops";
 import { HOLD_GRACE, HOLD_RUIN, payout, scorePlate, starsFor } from "./game/scoring";
 import {
   CARTON_COST,
@@ -50,7 +50,8 @@ const counter = new CounterView();
 const ui = buildUi(document.getElementById("ui")!, PAGES);
 
 const save = loadSave();
-const stop = () => townById(game.town);
+/** The town being played, as it is today (an event makes it busier and changes the crowd). */
+const stop = () => withEvent(townById(game.town), game.event);
 const has = (u: UpgradeId) => save.upgrades.includes(u);
 
 interface Slot {
@@ -85,6 +86,8 @@ const game = {
   town: save.town,
   /** Town highlighted on the map. */
   mapSel: save.town,
+  /** Event on in this town today, during a shift. */
+  event: null as TownEvent | null,
   rng: seededRng(Date.now() % 100000) as Rng,
   slots: [0, 1, 2].map(
     (): Slot => ({ order: null, plate: emptyPlate(), patience: 0, maxPatience: 1, leaving: false, fig: null, ticketKey: "", bubble: null, expanded: false }),
@@ -1253,6 +1256,8 @@ function startShift(plan: Plan | null = null): void {
   counter.warm = false;
   for (const b of counter.baskets) Object.assign(b, { loaded: false, cook: 0, down: false, goldenRung: false, amount: 0 });
   counter.resetStations();
+  game.town = save.town;
+  game.event = eventOn(save.town, save.day);
   Object.assign(game, {
     phase: "playing",
     time: 0,
@@ -1276,7 +1281,9 @@ function startShift(plan: Plan | null = null): void {
   counter.fryBoost = has("turbo") ? 1.35 : 1;
   counter.autoStopPour = has("autostop");
   counter.setPage(HOME_PAGE);
-  const intro = stop().newThing;
+  const intro = game.event
+    ? `${game.event.name} today! ${game.event.blurb}${game.event.special ? ` Special: ${game.event.special.name}.` : ""}`
+    : stop().newThing;
   if (intro && !game.tutorial) showHint(intro, 6);
   ui.title.hidden = true;
   ui.menu.hidden = true;
@@ -1288,7 +1295,7 @@ function applyStop(): void {
   const st = stop();
   counter.setPantry(st.pantry);
   customersView.setBackdrop(st.backdrop);
-  ui.stop.textContent = st.name;
+  ui.stop.textContent = game.event ? `${st.name} · ${game.event.name}` : st.name;
 }
 
 const offerList = () => save.offer.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean);
@@ -1301,6 +1308,7 @@ function highlights(reviews: Review[]): Review[] {
 }
 
 function showPlan(): void {
+  game.event = eventOn(save.town, save.day);
   const plan = planFor(stop(), save.plan);
   ui.title.innerHTML = planHtml({ stop: stop(), plan, rep: save.rep, reviews: save.reviews, customers: plannedCustomers(plan) });
   ui.title.hidden = false;
@@ -1309,6 +1317,7 @@ function showPlan(): void {
 
 function showTitle(keepScroll = false): void {
   game.town = save.town;
+  game.event = eventOn(save.town, save.day);
   applyStop();
   const card = ui.title.querySelector(".card");
   const scroll = keepScroll && card ? card.scrollTop : 0;
@@ -1318,6 +1327,7 @@ function showTitle(keepScroll = false): void {
     unlocked: save.unlocked,
     passed: save.passedTowns,
     best: save.best,
+    day: save.day,
     trips: save.trips,
     bank: save.bank,
     owned: save.upgrades.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean),
@@ -1338,6 +1348,7 @@ function showTitle(keepScroll = false): void {
 
 function endShift(): void {
   game.phase = "summary";
+  save.day++;
   for (const s of game.slots) {
     s.bubble?.remove();
     s.bubble = null;

@@ -462,3 +462,9 @@ html, body {
 .townCard { display: grid; gap: 6px; }
 .townCard h3 .rg { font: 700 12px var(--body); color: var(--muted); margin-left: 4px; }
 .card .crowd { font-size: 13px; background: #eef4e4; border-radius: 10px; padding: 6px 9px; }
+.map .flag circle { fill: var(--tomato); stroke: var(--ink); stroke-width: 0.4; }
+.map .flag text { font: 800 3px var(--body); fill: #fff; text-anchor: middle; }
+.events { list-style: none; padding: 0 !important; display: grid; gap: 4px; font-size: 13px !important; }
+.events li { background: #fff; border-radius: 9px; padding: 5px 9px; cursor: pointer; }
+.events li b { color: var(--tomato); margin-right: 4px; }
+.card .event { font-size: 13px; background: #ffe3d6; border-radius: 10px; padding: 6px 9px; }

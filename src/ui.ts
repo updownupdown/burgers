@@ -1,7 +1,7 @@
 import type { Plan, Review } from "./game/business";
 import { CROWD, menuOf, PRICE, QUALITY, recipeCost, ratingBonus } from "./game/business";
 import type { Upgrade } from "./game/progress";
-import { REGIONS, STOPS, type Stop } from "./game/stops";
+import { EVENTS, eventOn, nextDay, REGIONS, STOPS, townById, type Stop } from "./game/stops";
 import type { Order, Plate } from "./game/types";
 import { DRINK_COLOR, DRINK_LABEL, KIND_COLOR, KIND_LABEL } from "./game/types";
 import { SLOT_COLORS } from "./scenes/tray";
@@ -45,7 +45,7 @@ export function planHtml(p: { stop: Stop; plan: Plan; rep: number; reviews: Revi
   return `<div class="card plan">
     <p class="sub">Before opening · ${esc(p.stop.name)}</p>
     <h2>Plan the shift</h2>
-    <p class="crowd"><b>${CROWD[p.stop.crowd].label}:</b> ${esc(CROWD[p.stop.crowd].blurb)}</p>
+    ${crowdHtml(p.stop.crowd)}
     <p class="rep">Reputation <b>${p.rep.toFixed(1)} ★</b>${p.reviews.length ? ` from ${p.reviews.length} reviews` : " (new truck)"}</p>
     <h3>Ingredients</h3>
     ${seg("plan-q", p.plan.quality, Object.entries(QUALITY).map(([k, q]) => [k, q.label]))}
@@ -225,7 +225,7 @@ function offerHtml(offer: Upgrade[]): string {
 }
 
 /** The road map: regions, roads and towns. Locked towns are greyed out; the truck sits on the current one. */
-function mapSvg(m: { town: string; selected: string; unlocked: string[]; passed: string[]; best: Record<string, number> }): string {
+function mapSvg(m: { town: string; selected: string; unlocked: string[]; passed: string[]; best: Record<string, number>; day: number }): string {
   const byId = new Map(STOPS.map((t) => [t.id, t]));
   const open = (id: string) => m.unlocked.includes(id);
   const land = REGIONS.map((r) => {
@@ -253,6 +253,7 @@ function mapSvg(m: { town: string; selected: string; unlocked: string[]; passed:
       <circle cx="${t.x}" cy="${t.y}" r="7" class="hit"/>
       <circle cx="${t.x}" cy="${t.y}" r="${r}" class="dot"/>
       <text x="${t.x}" y="${t.y + r + 3.6}" class="tname">${esc(t.name)}</text>
+      ${eventOn(t.id, m.day) ? `<g class="flag"><circle cx="${t.x + r + 1.6}" cy="${t.y - r - 0.4}" r="2.3"/><text x="${t.x + r + 1.6}" y="${t.y - r + 0.7}">!</text></g>` : ""}
       ${m.passed.includes(t.id) ? `<text x="${t.x}" y="${t.y - r - 1.2}" class="tstars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</text>` : ""}
     </g>`;
   }).join("");
@@ -264,12 +265,33 @@ function mapSvg(m: { town: string; selected: string; unlocked: string[]; passed:
   return `<svg class="map" viewBox="0 0 100 140" role="img" aria-label="Road map">${land}${roads}${towns}${truck}</svg>`;
 }
 
+const crowdHtml = (c: Stop["crowd"]) => `<p class="crowd"><b>${CROWD[c].label}:</b> ${esc(CROWD[c].blurb)}</p>`;
+
+/** What's on soon, anywhere on the map. */
+function eventsHtml(day: number): string {
+  const soon = EVENTS.map((e) => ({ e, d: nextDay(e, day) }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 3);
+  return `<ul class="events">${soon
+    .map(({ e, d }) => `<li data-act="town" data-id="${e.town}"><b>${d === day ? "Today" : d === day + 1 ? "Tomorrow" : `Day ${d}`}</b> ${esc(e.name)} · ${esc(townById(e.town).name)}</li>`)
+    .join("")}</ul>`;
+}
+
+function townEventHtml(town: string, day: number): string {
+  const e = EVENTS.find((x) => x.town === town);
+  if (!e) return "";
+  const d = nextDay(e, day);
+  const when = d === day ? "today" : d === day + 1 ? "tomorrow" : `on day ${d}`;
+  return `<p class="event"><b>${esc(e.name)} ${when}.</b> ${esc(e.blurb)}${e.special ? ` Special: ${esc(e.special.name)}.` : ""} Busier, longer shift.</p>`;
+}
+
 export function titleHtml(t: {
   town: Stop;
   selected: Stop;
   unlocked: string[];
   passed: string[];
   best: Record<string, number>;
+  day: number;
   trips: number;
   bank: number;
   owned: Upgrade[];
@@ -291,14 +313,16 @@ export function titleHtml(t: {
       ? `<button class="btn primary" data-act="drive" data-id="${sel.id}" ${t.offer.length ? "disabled" : ""}>Drive to ${esc(sel.name)}</button>`
       : `<button class="btn primary" disabled>Locked: pass a town next to it first</button>`;
   return `<div class="card title">
-    <p class="sub">${trip}A food truck road trip · ${t.passed.length} of ${STOPS.length} towns</p>
+    <p class="sub">${trip}Day ${t.day} on the road · ${t.passed.length} of ${STOPS.length} towns</p>
     <h1>Bun Voyage</h1>
     ${offerHtml(t.offer)}
-    ${t.fresh ? "" : mapSvg({ town: t.town.id, selected: sel.id, unlocked: t.unlocked, passed: t.passed, best: t.best })}
+    ${t.fresh ? "" : mapSvg({ town: t.town.id, selected: sel.id, unlocked: t.unlocked, passed: t.passed, best: t.best, day: t.day })}
+    ${t.fresh ? "" : eventsHtml(t.day)}
     <div class="townCard">
       <h3>${esc(sel.name)} <span class="rg">${esc(region.name)}${sel.capital ? " · big city" : ""}</span></h3>
       <p>${esc(sel.blurb)}</p>
-      <p class="crowd"><b>${CROWD[sel.crowd].label}:</b> ${esc(CROWD[sel.crowd].blurb)}</p>
+      ${crowdHtml(eventOn(sel.id, t.day)?.crowd ?? sel.crowd)}
+      ${townEventHtml(sel.id, t.day)}
       ${best !== undefined ? `<p class="note">Best shift here: ${best.toFixed(1)} ★</p>` : ""}
       ${canGo && sel.newThing ? `<p class="new">${esc(sel.newThing)}</p>` : ""}
     </div>

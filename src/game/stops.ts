@@ -278,3 +278,113 @@ export function townById(id: string): Stop {
 
 /** First town of each region, in trip order. */
 export const REGION_START_IDS = REGION_STARTS.map((t) => t.id);
+
+/** A local event: on its days the town is busier, with its own crowd and sometimes a special. */
+export interface TownEvent {
+  id: string;
+  name: string;
+  town: string;
+  /** First day it happens, then again every `every` days. */
+  day: number;
+  every: number;
+  crowd: CrowdId;
+  /** Customers multiplier and extra seconds of shift. */
+  busy: number;
+  longer: number;
+  blurb: string;
+  special?: Recipe;
+}
+
+export const EVENTS: TownEvent[] = [
+  {
+    id: "market",
+    name: "Farmers' market",
+    town: "cedarfalls",
+    day: 3,
+    every: 5,
+    crowd: "foodies",
+    busy: 1.3,
+    longer: 30,
+    blurb: "Locals with tote bags and opinions about bread.",
+  },
+  {
+    id: "fair",
+    name: "County fair",
+    town: "summit",
+    day: 5,
+    every: 7,
+    crowd: "families",
+    busy: 1.5,
+    longer: 40,
+    blurb: "Rides, prize pigs and a very long queue for food.",
+  },
+  {
+    id: "surf",
+    name: "Surf contest",
+    town: "driftwood",
+    day: 6,
+    every: 6,
+    crowd: "party",
+    busy: 1.6,
+    longer: 40,
+    blurb: "Half the coast turns up to watch. Nobody packed lunch.",
+    special: { name: "Wipeout", price: 12, layers: ["bun", "patty", "pineapple", "cheese", "ketchup", "bun"], toasted: true, melt: false },
+  },
+  {
+    id: "seafest",
+    name: "Harbor festival",
+    town: "harbor",
+    day: 9,
+    every: 7,
+    crowd: "foodies",
+    busy: 1.35,
+    longer: 30,
+    blurb: "Boat parade, brass band, and a lot of people who know their food.",
+  },
+  {
+    id: "rodeo",
+    name: "Rodeo",
+    town: "dustbowl",
+    day: 10,
+    every: 6,
+    crowd: "party",
+    busy: 1.6,
+    longer: 40,
+    blurb: "Big appetites. Bigger hats.",
+    special: { name: "Rodeo Double", price: 17, layers: ["bun", "patty", "cheese", "bacon", "patty", "onion", "bun"], toasted: true, melt: true },
+  },
+  {
+    id: "chili",
+    name: "Chili cook-off",
+    town: "redmesa",
+    day: 12,
+    every: 7,
+    crowd: "families",
+    busy: 1.4,
+    longer: 30,
+    blurb: "Everyone's tasting chili all day and craving something else.",
+  },
+];
+
+/** The event on in a town on a given day, if any. */
+export function eventOn(town: string, day: number): TownEvent | null {
+  return EVENTS.find((e) => e.town === town && day >= e.day && (day - e.day) % e.every === 0) ?? null;
+}
+
+/** Next day (from `day` on) that an event happens. */
+export function nextDay(e: TownEvent, day: number): number {
+  if (day <= e.day) return e.day;
+  return e.day + Math.ceil((day - e.day) / e.every) * e.every;
+}
+
+/** A town as it plays on an event day: busier, longer, its event crowd, and any special added to the menu. */
+export function withEvent(t: Stop, e: TownEvent | null): Stop {
+  if (!e) return t;
+  return {
+    ...t,
+    crowd: e.crowd,
+    customers: Math.round(t.customers * e.busy),
+    shiftLength: t.shiftLength + e.longer,
+    menu: e.special ? [...t.menu, e.special] : t.menu,
+  };
+}

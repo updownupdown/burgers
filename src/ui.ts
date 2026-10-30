@@ -161,6 +161,17 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 
 const MOD_LABEL = { no: "No", extra: "Extra", add: "+" } as const;
 
+/** How a waiting customer feels. The figure at the window and the face on their ticket always agree. */
+export function patienceMood(pct: number): "neutral" | "sad" | "angry" {
+  return pct >= 0.5 ? "neutral" : pct >= 0.2 ? "sad" : "angry";
+}
+
+function moodFace(mood: "neutral" | "sad" | "angry"): string {
+  const mouth = mood === "neutral" ? "M5.5 11.2h5" : "M5.3 12c1.6-1.6 3.8-1.6 5.4 0";
+  const brows = mood === "angry" ? `<path d="M4.4 5.2l2.6 1.2M11.6 5.2l-2.6 1.2"/>` : mood === "sad" ? `<path d="M4.6 6.2l2.4-1M11.4 6.2l-2.4-1"/>` : "";
+  return `<svg class="face" viewBox="0 0 16 16" aria-label="${mood}"><circle cx="8" cy="8" r="7.2"/><g><circle cx="5.9" cy="7.6" r="1"/><circle cx="10.1" cy="7.6" r="1"/>${brows}<path d="${mouth}"/></g></svg>`;
+}
+
 /**
  * Ticket HTML. Compact (default once a recipe is familiar): the recipe name, how to cook
  * it, the modifiers, and a strip of pips showing stacking progress. Expanded: every layer,
@@ -213,9 +224,9 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, expande
       `<span class="${plate.drink?.flavor === order.drink && plate.drink.size === order.drinkSize ? "ok" : ""}"><b style="background:${DRINK_COLOR[order.drink]}"></b><i class="sz">${order.drinkSize}</i>${DRINK_LABEL[order.drink]}</span>`,
     );
   const pct = Math.max(0, Math.min(1, patience));
-  const color = pct > 0.5 ? "#4caf50" : pct > 0.25 ? "#f0a92b" : "#e5432b";
-  return `<div class="pat"><i style="width:${(pct * 100).toFixed(0)}%;background:${color}"></i></div>
-    <div class="name">${order.critic ? `<span class="critic" title="Food critic">Critic</span>` : ""}<span class="l">#${order.id} ${esc(order.name)}</span><span class="exp">${expanded ? "▴" : "▾"}</span></div>
+  const mood = patienceMood(pct);
+  return `<div class="pat ${mood}">${moodFace(mood)}<span><i style="width:${(pct * 100).toFixed(0)}%"></i></span></div>
+    ${order.critic ? `<div class="critic" title="Food critic">Critic</div>` : ""}<div class="name"><span class="l">#${order.id} ${esc(order.name)}</span><span class="exp">${expanded ? "▴" : "▾"}</span></div>
     ${body}
     ${sides.length ? `<div class="sides">${sides.join("")}</div>` : ""}`;
 }

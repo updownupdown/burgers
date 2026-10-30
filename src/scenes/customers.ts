@@ -237,13 +237,13 @@ export class CustomersView {
     this.camera.updateMatrixWorld();
     // Customers stand at the left side of each slot; the ticket card fills the right side.
     for (let i = 0; i < 3; i++) {
-      this.raycaster.setFromCamera(new THREE.Vector2(((i + 0.25) / 3) * 2 - 1, 0), this.camera);
+      this.raycaster.setFromCamera(new THREE.Vector2(((i + 0.22) / 3) * 2 - 1, 0), this.camera);
       const out = new THREE.Vector3();
       this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), out);
       this.slotX[i] = out.x;
     }
     const spacing = this.slotX[1] - this.slotX[0];
-    const s = Math.min(0.95, spacing * 0.26);
+    const s = Math.min(0.95, spacing * 0.24);
     for (const sl of this.slots) if (sl.fig) sl.fig.root.scale.setScalar(s);
     this.figScale = s;
   }

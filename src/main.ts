@@ -32,7 +32,7 @@ import { CounterView, GRILL_SCALE, HOME_PAGE, PAGES, pageX, GRILL_TOP, SLEEVE, W
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
 import "./style.css";
-import { buildUi, planHtml, summaryHtml, ticketHtml, titleHtml } from "./ui";
+import { buildUi, patienceMood, planHtml, summaryHtml, ticketHtml, titleHtml } from "./ui";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 
 // ---------------------------------------------------------------------------
@@ -178,8 +178,8 @@ function layout(): void {
   // Tickets fill the right part of each customer slot.
   const slotW = w / 3;
   ui.tickets.forEach((t, i) => {
-    // At least wide enough for "Patty Med"; on narrow phones it overlaps the customer a little.
-    const tw = Math.max(slotW * 0.51, 72);
+    // Wide enough for "Patty Med" at a readable size; on narrow phones it overlaps the customer a little.
+    const tw = Math.max(slotW * 0.6, 84);
     t.style.left = `${(i + 1) * slotW - tw - slotW * 0.02}px`;
     t.style.width = `${tw}px`;
     const top = Math.max(custH * 0.16, safeT + 44);
@@ -1503,7 +1503,7 @@ function tick(dt: number): void {
     game.slots.forEach((s, i) => {
       if (!s.order || s.leaving) return;
       s.patience -= dt;
-      if (s.fig) s.fig.setMood(s.patience / s.maxPatience < 0.3 ? "sad" : "neutral");
+      if (s.fig) s.fig.setMood(patienceMood(s.patience / s.maxPatience));
       if (s.patience <= 0) {
         game.lost++;
         if (s.order.critic) criticVerdict(0, []);

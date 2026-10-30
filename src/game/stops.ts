@@ -29,14 +29,41 @@ export interface Stop {
   shiftLength: number;
   /** Short line shown when a new mechanic or ingredient appears here. */
   newThing?: string;
+  /** Road map: which region, where on the map (0..100 by 0..140), and the towns a pass opens up. */
+  region: RegionId;
+  x: number;
+  y: number;
+  roads: string[];
+  /** The region's big city: passing it opens the next region. */
+  capital?: boolean;
 }
 
-export const STOPS: Stop[] = [
+export type RegionId = "mountains" | "coast" | "desert";
+
+export interface Region {
+  id: RegionId;
+  name: string;
+  /** Land colour on the map, and which top corner holds the region's name. */
+  color: string;
+  label: "left" | "right";
+}
+
+export const REGIONS: Region[] = [
+  { id: "mountains", name: "The Pines", color: "#8fbf7a", label: "right" },
+  { id: "coast", name: "Sunny Coast", color: "#e9d39a", label: "left" },
+  { id: "desert", name: "Red Rock Desert", color: "#e2a77a", label: "right" },
+];
+
+const REGION_STARTS: Stop[] = [
   {
     id: "pinecrest",
     name: "Pinecrest",
     blurb: "Pinecrest is a mountain town full of hungry hikers. Keep them fed until closing time.",
     backdrop: "mountains",
+    region: "mountains",
+    x: 22,
+    y: 12,
+    roads: ["elkpass", "cedarfalls"],
     pantry: ["bun", "patty", "bacon", "egg", "cheese", "lettuce", "tomato", "onion", "pickle"],
     customers: 9,
     shiftLength: 180,
@@ -53,6 +80,10 @@ export const STOPS: Stop[] = [
     name: "Saltwater Bay",
     blurb: "Saltwater Bay is a beach town of surfers, lifeguards and one very bold crab.",
     backdrop: "beach",
+    region: "coast",
+    x: 80,
+    y: 58,
+    roads: ["gullpoint", "driftwood"],
     pantry: ["bun", "patty", "bacon", "pineapple", "cheese", "lettuce", "tomato", "onion", "pickle"],
     customers: 10,
     shiftLength: 190,
@@ -70,6 +101,10 @@ export const STOPS: Stop[] = [
     name: "Red Mesa",
     blurb: "Red Mesa is a desert crossroads where the cowhands like it hot.",
     backdrop: "desert",
+    region: "desert",
+    x: 22,
+    y: 97,
+    roads: ["cactus", "dustbowl"],
     pantry: ["bun", "patty", "bacon", "egg", "cheese", "lettuce", "tomato", "onion", "jalapeno"],
     customers: 11,
     shiftLength: 200,
@@ -83,3 +118,148 @@ export const STOPS: Stop[] = [
     ],
   },
 ];
+
+const [PINES, COAST, DESERT] = REGION_STARTS;
+const pick = (from: Stop, names: string[], extra: Recipe[] = []): Recipe[] => [...from.menu.filter((r) => names.includes(r.name)), ...extra];
+
+const CAMPFIRE_MELT: Recipe = { name: "Campfire Melt", price: 11, layers: ["bun", "patty", "cheese", "onion", "bun"], toasted: true, melt: true };
+const HARBOR_CLASSIC: Recipe = { name: "Harbor Classic", price: 12, layers: ["bun", "lettuce", "patty", "cheese", "tomato", "ketchup", "bun"], toasted: true, melt: true };
+const SUN_VALLEY_SUPREME: Recipe = {
+  name: "Sun Valley Supreme",
+  price: 18,
+  layers: ["bun", "patty", "cheese", "bacon", "jalapeno", "egg", "bun"],
+  toasted: true,
+  melt: true,
+  from: 0.3,
+};
+
+/** Every town on the road map, region by region. Each region opens at its first town and ends at its capital. */
+export const STOPS: Stop[] = [
+  PINES,
+  {
+    ...PINES,
+    id: "elkpass",
+    name: "Elk Pass",
+    blurb: "Elk Pass is a highway rest stop. Drivers want food fast and back on the road.",
+    newThing: undefined,
+    x: 12,
+    y: 30,
+    roads: ["summit"],
+    customers: 11,
+    menu: pick(PINES, ["Plain Jane", "Trailhead Classic", "Cheesy Switchback", "Lumberjack Stack"]),
+  },
+  {
+    ...PINES,
+    id: "cedarfalls",
+    name: "Cedar Falls",
+    blurb: "Cedar Falls is a lakeside campground. Families, fishing rods and very hungry kids.",
+    newThing: "New here: the Campfire Melt. Melt the cheese on the patty while it's on the grill.",
+    x: 44,
+    y: 26,
+    roads: ["summit"],
+    customers: 10,
+    menu: pick(PINES, ["Plain Jane", "Trailhead Classic", "Sunrise Summit"], [CAMPFIRE_MELT]),
+  },
+  {
+    ...PINES,
+    id: "summit",
+    name: "Summit City",
+    blurb: "Summit City is the big town in the hills. Do well here and the coast road opens.",
+    newThing: undefined,
+    x: 30,
+    y: 44,
+    roads: ["saltwater"],
+    capital: true,
+    customers: 12,
+    shiftLength: 200,
+    menu: [...PINES.menu, CAMPFIRE_MELT],
+  },
+  COAST,
+  {
+    ...COAST,
+    id: "gullpoint",
+    name: "Gull Point",
+    blurb: "Gull Point is a fishing harbour. Early starts, big appetites, no patience for fuss.",
+    newThing: undefined,
+    x: 90,
+    y: 74,
+    roads: ["harbor"],
+    customers: 11,
+    menu: pick(COAST, ["Boardwalk Basic", "Low Tide", "Sandy Pickle", "Big Kahuna"]),
+  },
+  {
+    ...COAST,
+    id: "driftwood",
+    name: "Driftwood",
+    blurb: "Driftwood is a surf camp. Everyone's sandy, sunburnt and starving.",
+    newThing: undefined,
+    x: 62,
+    y: 70,
+    roads: ["harbor"],
+    customers: 12,
+    menu: pick(COAST, ["Boardwalk Basic", "Luau Stack", "Sandy Pickle"]),
+  },
+  {
+    ...COAST,
+    id: "harbor",
+    name: "Harbor City",
+    blurb: "Harbor City is the coast's big city. Do well here and the desert highway opens.",
+    newThing: "New here: the Harbor Classic, with melted cheese.",
+    x: 76,
+    y: 86,
+    roads: ["redmesa"],
+    capital: true,
+    customers: 13,
+    shiftLength: 210,
+    menu: [...COAST.menu, HARBOR_CLASSIC],
+  },
+  DESERT,
+  {
+    ...DESERT,
+    id: "cactus",
+    name: "Cactus Junction",
+    blurb: "Cactus Junction is a truck stop where three highways meet.",
+    newThing: undefined,
+    x: 15,
+    y: 112,
+    roads: ["sunvalley"],
+    customers: 12,
+    menu: pick(DESERT, ["Tumbleweed", "Mesa Smash", "Ranch Breakfast"]),
+  },
+  {
+    ...DESERT,
+    id: "dustbowl",
+    name: "Dust Bowl Flats",
+    blurb: "Dust Bowl Flats is a rodeo town. They like their burgers big and their peppers hot.",
+    newThing: undefined,
+    x: 42,
+    y: 111,
+    roads: ["sunvalley"],
+    customers: 11,
+    menu: pick(DESERT, ["Rattlesnake", "Sunset Double", "Tumbleweed", "Ranch Breakfast"]),
+  },
+  {
+    ...DESERT,
+    id: "sunvalley",
+    name: "Sun Valley",
+    blurb: "Sun Valley is the end of the road. Finish here and the trip is complete.",
+    newThing: "New here: the Sun Valley Supreme.",
+    x: 28,
+    y: 125,
+    roads: [],
+    capital: true,
+    customers: 14,
+    shiftLength: 220,
+    menu: [...DESERT.menu, SUN_VALLEY_SUPREME],
+  },
+];
+
+export const START_TOWN = "pinecrest";
+export const FINAL_TOWN = "sunvalley";
+
+export function townById(id: string): Stop {
+  return STOPS.find((t) => t.id === id) ?? STOPS[0];
+}
+
+/** First town of each region, in trip order. */
+export const REGION_START_IDS = REGION_STARTS.map((t) => t.id);

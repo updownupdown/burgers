@@ -8,7 +8,9 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
   if (process.env.STOP) {
     // BIZ=quality,price plays business mode with that plan, e.g. BIZ=premium,high.
     const biz = process.env.BIZ ? process.env.BIZ.split(',') : null;
-    await p.evaluate(([n, biz]) => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: n, tutorialDone: true, biz: !!biz, plan: biz ? { quality: biz[0], price: biz[1], menu: [] } : null })), [+process.env.STOP, biz]);
+    // TOWN=id parks the truck in that town instead (STOP=n picks the first town of region n).
+    const town = process.env.TOWN ? { town: process.env.TOWN, unlocked: [process.env.TOWN] } : {};
+    await p.evaluate(([n, biz, town]) => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: n, ...town, tutorialDone: true, biz: !!biz, plan: biz ? { quality: biz[0], price: biz[1], menu: [] } : null })), [+process.env.STOP, biz, town]);
     await p.reload();
     await p.waitForTimeout(600);
   }

@@ -2,8 +2,8 @@ import * as THREE from "three";
 import { buzz, Sfx } from "./audio";
 import { avgCook, bunToast, MELT_RATE, pattyLabel } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
-import { freshSave, loadSave, passed, upgradeChoices, UPGRADES, writeSave, type UpgradeId } from "./game/progress";
-import { STOPS } from "./game/stops";
+import { freshSave, loadSave, passed, passTown, upgradeChoices, UPGRADES, writeSave, type UpgradeId } from "./game/progress";
+import { townById } from "./game/stops";
 import { HOLD_GRACE, HOLD_RUIN, payout, scorePlate, starsFor } from "./game/scoring";
 import {
   CARTON_COST,
@@ -49,7 +49,7 @@ const counter = new CounterView();
 const ui = buildUi(document.getElementById("ui")!, PAGES);
 
 const save = loadSave();
-const stop = () => STOPS[game.stopIdx];
+const stop = () => townById(game.town);
 const has = (u: UpgradeId) => save.upgrades.includes(u);
 
 interface Slot {
@@ -81,7 +81,9 @@ const game = {
   orderSeq: 1,
   active: 0,
   tutorial: true,
-  stopIdx: save.stop,
+  town: save.town,
+  /** Town highlighted on the map. */
+  mapSel: save.town,
   rng: seededRng(Date.now() % 100000) as Rng,
   slots: [0, 1, 2].map(
     (): Slot => ({ order: null, plate: emptyPlate(), patience: 0, maxPatience: 1, leaving: false, fig: null, ticketKey: "", bubble: null, expanded: false }),
@@ -1153,6 +1155,21 @@ ui.root.addEventListener("click", (e) => {
     case "next":
       showTitle();
       break;
+    case "town": {
+      const id = btn!.dataset.id!;
+      game.mapSel = id;
+      showTitle(true);
+      break;
+    }
+    case "drive": {
+      const id = btn!.dataset.id!;
+      if (!save.unlocked.includes(id) || save.offer.length) break;
+      save.town = id;
+      writeSave(save);
+      sfx.whoosh();
+      showTitle(true);
+      break;
+    }
     case "new-trip":
       if (btn!.dataset.armed !== "1") {
         btn!.dataset.armed = "1";
@@ -1160,6 +1177,7 @@ ui.root.addEventListener("click", (e) => {
         break;
       }
       Object.assign(save, freshSave(), { tutorialDone: save.tutorialDone, trips: save.trips, best: save.best });
+      game.mapSel = save.town;
       writeSave(save);
       showTitle();
       break;
@@ -1288,24 +1306,29 @@ function showPlan(): void {
   ui.summary.hidden = true;
 }
 
-function showTitle(): void {
-  game.stopIdx = save.stop;
+function showTitle(keepScroll = false): void {
+  game.town = save.town;
   applyStop();
+  const card = ui.title.querySelector(".card");
+  const scroll = keepScroll && card ? card.scrollTop : 0;
   ui.title.innerHTML = titleHtml({
-    stop: stop(),
-    stopNum: game.stopIdx + 1,
-    stops: STOPS.length,
+    town: stop(),
+    selected: townById(game.mapSel),
+    unlocked: save.unlocked,
+    passed: save.passedTowns,
+    best: save.best,
     trips: save.trips,
     bank: save.bank,
     owned: save.upgrades.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean),
     offer: offerList(),
-    fresh: !save.tutorialDone && save.stop === 0,
+    fresh: !save.tutorialDone && save.passedTowns.length === 0,
     biz: save.biz,
     rep: save.rep,
     reviews: save.reviews,
   });
+  ui.title.querySelector(".card")!.scrollTop = scroll;
   game.phase = "title";
-  screenShownAt = performance.now();
+  if (!keepScroll) screenShownAt = performance.now();
   ui.title.hidden = false;
   ui.summary.hidden = true;
   ui.menu.hidden = true;
@@ -1321,7 +1344,8 @@ function endShift(): void {
   const here = stop();
   const avg = game.stars.length ? game.stars.reduce((a, b) => a + b, 0) / game.stars.length : 0;
   const ok = passed(avg, game.served, game.customers);
-  const lastStop = game.stopIdx === STOPS.length - 1;
+  let lastStop = false;
+  const before = [...save.unlocked];
   const profit = game.money + game.tips - spills() - game.costs;
   save.bank += Math.max(0, Math.round(profit));
   const repBefore = save.rep;
@@ -1334,11 +1358,13 @@ function endShift(): void {
   save.best[here.id] = Math.max(save.best[here.id] ?? 0, avg);
   if (ok) {
     save.offer = upgradeChoices(save.upgrades, game.rng).map((u) => u.id);
-    if (lastStop) {
-      save.stop = 0;
-      save.trips++;
-    } else save.stop = game.stopIdx + 1;
+    const firstTime = !save.passedTowns.includes(here.id);
+    lastStop = passTown(save, here.id) && firstTime;
+    if (lastStop) save.trips++;
   }
+  const opened = save.unlocked.filter((id) => !before.includes(id)).map(townById);
+  // Point the map at the next new town so "Back to the map" leads somewhere.
+  if (opened.length) game.mapSel = opened[0].id;
   writeSave(save);
   ui.summary.innerHTML = summaryHtml({
     stop: here,
@@ -1360,7 +1386,7 @@ function endShift(): void {
       : null,
     best: game.best?.name ?? null,
     outcome: !ok ? "failed" : lastStop ? "trip" : "passed",
-    next: STOPS[save.stop],
+    opened,
     offer: offerList(),
   });
   ui.summary.hidden = false;

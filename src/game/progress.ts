@@ -1,5 +1,5 @@
 import type { Plan, Review } from "./business";
-import { STOPS } from "./stops";
+import { REGION_START_IDS, START_TOWN, STOPS, townById } from "./stops";
 
 export type UpgradeId = "bench" | "tipjar" | "turbo" | "autostop" | "steady";
 
@@ -18,8 +18,13 @@ export const UPGRADES: Upgrade[] = [
 ];
 
 export interface Save {
-  /** Index into STOPS of the next shift to play. */
-  stop: number;
+  /** Old saves: index of the next region. Kept only to migrate into `town`. */
+  stop?: number;
+  /** Where the truck is parked on the road map. */
+  town: string;
+  /** Towns the truck can drive to, and towns whose shift has been passed. */
+  unlocked: string[];
+  passedTowns: string[];
   upgrades: UpgradeId[];
   bank: number;
   /** Best average stars per stop id. */
@@ -45,7 +50,7 @@ export interface Save {
 const KEY = "bv-save-v1";
 
 export function freshSave(): Save {
-  return { stop: 0, upgrades: [], bank: 0, best: {}, tutorialDone: false, trips: 0, offer: [], known: {}, biz: false, plan: null, reviews: [], rep: 2, repWeight: 6 };
+  return { town: START_TOWN, unlocked: [START_TOWN], passedTowns: [], upgrades: [], bank: 0, best: {}, tutorialDone: false, trips: 0, offer: [], known: {}, biz: false, plan: null, reviews: [], rep: 2, repWeight: 6 };
 }
 
 export function loadSave(): Save {
@@ -53,7 +58,16 @@ export function loadSave(): Save {
     const raw = localStorage.getItem(KEY);
     if (!raw) return freshSave();
     const s = { ...freshSave(), ...(JSON.parse(raw) as Partial<Save>) };
-    s.stop = Math.max(0, Math.min(STOPS.length - 1, s.stop | 0));
+    if (s.stop !== undefined && !(JSON.parse(raw) as Partial<Save>).town) {
+      // Saves from before the map: start at the first town of the region they'd reached.
+      const r = Math.max(0, Math.min(REGION_START_IDS.length - 1, s.stop | 0));
+      s.town = REGION_START_IDS[r];
+      s.unlocked = REGION_START_IDS.slice(0, r + 1);
+      s.passedTowns = REGION_START_IDS.slice(0, r);
+    }
+    delete s.stop;
+    if (!STOPS.some((t) => t.id === s.town)) s.town = START_TOWN;
+    if (!s.unlocked.includes(s.town)) s.unlocked.push(s.town);
     return s;
   } catch {
     return freshSave();
@@ -66,6 +80,13 @@ export function writeSave(s: Save): void {
   } catch {
     // Private browsing or full storage: progress just won't persist.
   }
+}
+
+/** After passing a town's shift: open its roads. Returns true when that was the last town of the trip. */
+export function passTown(s: Save, id: string): boolean {
+  if (!s.passedTowns.includes(id)) s.passedTowns.push(id);
+  for (const next of townById(id).roads) if (!s.unlocked.includes(next)) s.unlocked.push(next);
+  return townById(id).roads.length === 0;
 }
 
 /** A shift counts as passed with an average of at least one star and most customers served. */

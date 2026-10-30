@@ -1,7 +1,7 @@
 import type { Plan, Review } from "./game/business";
 import { menuOf, PRICE, QUALITY, recipeCost, ratingBonus } from "./game/business";
 import type { Upgrade } from "./game/progress";
-import type { Stop } from "./game/stops";
+import { REGIONS, STOPS, type Stop } from "./game/stops";
 import type { Order, Plate } from "./game/types";
 import { DRINK_COLOR, DRINK_LABEL, KIND_COLOR, KIND_LABEL } from "./game/types";
 import { SLOT_COLORS } from "./scenes/tray";
@@ -223,10 +223,52 @@ function offerHtml(offer: Upgrade[]): string {
     <div class="offers">${offer.map((u) => `<button class="offer" data-act="pick" data-id="${u.id}"><b>${esc(u.name)}</b><span>${esc(u.text)}</span></button>`).join("")}</div>`;
 }
 
+/** The road map: regions, roads and towns. Locked towns are greyed out; the truck sits on the current one. */
+function mapSvg(m: { town: string; selected: string; unlocked: string[]; passed: string[]; best: Record<string, number> }): string {
+  const byId = new Map(STOPS.map((t) => [t.id, t]));
+  const open = (id: string) => m.unlocked.includes(id);
+  const land = REGIONS.map((r) => {
+    const ts = STOPS.filter((t) => t.region === r.id);
+    const x0 = Math.min(...ts.map((t) => t.x)) - 9;
+    const x1 = Math.max(...ts.map((t) => t.x)) + 9;
+    const y0 = Math.min(...ts.map((t) => t.y)) - 9;
+    const y1 = Math.max(...ts.map((t) => t.y)) + 9;
+    const lit = ts.some((t) => open(t.id));
+    return `<g class="region ${lit ? "" : "locked"}"><rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" rx="9" fill="${r.color}"/>
+      <text x="${r.label === "left" ? x0 + 3 : x1 - 3}" y="${y0 + 5}" class="rname" text-anchor="${r.label === "left" ? "start" : "end"}">${esc(r.name)}</text></g>`;
+  }).join("");
+  const roads = STOPS.flatMap((a) =>
+    a.roads.map((id) => {
+      const b = byId.get(id)!;
+      const lit = open(a.id) && open(b.id);
+      return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" class="road ${lit ? "" : "locked"}"/>`;
+    }),
+  ).join("");
+  const towns = STOPS.map((t) => {
+    const cls = ["town", open(t.id) ? "" : "locked", m.passed.includes(t.id) ? "passed" : "", t.id === m.selected ? "sel" : "", t.capital ? "capital" : ""].join(" ");
+    const stars = Math.round(m.best[t.id] ?? 0);
+    const r = t.capital ? 3.6 : 2.8;
+    return `<g class="${cls}" data-act="town" data-id="${t.id}">
+      <circle cx="${t.x}" cy="${t.y}" r="7" class="hit"/>
+      <circle cx="${t.x}" cy="${t.y}" r="${r}" class="dot"/>
+      <text x="${t.x}" y="${t.y + r + 3.6}" class="tname">${esc(t.name)}</text>
+      ${m.passed.includes(t.id) ? `<text x="${t.x}" y="${t.y - r - 1.2}" class="tstars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</text>` : ""}
+    </g>`;
+  }).join("");
+  const here = byId.get(m.town)!;
+  const truck = `<g class="truck" transform="translate(${here.x - 4} ${here.y - 9.5})">
+    <rect x="0" y="0" width="8" height="4.6" rx="1.2" fill="#e5432b" stroke="#1d1410" stroke-width="0.6"/>
+    <rect x="5" y="0.8" width="2.2" height="1.8" rx="0.4" fill="#bfe3f2"/>
+    <circle cx="2" cy="4.8" r="1" fill="#1d1410"/><circle cx="6" cy="4.8" r="1" fill="#1d1410"/></g>`;
+  return `<svg class="map" viewBox="0 0 100 140" role="img" aria-label="Road map">${land}${roads}${towns}${truck}</svg>`;
+}
+
 export function titleHtml(t: {
-  stop: Stop;
-  stopNum: number;
-  stops: number;
+  town: Stop;
+  selected: Stop;
+  unlocked: string[];
+  passed: string[];
+  best: Record<string, number>;
   trips: number;
   bank: number;
   owned: Upgrade[];
@@ -237,16 +279,31 @@ export function titleHtml(t: {
   reviews: Review[];
 }): string {
   const trip = t.trips > 0 ? `Trip ${t.trips + 1} · ` : "";
-  return `<div class="card">
-    <p class="sub">${trip}A food truck road trip · Stop ${t.stopNum} of ${t.stops}</p>
+  const sel = t.selected;
+  const here = sel.id === t.town.id;
+  const canGo = t.unlocked.includes(sel.id);
+  const best = t.best[sel.id];
+  const region = REGIONS.find((r) => r.id === sel.region)!;
+  const action = here
+    ? `<button class="btn primary" data-act="start" ${t.offer.length ? "disabled" : ""}>Open the window in ${esc(sel.name)}</button>`
+    : canGo
+      ? `<button class="btn primary" data-act="drive" data-id="${sel.id}" ${t.offer.length ? "disabled" : ""}>Drive to ${esc(sel.name)}</button>`
+      : `<button class="btn primary" disabled>Locked: pass a town next to it first</button>`;
+  return `<div class="card title">
+    <p class="sub">${trip}A food truck road trip · ${t.passed.length} of ${STOPS.length} towns</p>
     <h1>Bun Voyage</h1>
     ${offerHtml(t.offer)}
-    <p>${esc(t.stop.blurb)}</p>
-    ${t.stop.newThing ? `<p class="new">${esc(t.stop.newThing)}</p>` : ""}
+    ${t.fresh ? "" : mapSvg({ town: t.town.id, selected: sel.id, unlocked: t.unlocked, passed: t.passed, best: t.best })}
+    <div class="townCard">
+      <h3>${esc(sel.name)} <span class="rg">${esc(region.name)}${sel.capital ? " · big city" : ""}</span></h3>
+      <p>${esc(sel.blurb)}</p>
+      ${best !== undefined ? `<p class="note">Best shift here: ${best.toFixed(1)} ★</p>` : ""}
+      ${canGo && sel.newThing ? `<p class="new">${esc(sel.newThing)}</p>` : ""}
+    </div>
     ${t.owned.length ? `<p class="owned">On the truck: ${t.owned.map((u) => esc(u.name)).join(", ")}</p>` : ""}
     ${t.fresh ? HOW_TO : `<details><summary><b>How to play</b></summary>${HOW_TO}</details>`}
     <div class="btn-row">
-      <button class="btn primary" data-act="start" ${t.offer.length ? "disabled" : ""}>Open the window in ${esc(t.stop.name)}</button>
+      ${action}
       ${t.fresh ? "" : `<button class="btn small biz ${t.biz ? "on" : ""}" data-act="biz">Business mode: ${t.biz ? "on" : "off"}</button>`}
       ${t.fresh ? "" : `<button class="btn small" data-act="new-trip">Start a new trip</button>`}
     </div>
@@ -266,7 +323,8 @@ export function summaryHtml(s: {
   spills: number;
   best: string | null;
   outcome: "passed" | "failed" | "trip";
-  next: Stop | null;
+  /** Towns whose roads this shift opened. */
+  opened: Stop[];
   offer: Upgrade[];
   /** Business mode extras. */
   biz: { costs: number; profit: number; reviews: Review[]; rep: number; repBefore: number } | null;
@@ -286,17 +344,17 @@ export function summaryHtml(s: {
             : "A rough day at the grill, but you made it.";
   const buttons =
     s.outcome === "failed"
-      ? `<button class="btn primary" data-act="restart">Try ${esc(s.stop.name)} again</button>`
+      ? `<button class="btn primary" data-act="restart">Try ${esc(s.stop.name)} again</button><button class="btn small" data-act="next">Back to the map</button>`
       : s.offer.length
         ? ""
-        : s.outcome === "trip"
-          ? `<button class="btn primary" data-act="next">Head home and start a new trip</button>`
-          : `<button class="btn primary" data-act="next">Drive to ${esc(s.next!.name)}</button>`;
+        : `<button class="btn primary" data-act="next">Back to the map</button>`;
+  const opened = s.opened.length ? `<p class="new">New road${s.opened.length > 1 ? "s" : ""} open: ${s.opened.map((t) => esc(t.name)).join(" and ")}.</p>` : "";
   return `<div class="card">
     <p class="sub">Closing time · ${esc(s.stop.name)}</p>
     <h2>${s.outcome === "trip" ? "Road trip complete!" : s.outcome === "failed" ? "Shift over" : "Shift complete"}</h2>
     <div class="stars" aria-label="${avg.toFixed(1)} stars average">${starRow}</div>
     <p>${verdict}</p>
+    ${s.outcome === "trip" ? `<p class="new">You've reached the end of the road. Every town stays open, so keep touring or start a new trip.</p>` : opened}
     <dl class="stats">
       <dt>Orders served</dt><dd>${s.served}</dd>
       <dt>Customers who left</dt><dd>${s.lost}</dd>

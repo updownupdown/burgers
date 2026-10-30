@@ -1,0 +1,171 @@
+import type { Order, Plate } from "./game/types";
+import { DRINK_COLOR, DRINK_LABEL, KIND_COLOR, KIND_LABEL } from "./game/types";
+import { SLOT_COLORS } from "./scenes/tray";
+import { buildLabel } from "./update";
+
+const BELL_SVG = `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 5a2 2 0 0 1 2 2v1.2A9 9 0 0 1 25 17v5H7v-5a9 9 0 0 1 7-8.8V7a2 2 0 0 1 2-2z" fill="#1d1410"/><rect x="4" y="22" width="24" height="4" rx="2" fill="#1d1410"/><circle cx="16" cy="4" r="2" fill="#1d1410"/></svg>`;
+const MENU_SVG = `<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="2.4" rx="1.2" fill="currentColor"/><rect x="3" y="9" width="14" height="2.4" rx="1.2" fill="currentColor"/><rect x="3" y="14" width="14" height="2.4" rx="1.2" fill="currentColor"/></svg>`;
+
+const HOW_TO = `
+<ul>
+  <li><b>Customers</b> wait at the window. Their ticket shows the burger from top to bottom. Tap a ticket or plate to work on that order.</li>
+  <li><b>Drag</b> ingredients up onto the tray, or <b>flick</b> them up to toss them on.</li>
+  <li><b>Patties, bacon, eggs and buns</b> go on the grill first. <b>Swipe up</b> on a patty to flip it, then drag it up to the plate.</li>
+  <li><b>Sauce:</b> drag a bottle up to the tray and draw on the burger.</li>
+  <li><b>Swipe sideways</b> or use the tabs for the Drinks and Fryer counters.</li>
+  <li><b>Ring the bell twice</b> to serve. Swipe down on a plate to take the top layer off.</li>
+</ul>`;
+
+export interface Ui {
+  root: HTMLElement;
+  timer: HTMLElement;
+  money: HTMLElement;
+  stop: HTMLElement;
+  tickets: HTMLElement[];
+  drinkLabels: HTMLElement[];
+  hint: HTMLElement;
+  tabs: HTMLButtonElement[];
+  tabDots: HTMLElement[];
+  bell: HTMLButtonElement;
+  menuBtn: HTMLButtonElement;
+  title: HTMLElement;
+  menu: HTMLElement;
+  summary: HTMLElement;
+  update: HTMLElement;
+  updateText: HTMLElement;
+}
+
+export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
+  root.innerHTML = `
+  <div class="hud">
+    <span class="chip" data-r="stop">Pinecrest</span>
+    <span class="chip" data-r="timer">3:00</span>
+    <span class="chip money" data-r="money">$0</span>
+    <span class="spacer"></span>
+    <button class="icon-btn" data-r="menuBtn" aria-label="Menu">${MENU_SVG}</button>
+  </div>
+  ${[0, 1, 2].map((i) => `<div class="ticket" data-r="ticket" data-slot="${i}" style="--slot:${SLOT_COLORS[i]}" hidden></div>`).join("")}
+  <div class="hint" data-r="hint" hidden></div>
+  ${(["pine", "lemon", "cola"] as const).map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_LABEL[d]}</div>`).join("")}
+  <nav class="tabs">
+    ${pages.map((p, i) => `<button class="tab" data-r="tab" data-page="${i}" aria-selected="false">${p}<span class="dot" hidden></span></button>`).join("")}
+    <button class="bell" data-r="bell" aria-label="Ring the bell (twice to serve)">${BELL_SVG}</button>
+  </nav>
+  <div class="update" data-r="update" hidden>
+    <span data-r="updateText">A new build is ready.</span>
+    <button class="later" data-act="update-later">Later</button>
+    <button data-act="update-now">Update</button>
+  </div>
+  <div class="screen" data-r="title">
+    <div class="card">
+      <p class="sub">A food truck road trip · Stop 1</p>
+      <h1>Bun Voyage</h1>
+      <p>The truck has rolled into <b>Pinecrest</b>, a mountain town full of hungry hikers. Keep them fed until closing time.</p>
+      ${HOW_TO}
+      <div class="btn-row">
+        <button class="btn primary" data-act="start">Open the window</button>
+      </div>
+      <p class="build" data-r="build1"></p>
+    </div>
+  </div>
+  <div class="screen" data-r="menu" hidden>
+    <div class="card">
+      <h2>Paused</h2>
+      <div class="btn-row">
+        <button class="btn primary" data-act="resume">Resume</button>
+        <button class="btn" data-act="restart">Restart shift</button>
+        <button class="btn" data-act="sound">Sound: on</button>
+        <button class="btn" data-act="check-update">Check for updates</button>
+      </div>
+      <details><summary><b>How to play</b></summary>${HOW_TO}</details>
+      <p class="build" data-r="build2"></p>
+    </div>
+  </div>
+  <div class="screen" data-r="summary" hidden></div>
+  `;
+  const q = (r: string) => root.querySelector<HTMLElement>(`[data-r="${r}"]`)!;
+  const tabs = [...root.querySelectorAll<HTMLButtonElement>('[data-r="tab"]')];
+  for (const b of ["build1", "build2"]) q(b).textContent = buildLabel();
+  return {
+    root,
+    timer: q("timer"),
+    money: q("money"),
+    stop: q("stop"),
+    tickets: [...root.querySelectorAll<HTMLElement>('[data-r="ticket"]')],
+    drinkLabels: [...root.querySelectorAll<HTMLElement>('[data-r="dlabel"]')],
+    hint: q("hint"),
+    tabs,
+    tabDots: tabs.map((t) => t.querySelector<HTMLElement>(".dot")!),
+    bell: q("bell") as HTMLButtonElement,
+    menuBtn: q("menuBtn") as HTMLButtonElement,
+    title: q("title"),
+    menu: q("menu"),
+    summary: q("summary"),
+    update: q("update"),
+    updateText: q("updateText"),
+  };
+}
+
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+
+/** Ticket HTML: the burger top to bottom, ticking off layers already stacked in order. */
+export function ticketHtml(order: Order, plate: Plate, patience: number): string {
+  const lines: string[] = [];
+  let prefixOk = true;
+  const okFlags = order.layers.map((exp, i) => {
+    const got = plate.layers[i];
+    prefixOk = prefixOk && !!got && got.piece.kind === exp.kind;
+    return prefixOk;
+  });
+  for (let i = order.layers.length - 1; i >= 0; i--) {
+    const exp = order.layers[i];
+    let extra = "";
+    if (exp.kind === "patty") extra = ` <em>${exp.doneness === "rare" ? "Rare" : exp.doneness === "well" ? "Well" : "Med"}</em>`;
+    if (exp.kind === "bun" && exp.toasted) extra = ` <em>Toast</em>`;
+    lines.push(`<li class="${okFlags[i] ? "ok" : ""}"><b style="background:${KIND_COLOR[exp.kind]}"></b>${KIND_LABEL[exp.kind]}${extra}</li>`);
+  }
+  const sides: string[] = [];
+  if (order.fries) sides.push(`<span class="${plate.fries ? "ok" : ""}"><b style="background:#f3d36b"></b>Fries</span>`);
+  if (order.drink) sides.push(`<span class="${plate.drink?.flavor === order.drink ? "ok" : ""}"><b style="background:${DRINK_COLOR[order.drink]}"></b>${DRINK_LABEL[order.drink]}</span>`);
+  const pct = Math.max(0, Math.min(1, patience));
+  const color = pct > 0.5 ? "#4caf50" : pct > 0.25 ? "#f0a92b" : "#e5432b";
+  return `<div class="pat"><i style="width:${(pct * 100).toFixed(0)}%;background:${color}"></i></div>
+    <div class="name">#${order.id} ${esc(order.name)}</div>
+    <ol>${lines.join("")}</ol>
+    ${sides.length ? `<div class="sides">${sides.join("")}</div>` : ""}`;
+}
+
+export function summaryHtml(s: {
+  served: number;
+  lost: number;
+  stars: number[];
+  earned: number;
+  tips: number;
+  best: string | null;
+}): string {
+  const avg = s.stars.length ? s.stars.reduce((a, b) => a + b, 0) / s.stars.length : 0;
+  const rounded = Math.round(avg);
+  const starRow = [0, 1, 2].map((i) => `<span class="${i < rounded ? "" : "off"}">★</span>`).join("");
+  const verdict =
+    s.served === 0 ? "The truck stayed quiet today." : avg >= 2.5 ? "Pinecrest will be talking about this for weeks." : avg >= 1.5 ? "Solid shift. The hikers left full." : "Rough day at the grill. Tomorrow's a new town.";
+  return `<div class="card">
+    <p class="sub">Closing time · Pinecrest</p>
+    <h2>Shift complete</h2>
+    <div class="stars" aria-label="${avg.toFixed(1)} stars average">${starRow}</div>
+    <p>${verdict}</p>
+    <dl class="stats">
+      <dt>Orders served</dt><dd>${s.served}</dd>
+      <dt>Customers who left</dt><dd>${s.lost}</dd>
+      <dt>Average rating</dt><dd>${avg.toFixed(1)} ★</dd>
+      <dt>Sales</dt><dd>$${s.earned}</dd>
+      <dt>Tips</dt><dd>$${s.tips}</dd>
+      <dt>Total</dt><dd>$${s.earned + s.tips}</dd>
+      ${s.best ? `<dt>Best order</dt><dd>${esc(s.best)}</dd>` : ""}
+    </dl>
+    <div class="btn-row">
+      <button class="btn primary" data-act="restart">Play again</button>
+    </div>
+    <p class="build">${esc(buildLabel())}</p>
+  </div>`;
+}
+

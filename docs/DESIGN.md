@@ -1,7 +1,9 @@
 # Burger game: design doc (draft 1)
 
-Status: **draft for review**. Nothing here is locked until James confirms the
-feature set (section 7) and the stack (section 6).
+Status: **confirmed by James on 2026-10-30.** Theme: Bun Voyage (food truck road
+trip). Art: toon-shaded 3D generated in code (pixelation possible later). Stack:
+TypeScript + Vite + three.js, GitHub Pages, Capacitor for Android later. The burger
+is assembled on the tray. Prototype scope is section 7.
 
 The game is a touch-first, portrait, single-player cooking game about grilling
 and stacking burgers (and later other grilled sandwiches). It runs in the

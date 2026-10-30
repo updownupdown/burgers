@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 
 // The Pages workflow sets BUILD_NUMBER to the Actions run number; local builds show "dev".
@@ -13,6 +14,13 @@ function versionFile(): Plugin {
         type: "asset",
         fileName: "version.json",
         source: JSON.stringify({ build, commit, builtAt }),
+      });
+      // The service worker's cache name carries the build so each deploy replaces the last.
+      const id = build === "dev" ? `dev-${Date.now()}` : build;
+      this.emitFile({
+        type: "asset",
+        fileName: "sw.js",
+        source: readFileSync(new URL("./pwa/sw.js", import.meta.url), "utf8").replaceAll("__BUILD__", id),
       });
     },
   };

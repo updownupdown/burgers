@@ -14,7 +14,7 @@ import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
 import "./style.css";
 import { buildUi, summaryHtml, ticketHtml, titleHtml } from "./ui";
-import { buildLabel, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
+import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -864,6 +864,9 @@ ui.root.addEventListener("click", (e) => {
     case "update-now":
       if (game.pendingUpdate) reloadTo(game.pendingUpdate.build, true);
       break;
+    case "install":
+      void installPrompt?.prompt();
+      break;
     case "update-later":
       ui.update.hidden = true;
       break;
@@ -1018,6 +1021,19 @@ const checkNow = startUpdateChecks((v) => {
   }
 });
 console.info(`Bun Voyage ${buildLabel()}`);
+
+// Installable app: the browser offers "Add to home screen"; we surface it in the menu.
+registerServiceWorker();
+let installPrompt: (Event & { prompt: () => Promise<void> }) | null = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installPrompt = e as typeof installPrompt;
+  ui.install.hidden = false;
+});
+window.addEventListener("appinstalled", () => {
+  installPrompt = null;
+  ui.install.hidden = true;
+});
 
 // ---------------------------------------------------------------------------
 // Main loop

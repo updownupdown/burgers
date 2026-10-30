@@ -34,6 +34,7 @@ export interface Ui {
   menu: HTMLElement;
   summary: HTMLElement;
   update: HTMLElement;
+  install: HTMLElement;
   updateText: HTMLElement;
 }
 
@@ -67,6 +68,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
         <button class="btn" data-act="restart">Restart shift</button>
         <button class="btn" data-act="sound">Sound: on</button>
         <button class="btn" data-act="check-update">Check for updates</button>
+        <button class="btn" data-act="install" data-r="install" hidden>Install the app</button>
       </div>
       <details><summary><b>How to play</b></summary>${HOW_TO}</details>
       <p class="build" data-r="build2"></p>
@@ -94,6 +96,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     menu: q("menu"),
     summary: q("summary"),
     update: q("update"),
+    install: q("install"),
     updateText: q("updateText"),
   };
 }

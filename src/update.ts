@@ -42,6 +42,19 @@ export function reloadTo(build: string, force = false): void {
   location.replace(url.toString());
 }
 
+/**
+ * Offline support and "Add to home screen". Only on real web origins (not file:// or a
+ * native WebView), and not in dev where Vite serves unhashed modules.
+ */
+export function registerServiceWorker(): void {
+  if (CURRENT.build === "dev" || !("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {
+      // Not fatal: the game works the same without it.
+    });
+  });
+}
+
 export function startUpdateChecks(onNewer: (v: VersionInfo) => void): () => Promise<VersionInfo | null> {
   let notified = "";
   const check = async () => {

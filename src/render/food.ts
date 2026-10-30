@@ -127,7 +127,8 @@ const GEO = {
 for (const g of Object.values(GEO)) for (const geo of Array.isArray(g) ? g : [g]) shareGeometry(geo);
 
 function pattyGeo(): THREE.BufferGeometry {
-  const g = new THREE.CylinderGeometry(1, 1, 0.28, 26, 2);
+  // Several rings up the edge so the seared crust can creep up from each face.
+  const g = new THREE.CylinderGeometry(1, 1, 0.28, 26, 6);
   const p = g.attributes.position;
   const seed = Math.random() * 10;
   for (let i = 0; i < p.count; i++) {
@@ -175,14 +176,28 @@ function eggWhiteGeo(): THREE.BufferGeometry {
 const tmpA = new THREE.Color();
 const tmpB = new THREE.Color();
 const tmpC = new THREE.Color();
+const tmpD = new THREE.Color();
+const tmpE = new THREE.Color();
 
-function paintTwoSided(m: THREE.Mesh, down: THREE.Color, up: THREE.Color, side: THREE.Color, split: number) {
+/**
+ * Faces take their own doneness colour. On the edge, a crust band grows up from the bottom
+ * (and down from the top) as each face cooks, so the underside reads from the angled camera.
+ */
+function paintPatty(m: THREE.Mesh, downCook: number, upCook: number, down: THREE.Color, up: THREE.Color, mid: THREE.Color) {
   const g = m.geometry;
   const pos = g.attributes.position;
+  const nrm = g.attributes.normal;
   const col = g.attributes.color;
+  const bandDown = 0.06 + 0.4 * Math.min(1, downCook);
+  const bandUp = 0.06 + 0.4 * Math.min(1, upCook);
+  // Heat from the grill greys the outer ring of the top face first, like a real patty.
+  tmpD.copy(up).lerp(down, downCook > upCook ? 0.7 : 0);
+  tmpE.copy(down).lerp(up, upCook > downCook ? 0.7 : 0);
   for (let i = 0; i < pos.count; i++) {
-    const y = pos.getY(i);
-    const c = y > split + 0.1 ? up : y < split - 0.1 ? down : side;
+    const ny = nrm.getY(i);
+    const f = pos.getY(i) / 0.28;
+    const rim = Math.hypot(pos.getX(i), pos.getZ(i)) > 0.5;
+    const c = ny > 0.6 ? (rim ? tmpD : up) : ny < -0.6 ? (rim ? tmpE : down) : f < bandDown ? down : f > 1 - bandUp ? up : mid;
     col.setXYZ(i, c.r, c.g, c.b);
   }
   col.needsUpdate = true;
@@ -244,7 +259,7 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
         pattyRamp(p.cook[0], tmpA);
         pattyRamp(p.cook[1], tmpB);
         pattyRamp(avgCook(p) * 0.85, tmpC);
-        paintTwoSided(m, tmpA, tmpB, tmpC, 0.14);
+        paintPatty(m, p.cook[0], p.cook[1], tmpA, tmpB, tmpC);
       });
       g.add(m);
       g.userData.update(piece);

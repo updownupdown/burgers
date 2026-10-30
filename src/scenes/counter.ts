@@ -128,7 +128,8 @@ const BIN_SLOTS: { x: number; z: number }[] = [
 ];
 
 /** Buns toast and eggs set more slowly than meat, so they're forgiving to leave on. */
-const COOK_SPEED: Record<string, number> = { patty: 1, bacon: 1.1, egg: 0.75, bun: 0.6, pineapple: 0.7 };
+/** Patties are slow on purpose: put them on, go do something else, come back to flip. */
+const COOK_SPEED: Record<string, number> = { patty: 0.34, bacon: 1.1, egg: 0.75, bun: 0.6, pineapple: 0.7 };
 
 const DRINKS: DrinkId[] = ["pine", "lemon", "cola"];
 const DRINK_LABEL_COLOR: Record<DrinkId, string> = { pine: "#4fae5c", lemon: "#e8c43a", cola: "#7a3b26" };

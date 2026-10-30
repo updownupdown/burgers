@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { buzz, Sfx } from "./audio";
-import { avgCook, bunToast, MELT_RATE, pattyLabel } from "./game/cooking";
+import { avgCook, bunToast, MELT_RATE, pattyDoneness, pattyLabel } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { freshSave, loadSave, passed, passTown, upgradeChoices, UPGRADES, writeSave, type UpgradeId } from "./game/progress";
 import { eventOn, townById, withEvent, type TownEvent } from "./game/stops";
@@ -222,7 +222,7 @@ function spawnCustomer(slotIdx: number): void {
   s.plate = emptyPlate();
   // Recipes you haven't made a couple of times yet start with the full layer list showing.
   s.expanded = game.tutorial || (save.known[order.name] ?? 0) < 2;
-  s.maxPatience = (50 + order.layers.length * 7 + (order.fries ? 12 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1) * CROWD[stop().crowd].patience;
+  s.maxPatience = (50 + order.layers.length * 7 + order.layers.filter((l) => l.kind === "patty").length * 22 + (order.fries ? 12 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1) * CROWD[stop().crowd].patience;
   if (game.tutorial && game.spawned === 0) s.maxPatience = 600;
   s.patience = s.maxPatience;
   s.leaving = false;
@@ -1641,14 +1641,21 @@ function updateUi(): void {
 
 /** Small doneness tags floating over grill items, so players don't have to judge colour alone. */
 const grillTags: HTMLElement[] = [];
+/** Colour for each doneness band, so the grill tag can be read at a glance. */
+const DONENESS_COLOR: Record<string, string> = { raw: "#f4a6b4", rare: "#de4f5c", medium: "#c47a45", well: "#6e4128", burnt: "#1d1410" };
+
 function itemTag(p: Piece): string {
-  const short = (t: number) => {
-    const l = pattyLabel(t);
-    return l === "Well done" ? "Well" : l === "Medium" ? "Med" : l;
-  };
   switch (p.kind) {
-    case "patty":
-      return `<span>▼ ${short(p.cook[0])}</span><span>▲ ${short(p.cook[1])}</span>`;
+    case "patty": {
+      // Two halves that mirror the patty: top half is the face up, bottom half the face on the grill.
+      // A face that matches the active order's doneness gets a green edge.
+      const want = game.slots[game.active]?.order?.layers.find((l) => l.kind === "patty")?.doneness;
+      const half = (t: number) => {
+        const d = pattyDoneness(t);
+        return `<b class="${d === want ? "ok" : ""}" style="background:${DONENESS_COLOR[d]}"></b>`;
+      };
+      return `<i class="pind">${half(p.cook[1])}${half(p.cook[0])}</i>`;
+    }
     case "bacon": {
       const t = avgCook(p);
       return t >= 1 ? "Burnt" : t >= 0.4 ? "Crispy" : p.cook[0] > 0.3 && p.cook[1] < 0.1 ? "Flip me" : "Raw";
@@ -1765,10 +1772,14 @@ function updateGrillTags(): void {
     }
     const v = it.obj.position.clone().add(new THREE.Vector3(0, 0.2, 0.75)).project(counter.camera);
     const x = ((v.x + 1) / 2) * bands.counter.w;
-    el.hidden = x < 0 || x > bands.counter.w || it.flipT >= 0;
+    const patty = it.piece.kind === "patty";
+    el.hidden = x < 0 || x > bands.counter.w || (it.flipT >= 0 && !patty);
     if (el.hidden) return;
     const html = itemTag(it.piece);
     if (el.innerHTML !== html) el.innerHTML = html;
+    // The patty indicator flips with the patty.
+    if (patty) (el.firstElementChild as HTMLElement).style.transform = it.flipT >= 0 ? `scaleY(${Math.cos(Math.PI * Math.min(1, it.flipT)).toFixed(3)})` : "";
+    el.classList.toggle("pt", patty);
     const burning = Math.max(it.piece.cook[0], it.piece.cook[1]) >= (it.piece.kind === "patty" || it.piece.kind === "bacon" ? 0.92 : 0.95);
     el.classList.toggle("hot", burning && !counter.isWarm(it));
     el.classList.toggle("warm", counter.isWarm(it));

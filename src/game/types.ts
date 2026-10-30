@@ -107,6 +107,13 @@ export interface Order {
 
 export const GRILLABLE: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon", "egg", "pineapple"]);
 export const SAUCES: ReadonlySet<Kind> = new Set<Kind>(["ketchup", "mustard"]);
+/**
+ * Toppings placed one piece at a time; a recipe asks for a number of them. Fewer saves money but
+ * customers notice; a couple extra can win a better review.
+ */
+export const COUNTED: ReadonlySet<Kind> = new Set<Kind>(["pickle", "onion", "tomato", "jalapeno"]);
+/** Pieces of each counted topping in a standard recipe, unless the recipe says otherwise. */
+export const STANDARD_COUNT: Partial<Record<Kind, number>> = { pickle: 3, onion: 2, tomato: 2, jalapeno: 4 };
 
 export const KIND_LABEL: Record<Kind, string> = {
   bun: "Bun",

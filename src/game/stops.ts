@@ -1,5 +1,6 @@
 import type { CrowdId } from "./business";
 import type { Kind } from "./types";
+import { STANDARD_COUNT } from "./types";
 
 export interface Recipe {
   name: string;
@@ -13,6 +14,13 @@ export interface Recipe {
   melt?: boolean;
   /** Only ordered once the shift has warmed up (0..1 of the way through). */
   from?: number;
+  /** Pieces of counted toppings (pickles, onions...) when not the standard number (STANDARD_COUNT). */
+  counts?: Partial<Record<Kind, number>>;
+}
+
+/** How many pieces of a counted topping go in each of its layers in this recipe. */
+export function recipeCount(recipe: Recipe, kind: Kind): number {
+  return recipe.counts?.[kind] ?? STANDARD_COUNT[kind] ?? 1;
 }
 
 export type Backdrop = "mountains" | "beach" | "desert";

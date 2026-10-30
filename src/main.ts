@@ -33,6 +33,7 @@ import { disposeObject } from "./render/materials";
 import { CounterView, GRILL_SCALE, HOME_PAGE, PAGES, pageX, GRILL_TOP, SLEEVE, WARM_X0, type GrillItem, type Hit } from "./scenes/counter";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
+import "./ui/components.css";
 import "./style.css";
 import { buildUi, patienceMood, planHtml, summaryHtml, ticketHtml, titleHtml } from "./ui";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";

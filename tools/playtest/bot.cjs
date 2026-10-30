@@ -141,9 +141,14 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       const s = await ev((i) => { const s = window.__bv.counter.stacks[i]; return { x: s.x, z: s.z, count: s.count }; }, si);
       const [sx, sy] = await ev(([x, z]) => window.__bv.project('counter', x, 0.4, z), [s.x, s.z]);
       if (!s.count) {
-        const sup = kind === 'cup' ? [-14 + 2.0, 2.0] : [14 + 2.1, 3.15];
-        const [ux, uy] = await ev(([x, z]) => window.__bv.project('counter', x, 0.4, z), sup);
-        await act(line(ux, uy, sx, sy, 10));
+        // Open the cupboard, pick a sleeve off a shelf; the view comes back up while it's carried to the stack.
+        await p.click('.cupbtn');
+        await step(p, 1);
+        const sleeve = await ev((k) => { const c = window.__bv.counter; const pr = c.hitMeshes.find(m => m.userData.cupboard && m.userData.hit.kind === k && Math.abs(m.position.x - c.camera.position.x) < 4); return window.__bv.project('counter', pr.position.x, pr.position.y, pr.position.z); }, kind);
+        await ev(([x, y]) => { window.__bv.manual(true); document.getElementById('gl').dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, pointerId: 7, bubbles: true, pointerType: 'touch', isPrimary: true })); }, sleeve);
+        await step(p, 1);
+        await ev(async ([a, b, x, y]) => { const c = document.getElementById('gl'); const fire = (t, px, py) => c.dispatchEvent(new PointerEvent(t, { clientX: px, clientY: py, pointerId: 7, bubbles: true, pointerType: 'touch', isPrimary: true })); for (let i = 1; i <= 10; i++) { fire('pointermove', a + (x - a) * i / 10, b + (y - b) * i / 10); await new Promise(r => setTimeout(r, 16)); } fire('pointerup', x, y); }, [...sleeve, sx, sy]);
+        await step(p, 0.3);
         await act([[sx, sy], [sx, sy]], 30);
         await act([[sx, sy], [sx, sy]], 30);
         refills++;
@@ -184,7 +189,16 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       const [cx, cy] = await ev((x) => window.__bv.project('counter', x, 0.5, -0.3), x);
       await takeEmpty('cup', order.drinkSize, [cx, cy]);
       const [tx, ty] = await ev((x) => window.__bv.project('counter', x, 1.2, -2.4), x);
+      // Ice (when asked for) before pouring; lid and straw after.
+      const extra = async (what) => {
+        const pos = { ice: [1.9, 0.4, 3.05], lid: [1.15, 0.5, 1.7], straw: [2.65, 0.8, 1.75] }[what];
+        const [ex, ey] = await ev(([x, y, z]) => window.__bv.project('counter', -14 + x, y, z), pos);
+        await act(line(ex, ey, cx, cy, 10));
+      };
+      if (order.ice) await extra('ice');
       await hold(p, tx, ty, Math.round(0.9 / (0.42 * { S: 1.35, M: 1, L: 0.78 }[order.drinkSize]) * 1000));
+      await extra('lid');
+      await extra('straw');
       await act(line(cx, cy, px, py, 12));
       await page(1);
     }

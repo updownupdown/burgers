@@ -324,8 +324,7 @@ export class CounterView {
     this.scene.add(pile);
     this.proxy(new THREE.BoxGeometry(2.1, 1.4, 1.5), new THREE.Vector3(x0 - 1.7, 0.6, -2.2), { type: "friesBin" });
     // Carton stacks at the back, packing spots and the supplies cabinet along the front.
-    this.addStack("carton", "S", x0 + 1.1, -2.2);
-    this.addStack("carton", "L", x0 + 2.4, -2.2);
+    (["S", "M", "L"] as Size[]).forEach((size, i) => this.addStack("carton", size, x0 + 0.8 + i * 1.1, -2.2));
     for (const px of [-2.45, -0.75]) {
       const mat = mesh(faceted(new THREE.BoxGeometry(1.3, 0.04, 0.95)), "#f1e6cf", { ink: false });
       mat.position.set(x0 + px, 0.02, 3.1);

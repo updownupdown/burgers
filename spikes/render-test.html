@@ -1,0 +1,613 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bun Voyage Render Test</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: one narrow phone-shaped column; the 3D scene is the hero, controls sit under it like a counter edge. */
+:root {
+  --bg: #e9efed;
+  --panel: #f8fbfa;
+  --fg: #17302c;
+  --muted: #5a716c;
+  --line: #c9d6d2;
+  --accent: #f0b429;
+  --accent-ink: #2a1d00;
+  --chip: #dde7e4;
+  --font-display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1b19; --panel: #172623; --fg: #e3eeeb; --muted: #93aaa4;
+    --line: #2b3f3b; --accent: #f3bd3d; --accent-ink: #241900; --chip: #22342f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1b19; --panel: #172623; --fg: #e3eeeb; --muted: #93aaa4;
+  --line: #2b3f3b; --accent: #f3bd3d; --accent-ink: #241900; --chip: #22342f;
+  color-scheme: dark;
+}
+html, body { background: var(--bg); color: var(--fg); }
+body {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 32px;
+}
+.wrap { max-width: 460px; margin: 0 auto; display: grid; gap: 16px; }
+header h1 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 28px;
+  line-height: 1.1;
+  margin: 0;
+  text-wrap: balance;
+}
+header p { margin: 6px 0 0; color: var(--muted); }
+.eyebrow {
+  font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); font-weight: 700;
+}
+.stage {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  max-width: 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #2c3e3a;
+  box-shadow: 0 10px 30px rgb(0 0 0 / .18);
+}
+.stage canvas {
+  width: 100%; height: 100%; display: block;
+  touch-action: none;
+}
+.stage.pixel canvas { image-rendering: pixelated; }
+[hidden] { display: none !important; }
+.hint {
+  position: absolute; left: 12px; right: 12px; bottom: 10px;
+  font-size: 12px; color: #f4efe2; text-align: center;
+  text-shadow: 0 1px 2px rgb(0 0 0 / .6);
+  pointer-events: none;
+}
+.readout {
+  position: absolute; top: 10px; left: 10px; right: 10px;
+  display: flex; gap: 6px; flex-wrap: wrap; pointer-events: none;
+}
+.tag {
+  background: rgb(15 25 23 / .72); color: #f4efe2;
+  font-size: 12px; padding: 3px 8px; border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.tag b { color: #ffd166; font-weight: 700; }
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  display: grid; gap: 14px;
+}
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--chip); border-radius: 10px; padding: 3px; gap: 3px; }
+.seg button {
+  font: inherit; font-weight: 700; font-size: 14px;
+  border: 0; border-radius: 8px; padding: 8px 4px;
+  background: transparent; color: var(--fg); cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.row { display: grid; gap: 4px; }
+.row label { display: flex; justify-content: space-between; font-weight: 700; font-size: 14px; }
+.row label span { font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn {
+  flex: 1 1 0; min-width: 90px;
+  font: inherit; font-weight: 700; font-size: 14px;
+  padding: 10px 12px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--chip); color: var(--fg);
+}
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px; }
+.notes { color: var(--muted); font-size: 14px; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.notes b { color: var(--fg); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Art style test · everything here is generated in code</div>
+    <h1>Bun Voyage render test</h1>
+    <p>Compare three looks for the same procedural burger. Swipe up on the scene to flip the patty on the grill, tap to wobble the stack, drag sideways to turn it.</p>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="c" aria-label="3D burger scene"></canvas>
+    <div class="readout">
+      <span class="tag">Down side: <b id="downTxt">Raw</b></span>
+      <span class="tag">Up side: <b id="upTxt">Raw</b></span>
+    </div>
+    <div class="hint">Swipe up: flip · Tap: wobble · Drag: turn</div>
+  </div>
+
+  <div class="panel">
+    <div class="seg" role="group" aria-label="Art style">
+      <button id="s-low" data-style="lowpoly" aria-pressed="false">Low-poly</button>
+      <button id="s-toon" data-style="toon" aria-pressed="true">Toon</button>
+      <button id="s-pix" data-style="pixel" aria-pressed="false">Pixel</button>
+    </div>
+    <div class="row" id="pxRow" hidden>
+      <label for="px">Pixel size <span id="pxVal">4×</span></label>
+      <input id="px" type="range" min="2" max="8" step="1" value="4">
+    </div>
+    <div class="btns">
+      <button class="btn primary" id="flipBtn">Flip patty</button>
+      <button class="btn" id="stackBtn">Restack</button>
+      <button class="btn" id="heatBtn" aria-pressed="true">Heat: on</button>
+    </div>
+    <div class="row">
+      <label for="done">Burger patty <span id="doneVal">Medium</span></label>
+      <input id="done" type="range" min="0" max="1" step="0.01" value="0.58">
+    </div>
+    <div class="row">
+      <label for="melt">Cheese melt <span id="meltVal">60%</span></label>
+      <input id="melt" type="range" min="0" max="1" step="0.01" value="0.6">
+    </div>
+  </div>
+
+  <ul class="notes">
+    <li><b>Low-poly</b> is flat-shaded, close to an Aloft-style look.</li>
+    <li><b>Toon</b> adds three-step shading and ink outlines.</li>
+    <li><b>Pixel</b> renders the toon scene at low resolution and scales it up with hard pixels, for a pixel-art feel with no hand-drawn sprites.</li>
+    <li>No image files are used. Buns, patty, cheese drip, lettuce ruffles and seeds are all shapes built in code, so the game can animate and recolour them freely.</li>
+  </ul>
+</div>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+const stageEl = document.getElementById("stage");
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#3b5a54");
+scene.fog = new THREE.Fog("#3b5a54", 12, 22);
+
+const camera = new THREE.PerspectiveCamera(34, 3 / 4, 0.1, 50);
+camera.position.set(0, 8.4, 8.2);
+camera.lookAt(0, 0.4, 0.1);
+
+scene.add(new THREE.HemisphereLight("#fff4dc", "#40524d", 1.1));
+const sun = new THREE.DirectionalLight("#fff1d6", 2.2);
+sun.position.set(3, 7, 4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: 1, far: 20 });
+sun.shadow.bias = -0.002;
+scene.add(sun);
+
+// ---- materials -------------------------------------------------------------
+const gradient = new THREE.DataTexture(new Uint8Array([70, 160, 255]), 3, 1, THREE.RedFormat);
+gradient.minFilter = gradient.magFilter = THREE.NearestFilter;
+gradient.needsUpdate = true;
+
+let style = "toon";
+const styled = []; // { mesh, color, vertexColors, hull }
+
+function makeMaterial(color, vertexColors, side) {
+  const opts = { color: vertexColors ? "#ffffff" : color, vertexColors, side: side || THREE.FrontSide };
+  if (style === "lowpoly") return new THREE.MeshStandardMaterial({ ...opts, flatShading: true, roughness: 0.85 });
+  return new THREE.MeshToonMaterial({ ...opts, gradientMap: gradient });
+}
+const hullMat = new THREE.MeshBasicMaterial({ color: "#1d1410", side: THREE.BackSide });
+
+function faceted(geo) {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  g.computeVertexNormals();
+  return g;
+}
+
+function addPart(parent, geo, color, { vertexColors = false, side, outline = true, hullScale = 1.045 } = {}) {
+  const mesh = new THREE.Mesh(geo, makeMaterial(color, vertexColors, side));
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  const hull = outline ? new THREE.Mesh(geo, hullMat) : null;
+  if (hull) { hull.scale.setScalar(hullScale); mesh.add(hull); }
+  const entry = { mesh, color, vertexColors, side, hull };
+  styled.push(entry);
+  parent.add(mesh);
+  return mesh;
+}
+
+function applyStyle() {
+  for (const e of styled) {
+    e.mesh.material.dispose();
+    e.mesh.material = makeMaterial(e.color, e.vertexColors, e.side);
+    if (e.hull) e.hull.visible = style !== "lowpoly";
+  }
+  resize();
+}
+
+// ---- geometry builders -----------------------------------------------------
+const rand = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+
+function lathe(points, segs = 28) {
+  return faceted(new THREE.LatheGeometry(points.map(([x, y]) => new THREE.Vector2(x, y)), segs));
+}
+function bottomBunGeo() {
+  return lathe([[0, 0], [0.92, 0], [1.0, 0.06], [1.03, 0.17], [0.99, 0.27], [0.9, 0.3], [0, 0.3]]);
+}
+function topBunGeo() {
+  return lathe([[0, 0], [0.98, 0], [1.05, 0.08], [1.03, 0.22], [0.9, 0.42], [0.66, 0.6], [0.36, 0.7], [0, 0.73]]);
+}
+function pattyGeo() {
+  const g = new THREE.CylinderGeometry(1, 1, 0.28, 30, 2);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const a = Math.atan2(z, x);
+    const r = Math.hypot(x, z);
+    const k = 1.04 + 0.035 * Math.sin(5 * a) + 0.025 * Math.sin(11 * a + 1.3);
+    p.setXYZ(i, x * k, y + Math.sign(y) * 0.025 * Math.sin(6 * x + 4 * z) * r, z * k);
+  }
+  const f = faceted(g);
+  f.setAttribute("color", new THREE.BufferAttribute(new Float32Array(f.attributes.position.count * 3), 3));
+  return f;
+}
+function lettuceGeo() {
+  const g = new THREE.RingGeometry(0.0, 1.22, 54, 5);
+  g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    const r = Math.hypot(x, z) / 1.22, a = Math.atan2(z, x);
+    p.setY(i, r * r * (0.1 * Math.sin(a * 9 + r * 3) - 0.05));
+  }
+  return faceted(g);
+}
+function cheeseGeo(melt) {
+  const g = new THREE.PlaneGeometry(1.95, 1.95, 14, 14);
+  g.rotateX(-Math.PI / 2);
+  g.rotateY(Math.PI / 4 + 0.15);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    const r = Math.hypot(x, z);
+    const over = Math.max(0, r - 0.92);
+    const s = 1 - melt * 0.12 * Math.min(1, over * 3); // corners pull in a little as they droop
+    p.setXYZ(i, x * s, -melt * (over * 1.1 + over * over * 1.4) + 0.02 * Math.sin(x * 5) * melt, z * s);
+  }
+  return faceted(g);
+}
+
+// ---- scene layout ----------------------------------------------------------
+const world = new THREE.Group();
+scene.add(world);
+
+const counter = new THREE.Mesh(new THREE.BoxGeometry(9, 0.4, 7), new THREE.MeshStandardMaterial({ color: "#c98f55", roughness: 0.9 }));
+counter.position.y = -0.2;
+counter.receiveShadow = true;
+world.add(counter);
+
+// Tray (where burgers are assembled)
+const tray = addPart(world, faceted(new THREE.BoxGeometry(3.0, 0.12, 2.4)), "#d8473a", { outline: false });
+tray.position.set(0, 0.06, -1.15);
+const paper = addPart(world, faceted(new THREE.BoxGeometry(2.4, 0.02, 1.9)), "#f2ead6", { outline: false });
+paper.position.set(0, 0.13, -1.15);
+
+// Grill (bottom of the screen, in thumb reach)
+const grill = addPart(world, faceted(new THREE.BoxGeometry(3.6, 0.22, 1.9)), "#3d4245", { outline: false });
+grill.position.set(0, 0.11, 1.75);
+for (let i = 0; i < 7; i++) {
+  const bar = addPart(world, faceted(new THREE.BoxGeometry(3.3, 0.03, 0.06)), "#25292b", { outline: false });
+  bar.position.set(0, 0.235, 1.0 + i * 0.25);
+}
+const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.3, 1.6), new THREE.MeshBasicMaterial({ color: "#ff6a2b", transparent: true, opacity: 0.18 }));
+glow.rotation.x = -Math.PI / 2;
+glow.position.set(0, 0.226, 1.75);
+world.add(glow);
+
+// Burger stack
+const stack = new THREE.Group();
+stack.position.set(0, 0.14, -1.15);
+world.add(stack);
+
+const layers = [];
+function layer(build, height) {
+  const g = new THREE.Group();
+  build(g);
+  stack.add(g);
+  layers.push({ g, height, y: 0, baseY: 0, vy: 0, squash: 0, squashV: 0, landed: true, offX: 0, offZ: 0, delay: 0 });
+}
+
+const doneStops = [
+  [0.0, "#d9737b"], [0.3, "#b5615a"], [0.55, "#8a4a33"], [0.78, "#5e3423"], [1.0, "#2c1b14"],
+];
+function doneColor(t, out) {
+  t = Math.min(1, Math.max(0, t));
+  for (let i = 1; i < doneStops.length; i++) {
+    if (t <= doneStops[i][0]) {
+      const [t0, c0] = doneStops[i - 1], [t1, c1] = doneStops[i];
+      return out.set(c0).lerp(new THREE.Color(c1), (t - t0) / (t1 - t0));
+    }
+  }
+  return out.set(doneStops[doneStops.length - 1][1]);
+}
+function doneLabel(t) {
+  if (t < 0.18) return "Raw";
+  if (t < 0.42) return "Rare";
+  if (t < 0.66) return "Medium";
+  if (t < 0.9) return "Well done";
+  return "Burnt";
+}
+const ca = new THREE.Color(), cb = new THREE.Color(), cm = new THREE.Color();
+function paintPatty(mesh, bottomT, topT) {
+  const pos = mesh.geometry.attributes.position, col = mesh.geometry.attributes.color;
+  doneColor(bottomT, ca); doneColor(topT, cb);
+  // The sides cook to roughly the average of both faces
+  doneColor((bottomT + topT) / 2 * 0.85, cm);
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    const c = y > 0.12 ? cb : y < -0.12 ? ca : cm;
+    col.setXYZ(i, c.r, c.g, c.b);
+  }
+  col.needsUpdate = true;
+}
+
+let cheeseMesh, burgerPatty;
+layer(g => {
+  addPart(g, bottomBunGeo(), "#df9a3e");
+  const crumb = addPart(g, faceted(new THREE.CylinderGeometry(0.9, 0.9, 0.02, 28)), "#f4d79a", { outline: false });
+  crumb.position.y = 0.3;
+}, 0.31);
+layer(g => { addPart(g, lettuceGeo(), "#68bf45", { side: THREE.DoubleSide }).position.y = 0.04; }, 0.07);
+layer(g => {
+  burgerPatty = addPart(g, pattyGeo(), "#ffffff", { vertexColors: true });
+  burgerPatty.position.y = 0.15;
+}, 0.3);
+layer(g => {
+  cheeseMesh = addPart(g, cheeseGeo(0.6), "#f7c531", { side: THREE.DoubleSide, hullScale: 1.02 });
+  cheeseMesh.position.y = 0.02;
+}, 0.04);
+layer(g => {
+  for (let i = 0; i < 3; i++) {
+    const a = i * Math.PI * 2 / 3 + 0.4;
+    const t = addPart(g, faceted(new THREE.CylinderGeometry(0.44, 0.44, 0.09, 16)), "#e5432b");
+    t.position.set(Math.cos(a) * 0.46, 0.045 + i * 0.012, Math.sin(a) * 0.46);
+    const core = addPart(t, faceted(new THREE.CylinderGeometry(0.26, 0.26, 0.095, 10)), "#f2765d", { outline: false });
+    core.position.y = 0.001;
+  }
+}, 0.11);
+layer(g => {
+  for (let i = 0; i < 2; i++) {
+    const ring = addPart(g, faceted(new THREE.TorusGeometry(0.32 + i * 0.12, 0.045, 6, 22)), "#ecd5f0");
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(i ? -0.25 : 0.3, 0.05, i ? 0.15 : -0.1);
+  }
+}, 0.08);
+layer(g => {
+  addPart(g, topBunGeo(), "#e3a03c");
+  const seedGeo = faceted(new THREE.SphereGeometry(0.04, 6, 4));
+  for (let i = 0; i < 44; i++) {
+    const a = rand() * Math.PI * 2, r = Math.sqrt(rand()) * 0.85;
+    const y = 0.73 * Math.sqrt(Math.max(0, 1 - (r / 1.06) ** 2)) + 0.005;
+    const s = addPart(g, seedGeo, "#fff3d8", { outline: false });
+    s.position.set(Math.cos(a) * r, y, Math.sin(a) * r);
+    s.scale.set(1.5, 0.55, 0.9);
+    s.rotation.set(Math.sin(a) * r * 0.5, rand() * Math.PI, -Math.cos(a) * r * 0.5);
+  }
+}, 0.75);
+
+let acc = 0;
+for (const L of layers) { L.baseY = acc; L.y = acc; acc += L.height; }
+
+// Grill patty, cooks on whichever face is down
+const grillPatty = new THREE.Group();
+grillPatty.position.set(0.55, 0.39, 1.7);
+grillPatty.scale.setScalar(0.78);
+world.add(grillPatty);
+const gpMesh = addPart(grillPatty, pattyGeo(), "#ffffff", { vertexColors: true });
+const grillBun = addPart(world, bottomBunGeo(), "#df9a3e");
+grillBun.rotation.x = Math.PI; // face down, toasting
+grillBun.position.set(-1.0, 0.54, 1.75);
+grillBun.scale.setScalar(0.62);
+grillBun.position.x = -1.05;
+
+const cook = { down: 0, up: 0 };
+let heatOn = true;
+const flip = { active: false, t: 0, squash: 0, squashV: 0 };
+
+// Smoke puffs over the grill
+const puffs = [];
+const puffMat = new THREE.MeshBasicMaterial({ color: "#f2f2f2", transparent: true, opacity: 0.4, depthWrite: false });
+for (let i = 0; i < 10; i++) {
+  const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12, 0), puffMat.clone());
+  m.userData.t = rand();
+  m.userData.x = (rand() - 0.5) * 1.4;
+  m.userData.z = (rand() - 0.5) * 1.0;
+  world.add(m);
+  puffs.push(m);
+}
+
+// ---- stack animation -------------------------------------------------------
+const wobble = { a: 0, v: 0, dir: 1 };
+function restack() {
+  layers.forEach((L, i) => {
+    L.landed = false;
+    L.delay = i * 0.28;
+    L.y = L.baseY + 4.5;
+    L.vy = 0;
+    L.offX = (rand() - 0.5) * 0.12;
+    L.offZ = (rand() - 0.5) * 0.12;
+    L.g.visible = false;
+  });
+}
+function kick(strength = 1) {
+  wobble.v += (rand() > 0.5 ? 1 : -1) * 2.2 * strength;
+}
+
+function updateStack(dt) {
+  for (const L of layers) {
+    if (!L.landed) {
+      L.delay -= dt;
+      if (L.delay > 0) continue;
+      L.g.visible = true;
+      L.vy -= 26 * dt;
+      L.y += L.vy * dt;
+      if (L.y <= L.baseY) {
+        L.y = L.baseY;
+        L.squashV = -L.vy * 0.9;
+        L.vy = 0;
+        L.landed = true;
+        kick(0.35);
+      }
+    }
+    // springy squash on landing
+    L.squashV += (-140 * L.squash - 11 * L.squashV) * dt;
+    L.squash += L.squashV * dt;
+  }
+  wobble.v += (-55 * wobble.a - 4.5 * wobble.v) * dt;
+  wobble.a += wobble.v * dt;
+  for (const L of layers) {
+    const h = L.baseY + L.height / 2;
+    const s = THREE.MathUtils.clamp(L.squash * 0.06, -0.35, 0.35);
+    L.g.scale.set(1 + s * 0.5, 1 - s, 1 + s * 0.5);
+    L.g.position.set(L.offX + wobble.a * 0.06 * h * h, L.y, L.offZ);
+    L.g.rotation.z = -wobble.a * 0.05 * h;
+  }
+}
+
+function startFlip() {
+  if (flip.active) return;
+  flip.active = true;
+  flip.t = 0;
+}
+function updateGrill(dt) {
+  if (flip.active) {
+    flip.t += dt / 0.6;
+    const t = Math.min(1, flip.t);
+    grillPatty.position.y = 0.39 + 1.7 * Math.sin(Math.PI * t);
+    grillPatty.rotation.x = Math.PI * t;
+    if (flip.t >= 1) {
+      flip.active = false;
+      grillPatty.rotation.x = 0;
+      grillPatty.position.y = 0.39;
+      [cook.down, cook.up] = [cook.up, cook.down];
+      flip.squashV = 6;
+    }
+  } else if (heatOn) {
+    cook.down = Math.min(1.1, cook.down + dt * 0.075);
+  }
+  flip.squashV += (-160 * flip.squash - 12 * flip.squashV) * dt;
+  flip.squash += flip.squashV * dt;
+  const s = THREE.MathUtils.clamp(flip.squash * 0.08, -0.3, 0.3);
+  gpMesh.scale.set(1 + s * 0.4, 1 - s, 1 + s * 0.4);
+  paintPatty(gpMesh, cook.down, cook.up);
+  glow.material.opacity = heatOn ? 0.14 + 0.05 * Math.sin(perfNow * 3) : 0;
+
+  for (const m of puffs) {
+    m.userData.t += dt * 0.35;
+    if (m.userData.t > 1) { m.userData.t -= 1; m.userData.x = (rand() - 0.5) * 1.4; m.userData.z = (rand() - 0.5) * 1.0; }
+    const t = m.userData.t;
+    m.visible = heatOn && cook.down > 0.08;
+    m.position.set(0.55 + m.userData.x + Math.sin(t * 6 + m.userData.z * 9) * 0.1, 0.5 + t * 1.8, 1.7 + m.userData.z);
+    m.scale.setScalar(0.6 + t * 1.6);
+    m.material.opacity = 0.35 * Math.sin(Math.PI * t) * Math.min(1, cook.down * 3);
+  }
+}
+
+// ---- UI --------------------------------------------------------------------
+const $ = id => document.getElementById(id);
+let pixelSize = 4;
+
+for (const b of document.querySelectorAll(".seg button")) {
+  b.addEventListener("click", () => {
+    style = b.dataset.style;
+    for (const o of document.querySelectorAll(".seg button")) o.setAttribute("aria-pressed", String(o === b));
+    $("pxRow").hidden = style !== "pixel";
+    stageEl.classList.toggle("pixel", style === "pixel");
+    applyStyle();
+  });
+}
+$("px").addEventListener("input", e => { pixelSize = +e.target.value; $("pxVal").textContent = pixelSize + "×"; resize(); });
+$("flipBtn").addEventListener("click", startFlip);
+$("stackBtn").addEventListener("click", restack);
+$("heatBtn").addEventListener("click", e => {
+  heatOn = !heatOn;
+  e.currentTarget.setAttribute("aria-pressed", String(heatOn));
+  e.currentTarget.textContent = heatOn ? "Heat: on" : "Heat: off";
+});
+function setDone() {
+  const v = +$("done").value;
+  $("doneVal").textContent = doneLabel(v);
+  paintPatty(burgerPatty, v, v);
+}
+$("done").addEventListener("input", setDone);
+$("melt").addEventListener("input", e => {
+  const m = +e.target.value;
+  $("meltVal").textContent = Math.round(m * 100) + "%";
+  const old = cheeseMesh.geometry;
+  const g = cheeseGeo(m);
+  cheeseMesh.geometry = g;
+  for (const e2 of styled) if (e2.mesh === cheeseMesh && e2.hull) e2.hull.geometry = g;
+  old.dispose();
+});
+
+// gestures on the scene: swipe up flips, tap wobbles, sideways drag turns the view
+let down = null, yaw = 0, yawTarget = 0;
+canvas.addEventListener("pointerdown", e => {
+  canvas.setPointerCapture(e.pointerId);
+  down = { x: e.clientX, y: e.clientY, t: performance.now(), yaw: yawTarget };
+});
+canvas.addEventListener("pointermove", e => {
+  if (!down) return;
+  const dx = e.clientX - down.x, dy = e.clientY - down.y;
+  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) yawTarget = THREE.MathUtils.clamp(down.yaw + dx * 0.006, -0.9, 0.9);
+});
+canvas.addEventListener("pointerup", e => {
+  if (!down) return;
+  const dx = e.clientX - down.x, dy = down.y - e.clientY, dt = performance.now() - down.t;
+  if (dy > 35 && dy > Math.abs(dx) && dt < 500) { startFlip(); navigator.vibrate?.(15); }
+  else if (Math.hypot(dx, dy) < 10) kick(1);
+  down = null;
+});
+canvas.addEventListener("pointercancel", () => { down = null; });
+
+function resize() {
+  const w = stageEl.clientWidth, h = stageEl.clientHeight;
+  if (!w || !h) return;
+  if (style === "pixel") {
+    renderer.setPixelRatio(1);
+    renderer.setSize(Math.max(1, Math.round(w / pixelSize)), Math.max(1, Math.round(h / pixelSize)), false);
+  } else {
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(w, h, false);
+  }
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stageEl);
+
+setDone();
+applyStyle();
+restack();
+
+let last = performance.now(), perfNow = 0;
+function frame(now) {
+  const dt = Math.min(0.033, (now - last) / 1000);
+  last = now;
+  perfNow = now / 1000;
+  yaw += (yawTarget - yaw) * Math.min(1, dt * 8);
+  world.rotation.y = yaw;
+  updateStack(dt);
+  updateGrill(dt);
+  $("downTxt").textContent = doneLabel(cook.down);
+  $("upTxt").textContent = doneLabel(cook.up);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>

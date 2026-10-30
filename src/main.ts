@@ -189,7 +189,8 @@ function layout(): void {
     t.style.maxHeight = `${custH - top + trayH * 0.22}px`;
   });
   ui.hint.style.top = `${bands.counter.y + 8}px`;
-  ui.cupboard.style.top = `${bands.counter.y + bands.counter.h - 46}px`;
+  // Top right of the counter, clear of the stations along the front edge.
+  ui.cupboard.style.top = `${bands.counter.y + 8}px`;
   // Turned sideways mid-shift: pause behind the "turn your phone" overlay.
   if (W > H && H < 500 && game.phase === "playing") {
     cancelPointer();
@@ -601,7 +602,7 @@ function finishHold(pt: Pointer): void {
   } else if (band === "counter") {
     const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3);
     const hold = counter.page === HOME_PAGE ? counter.overHold(g) : -1;
-    if (payload.type === "empty" || payload.type === "sleeve" || payload.type === "carton" || payload.type === "drink" || (payload.type === "fries" && payload.basket !== null)) {
+    if (payload.type === "empty" || payload.type === "sleeve" || payload.type === "carton" || payload.type === "drink" || payload.type === "ice" || payload.type === "lid" || payload.type === "straw" || (payload.type === "fries" && payload.basket !== null)) {
       done = dropAtStation(payload, g);
     } else if (counter.page === HOME_PAGE && counter.overTrash(g)) {
       sfx.thud();
@@ -1680,7 +1681,7 @@ function updateUi(): void {
   ui.drinkLabels.forEach((el, i) => {
     const v = counter.drinkLabelPoint(i).project(counter.camera);
     const x = ((v.x + 1) / 2) * bands.counter.w;
-    const visible = game.phase === "playing" && x > 20 && x < bands.counter.w - 20;
+    const visible = game.phase === "playing" && counter.cupboardT < 0.05 && x > 20 && x < bands.counter.w - 20;
     el.hidden = !visible;
     if (visible) {
       el.style.left = `${x}px`;
@@ -1759,7 +1760,6 @@ const stationTag = (cls: string): HTMLElement => {
   return el;
 };
 const stackTags = counter.stacks.map(() => stationTag("stack"));
-const supplyTags = [0, 2].map(() => stationTag("supply"));
 const puddleTags = counter.taps.map(() => stationTag("hot"));
 function placeTag(el: HTMLElement, world: THREE.Vector3, text: string, cls?: [string, boolean]): void {
   el.hidden = false;
@@ -1770,18 +1770,13 @@ function placeTag(el: HTMLElement, world: THREE.Vector3, text: string, cls?: [st
   el.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
 }
 function updateStationUi(): void {
-  const playing = game.phase === "playing" && counter.dragOffset === 0;
+  const playing = game.phase === "playing" && counter.dragOffset === 0 && counter.cupboardT < 0.05;
   const on = (page: number) => playing && Math.abs(counter.page - page) < 1;
   counter.stacks.forEach((s, i) => {
     const page = s.kind === "cup" ? 0 : 2;
     if (!on(page)) return void (stackTags[i].hidden = true);
     const text = s.sleeve ? "Tap to unwrap" : s.count ? `${s.size} · ${s.count}` : `${s.size} · empty`;
     placeTag(stackTags[i], new THREE.Vector3(s.x, 0, s.z + 0.6), text, ["low", !s.sleeve && s.count <= 1]);
-  });
-  supplyTags.forEach((el, k) => {
-    const page = k ? 2 : 0;
-    if (!on(page)) return void (el.hidden = true);
-    placeTag(el, k ? new THREE.Vector3(pageX(2) + 2.1, 0.3, 3.5) : new THREE.Vector3(pageX(0) + 2.0, 0.3, 2.62), "Supplies");
   });
   counter.taps.forEach((t, i) => {
     if (!on(0) || t.puddle < 0.01) return void (puddleTags[i].hidden = true);

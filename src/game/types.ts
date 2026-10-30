@@ -14,7 +14,8 @@ export type Kind =
   | "mustard";
 
 export type Doneness = "rare" | "medium" | "well";
-export type DrinkId = "pine" | "lemon" | "cola";
+export type DrinkId = "pine" | "pink" | "cola" | "water" | "tea";
+export const DRINKS: DrinkId[] = ["pine", "pink", "cola", "water", "tea"];
 export type SauceKind = "ketchup" | "mustard";
 
 /** A single physical food item. `cook[0]` is the face currently down on the grill. */
@@ -142,14 +143,18 @@ export const KIND_COLOR: Record<Kind, string> = {
 
 export const DRINK_LABEL: Record<DrinkId, string> = {
   pine: "Pine Fizz",
-  lemon: "Lemon Zip",
+  pink: "Pink Lemonade",
   cola: "Road Cola",
+  water: "Water",
+  tea: "Iced Tea",
 };
 
 export const DRINK_COLOR: Record<DrinkId, string> = {
-  pine: "#5fc46d",
-  lemon: "#f2d64b",
-  cola: "#6b3524",
+  pine: "#7dbd8a",
+  pink: "#f3a3b8",
+  cola: "#3b1d1b",
+  water: "#cfe8f2",
+  tea: "#c3731f",
 };
 
 export const DONENESS_TARGET: Record<Doneness, number> = {

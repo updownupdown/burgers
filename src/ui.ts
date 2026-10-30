@@ -4,7 +4,7 @@ import type { Upgrade } from "./game/progress";
 import { EVENTS, eventOn, nextDay, REGIONS, STOPS, townById, type Stop } from "./game/stops";
 import type { PressPiece } from "./game/press";
 import type { Order, Plate } from "./game/types";
-import { DRINK_COLOR, DRINK_LABEL, KIND_COLOR, KIND_LABEL } from "./game/types";
+import { DRINK_COLOR, DRINK_LABEL, DRINKS, KIND_COLOR, KIND_LABEL } from "./game/types";
 import { SLOT_COLORS } from "./scenes/tray";
 import { buildLabel } from "./update";
 import { icon } from "./ui/icons";
@@ -108,7 +108,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   ${[0, 1, 2].map((i) => `<div class="ticket" data-r="ticket" data-slot="${i}" style="--slot:${SLOT_COLORS[i]}" hidden></div>`).join("")}
   <div class="hint" data-r="hint" hidden></div>
   <button class="cupbtn" data-r="cupboard" aria-pressed="false" hidden>${icon("box")}<span>Supplies</span></button>
-  ${(["pine", "lemon", "cola"] as const).map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_LABEL[d]}</div>`).join("")}
+  ${DRINKS.map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_LABEL[d]}</div>`).join("")}
   <nav class="tabs">
     ${pages.map((p, i) => `<button class="tab" data-r="tab" data-page="${i}" aria-selected="false">${p}<span class="dot" hidden></span></button>`).join("")}
     <button class="bell" data-r="bell" aria-label="Ring the bell (twice to serve)">${BELL_SVG}</button>

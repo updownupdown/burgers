@@ -495,7 +495,7 @@ html, body {
 .ticket .sides .ice { font-style: normal; font-weight: 700; margin-left: 3px; color: #2f7fb5; }
 .ticket .sides .ice.no { color: #9b3a2c; }
 /* Opens the supplies cupboard under the drinks and fryer counters. */
-.cupbtn { position: absolute; left: calc(var(--gx) + 8px); z-index: 4; pointer-events: auto; display: inline-flex; align-items: center; gap: 5px; height: 36px; padding: 0 12px 0 9px; border: 2px solid var(--ink); border-radius: 18px; background: var(--paper); color: var(--ink); font: 800 13px var(--body); box-shadow: 0 3px 0 rgb(0 0 0 / 0.2); }
+.cupbtn { position: absolute; left: calc(var(--gx) + var(--gw) - 8px); transform: translateX(-100%); z-index: 4; pointer-events: auto; display: inline-flex; align-items: center; gap: 5px; height: 36px; padding: 0 12px 0 9px; border: 2px solid var(--ink); border-radius: 18px; background: var(--paper); color: var(--ink); font: 800 13px var(--body); box-shadow: 0 3px 0 rgb(0 0 0 / 0.2); }
 .cupbtn .bv-icon { width: 18px; height: 18px; }
 .cupbtn[aria-pressed="true"] { background: var(--mustard, #f3c33c); }
 .cupbtn[hidden] { display: none; }

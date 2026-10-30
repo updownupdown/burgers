@@ -79,6 +79,7 @@ export interface Ui {
   timer: HTMLElement;
   money: HTMLElement;
   stop: HTMLElement;
+  rail: HTMLElement;
   tickets: HTMLElement[];
   drinkLabels: HTMLElement[];
   hint: HTMLElement;
@@ -105,6 +106,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     <span class="spacer"></span>
     <button class="icon-btn" data-r="menuBtn" aria-label="Menu">${MENU_SVG}</button>
   </div>
+  <div class="rail" data-r="rail"></div>
   ${[0, 1, 2].map((i) => `<div class="ticket" data-r="ticket" data-slot="${i}" style="--slot:${SLOT_COLORS[i]}" hidden></div>`).join("")}
   <div class="hint" data-r="hint" hidden></div>
   ${DRINKS.map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_LABEL[d]}</div>`).join("")}
@@ -143,6 +145,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     timer: q("timer"),
     money: q("money"),
     stop: q("stop"),
+    rail: q("rail"),
     tickets: [...root.querySelectorAll<HTMLElement>('[data-r="ticket"]')],
     drinkLabels: [...root.querySelectorAll<HTMLElement>('[data-r="dlabel"]')],
     hint: q("hint"),
@@ -161,6 +164,22 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 const MOD_LABEL = { no: "No", extra: "Extra", add: "+" } as const;
+
+/** Doneness pills: the same colour and word on the ticket and under the patty on the grill. */
+export const DONENESS_PILL: Record<string, { label: string; color: string }> = {
+  raw: { label: "Raw", color: "#d27585" },
+  rare: { label: "Rare", color: "#c23b48" },
+  medium: { label: "Med", color: "#a8642f" },
+  well: { label: "Well", color: "#6b4127" },
+  burnt: { label: "Burnt", color: "#231915" },
+};
+
+/** A patty-shaped pill with white text; `progress` (0..1) draws a bar for how far into that level it is. */
+export function donenessPill(d: string, progress?: number, cls = ""): string {
+  const p = DONENESS_PILL[d] ?? DONENESS_PILL.medium;
+  const bar = progress === undefined ? "" : `<u><i style="width:${Math.round(Math.max(0, Math.min(1, progress)) * 100)}%"></i></u>`;
+  return `<span class="dpill ${d} ${cls}" style="--c:${p.color}"><b>${p.label}</b>${bar}</span>`;
+}
 
 /** How a waiting customer feels. The figure at the window and the face on their ticket always agree. */
 export function patienceMood(pct: number): "neutral" | "sad" | "angry" {
@@ -192,7 +211,7 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, expande
     for (let i = order.layers.length - 1; i >= 0; i--) {
       const exp = order.layers[i];
       let extra = "";
-      if (exp.kind === "patty") extra = exp.smashed ? ` <em>Smash</em>` : ` <em>${exp.doneness === "rare" ? "Rare" : exp.doneness === "well" ? "Well" : "Med"}</em>`;
+      if (exp.kind === "patty") extra = ` ${donenessPill(exp.doneness ?? "medium")}${exp.smashed ? ` <em>Smash</em>` : ""}`;
       if (exp.kind === "pineapple") extra = ` <em>Grilled</em>`;
       if (exp.kind === "bun" && exp.toasted) extra = ` <em>Toast</em>`;
       if (exp.melted) extra = ` <em>Melted</em>`;
@@ -205,14 +224,14 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, expande
     const patty = order.layers.find((l) => l.kind === "patty");
     const bun = order.layers.find((l) => l.kind === "bun");
     const how: string[] = [];
-    if (patty) how.push(patty.smashed ? "Smash" : patty.doneness === "rare" ? "Rare" : patty.doneness === "well" ? "Well" : "Med");
+    if (patty?.smashed) how.push("Smash");
     if (bun?.toasted) how.push("Toast");
     if (order.layers.some((l) => l.melted)) how.push("Melt");
     const mods = order.mods.map(
       (m) => `<li class="m ${m.type}"><b style="background:${KIND_COLOR[m.kind]}"></b><span class="l">${MOD_LABEL[m.type]} ${KIND_LABEL[m.kind].toLowerCase()}</span></li>`,
     );
     const pips = order.layers.map((l, i) => `<i class="${okFlags[i] ? "ok" : ""}" style="background:${KIND_COLOR[l.kind]}"></i>`).join("");
-    body = `<div class="how">${how.map((h) => `<em>${h}</em>`).join(" ")}</div>
+    body = `<div class="how">${patty ? donenessPill(patty.doneness ?? "medium") : ""}${how.map((h) => `<em>${h}</em>`).join(" ")}</div>
       ${mods.length ? `<ol>${mods.join("")}</ol>` : ""}
       <div class="pips" aria-label="${okFlags.filter(Boolean).length} of ${order.layers.length} layers">${pips}</div>`;
   }

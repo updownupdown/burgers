@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { buzz, Sfx } from "./audio";
-import { avgCook, bunToast, MELT_RATE, pattyDoneness, pattyLabel } from "./game/cooking";
+import { avgCook, bunToast, MELT_RATE, pattyLabel } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { freshSave, loadSave, passed, passTown, upgradeChoices, UPGRADES, writeSave, type UpgradeId } from "./game/progress";
 import { eventOn, townById, withEvent, type TownEvent } from "./game/stops";
@@ -35,7 +35,7 @@ import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
 import "./ui/components.css";
 import "./style.css";
-import { buildUi, patienceMood, planHtml, summaryHtml, ticketHtml, titleHtml } from "./ui";
+import { buildUi, donenessPill, patienceMood, planHtml, summaryHtml, ticketHtml, titleHtml } from "./ui";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 
 // ---------------------------------------------------------------------------
@@ -181,8 +181,12 @@ function layout(): void {
   const safeB = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-b")) || 0;
   const safeT = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-t")) || 0;
   const tabsH = 64 + safeB;
-  const custH = Math.round(THREE.MathUtils.clamp(H * 0.24, 150, 230));
-  const trayH = Math.round(THREE.MathUtils.clamp(H * 0.18, 110, 180));
+  // The customers band holds the window (HUD on top, customers, then the order rail) and the
+  // receipts hanging from the rail; it's taller than the tray so the receipts have room.
+  const custH = Math.round(THREE.MathUtils.clamp(H * 0.34, 200, 320));
+  const trayH = Math.round(THREE.MathUtils.clamp(H * 0.14, 96, 140));
+  const hudH = safeT + 42;
+  const railY = Math.round(hudH + (custH - hudH) * 0.42);
   bands.customers = { x: colX, y: 0, w, h: custH };
   bands.tray = { x: colX, y: custH, w, h: trayH };
   bands.counter = { x: colX, y: custH + trayH, w, h: H - custH - trayH - tabsH };
@@ -194,7 +198,7 @@ function layout(): void {
   // with their toolbars hidden), so taps line up with what's drawn.
   canvas.style.width = `${W}px`;
   canvas.style.height = `${H}px`;
-  customersView.layout(w / custH);
+  customersView.layout(w / custH, hudH / custH, railY / custH);
   trayView.layout(w / trayH);
   counter.layout(w / bands.counter.h);
 
@@ -203,16 +207,15 @@ function layout(): void {
   st.setProperty("--gw", `${w}px`);
   st.setProperty("--gh", `${H}px`);
 
-  // Tickets fill the right part of each customer slot.
+  // Receipts hang from the rail, one under each customer.
   const slotW = w / 3;
+  ui.rail.style.top = `${railY - 4}px`;
   ui.tickets.forEach((t, i) => {
-    // Wide enough for "Patty Med" at a readable size; on narrow phones it overlaps the customer a little.
-    const tw = Math.max(slotW * 0.6, 84);
-    t.style.left = `${(i + 1) * slotW - tw - slotW * 0.02}px`;
+    const tw = Math.min(slotW * 0.88, 170);
+    t.style.left = `${slotW * i + (slotW - tw) / 2}px`;
     t.style.width = `${tw}px`;
-    const top = Math.max(custH * 0.16, safeT + 44);
-    t.style.top = `${top}px`;
-    t.style.maxHeight = `${custH - top + trayH * 0.22}px`;
+    t.style.top = `${railY}px`;
+    t.style.maxHeight = `${custH - railY + trayH * 0.3}px`;
   });
   ui.hint.style.top = `${bands.counter.y + 8}px`;
   // Turned sideways mid-shift: pause behind the "turn your phone" overlay.
@@ -1778,17 +1781,18 @@ function updateUi(): void {
 /** Small doneness tags floating over grill items, so players don't have to judge colour alone. */
 const grillTags: HTMLElement[] = [];
 /** Colour for each doneness band, so the grill tag can be read at a glance. */
-const DONENESS_COLOR: Record<string, string> = { raw: "#f4a6b4", rare: "#de4f5c", medium: "#c47a45", well: "#6e4128", burnt: "#1d1410" };
+/** Cook thresholds of each patty doneness level, to show progress through the current one. */
+const DONENESS_BANDS: [string, number, number][] = [["raw", 0, 0.18], ["rare", 0.18, 0.43], ["medium", 0.43, 0.67], ["well", 0.67, 0.92], ["burnt", 0.92, 1.2]];
 
 function itemTag(p: Piece): string {
   switch (p.kind) {
     case "patty": {
-      // Two halves that mirror the patty: top half is the face up, bottom half the face on the grill.
-      // A face that matches the active order's doneness gets a green edge.
+      // Two pills that mirror the patty: the top one is the face up, the bottom one the face on the grill.
+      // Each shows its level and how far into it the face is; a face matching the active order gets a tick.
       const want = game.slots[game.active]?.order?.layers.find((l) => l.kind === "patty")?.doneness;
       const half = (t: number) => {
-        const d = pattyDoneness(t);
-        return `<b class="${d === want ? "ok" : ""}" style="background:${DONENESS_COLOR[d]}"></b>`;
+        const [d, lo, hi] = DONENESS_BANDS.find(([, , h]) => t < h) ?? DONENESS_BANDS[4];
+        return donenessPill(d, (t - lo) / (hi - lo), d === want ? "ok" : "");
       };
       return `<i class="pind">${half(p.cook[1])}${half(p.cook[0])}</i>`;
     }

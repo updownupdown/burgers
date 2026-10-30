@@ -39,10 +39,10 @@ async function hold(p, x, y, ms) {
 const step = (p, s) => p.evaluate((s) => window.__bv.step(s), s);
 const state = (p) => p.evaluate(() => {
   const g = window.__bv.game, c = window.__bv.counter;
-  const f = (pc) => pc.kind + ':' + pc.cook.map(x => x.toFixed(2)).join('/');
+  const f = (pc) => pc.kind + ':' + pc.cook.map(x => x.toFixed(2)).join('/') + (pc.melt != null ? ' melt' + pc.melt.toFixed(2) : '');
   return {
     t: +g.time.toFixed(1), phase: g.phase, active: g.active, served: g.served, lost: g.lost, money: g.money, tips: g.tips,
-    slots: g.slots.map(s => s.order && !s.leaving ? { id: s.order.id, name: s.order.name, want: s.order.layers.map(l => l.kind + (l.doneness ? '(' + l.doneness + ')' : '') + (l.toasted ? '(t)' : '')).join(' '), fries: s.order.fries, drink: s.order.drink, patience: +(s.patience / s.maxPatience).toFixed(2), plate: s.plate.layers.map(l => f(l.piece)), pf: s.plate.fries, pd: s.plate.drink } : null),
+    slots: g.slots.map(s => s.order && !s.leaving ? { id: s.order.id, name: s.order.name, want: s.order.layers.map(l => l.kind + (l.doneness ? '(' + l.doneness + ')' : '') + (l.toasted ? '(t)' : '') + (l.melted ? '(m)' : '')).join(' '), fries: s.order.fries, drink: s.order.drink, patience: +(s.patience / s.maxPatience).toFixed(2), plate: s.plate.layers.map(l => f(l.piece)), pf: s.plate.fries, pd: s.plate.drink } : null),
     grill: c.grillItems.map(i => f(i.piece) + '@' + i.x.toFixed(1) + ',' + i.z.toFixed(1)),
     page: c.page, gesture: window.__bv.gesture(),
   };

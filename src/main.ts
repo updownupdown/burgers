@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { buzz, Sfx } from "./audio";
-import { avgCook, bunToast, pattyLabel } from "./game/cooking";
+import { avgCook, bunToast, MELT_RATE, pattyLabel } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { freshSave, loadSave, passed, upgradeChoices, UPGRADES, writeSave, type UpgradeId } from "./game/progress";
 import { STOPS } from "./game/stops";
@@ -326,7 +326,7 @@ function tutorialHint(): string | null {
 
 type Payload =
   | { type: "piece"; piece: Piece; fromGrill: { x: number; z: number } | null }
-  | { type: "stack"; layers: Layer[]; from: number }
+  | { type: "stack"; layers: Layer[]; from: number; grill?: { x: number; z: number } }
   | { type: "fries"; cook: number; basket: number | null }
   | { type: "drink"; flavor: DrinkId; fill: number; tap: number };
 
@@ -512,15 +512,23 @@ function finishHold(pt: Pointer): void {
     } else if (payload.type === "stack") {
       // A single grill item can go back on the grill.
       const over = counter.overGrill(g);
-      const only = payload.layers.length === 1 ? payload.layers[0].piece : null;
-      if (over && only && GRILLABLE.has(only.kind)) {
-        counter.addGrillItem(only, over.x, over.z);
+      const [base, top] = payload.layers.map((l) => l.piece);
+      const fits = payload.layers.length === 1 || (payload.layers.length === 2 && base.kind === "patty" && top.kind === "cheese");
+      if (over && fits && GRILLABLE.has(base.kind)) {
+        counter.addGrillItem(base, over.x, over.z, top);
         sfx.sizzleHit();
         done = true;
       }
     } else if (payload.type === "piece") {
       const over = counter.overGrill(g);
-      if (over && GRILLABLE.has(payload.piece.kind)) {
+      const under = over && payload.piece.kind === "cheese" ? counter.grillItemAt(g) : null;
+      if (under && counter.addTopping(under, payload.piece)) {
+        sfx.plop();
+        hintOnce("melt", "The cheese melts on the hot patty. Drag them up together when it slumps.", 3.5);
+        done = true;
+      } else if (over && payload.piece.kind === "cheese") {
+        showHint(under?.topping ? "That patty already has cheese." : "Drop the cheese right on a patty to melt it.", 2);
+      } else if (over && GRILLABLE.has(payload.piece.kind)) {
         counter.addGrillItem(payload.piece, over.x, over.z);
         if (!payload.fromGrill) sfx.sizzleHit();
         else sfx.thud();
@@ -552,7 +560,10 @@ function finishHold(pt: Pointer): void {
   if (!done) {
     // Put things back where they came from.
     if (payload.type === "piece" && payload.fromGrill) counter.addGrillItem(payload.piece, payload.fromGrill.x, payload.fromGrill.z);
-    if (payload.type === "stack") {
+    if (payload.type === "stack" && payload.grill) {
+      const [base, top] = payload.layers.map((l) => l.piece);
+      counter.addGrillItem(base, payload.grill.x, payload.grill.z, top);
+    } else if (payload.type === "stack") {
       counter.holds[payload.from].layers.push(...payload.layers);
       counter.syncHold(payload.from, false);
     }
@@ -696,7 +707,10 @@ canvas.addEventListener("pointermove", (e) => {
         const item: GrillItem = pt.hit.item;
         if (item.flipT < 0) {
           counter.removeGrillItem(item);
-          startHold(pt, { type: "piece", piece: item.piece, fromGrill: { x: item.x, z: item.z } });
+          const at = { x: item.x, z: item.z };
+          // A cheesed patty comes off the grill as a little stack.
+          if (item.topping) startHold(pt, { type: "stack", layers: [item.piece, item.topping.piece].map((piece) => ({ piece, offX: 0, offZ: 0 })), from: -1, grill: at });
+          else startHold(pt, { type: "piece", piece: item.piece, fromGrill: at });
         }
       }
       break;
@@ -761,7 +775,8 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
             sfx.flip();
             buzz(15);
             hintOnce("flip-done", "Nice flip!", 1.2);
-          } else if (pt.hit.item.piece.kind === "egg") showHint("Eggs stay sunny side up. Drag it to the tray when the white sets.", 2.5);
+          } else if (pt.hit.item.topping) showHint("Flip the patty before the cheese goes on.", 2);
+          else if (pt.hit.item.piece.kind === "egg") showHint("Eggs stay sunny side up. Drag it to the tray when the white sets.", 2.5);
         } else showHint("Swipe up to flip, or drag it to the tray.", 2);
       }
       break;
@@ -1145,7 +1160,15 @@ function tick(dt: number): void {
     });
 
     // Food under the heat lamp slowly dries out.
-    for (const h of counter.holds) for (const l of h.layers) l.piece.held = (l.piece.held ?? 0) + dt;
+    for (const h of counter.holds)
+      h.layers.forEach((l, i) => {
+        l.piece.held = (l.piece.held ?? 0) + dt;
+        // Cheese sitting on a hot patty softens slowly under the lamp too.
+        if (l.piece.kind === "cheese" && h.layers[i - 1]?.piece.kind === "patty") l.piece.melt = Math.min(1, (l.piece.melt ?? 0) + MELT_RATE.lamp * dt);
+      });
+
+    if (!game.hintsShown.has("melt-order") && game.slots[game.active]?.order?.layers.some((l) => l.melted))
+      hintOnce("melt-order", "This one wants melted cheese: drop the slice on the patty while it's on the grill.", 4.5);
 
     // Press and hold a fresh patty to smash it (at stops that serve smash burgers).
     if (ptr && ptr.mode === "grill" && !ptr.moved && ptr.hit?.type === "grillItem" && game.time - ptr.gt0 > 0.45 && stop().menu.some((r) => r.smash)) {

@@ -33,9 +33,11 @@ export function applyMods(base: Kind[], mods: Modifier[]): Kind[] {
 }
 
 export function orderFromRecipe(id: number, recipe: Recipe, doneness: Doneness, fries: boolean, drink: DrinkId | null, mods: Modifier[] = []): Order {
-  const layers: ExpectedLayer[] = applyMods(recipe.layers, mods).map((kind) => {
+  const kinds = applyMods(recipe.layers, mods);
+  const layers: ExpectedLayer[] = kinds.map((kind, i) => {
     if (kind === "patty") return recipe.smash ? { kind, doneness, smashed: true } : { kind, doneness };
     if (kind === "bun") return { kind, toasted: recipe.toasted };
+    if (kind === "cheese" && recipe.melt && kinds[i - 1] === "patty") return { kind, melted: true };
     return { kind };
   });
   const extras = mods.filter((m) => m.type !== "no").length;

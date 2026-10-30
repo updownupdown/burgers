@@ -1,4 +1,4 @@
-import { avgCook, bunToast } from "./cooking";
+import { avgCook, bunToast, isMelted } from "./cooking";
 import type { ExpectedLayer, Layer, Order, Piece, Plate } from "./types";
 import { DONENESS_TARGET, KIND_LABEL } from "./types";
 
@@ -101,6 +101,9 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
       if (len >= 0.5) return [0.65, `stingy ${exp.kind}`];
       return [0.35, `barely any ${exp.kind}`];
     }
+    case "cheese":
+      if (exp.melted && !isMelted(piece)) return [0.55, "cheese not melted"];
+      return [1, null];
     default:
       return [1, null];
   }

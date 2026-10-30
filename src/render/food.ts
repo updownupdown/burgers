@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { avgCook, bunToast } from "../game/cooking";
+import { avgCook, bunToast, isMelted } from "../game/cooking";
 import type { DrinkId, Kind, Piece } from "../game/types";
 import { DRINK_COLOR } from "../game/types";
 import { faceted, mesh, outline, ramp, shareGeometry, toon } from "./materials";
@@ -70,6 +70,24 @@ const friesRamp = ramp([
   [1.3, "#3e2510"],
 ]);
 
+/** A square slice; `melt` slumps the corners over the patty edge and `drip` adds runs. */
+function cheeseGeo(melt: number, drip: number): THREE.BufferGeometry {
+  const g = new THREE.PlaneGeometry(1.9, 1.9, 14, 14);
+  g.rotateX(-Math.PI / 2);
+  g.rotateY(Math.PI / 4 + 0.15);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const z = p.getZ(i);
+    const a = Math.atan2(z, x);
+    const over = Math.max(0, Math.hypot(x, z) - 0.92 + drip * 0.04 * Math.sin(a * 7));
+    const s = 1 - Math.min(melt, 0.4) * 0.12 * Math.min(1, over * 3);
+    const sag = melt * (over * 1.1 + over * over * 1.4) * (1 + drip * 0.5 * Math.max(0, Math.sin(a * 5 + 1)));
+    p.setXYZ(i, x * s, 0.025 - Math.min(sag, 0.5), z * s);
+  }
+  return faceted(g);
+}
+
 function lathe(points: [number, number][], segs = 26): THREE.BufferGeometry {
   return faceted(new THREE.LatheGeometry(points.map(([x, y]) => new THREE.Vector2(x, y)), segs));
 }
@@ -93,21 +111,8 @@ const GEO = {
     }
     return faceted(g);
   })(),
-  cheese: (() => {
-    const melt = 0.4;
-    const g = new THREE.PlaneGeometry(1.9, 1.9, 12, 12);
-    g.rotateX(-Math.PI / 2);
-    g.rotateY(Math.PI / 4 + 0.15);
-    const p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      const x = p.getX(i);
-      const z = p.getZ(i);
-      const over = Math.max(0, Math.hypot(x, z) - 0.92);
-      const s = 1 - melt * 0.12 * Math.min(1, over * 3);
-      p.setXYZ(i, x * s, 0.025 - melt * (over * 1.1 + over * over * 1.4), z * s);
-    }
-    return faceted(g);
-  })(),
+  cheese: cheeseGeo(0.3, 0),
+  cheeseMelted: cheeseGeo(0.95, 1),
   tomato: faceted(new THREE.CylinderGeometry(0.44, 0.44, 0.09, 14)),
   tomatoCore: faceted(new THREE.CylinderGeometry(0.27, 0.27, 0.095, 9)),
   onion: [0.32, 0.44].map((r) => faceted(new THREE.TorusGeometry(r, 0.045, 5, 20))),
@@ -317,8 +322,18 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       return g;
     }
     case "cheese": {
-      const g = group("cheese", LAYER_HEIGHT.cheese);
-      g.add(mesh(GEO.cheese, "#f7c531", { side: THREE.DoubleSide, ink: 1.02 }));
+      // Swaps to a slumped, deeper-orange slice once it melts.
+      let melted = false;
+      const slice = mesh(GEO.cheese, "#f7c531", { side: THREE.DoubleSide, ink: 1.02 });
+      const g = group("cheese", LAYER_HEIGHT.cheese, (p) => {
+        if (isMelted(p) === melted) return;
+        melted = !melted;
+        slice.geometry = melted ? GEO.cheeseMelted : GEO.cheese;
+        (slice.children[0] as THREE.Mesh).geometry = slice.geometry;
+        slice.material = toon(melted ? "#f6ad25" : "#f7c531", { side: THREE.DoubleSide });
+      });
+      g.add(slice);
+      g.userData.update(piece);
       return g;
     }
     case "lettuce": {

@@ -127,6 +127,7 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, expande
       if (exp.kind === "patty") extra = exp.smashed ? ` <em>Smash</em>` : ` <em>${exp.doneness === "rare" ? "Rare" : exp.doneness === "well" ? "Well" : "Med"}</em>`;
       if (exp.kind === "pineapple") extra = ` <em>Grilled</em>`;
       if (exp.kind === "bun" && exp.toasted) extra = ` <em>Toast</em>`;
+      if (exp.melted) extra = ` <em>Melted</em>`;
       const cls = [okFlags[i] ? "ok" : "", modded.has(exp.kind) ? "mod" : ""].join(" ").trim();
       lines.push(`<li class="${cls}"><b style="background:${KIND_COLOR[exp.kind]}"></b><span class="l">${KIND_LABEL[exp.kind]}</span>${extra}</li>`);
     }
@@ -138,6 +139,7 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, expande
     const how: string[] = [];
     if (patty) how.push(patty.smashed ? "Smash" : patty.doneness === "rare" ? "Rare" : patty.doneness === "well" ? "Well" : "Med");
     if (bun?.toasted) how.push("Toast");
+    if (order.layers.some((l) => l.melted)) how.push("Melt");
     const mods = order.mods.map(
       (m) => `<li class="m ${m.type}"><b style="background:${KIND_COLOR[m.kind]}"></b><span class="l">${MOD_LABEL[m.type]} ${KIND_LABEL[m.kind].toLowerCase()}</span></li>`,
     );

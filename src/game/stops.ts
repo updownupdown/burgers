@@ -8,6 +8,8 @@ export interface Recipe {
   toasted: boolean;
   /** Patties must be smashed flat on the grill. */
   smash?: boolean;
+  /** Cheese sitting right on a patty should be melted on the grill. */
+  melt?: boolean;
   /** Only ordered once the shift has warmed up (0..1 of the way through). */
   from?: number;
 }
@@ -43,7 +45,7 @@ export const STOPS: Stop[] = [
       { name: "Trailhead Classic", price: 9, layers: ["bun", "ketchup", "patty", "lettuce", "tomato", "bun"], toasted: true },
       { name: "Cheesy Switchback", price: 10, layers: ["bun", "patty", "cheese", "pickle", "mustard", "bun"], toasted: false },
       { name: "Sunrise Summit", price: 11, layers: ["bun", "lettuce", "patty", "egg", "bun"], toasted: true, from: 0.15 },
-      { name: "Lumberjack Stack", price: 15, layers: ["bun", "patty", "cheese", "bacon", "onion", "patty", "ketchup", "bun"], toasted: true, from: 0.3 },
+      { name: "Lumberjack Stack", price: 15, layers: ["bun", "patty", "cheese", "bacon", "onion", "patty", "ketchup", "bun"], toasted: true, melt: true, from: 0.3 },
     ],
   },
   {
@@ -58,8 +60,8 @@ export const STOPS: Stop[] = [
     menu: [
       { name: "Boardwalk Basic", price: 8, layers: ["bun", "patty", "lettuce", "ketchup", "bun"], toasted: false },
       { name: "Luau Stack", price: 13, layers: ["bun", "patty", "pineapple", "bacon", "mustard", "bun"], toasted: true },
-      { name: "Low Tide", price: 11, layers: ["bun", "lettuce", "tomato", "patty", "cheese", "onion", "bun"], toasted: true },
-      { name: "Big Kahuna", price: 17, layers: ["bun", "patty", "cheese", "pineapple", "patty", "bacon", "ketchup", "bun"], toasted: true, from: 0.3 },
+      { name: "Low Tide", price: 11, layers: ["bun", "lettuce", "tomato", "patty", "cheese", "onion", "bun"], toasted: true, melt: true },
+      { name: "Big Kahuna", price: 17, layers: ["bun", "patty", "cheese", "pineapple", "patty", "bacon", "ketchup", "bun"], toasted: true, melt: true, from: 0.3 },
       { name: "Sandy Pickle", price: 10, layers: ["bun", "pickle", "patty", "cheese", "pickle", "bun"], toasted: false },
     ],
   },
@@ -74,9 +76,9 @@ export const STOPS: Stop[] = [
     newThing: "New here: smash burgers. Press and hold a fresh patty on the grill to smash it flat. Smashed patties cook fast!",
     menu: [
       { name: "Tumbleweed", price: 8, layers: ["bun", "patty", "onion", "ketchup", "bun"], toasted: false },
-      { name: "Mesa Smash", price: 12, layers: ["bun", "patty", "cheese", "onion", "mustard", "bun"], toasted: true, smash: true },
+      { name: "Mesa Smash", price: 12, layers: ["bun", "patty", "cheese", "onion", "mustard", "bun"], toasted: true, smash: true, melt: true },
       { name: "Rattlesnake", price: 13, layers: ["bun", "patty", "jalapeno", "cheese", "jalapeno", "ketchup", "bun"], toasted: true },
-      { name: "Sunset Double", price: 16, layers: ["bun", "patty", "cheese", "patty", "cheese", "jalapeno", "bun"], toasted: true, smash: true, from: 0.25 },
+      { name: "Sunset Double", price: 16, layers: ["bun", "patty", "cheese", "patty", "cheese", "jalapeno", "bun"], toasted: true, smash: true, melt: true, from: 0.25 },
       { name: "Ranch Breakfast", price: 14, layers: ["bun", "patty", "bacon", "egg", "bun"], toasted: true, from: 0.15 },
     ],
   },

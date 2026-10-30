@@ -15,7 +15,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
   const ev = (f, a) => p.evaluate(f, a);
   const bin = (k) => ev((k) => { const b = window.__bv.bins.find(x => x.kind === k); return window.__bv.project('counter', b.x, 0.4, b.z); }, k);
   const plate = (i) => ev((i) => { const g = window.__bv.trayView.plates[i].group.position; return window.__bv.project('tray', g.x, 0.3, g.z); }, i);
-  const items = () => ev(() => window.__bv.counter.grillItems.map((it, i) => ({ i, kind: it.piece.kind, cook: it.piece.cook.slice(), flipping: it.flipT >= 0, uid: it.piece.uid, x: it.x, z: it.z, scr: window.__bv.project('counter', it.x, 0.35, it.z) })));
+  const items = () => ev(() => window.__bv.counter.grillItems.map((it, i) => ({ i, kind: it.piece.kind, cook: it.piece.cook.slice(), flipping: it.flipT >= 0, uid: it.piece.uid, melt: it.topping ? (it.topping.piece.melt ?? 0) : -1, x: it.x, z: it.z, scr: window.__bv.project('counter', it.x, 0.35, it.z) })));
   const page = async (n) => { await p.evaluate((n) => document.querySelectorAll('.tab')[n].click(), n); await step(p, 0.4); };
   const act = async (pts, ms) => { await gesture(p, pts, ms); await step(p, ACTION); };
   const spots = [[-2.5, 0.7], [-1.2, 0.7], [0.1, 0.7], [1.3, 0.7], [-2.5, 2.1], [-1.2, 2.1], [0.1, 2.1], [1.3, 2.1]];
@@ -34,7 +34,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
     const need = order.layers.map((l, idx) => ({ ...l, idx })).filter(l => l.kind === 'patty' || l.kind === 'bacon' || l.kind === 'egg' || l.kind === 'pineapple' || (l.kind === 'bun' && l.toasted));
     const used = new Set((await items()).map(i => i.uid));
     let si = 0;
-    const assigned = {}; const parked = new Map();
+    const assigned = {}; const parked = new Map(); const skip = new Set();
     for (const n of need) {
       const [bx, by] = await bin(n.kind);
       const occupied = await items();
@@ -62,6 +62,9 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
     const [px, py] = await plate(slot);
     for (let li = 0; li < order.layers.length; li++) {
       const l = order.layers[li];
+      if (skip.has(li)) continue;
+      const wantsMelt = (i) => order.layers[i]?.kind === 'patty' && order.layers[i + 1]?.melted;
+      const cheeseOn = async (o) => { const [cx, cy] = await bin('cheese'); await act(line(cx, cy, o.scr[0], o.scr[1], 10)); };
       if (assigned[li]) {
         // cook, flipping when the down side reaches target
         for (let w = 0; w < 200; w++) {
@@ -89,6 +92,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
               const done2 = ex.kind === 'patty' || ex.kind === 'bacon' ? o.cook[0] >= t2 - 0.02 && o.cook[1] >= t2 - 0.02 : o.cook[0] >= t2;
               const free = done2 ? await ev(() => window.__bv.counter.holds.findIndex(h => !h.layers.length)) : -1;
               if (free >= 0 && ![...parked.values()].includes(free)) {
+                if (wantsMelt(+ln[0]) && o.melt < 0) { await cheeseOn(o); skip.add(+ln[0] + 1); }
                 const [rx, ry] = await ev((i) => { const h = window.__bv.counter.holds[i]; return window.__bv.project('counter', h.x, 0.35, h.z); }, free);
                 await act(line(o.scr[0], o.scr[1], rx, ry, 12));
                 if (await ev((u) => !window.__bv.counter.grillItems.some(g => g.piece.uid === u), o.uid)) parked.set(o.uid, free);
@@ -96,7 +100,10 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
             }
           }
           const tgt = l.kind === 'patty' ? TARGET[l.doneness] : l.kind === 'bun' || l.kind === 'egg' || l.kind === 'pineapple' ? 0.5 : 0.6;
-          const ready = l.kind === 'patty' || l.kind === 'bacon' ? it.cook[0] >= tgt - 0.02 && it.cook[1] >= tgt - 0.02 : it.cook[0] >= tgt;
+          if (wantsMelt(li) && it.melt < 0 && it.cook[1] >= tgt - 0.02 && it.cook[0] >= tgt - 0.15 && !it.flipping) {
+            await cheeseOn(it); skip.add(li + 1); continue;
+          }
+          const ready = (l.kind === 'patty' || l.kind === 'bacon' ? it.cook[0] >= tgt - 0.02 && it.cook[1] >= tgt - 0.02 : it.cook[0] >= tgt) && (!wantsMelt(li) || it.melt >= 0.5);
           if (ready && !it.flipping) {
             const now = (await items()).find(i => i.uid === assigned[li]);
             await act(line(now.scr[0], now.scr[1], px, py, 12));

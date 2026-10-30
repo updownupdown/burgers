@@ -1,8 +1,8 @@
 import * as THREE from "three";
-import { FRY_RATE, GRILL_RATE } from "../game/cooking";
+import { FRY_RATE, GRILL_RATE, MELT_RATE } from "../game/cooking";
 import type { DrinkId, Kind, Layer, Piece, SauceKind } from "../game/types";
 import { newPiece } from "../game/types";
-import { bottle, makeCup, makeFood, makeFries, type CupObject, type FoodObject, type FriesObject } from "../render/food";
+import { bottle, makeCup, makeFood, makeFries, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { PlateView } from "./tray";
 
@@ -35,6 +35,8 @@ export interface GrillItem {
   squashV: number;
   smoke: number;
   held: boolean;
+  /** A cheese slice melting on top of a patty. */
+  topping: { piece: Piece; obj: FoodObject } | null;
 }
 
 export interface Basket {
@@ -443,19 +445,42 @@ export class CounterView {
     this.holds[i].view.sync({ layers: this.holds[i].layers, fries: null, drink: null }, animate, () => {});
   }
 
-  addGrillItem(piece: Piece, x: number, z: number): GrillItem {
+  addGrillItem(piece: Piece, x: number, z: number, topping?: Piece): GrillItem {
     const obj = makeFood(piece, "top");
     obj.scale.setScalar(GRILL_SCALE);
     this.scene.add(obj);
-    const item: GrillItem = { piece, obj, x, z, flipT: -1, squash: 0, squashV: 4, smoke: 0, held: false };
+    const item: GrillItem = { piece, obj, x, z, flipT: -1, squash: 0, squashV: 4, smoke: 0, held: false, topping: null };
     this.grillItems.push(item);
+    if (topping) this.addTopping(item, topping);
     return item;
+  }
+
+  /** Grill item under a world point, if any. */
+  grillItemAt(world: THREE.Vector3): GrillItem | null {
+    const x = world.x - pageX(1);
+    let best: GrillItem | null = null;
+    let bestD = 0.75;
+    for (const it of this.grillItems) {
+      const d = Math.hypot(it.x - x, it.z - world.z);
+      if (d < bestD) [best, bestD] = [it, d];
+    }
+    return best;
+  }
+
+  /** Lay a cheese slice on a patty so it melts. Only one slice per patty, and not mid-flip. */
+  addTopping(item: GrillItem, piece: Piece): boolean {
+    if (item.piece.kind !== "patty" || item.topping || item.flipT >= 0 || piece.kind !== "cheese") return false;
+    const obj = makeFood(piece, "top");
+    obj.position.y = stackHeight(item.piece, "top");
+    item.obj.add(obj);
+    item.topping = { piece, obj };
+    return true;
   }
 
   /** Press a patty flat. Only fresh patties can be smashed. */
   smash(item: GrillItem): boolean {
     const p = item.piece;
-    if (p.kind !== "patty" || p.smashed || item.flipT >= 0 || p.cook[0] > 0.35) return false;
+    if (p.kind !== "patty" || p.smashed || item.topping || item.flipT >= 0 || p.cook[0] > 0.35) return false;
     p.smashed = true;
     this.scene.remove(item.obj);
     disposeObject(item.obj);
@@ -476,7 +501,7 @@ export class CounterView {
   }
 
   flip(item: GrillItem): boolean {
-    if (item.flipT >= 0 || item.held) return false;
+    if (item.flipT >= 0 || item.held || item.topping) return false;
     // Eggs and buns don't flip in this shop: eggs are sunny side up, buns toast cut side down.
     if (item.piece.kind === "egg") return false;
     item.flipT = 0;
@@ -561,6 +586,11 @@ export class CounterView {
         const zone = this.isWarm(it) ? 0.07 : 1.12 - 0.25 * Math.abs((it.x - GRILL_CX) / 2.5);
         const heat = zone * (COOK_SPEED[it.piece.kind] ?? 1) * (it.piece.smashed ? 1.6 : 1);
         const before = it.piece.cook[0];
+        if (it.topping) {
+          const c = it.topping.piece;
+          c.melt = Math.min(1, (c.melt ?? 0) + (this.isWarm(it) ? MELT_RATE.warm : MELT_RATE.hot) * dt);
+          it.topping.obj.userData.update(c);
+        }
         it.piece.cook[0] += GRILL_RATE * heat * dt;
         if (it.piece.kind === "egg") it.piece.cook[1] += GRILL_RATE * 0.35 * heat * dt;
         it.obj.position.set(gx + it.x, GRILL_TOP, it.z);

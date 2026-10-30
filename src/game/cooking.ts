@@ -35,6 +35,14 @@ export function isToasted(p: Piece): boolean {
   return t >= 0.35 && t < 0.95;
 }
 
+/** Cheese counts as melted once it slumps over the patty. */
+export function isMelted(p: Piece): boolean {
+  return (p.melt ?? 0) >= 0.5;
+}
+
+/** Melt per second: fast on a hot patty, slow on the warm end or under the heat lamp. */
+export const MELT_RATE = { hot: 0.45, warm: 0.14, lamp: 0.12 };
+
 export function friesLabel(t: number): string {
   if (t < 0.3) return "Frozen";
   if (t < 0.5) return "Soggy";

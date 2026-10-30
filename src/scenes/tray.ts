@@ -135,6 +135,7 @@ export class PlateView {
 
   update(dt: number): void {
     for (const e of this.entries) {
+      if (e.piece.kind === "cheese") e.obj.userData.update(e.piece);
       if (!e.landed) {
         e.vy -= 30 * dt;
         e.y += e.vy * dt;

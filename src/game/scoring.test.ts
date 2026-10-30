@@ -143,6 +143,25 @@ describe("smash burgers", () => {
   });
 });
 
+describe("melted cheese", () => {
+  it("only asks for melting on cheese that sits right on a patty", () => {
+    const recipe = STOPS.flatMap((s) => s.menu).find((r) => r.name === "Sunset Double")!;
+    const order = makeOrder(1, seededRng(3), 1, { ...STOPS[2], menu: [recipe] });
+    const melted = order.layers.map((l, i) => (l.melted ? order.layers[i - 1].kind : null)).filter(Boolean);
+    expect(melted.length).toBeGreaterThan(0);
+    expect(melted.every((k) => k === "patty")).toBe(true);
+  });
+
+  it("marks down cold cheese when melted was ordered", () => {
+    const order: Order = { ...classic, layers: [...classic.layers.slice(0, 2), { kind: "cheese", melted: true }, ...classic.layers.slice(2)] };
+    const p = perfectPlate();
+    p.layers.splice(2, 0, layer(piece("cheese")));
+    expect(scorePlate(order, p).notes).toContain("cheese not melted");
+    p.layers[2].piece.melt = 0.8;
+    expect(scorePlate(order, p).score).toBe(100);
+  });
+});
+
 describe("road trip progress", () => {
   it("needs most customers served at one star or better to move on", () => {
     expect(passed(1.2, 6, 9)).toBe(true);

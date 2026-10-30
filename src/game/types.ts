@@ -24,6 +24,8 @@ export interface Piece {
   cook: [number, number];
   /** Pressed flat on the grill (smash burger). */
   smashed?: boolean;
+  /** Cheese only: 0 is a cold slice, 1 is fully melted over a hot patty. */
+  melt?: number;
   /** Seconds spent under the heat lamp; long waits dry food out. */
   held?: number;
   /** Sauce stroke, in plate-local units (x, z), for ketchup/mustard layers. */
@@ -57,6 +59,8 @@ export interface ExpectedLayer {
   doneness?: Doneness;
   toasted?: boolean;
   smashed?: boolean;
+  /** Cheese that should be melted onto the patty below it. */
+  melted?: boolean;
 }
 
 /** A change to a known recipe: "no pickles", "extra cheese", "add bacon". */

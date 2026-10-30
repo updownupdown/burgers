@@ -663,7 +663,7 @@ export function makeFryPile(w: number, d: number, layers: number, seed: number, 
           p: [(r() - 0.5) * w * 0.86 * k, 0.045 + l * 0.07 + r() * 0.025, (r() - 0.5) * d * 0.86 * k],
           r: [(r() - 0.5) * 0.3, r() * Math.PI, Math.PI / 2 + (r() - 0.5) * 0.3],
           s: [1, 0.5 + r() * 0.3, 1],
-          ink: 0.012,
+          ink: 0.009,
         });
       }
     }

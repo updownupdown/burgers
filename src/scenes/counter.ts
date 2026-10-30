@@ -184,6 +184,8 @@ export class CounterView {
   baskets: Basket[] = [];
   /** Where to grab frozen fries from (the middle of the potato freezer), in world units. */
   friesBinAt = new THREE.Vector3();
+  /** Middle of the fryer page's supplies box (wrapped carton sleeves), for its label. */
+  cartonSuppliesAt = new THREE.Vector3();
   private bubbles: THREE.Mesh[] = [];
   private padMarks: THREE.Mesh[] = [];
   taps: Tap[] = [];
@@ -365,6 +367,7 @@ export class CounterView {
     shaker.position.set(x0 + F.shaker.x, 0, F.shaker.z);
     this.scene.add(shaker);
     this.addSupplies("carton", x0 + F.supplies.x, F.supplies.z, F.supplies.w, F.supplies.d);
+    this.cartonSuppliesAt.set(x0 + F.supplies.x, 0.3, F.supplies.z);
 
     // The vats, each with a wire basket and a pile of fries that empties from the top.
     F.vatX.forEach((x, i) => {
@@ -648,7 +651,7 @@ export class CounterView {
     }
     if (best) return { type: "grillItem", item: best };
     const hp = this.groundPoint(ndc, 0.35);
-    const hold = this.holds.findIndex((h) => Math.hypot(hp.x - (pageX(1) + h.x), hp.z - h.z) < 0.55);
+    const hold = this.holds.findIndex((h) => Math.hypot(hp.x - (pageX(1) + h.x), hp.z - h.z) < 0.6);
     if (hold >= 0) return { type: "hold", idx: hold };
     const hits = this.raycaster.intersectObjects(this.hitMeshes, false);
     return hits.length ? (hits[0].object.userData.hit as Hit) : null;
@@ -677,7 +680,7 @@ export class CounterView {
 
   /** Assembly spot under the world point, or -1. */
   overHold(world: THREE.Vector3): number {
-    return this.holds.findIndex((h) => Math.hypot(world.x - (pageX(1) + h.x), world.z - h.z) < 0.6);
+    return this.holds.findIndex((h) => Math.hypot(world.x - (pageX(1) + h.x), world.z - h.z) < 0.62);
   }
 
   /** Redraw an assembly spot after its layers change. */
@@ -872,7 +875,8 @@ export class CounterView {
     });
 
     // Fryer
-    this.baskets.forEach((b, i) => {
+    for (let i = 0; i < this.baskets.length; i++) {
+      const b = this.baskets[i];
       const inOil = b.down && b.loaded;
       const targetY = inOil ? BASKET_DOWN : BASKET_UP;
       b.y += (targetY - b.y) * Math.min(1, dt * 8);
@@ -895,7 +899,7 @@ export class CounterView {
         b.fries.userData.setCook(b.cook);
         b.fries.userData.setAmount?.(b.amount);
       }
-    });
+    }
 
     // Drinks
     for (const t of this.taps) {

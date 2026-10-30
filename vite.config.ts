@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { readFileSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 
@@ -35,6 +36,8 @@ export default defineConfig({
     __BUILT_AT__: JSON.stringify(builtAt),
   },
   plugins: [versionFile()],
+  // Agent worktrees live under .claude/; their copies of the tests aren't ours to run.
+  test: { exclude: ["**/node_modules/**", "**/dist/**", ".claude/**"] },
   build: {
     target: "es2020",
     chunkSizeWarningLimit: 900,

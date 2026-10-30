@@ -187,6 +187,8 @@ const COOK_SPEED: Record<string, number> = { patty: 0.34, bacon: 1.1, egg: 0.75,
 /** Nozzle spacing on the soda fountain: five across the ~7-unit page. */
 export const TAP_GAP = 1.4;
 const tapX = (i: number) => pageX(0) + (i - (DRINKS.length - 1) / 2) * TAP_GAP;
+/** Where the pour falls: over the back half of a cup under the nozzle (cups sit at z -0.45). */
+const STREAM_Z = -0.62;
 /** Button, stream and puddle colours: a shade stronger than the drink itself so they read on the machine. */
 const DRINK_LABEL_COLOR: Record<DrinkId, string> = { pine: "#6aa877", pink: "#ea8ea6", cola: "#4a2522", water: "#8ec6dc", tea: "#b4651e" };
 
@@ -437,7 +439,9 @@ export class CounterView {
     const plateGeo = faceted(new THREE.BoxGeometry(TAP_GAP - 0.2, 0.06, 1.5));
     const buttonGeo = faceted(new THREE.CylinderGeometry(0.46, 0.5, 0.2, 20));
     const shineGeo = faceted(new THREE.CylinderGeometry(0.26, 0.26, 0.02, 14));
-    const nozzleGeo = faceted(new THREE.BoxGeometry(0.4, 0.22, 0.9));
+    // Nozzles reach out over the back half of the cup, so the pour falls where it can be seen.
+    const nozzleGeo = faceted(new THREE.BoxGeometry(0.34, 0.2, 1.0));
+    const spoutGeo = faceted(new THREE.CylinderGeometry(0.09, 0.07, 0.14, 8));
     DRINKS.forEach((flavor, i) => {
       const x = tapX(i);
       const plate = mesh(plateGeo, "#f8f6ef", { ink: false });
@@ -450,9 +454,14 @@ export class CounterView {
       shine.position.set(x - 0.1, 1.47, -2.62);
       this.scene.add(shine);
       const nozzle = mesh(nozzleGeo, "#8c9496");
-      nozzle.position.set(x, 1.0, -1.25);
+      nozzle.position.set(x, 1.0, -1.15);
       this.scene.add(nozzle);
-      const stream = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1, 6), toon(DRINK_LABEL_COLOR[flavor]));
+      const spout = mesh(spoutGeo, "#6f7779");
+      spout.position.set(x, 0.85, STREAM_Z);
+      this.scene.add(spout);
+      const stream = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 1, 8), toon(DRINK_LABEL_COLOR[flavor]));
+      // Drawn after the cup so the see-through cup wall never hides it.
+      stream.renderOrder = 2;
       stream.visible = false;
       this.scene.add(stream);
       const puddleObj = new THREE.Mesh(new THREE.CircleGeometry(0.62, 18), new THREE.MeshBasicMaterial({ color: DRINK_LABEL_COLOR[flavor], transparent: true, opacity: 0.7 }));
@@ -737,8 +746,9 @@ export class CounterView {
   }
 
   /** World position under each drink cup, for the HTML flavour labels; alternate rows so five fit. */
+  /** Each drink's label sits in a row along the front lip of the machine, over its nozzle. */
   drinkLabelPoint(i: number): THREE.Vector3 {
-    return new THREE.Vector3(tapX(i), 0.1, i % 2 ? 0.9 : 0.45);
+    return new THREE.Vector3(tapX(i), 1.18, -1.32);
   }
 
   /** Fill the grill counter's bins for the current stop. */
@@ -1070,9 +1080,9 @@ export class CounterView {
       t.stream.visible = t.pouring && !!t.cup;
       if (t.stream.visible) {
         const topY = 0.1 + 0.8 * CUP_SCALE[t.size ?? "M"][1] * (0.07 + Math.min(1, t.fill) * 0.95);
-        const h = Math.max(0.05, 0.92 - topY);
+        const h = Math.max(0.05, 0.8 - topY);
         t.stream.scale.set(1, h, 1);
-        t.stream.position.set(t.x, topY + h / 2, -0.82);
+        t.stream.position.set(t.x, topY + h / 2, STREAM_Z);
       }
       t.spill = Math.max(0, t.spill - dt * 2);
       if (t.cup) t.cup.rotation.z = Math.sin(this.time * 40) * 0.05 * t.spill;

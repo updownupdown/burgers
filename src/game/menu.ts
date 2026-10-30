@@ -1,9 +1,11 @@
 import type { Doneness, DrinkId, ExpectedLayer, FriesSize, Kind, Modifier, Order, Size } from "./types";
-import { DRINKS } from "./types";
-import type { Recipe, Stop } from "./stops";
+import { COUNTED, DRINKS, extraCount } from "./types";
+import { recipeCount, type Recipe, type Stop } from "./stops";
 
 export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, M: 3, L: 4 };
 export const DRINK_PRICE: Record<Size, number> = { S: 1, M: 2, L: 3 };
+/** What a customer pays for each "extra" or "add" on their burger. */
+export const EXTRA_PRICE = 1;
 /** A poutine meal: a large carton of fries under cheese curds and gravy. */
 export const POUTINE_PRICE = 8;
 /** Share of orders, once the shift is going, that are a poutine instead of a burger. */
@@ -58,15 +60,18 @@ export function orderFromRecipe(
   friesSize: FriesSize = "S",
   drinkSize: Size = "M",
 ): Order {
-  const kinds = applyMods(recipe.layers, mods);
+  // "Extra pickles" means more pickles in the same layer, not a second layer of them.
+  const more = new Set(mods.filter((m) => m.type === "extra" && COUNTED.has(m.kind)).map((m) => m.kind));
+  const kinds = applyMods(recipe.layers, mods.filter((m) => !(m.type === "extra" && COUNTED.has(m.kind))));
   const layers: ExpectedLayer[] = kinds.map((kind, i) => {
     if (kind === "patty") return recipe.smash ? { kind, doneness, smashed: true } : { kind, doneness };
     if (kind === "bun") return { kind, toasted: recipe.toasted };
     if (kind === "cheese" && recipe.melt && kinds[i - 1] === "patty") return { kind, melted: true };
+    if (COUNTED.has(kind)) return { kind, count: recipeCount(recipe, kind) + (more.has(kind) ? extraCount(kind) : 0) };
     return { kind };
   });
   const extras = mods.filter((m) => m.type !== "no").length;
-  const price = recipe.price + extras + (fries ? FRIES_PRICE[friesSize] : 0) + (drink ? DRINK_PRICE[drinkSize] : 0);
+  const price = recipe.price + extras * EXTRA_PRICE + (fries ? FRIES_PRICE[friesSize] : 0) + (drink ? DRINK_PRICE[drinkSize] : 0);
   return { id, name: recipe.name, price, mods, layers, fries, drink, friesSize, drinkSize };
 }
 

@@ -4,6 +4,7 @@ import type { Upgrade } from "./game/progress";
 import { EVENTS, eventOn, nextDay, REGIONS, STOPS, townById, type Stop } from "./game/stops";
 import type { PressPiece } from "./game/press";
 import type { Order, Plate } from "./game/types";
+import { collapseCounted } from "./game/scoring";
 import { DRINK_COLOR, DRINK_LABEL, DRINKS, KIND_COLOR, KIND_LABEL } from "./game/types";
 import { SLOT_COLORS } from "./scenes/tray";
 import { buildLabel } from "./update";
@@ -198,10 +199,12 @@ function moodFace(mood: "neutral" | "sad" | "angry"): string {
  * top to bottom, ticked off as it's stacked in order.
  */
 export function ticketHtml(order: Order, plate: Plate, patience: number, expanded: boolean): string {
+  // Runs of counted toppings are one layer; a layer is done once it has its full count.
+  const stacked = collapseCounted(plate.layers);
   let prefixOk = true;
   const okFlags = order.layers.map((exp, i) => {
-    const got = plate.layers[i];
-    prefixOk = prefixOk && !!got && got.piece.kind === exp.kind;
+    const got = stacked[i];
+    prefixOk = prefixOk && !!got && got.piece.kind === exp.kind && got.count >= (exp.count ?? 1);
     return prefixOk;
   });
   const modded = new Set(order.mods.filter((m) => m.type !== "no").map((m) => m.kind));
@@ -220,6 +223,10 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, expande
       if (exp.kind === "pineapple") extra = ` <em>Grilled</em>`;
       if (exp.kind === "bun" && exp.toasted) extra = ` <em>Toast</em>`;
       if (exp.melted) extra = ` <em>Melted</em>`;
+      if (exp.count) {
+        const got = stacked[i]?.piece.kind === exp.kind && okFlags[i - 1] !== false ? stacked[i].count : 0;
+        extra = ` <span class="n">${got && got < exp.count ? `${got}/` : ""}×${exp.count}</span>`;
+      }
       const cls = [okFlags[i] ? "ok" : "", modded.has(exp.kind) ? "mod" : ""].join(" ").trim();
       lines.push(`<li class="${cls}"><b style="background:${KIND_COLOR[exp.kind]}"></b><span class="l">${KIND_LABEL[exp.kind]}</span>${extra}</li>`);
     }

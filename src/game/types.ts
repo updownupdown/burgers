@@ -84,6 +84,8 @@ export interface ExpectedLayer {
   smashed?: boolean;
   /** Cheese that should be melted onto the patty below it. */
   melted?: boolean;
+  /** Counted toppings (COUNTED): how many pieces go in this layer. */
+  count?: number;
 }
 
 /** A change to a known recipe: "no pickles", "extra cheese", "add bacon". */
@@ -121,6 +123,10 @@ export const SAUCES: ReadonlySet<Kind> = new Set<Kind>(["ketchup", "mustard"]);
 export const COUNTED: ReadonlySet<Kind> = new Set<Kind>(["pickle", "onion", "tomato", "jalapeno"]);
 /** Pieces of each counted topping in a standard recipe, unless the recipe says otherwise. */
 export const STANDARD_COUNT: Partial<Record<Kind, number>> = { pickle: 3, onion: 2, tomato: 2, jalapeno: 4 };
+/** "Extra pickles" adds this many on top of the recipe's count. */
+export function extraCount(kind: Kind): number {
+  return Math.max(1, Math.round((STANDARD_COUNT[kind] ?? 1) * 0.67));
+}
 
 export const KIND_LABEL: Record<Kind, string> = {
   bun: "Bun",

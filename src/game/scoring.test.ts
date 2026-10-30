@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { nextReputation, planFor, ratingBonus, trafficMult } from "./business";
 import { pieceFor, popularityChange, willingnessToPay } from "./press";
-import { applyMods, makeOrder, seededRng } from "./menu";
+import { applyMods, makeOrder, orderFromRecipe, seededRng } from "./menu";
 import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent } from "./stops";
 import { passed, upgradeChoices } from "./progress";
 import { alignLayers, payout, scorePlate } from "./scoring";
@@ -202,6 +202,44 @@ describe("makeOrder", () => {
       expect(o.layers[o.layers.length - 1].kind).toBe("bun");
       expect(o.price).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("counted toppings", () => {
+  const withPickles = (n: number): Plate => {
+    const p = perfectPlate();
+    const pickles = Array.from({ length: n }, () => layer(piece("pickle")));
+    p.layers.splice(2, 0, ...pickles);
+    return p;
+  };
+  const order: Order = { ...classic, layers: [...classic.layers.slice(0, 2), { kind: "pickle", count: 3 }, ...classic.layers.slice(2)] };
+
+  it("counts a run of pickles as one layer", () => {
+    expect(scorePlate(order, withPickles(3)).score).toBe(100);
+    expect(scorePlate(order, withPickles(3)).notes).toEqual([]);
+  });
+
+  it("marks down a skimpy burger and calls it out", () => {
+    const r = scorePlate(order, withPickles(1));
+    expect(r.notes).toContain("skimpy on the pickles");
+    expect(r.score).toBeLessThan(90);
+  });
+
+  it("rewards a couple extra, not a pile", () => {
+    const base = scorePlate(order, (() => { const p = withPickles(3); p.layers[1].piece.cook = [0.3, 0.3]; return p; })()).score;
+    const generous = (() => { const p = withPickles(5); p.layers[1].piece.cook = [0.3, 0.3]; return p; })();
+    expect(scorePlate(order, generous).score).toBeGreaterThan(base);
+    expect(scorePlate(order, withPickles(7)).notes).toContain("way too many pickles");
+  });
+
+  it("orders extra pickles as more pieces, at a price", () => {
+    const recipe = { name: "P", price: 6, layers: ["bun", "patty", "pickle", "bun"] as Kind[], toasted: false };
+    const plain = orderFromRecipe(1, recipe, "medium", false, null);
+    const extra = orderFromRecipe(1, recipe, "medium", false, null, [{ type: "extra", kind: "pickle" }]);
+    expect(plain.layers.find((l) => l.kind === "pickle")?.count).toBe(3);
+    expect(extra.layers.filter((l) => l.kind === "pickle")).toHaveLength(1);
+    expect(extra.layers.find((l) => l.kind === "pickle")?.count).toBe(5);
+    expect(extra.price).toBeGreaterThan(plain.price);
   });
 });
 

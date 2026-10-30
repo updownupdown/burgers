@@ -27,9 +27,9 @@ import {
   type Review,
 } from "./game/business";
 import type { DrinkId, FriesSize, Layer, Order, Piece, Plate, SauceKind, Size } from "./game/types";
-import { FRIES_PORTION, FRIES_SCOOP, GRILLABLE, newPiece } from "./game/types";
+import { COUNTED, FRIES_PORTION, FRIES_SCOOP, GRILLABLE, KIND_LABEL, newPiece } from "./game/types";
 import { dressCup } from "./render/cup";
-import { makeCarton, makeCup, makeFood, makeFries, stackHeight } from "./render/food";
+import { makeCarton, makeCup, makeFood, makeFries, sliceSpot, stackBases } from "./render/food";
 import { disposeObject } from "./render/materials";
 import { CounterView, EMPTY_PACK, GRILL_SCALE, HOME_PAGE, PAGES, pageX, GRILL_TOP, SLEEVE, WARM_X0, type GrillItem, type Hit } from "./scenes/counter";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
@@ -216,7 +216,7 @@ function layout(): void {
     t.style.left = `${slotW * i + (slotW - tw) / 2}px`;
     t.style.width = `${tw}px`;
     t.style.top = `${railY}px`;
-    t.style.maxHeight = `${custH - railY + trayH * 0.3}px`;
+    t.style.maxHeight = `${custH - railY + trayH * 0.1}px`;
   });
   ui.hint.style.top = `${bands.counter.y + 8}px`;
   // Turned sideways mid-shift: pause behind the "turn your phone" overlay.
@@ -482,12 +482,10 @@ let lastSquirt = 0;
 /** A burger (or part of one) as a single object to carry around. */
 function stackVisual(layers: Layer[]): THREE.Object3D {
   const g = new THREE.Group();
-  let y = 0;
+  const { bases } = stackBases(layers.map((l) => l.piece));
   layers.forEach((l, i) => {
-    const role = i === 0 ? "bottom" : "top";
-    const o = makeFood(l.piece, role);
-    o.position.set(l.offX, y, l.offZ);
-    y += stackHeight(l.piece, role);
+    const o = makeFood(l.piece, i === 0 ? "bottom" : "top");
+    o.position.set(l.offX, bases[i], l.offZ);
     g.add(o);
   });
   g.scale.setScalar(0.6);
@@ -580,6 +578,16 @@ function velocity(pt: Pointer): { vx: number; vy: number } {
   return { vx: (b.x - a.x) / dt, vy: (b.y - a.y) / dt };
 }
 
+/** Where a new piece lands on a stack: counted toppings go round the burger one by one, the rest roughly centred. */
+function landing(layers: Layer[], piece: Piece, spread: number): Layer {
+  const jitter = () => (Math.random() - 0.5) * spread;
+  if (!COUNTED.has(piece.kind)) return { piece, offX: jitter(), offZ: jitter() };
+  let k = 0;
+  for (let i = layers.length - 1; i >= 0 && layers[i].piece.kind === piece.kind; i--) k++;
+  const [x, z] = sliceSpot(piece.kind, k);
+  return { piece, offX: x + jitter() * 0.4, offZ: z + jitter() * 0.4 };
+}
+
 function addToPlate(slot: number, payload: Payload, spread: number): boolean {
   const s = game.slots[slot];
   if (s.leaving) {
@@ -595,10 +603,17 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
   }
   if (payload.type === "piece") {
     const p = payload.piece;
-    s.plate.layers.push({ piece: p, offX: (Math.random() - 0.5) * spread, offZ: (Math.random() - 0.5) * spread });
+    const l = landing(s.plate.layers, p, spread);
+    s.plate.layers.push(l);
     syncTray(slot, true);
-    trayView.plates[slot].kick(spread * 4);
-    if (s.order) {
+    trayView.plates[slot].kick(COUNTED.has(p.kind) ? 0.05 : spread * 4);
+    if (s.order && COUNTED.has(p.kind)) {
+      // Count them on: "Pickles 2 of 3".
+      let n = 0;
+      for (let i = s.plate.layers.length - 1; i >= 0 && s.plate.layers[i].piece.kind === p.kind; i--) n++;
+      const want = s.order.layers.find((e) => e.kind === p.kind)?.count;
+      if (want) showHint(`${KIND_LABEL[p.kind]} ${n} of ${want}${n > want ? ": generous!" : ""}`, 1.2);
+    } else if (s.order) {
       const exp = s.order.layers[s.plate.layers.length - 1];
       if (exp && exp.kind === "patty" && p.kind === "patty") showHint(`Patty: ${pattyLabel((p.cook[0] + p.cook[1]) / 2)}`, 1.5);
     }
@@ -676,7 +691,7 @@ function finishHold(pt: Pointer): void {
     } else if (hold >= 0 && (payload.type === "piece" || payload.type === "stack")) {
       // Build a burger ahead (or park food) under the heat lamp.
       const spot = counter.holds[hold];
-      const add = payload.type === "piece" ? [{ piece: payload.piece, offX: (Math.random() - 0.5) * 0.06, offZ: (Math.random() - 0.5) * 0.06 }] : payload.layers;
+      const add = payload.type === "piece" ? [landing(spot.layers, payload.piece, 0.06)] : payload.layers;
       if (spot.layers.length + add.length > 9) showHint("That stack's tall enough.", 1.5);
       else {
         spot.layers.push(...add);
@@ -1796,9 +1811,12 @@ function updateUi(): void {
   updateFryTags();
   updateHoldUi();
   updateStationUi();
+  // Labels are as wide as one tap, so they line up edge to edge along the machine.
+  const tapPx = ((counter.drinkLabelPoint(1).project(counter.camera).x - counter.drinkLabelPoint(0).project(counter.camera).x) / 2) * bands.counter.w;
   ui.drinkLabels.forEach((el, i) => {
     const v = counter.drinkLabelPoint(i).project(counter.camera);
     const x = ((v.x + 1) / 2) * bands.counter.w;
+    el.style.width = `${Math.round(tapPx - 4)}px`;
     const visible = game.phase === "playing" && x > 20 && x < bands.counter.w - 20;
     el.hidden = !visible;
     if (visible) {

@@ -163,7 +163,8 @@ html, body {
 .ticket li.ok { color: var(--bv-olive); }
 .ticket li.ok::after { content: "✓"; margin-left: auto; font-weight: 800; }
 .ticket li .l { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ticket li .n { font: 600 10.5px var(--bv-font-mono); color: var(--bv-mute); flex: none; }
+.ticket li .n { font: 600 10.5px var(--bv-font-mono); color: var(--bv-mute); flex: none; margin-left: auto; }
+.ticket li.ok .n { color: inherit; }
 .ticket li em { font-style: normal; font-weight: 800; color: var(--bv-paprika); flex: none; }
 .ticket .sides { display: flex; gap: 2px 6px; margin-top: 4px; border-top: 1px dashed var(--bv-rule-2); padding-top: 3px; flex-wrap: wrap; }
 .ticket .sides span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 3px; white-space: nowrap; }
@@ -213,18 +214,24 @@ html, body {
 }
 @keyframes rise { to { transform: translate(-50%, -50px); opacity: 0; } }
 
+/* Printed labels in a row along the soda machine's front lip, one per nozzle. */
 .dlabel {
   position: absolute;
-  transform: translate(-50%, 0);
-  background: var(--paper);
-  border-left: 6px solid var(--c);
-  border-radius: 6px;
-  padding: 2px 7px;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  min-height: 26px;
+  display: grid;
+  place-items: center;
+  background: #fffdf7;
+  border-top: 4px solid var(--c);
+  border-radius: 3px;
+  padding: 1px 3px 2px;
+  font: 800 10px/1.05 var(--bv-font-ui);
+  letter-spacing: 0.01em;
+  text-align: center;
+  color: var(--bv-ink);
   pointer-events: none;
-  box-shadow: 0 2px 0 rgb(0 0 0 / 0.2);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
 }
 
 /* ---- Hint ------------------------------------------------------------ */

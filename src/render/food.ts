@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { avgCook, bunToast, isMelted } from "../game/cooking";
 import type { FriesSize, Kind, Piece } from "../game/types";
+import { COUNTED } from "../game/types";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
 import { faceted, mesh, outline, ramp, shareGeometry, toon } from "./materials";
 
@@ -317,23 +318,14 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       return g;
     }
     case "jalapeno": {
+      // One slice; a ripe red one now and then makes a pile read as "hot peppers" rather than pickles.
       const g = group("jalapeno", LAYER_HEIGHT.jalapeno);
-      const spots = [
-        [0.45, 0.15],
-        [-0.4, 0.3],
-        [-0.15, -0.5],
-        [0.2, 0.55],
-        [0.05, -0.05],
-      ];
-      spots.forEach(([x, z], i) => {
-        // One ripe red slice makes the pile read as "hot peppers" rather than pickles.
-        const r = mesh(GEO.jalapeno, i === 2 ? "#d8392b" : "#2fa83a", { ink: 1.15 });
-        r.rotation.x = Math.PI / 2;
-        r.position.set(x, 0.03 + i * 0.004, z);
-        const c = mesh(GEO.jalapenoCore, "#fff4b8", { ink: false, shadow: false });
-        c.position.set(x, 0.03, z);
-        g.add(r, c);
-      });
+      const r = mesh(GEO.jalapeno, piece.uid % 4 === 2 ? "#d8392b" : "#2fa83a", { ink: 1.15 });
+      r.rotation.x = Math.PI / 2;
+      r.position.y = 0.03;
+      const c = mesh(GEO.jalapenoCore, "#fff4b8", { ink: false, shadow: false });
+      c.position.y = 0.03;
+      g.add(r, c);
       return g;
     }
     case "cheese": {
@@ -358,40 +350,26 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
     }
     case "tomato": {
       const g = group("tomato", LAYER_HEIGHT.tomato);
-      for (let i = 0; i < 3; i++) {
-        const a = (i * Math.PI * 2) / 3 + 0.4;
-        const t = mesh(GEO.tomato, "#e5432b");
-        t.position.set(Math.cos(a) * 0.46, 0.045 + i * 0.01, Math.sin(a) * 0.46);
-        const core = mesh(GEO.tomatoCore, "#f2765d", { ink: false, shadow: false });
-        t.add(core);
-        g.add(t);
-      }
+      const t = mesh(GEO.tomato, "#e5432b");
+      t.position.y = 0.045;
+      t.add(mesh(GEO.tomatoCore, "#f2765d", { ink: false, shadow: false }));
+      g.add(t);
       return g;
     }
     case "onion": {
       const g = group("onion", LAYER_HEIGHT.onion);
-      GEO.onion.forEach((geo, i) => {
-        const ring = mesh(geo, "#ecd5f0");
-        ring.rotation.x = Math.PI / 2;
-        ring.position.set(i ? -0.25 : 0.3, 0.05, i ? 0.15 : -0.1);
-        g.add(ring);
-      });
+      const ring = mesh(GEO.onion[piece.uid % 2], "#ecd5f0");
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.05;
+      g.add(ring);
       return g;
     }
     case "pickle": {
       const g = group("pickle", LAYER_HEIGHT.pickle);
-      const spots = [
-        [0.45, 0.1],
-        [-0.35, 0.35],
-        [-0.2, -0.45],
-        [0.15, 0.55],
-      ];
-      spots.forEach(([x, z], i) => {
-        const p = mesh(GEO.pickle, "#6f9a3c");
-        p.position.set(x, 0.03 + i * 0.006, z);
-        p.add(mesh(GEO.pickleCore, "#b9d27a", { ink: false, shadow: false }));
-        g.add(p);
-      });
+      const p = mesh(GEO.pickle, "#6f9a3c");
+      p.position.y = 0.03;
+      p.add(mesh(GEO.pickleCore, "#b9d27a", { ink: false, shadow: false }));
+      g.add(p);
       return g;
     }
     case "ketchup":
@@ -427,6 +405,36 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       return g;
     }
   }
+}
+
+/** How far from the middle of the burger each counted topping's slices sit. */
+const SLICE_RING: Partial<Record<Kind, number>> = { tomato: 0.42, onion: 0.28, pickle: 0.45, jalapeno: 0.46 };
+
+/** Where the `k`th slice of a counted topping goes (x, z), spread around the burger so they don't pile up. */
+export function sliceSpot(kind: Kind, k: number): [number, number] {
+  const r = (SLICE_RING[kind] ?? 0.4) * (k % 3 === 2 ? 0.45 : 1);
+  const a = 0.6 + k * 2.39996;
+  return [Math.cos(a) * r, Math.sin(a) * r];
+}
+
+/**
+ * Base height of each piece in a stack, bottom first, plus the height of the top. A run of the
+ * same counted topping lies side by side at one level.
+ */
+export function stackBases(pieces: Pick<Piece, "kind" | "smashed">[]): { bases: number[]; top: number } {
+  const bases: number[] = [];
+  let next = 0;
+  let runBase = 0;
+  pieces.forEach((p, i) => {
+    const joins = i > 0 && COUNTED.has(p.kind) && pieces[i - 1].kind === p.kind;
+    if (joins) bases.push(bases[i - 1] + 0.004);
+    else {
+      runBase = next;
+      bases.push(next);
+    }
+    next = Math.max(next, runBase + stackHeight(p, i === 0 ? "bottom" : "top"));
+  });
+  return { bases, top: next };
 }
 
 /** Height of a stacked piece, accounting for bun shape and smashed patties. */

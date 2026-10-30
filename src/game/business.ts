@@ -1,5 +1,6 @@
-import type { Recipe, Stop } from "./stops";
+import { recipeCount, type Recipe, type Stop } from "./stops";
 import type { FriesSize, Kind, Size } from "./types";
+import { COUNTED } from "./types";
 
 /**
  * Optional business mode: the player runs the truck's books. Before each shift they pick
@@ -57,11 +58,12 @@ export const KIND_COST: Record<Kind, number> = {
   egg: 0.3,
   cheese: 0.3,
   lettuce: 0.12,
-  tomato: 0.18,
-  onion: 0.1,
-  pickle: 0.1,
+  // Counted toppings are priced per piece.
+  tomato: 0.09,
+  onion: 0.05,
+  pickle: 0.035,
   pineapple: 0.35,
-  jalapeno: 0.15,
+  jalapeno: 0.04,
   ketchup: 0.06,
   mustard: 0.06,
 };
@@ -112,7 +114,7 @@ export function trafficMult(plan: Plan, reputation: number, menuSize: number, cr
 
 /** Ingredient cost of one burger as ordered, for the planning screen. */
 export function recipeCost(recipe: Recipe, quality: Quality): number {
-  return recipe.layers.reduce((s, k) => s + KIND_COST[k], 0) * QUALITY[quality].cost;
+  return recipe.layers.reduce((s, k) => s + KIND_COST[k] * (COUNTED.has(k) ? recipeCount(recipe, k) : 1), 0) * QUALITY[quality].cost;
 }
 
 export interface Review {

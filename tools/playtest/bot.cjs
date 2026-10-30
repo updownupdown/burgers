@@ -70,6 +70,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
         const [kx, ky] = await ev((i) => { const v = window.__bv.counter.baskets[i].obj.position; return window.__bv.project('counter', v.x, 1.0, v.z); }, freshB);
         // One scoop per small carton's worth: S/M/L take 1/2/3.
         for (let n = { S: 1, M: 2, L: 3 }[order.friesSize]; n > 0; n--) await act(line(fx, fy, kx, ky, 10));
+        // Baskets wait up top until they're tapped down; that happens once the burger is built.
       }
       await page(1);
     }
@@ -132,8 +133,9 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
         for (let z = 0; z < 6; z++) pts.push([px - 25 + (z % 2) * 50, py - 6 + z * 3]);
         await act(pts, 16);
       } else {
+        // Counted toppings go on one piece at a time.
         const [bx, by] = await bin(l.kind);
-        await act(line(bx, by, px, py, 10));
+        for (let n = l.count || 1; n > 0; n--) await act(line(bx, by, px, py, 10));
       }
     }
     // Take an empty cup or carton, unwrapping a fresh sleeve when the stack is out.
@@ -142,13 +144,21 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       const s = await ev((i) => { const s = window.__bv.counter.stacks[i]; return { x: s.x, z: s.z, count: s.count }; }, si);
       const [sx, sy] = await ev(([x, z]) => window.__bv.project('counter', x, 0.4, z), [s.x, s.z]);
       if (!s.count) {
-        // Open the cupboard, pick a sleeve off a shelf; the view comes back up while it's carried to the stack.
-        await p.click('.cupbtn');
-        await step(p, 1);
-        const sleeve = await ev((k) => { const c = window.__bv.counter; const pr = c.hitMeshes.find(m => m.userData.cupboard && m.userData.hit.kind === k && Math.abs(m.position.x - c.camera.position.x) < 4); return window.__bv.project('counter', pr.position.x, pr.position.y, pr.position.z); }, kind);
-        await ev(([x, y]) => { window.__bv.manual(true); document.getElementById('gl').dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, pointerId: 7, bubbles: true, pointerType: 'touch', isPrimary: true })); }, sleeve);
-        await step(p, 1);
-        await ev(async ([a, b, x, y]) => { const c = document.getElementById('gl'); const fire = (t, px, py) => c.dispatchEvent(new PointerEvent(t, { clientX: px, clientY: py, pointerId: 7, bubbles: true, pointerType: 'touch', isPrimary: true })); for (let i = 1; i <= 10; i++) { fire('pointermove', a + (x - a) * i / 10, b + (y - b) * i / 10); await new Promise(r => setTimeout(r, 16)); } fire('pointerup', x, y); }, [...sleeve, sx, sy]);
+        // Fetch a sleeve from the Supplies counter: carry it over the counter's tab until it
+        // switches, then drop it on the empty stack.
+        const back = await ev(() => window.__bv.counter.page);
+        await page(3);
+        const [ax, ay] = await ev((k) => { const v = window.__bv.counter.supplyAt[k]; return window.__bv.project('counter', v.x, v.y, v.z); }, kind);
+        const tab = await ev((n) => { const r = document.querySelectorAll('.tab')[n].getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }, back);
+        await ev(async ([a, b, tx, ty]) => {
+          const c = document.getElementById('gl');
+          const fire = (t, x, y) => c.dispatchEvent(new PointerEvent(t, { clientX: x, clientY: y, pointerId: 7, bubbles: true, pointerType: 'touch', isPrimary: true }));
+          fire('pointerdown', a, b);
+          for (let i = 1; i <= 10; i++) { await new Promise(r => setTimeout(r, 16)); fire('pointermove', a + (tx - a) * i / 10, b + (ty - b) * i / 10); }
+          for (let i = 0; i < 8; i++) { await new Promise(r => setTimeout(r, 60)); fire('pointermove', tx + (i % 2), ty); }
+        }, [ax, ay, ...tab]);
+        await step(p, 0.6);
+        await ev(async ([tx, ty, x, y]) => { const c = document.getElementById('gl'); const fire = (t, px, py) => c.dispatchEvent(new PointerEvent(t, { clientX: px, clientY: py, pointerId: 7, bubbles: true, pointerType: 'touch', isPrimary: true })); for (let i = 1; i <= 10; i++) { fire('pointermove', tx + (x - tx) * i / 10, ty + (y - ty) * i / 10); await new Promise(r => setTimeout(r, 16)); } fire('pointerup', x, y); }, [...tab, sx, sy]);
         await step(p, 0.3);
         await act([[sx, sy], [sx, sy]], 30);
         await act([[sx, sy], [sx, sy]], 30);
@@ -165,19 +175,30 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
         const pk = await ev(() => window.__bv.counter.packs[0].fill);
         if (pk >= 0.99) break;
         const bs = await ev(() => window.__bv.counter.baskets.map(b => ({ loaded: b.loaded, down: b.down, cook: b.cook, amount: b.amount })));
-        let bi = bs.findIndex(b => b.loaded && !b.down && b.cook >= 0.5 && b.cook < 1.05);
+        let bi = bs.findIndex(b => b.loaded && !b.down && b.cook >= 0.5 && b.cook < 0.95);
         if (bi < 0) bi = bs.findIndex(b => b.loaded && b.down);
+        if (bi < 0) {
+          // A loaded basket still waiting up top: lower it now.
+          bi = bs.findIndex(b => b.loaded && !b.down && b.cook < 0.5);
+          if (bi >= 0) { const [ux, uy] = await ev((i) => { const v = window.__bv.counter.baskets[i].obj.position; return window.__bv.project('counter', v.x, 1.0, v.z); }, bi); await act([[ux, uy], [ux, uy]], 30); }
+        }
         if (bi < 0) {
           // Nothing left anywhere: start another batch.
           const free = bs.findIndex(b => !b.loaded);
           const [fx, fy] = await ev(() => { const v = window.__bv.counter.friesBinAt; return window.__bv.project('counter', v.x, v.y, v.z); });
           const [bx2, by2] = await ev((i) => { const v = window.__bv.counter.baskets[i].obj.position; return window.__bv.project('counter', v.x, 1.0, v.z); }, free);
           await act(line(fx, fy, bx2, by2, 10));
+          await act([[bx2, by2], [bx2, by2]], 30);
           continue;
         }
-        for (let w = 0; w < 80; w++) { const c = await ev((i) => window.__bv.counter.baskets[i].cook, bi); if (c >= 0.6) break; await step(p, 0.25); }
+        for (let w = 0; w < 80; w++) { const c = await ev((i) => window.__bv.counter.baskets[i].cook, bi); if (c >= 0.68) break; await step(p, 0.25); }
         const [bx, by] = await ev((i) => { const v = window.__bv.counter.baskets[i].obj.position; return window.__bv.project('counter', v.x, 1.0, v.z); }, bi);
         await act(line(bx, by, kx2, ky2, 10));
+      }
+      // Salt for fries; curds then gravy for a poutine.
+      for (const what of order.poutine ? ['curds', 'gravy'] : ['salt']) {
+        const [tx, ty] = await ev((w) => { const m = window.__bv.counter.hitMeshes.find(h => h.userData.hit.type === (w === 'salt' ? 'shaker' : w)); return window.__bv.project('counter', m.position.x, 0.5, m.position.z); }, what);
+        await act(line(tx, ty, kx2, ky2, 10));
       }
       await act(line(kx2, ky2, px, py, 12));
       await page(1);
@@ -204,7 +225,9 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       await page(1);
     }
     const before = await state(p);
-    await p.evaluate(() => { const b = document.querySelector('.bell'); b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); });
+    // Ring the bell on the tray twice.
+    const [bx3, by3] = await ev(() => { const b = window.__bv.trayView.bell.position; return window.__bv.project('tray', b.x, 0.4, b.z); });
+    for (let k = 0; k < 2; k++) await gesture(p, [[bx3, by3], [bx3, by3]], 20);
     await step(p, 0.3);
     const afterServe = await ev(() => ({ stars: window.__bv.game.stars.slice(-1)[0], served: window.__bv.game.served, bubble: [...document.querySelectorAll('.bubble')].map(b => b.textContent).join(' | ') }));
     log.push({ order: order.name, plate: before.slots[slot] && before.slots[slot].plate.join(' '), want: before.slots[slot] && before.slots[slot].want, fries: before.slots[slot] && before.slots[slot].pf, drink: before.slots[slot] && before.slots[slot].pd, took: +(before.t - t0).toFixed(1), patienceLeft: before.slots[slot] && before.slots[slot].patience, ...afterServe });

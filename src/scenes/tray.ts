@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { Piece, Plate } from "../game/types";
 import { dressCup } from "../render/cup";
-import { makeCup, makeFood, makeFries, stackHeight, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
+import { makeCup, makeFood, makeFries, stackBases, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 
 export const SLOT_COLORS = ["#6a8fd8", "#9ccf8a", "#b48ad8"];
@@ -56,8 +56,7 @@ export class PlateView {
   }
 
   stackTop(): number {
-    const last = this.entries[this.entries.length - 1];
-    return last ? last.baseY + stackHeight(last.piece, last.role) : 0;
+    return stackBases(this.entries.map((e) => e.piece)).top;
   }
 
   sync(p: Plate, animate: boolean, onLand: () => void): void {
@@ -68,8 +67,9 @@ export class PlateView {
       this.burger.remove(e.obj);
       disposeObject(e.obj);
     }
-    let y = same ? this.entries[same - 1].baseY + stackHeight(this.entries[same - 1].piece, this.entries[same - 1].role) : 0;
+    const { bases } = stackBases(want.map((w) => w.l.piece));
     for (let i = same; i < want.length; i++) {
+      const y = bases[i];
       const { l, role } = want[i];
       const obj = makeFood(l.piece, role);
       this.burger.add(obj);
@@ -89,7 +89,6 @@ export class PlateView {
         onLand,
       };
       this.entries.push(e);
-      y += stackHeight(l.piece, role);
     }
     // Sauce layers grow while being drawn.
     p.layers.forEach((l, i) => {

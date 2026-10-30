@@ -2,9 +2,9 @@ import * as THREE from "three";
 import type { Piece, Plate } from "../game/types";
 import { dressCup } from "../render/cup";
 import { makeCup, makeFood, makeFries, stackHeight, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
-import { disposeObject, faceted, mesh } from "../render/materials";
+import { disposeObject, faceted, mesh, toon } from "../render/materials";
 
-export const SLOT_COLORS = ["#2bb3a3", "#f07d4a", "#8f6ee0"];
+export const SLOT_COLORS = ["#6a8fd8", "#9ccf8a", "#b48ad8"];
 
 interface StackEntry {
   uid: number;
@@ -174,15 +174,18 @@ export class TrayView {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(26, 2.4, 0.1, 60);
   plates: PlateView[] = [];
+  /** The shadow-casting light, so the graphics setting can soften or disable it. */
+  sun: THREE.DirectionalLight;
   private raycaster = new THREE.Raycaster();
   private ghost: THREE.Object3D | null = null;
   private ghostSlot = -1;
   private ghostT = 0;
 
   constructor() {
-    this.scene.background = new THREE.Color("#c98f55");
-    this.scene.add(new THREE.HemisphereLight("#fff4dc", "#6b4a2c", 1.3));
+    this.scene.background = new THREE.Color("#efe6d8");
+    this.scene.add(new THREE.HemisphereLight("#fff4dc", "#7a6a9a", 1.3));
     const sun = new THREE.DirectionalLight("#fff1d6", 1.9);
+    this.sun = sun;
     sun.position.set(2, 8, 5);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 512);
@@ -190,11 +193,11 @@ export class TrayView {
     sun.shadow.bias = -0.002;
     this.scene.add(sun);
 
-    const counter = new THREE.Mesh(new THREE.BoxGeometry(40, 0.4, 12), new THREE.MeshToonMaterial({ color: "#c98f55" }));
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(40, 0.4, 12), toon("#efe6d8"));
     counter.position.set(0, -0.32, 0);
     counter.receiveShadow = true;
     this.scene.add(counter);
-    const tray = mesh(faceted(new THREE.BoxGeometry(30, 0.12, 3.1)), "#3a4f4b", { ink: false });
+    const tray = mesh(faceted(new THREE.BoxGeometry(30, 0.12, 3.1)), "#ff8a70", { ink: false });
     tray.position.y = -0.06;
     tray.receiveShadow = true;
     this.scene.add(tray);

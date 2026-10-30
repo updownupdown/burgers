@@ -126,6 +126,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
         <button class="btn primary" data-act="resume">Resume</button>
         <button class="btn" data-act="restart">Restart shift</button>
         <button class="btn" data-act="sound">Sound: on</button>
+        <button class="btn" data-act="gfx">Graphics: high</button>
         <button class="btn" data-act="check-update">Check for updates</button>
         <button class="btn" data-act="install" data-r="install" hidden>Install the app</button>
       </div>

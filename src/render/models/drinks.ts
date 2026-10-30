@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { DrinkId, Size } from "../../game/types";
 import { DRINK_COLOR } from "../../game/types";
-import { faceted, INK, mesh, shareGeometry, toon } from "../materials";
+import { faceted, grade, lineColor, lineMaterial, mesh, shareGeometry, toon } from "../materials";
 
 /*
  * Drinks-page models: cups (with liquid, ice, lid and straw), the lid stack, the straw
@@ -160,7 +160,7 @@ export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"):
 function instanced(geo: THREE.BufferGeometry, color: THREE.ColorRepresentation, xf: THREE.Matrix4[], ink = 1.1): THREE.Group {
   const g = new THREE.Group();
   const body = new THREE.InstancedMesh(geo, toon(color), xf.length);
-  const hull = new THREE.InstancedMesh(geo, INK, xf.length);
+  const hull = new THREE.InstancedMesh(geo, lineMaterial(lineColor(grade(color))), xf.length);
   const m = new THREE.Matrix4();
   const s = new THREE.Matrix4().makeScale(ink, ink, ink);
   xf.forEach((x, i) => {

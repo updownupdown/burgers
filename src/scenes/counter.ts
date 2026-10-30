@@ -220,11 +220,15 @@ export class CounterView {
   private held: THREE.Object3D | null = null;
   private time = 0;
   events: CounterEvents = { golden: () => {}, spill: () => {}, burning: () => {} };
+  /** The shadow-casting light, so the graphics setting can soften or disable it. */
+  sun: THREE.DirectionalLight;
 
   constructor() {
-    this.scene.background = new THREE.Color("#355650");
-    this.scene.add(new THREE.HemisphereLight("#fff4dc", "#4a5a55", 1.15));
+    this.scene.background = new THREE.Color("#d9cfc2");
+    // Sky light from warm cream to a cool violet, so shadows tint rather than grey out.
+    this.scene.add(new THREE.HemisphereLight("#fff4dc", "#6e62a0", 1.15));
     const sun = new THREE.DirectionalLight("#fff1d6", 1.9);
+    this.sun = sun;
     sun.position.set(3, 10, 5);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 1024);
@@ -233,15 +237,15 @@ export class CounterView {
     this.scene.add(sun);
 
     // The slab stops just past the visible front edge, so the cupboard under it can be seen.
-    const counter = new THREE.Mesh(new THREE.BoxGeometry(60, 0.4, 10.6), new THREE.MeshToonMaterial({ color: "#c98f55" }));
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(60, 0.4, 10.6), toon("#efe6d8"));
     counter.position.set(0, -0.2, -0.7);
     counter.receiveShadow = true;
     this.scene.add(counter);
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(60, 6, 0.4), toon("#3f6a62"));
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(60, 6, 0.4), toon("#e9dfcf"));
     wall.position.set(0, 2.6, -3.6);
     this.scene.add(wall);
     // A steel backsplash strip where the counter meets the truck wall.
-    const splash = new THREE.Mesh(new THREE.BoxGeometry(60, 0.5, 0.1), toon("#b9c4c1"));
+    const splash = new THREE.Mesh(new THREE.BoxGeometry(60, 0.5, 0.1), toon("#b9d6a2"));
     splash.position.set(0, 0.25, -3.35);
     this.scene.add(splash);
 

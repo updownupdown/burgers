@@ -158,7 +158,7 @@ export class CustomersView {
   private kind: Backdrop = "mountains";
 
   constructor() {
-    this.scene.add(new THREE.HemisphereLight("#fff7e6", "#7a9a8a", 1.4));
+    this.scene.add(new THREE.HemisphereLight("#fff7e6", "#8f84b8", 1.4));
     const sun = new THREE.DirectionalLight("#fff1d6", 1.4);
     sun.position.set(-3, 6, 6);
     this.scene.add(sun);
@@ -167,7 +167,7 @@ export class CustomersView {
     // Truck window frame and serving ledge, in front of the customers.
     const ledge = mesh(faceted(new THREE.BoxGeometry(40, 0.5, 1.4)), "#f3efe4");
     ledge.position.set(0, 0.45, 1.8);
-    const trim = mesh(faceted(new THREE.BoxGeometry(40, 0.6, 0.2)), "#d24c3f", { ink: false });
+    const trim = mesh(faceted(new THREE.BoxGeometry(40, 0.6, 0.2)), "#ff8a70", { ink: false });
     trim.position.set(0, 0.0, 2.45);
     this.scene.add(trim);
     this.scene.add(ledge);

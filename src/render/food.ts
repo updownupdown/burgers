@@ -253,7 +253,7 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
     case "patty": {
       const m = new THREE.Mesh(pattyGeo(), toon(0xffffff, { vertexColors: true }));
       m.castShadow = m.receiveShadow = true;
-      outline(m, 1.045);
+      outline(m);
       const g = group("patty", LAYER_HEIGHT.patty, (p) => {
         if (p.smashed) m.scale.set(1.22, 0.5, 1.22);
         pattyRamp(p.cook[0], tmpA);
@@ -269,7 +269,7 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       const strips = [baconGeo(), baconGeo()].map((geo, i) => {
         const m = new THREE.Mesh(geo, toon(0xffffff, { vertexColors: true }));
         m.castShadow = m.receiveShadow = true;
-        outline(m, 1.04);
+        outline(m);
         m.position.z = i ? 0.22 : -0.22;
         m.rotation.y = i ? 0.08 : -0.05;
         return m;

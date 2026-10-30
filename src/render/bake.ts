@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { INK, shareGeometry, toon } from "./materials";
+import { grade, INK_COLOR, lineColor, shareGeometry, toon } from "./materials";
 
 /**
  * Many small parts baked into one vertex-coloured mesh plus one ink hull, so a heap of food
@@ -14,7 +14,7 @@ export interface PartOpts {
   /** Euler rotation in radians (XYZ). */
   r?: Vec3;
   s?: number | Vec3;
-  /** Ink outline thickness in world units (after `s`), or false for none. Default 0.022. */
+  /** Outline thickness in world units (after `s`), or false for none. Default 0.014. */
   ink?: number | false;
 }
 
@@ -35,6 +35,10 @@ const _size = new THREE.Vector3();
 const _box = new THREE.Box3();
 const _m = new THREE.Matrix4();
 const _t = new THREE.Matrix4();
+const _lc = new THREE.Color();
+
+/** Back-face material for baked hulls, coloured per vertex. */
+const LINE_VC = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide });
 
 export class Parts {
   private list: Part[] = [];
@@ -44,7 +48,7 @@ export class Parts {
     const r = o.r ?? [0, 0, 0];
     _q.setFromEuler(_e.set(r[0], r[1], r[2]));
     const matrix = new THREE.Matrix4().compose(_v.set(...(o.p ?? [0, 0, 0])), _q, s);
-    this.list.push({ geo, matrix, color: color === null ? null : new THREE.Color(color), scale: s, ink: o.ink ?? 0.022 });
+    this.list.push({ geo, matrix, color: color === null ? null : grade(color), scale: s, ink: o.ink ?? 0.014 });
     return this;
   }
 
@@ -64,7 +68,7 @@ export class Parts {
     return this.list.length;
   }
 
-  /** Merge into one geometry (position, normal, color) and its ink hull (position only). */
+  /** Merge into one geometry (position, normal, color) and its outline hull (position, color). */
   bake(): { geo: THREE.BufferGeometry; hull: THREE.BufferGeometry | null } {
     const solid: THREE.BufferGeometry[] = [];
     const hulls: THREE.BufferGeometry[] = [];
@@ -93,6 +97,15 @@ export class Parts {
       // Hull: grow the part about its own centre by a fixed world thickness on every axis.
       const h = new THREE.BufferGeometry();
       h.setAttribute("position", src.attributes.position.clone());
+      // Each part's line is a dark shade of its own colour; vertex-coloured parts get ink.
+      const lc = p.color ? lineColor(p.color, _lc) : INK_COLOR;
+      const hcol = new Float32Array(n * 3);
+      for (let i = 0; i < n * 3; i += 3) {
+        hcol[i] = lc.r;
+        hcol[i + 1] = lc.g;
+        hcol[i + 2] = lc.b;
+      }
+      h.setAttribute("color", new THREE.BufferAttribute(hcol, 3));
       _box.setFromBufferAttribute(src.attributes.position as THREE.BufferAttribute);
       _box.getCenter(_c);
       _box.getSize(_size);
@@ -131,7 +144,7 @@ export function bakedMesh(b: Baked, opts: { shadow?: boolean; material?: THREE.M
   m.castShadow = opts.shadow ?? true;
   m.receiveShadow = true;
   if (b.hull) {
-    const h = new THREE.Mesh(b.hull, INK);
+    const h = new THREE.Mesh(b.hull, LINE_VC);
     h.name = "hull";
     m.add(h);
   }

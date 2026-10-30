@@ -50,6 +50,31 @@ const sfx = new Sfx();
 const customersView = new CustomersView();
 const trayView = new TrayView();
 const counter = new CounterView();
+
+/**
+ * Graphics tiers change only cost, never the look: high = soft shadows, standard = hard
+ * shadows, low = no shadows and a 1x pixel ratio for slower phones.
+ */
+type Gfx = "high" | "standard" | "low";
+const GFX_ORDER: Gfx[] = ["high", "standard", "low"];
+let gfx: Gfx = "high";
+try {
+  const saved = localStorage.getItem("bv-gfx");
+  if (saved === "high" || saved === "standard" || saved === "low") gfx = saved;
+} catch {
+  // ignore
+}
+function applyGfx(level: Gfx): void {
+  gfx = level;
+  renderer.shadowMap.enabled = level !== "low";
+  for (const sun of [counter.sun, trayView.sun]) {
+    sun.castShadow = level !== "low";
+    sun.shadow.radius = level === "high" ? 5 : 1;
+  }
+  renderer.shadowMap.needsUpdate = true;
+  const btn = ui.menu.querySelector('[data-act="gfx"]');
+  if (btn) btn.textContent = `Graphics: ${level}`;
+}
 const ui = buildUi(document.getElementById("ui")!, PAGES);
 
 const save = loadSave();
@@ -162,7 +187,7 @@ function layout(): void {
   bands.counter = { x: colX, y: custH + trayH, w, h: H - custH - trayH - tabsH };
   bands.tabs = { x: colX, y: H - tabsH, w, h: tabsH };
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, gfx === "low" ? 1 : 1.5));
   renderer.setSize(W, H, false);
   // Size the canvas box to the visible viewport (not 100vh, which mobile browsers measure
   // with their toolbars hidden), so taps line up with what's drawn.
@@ -1277,6 +1302,16 @@ ui.root.addEventListener("click", (e) => {
       }
       break;
     }
+    case "gfx": {
+      applyGfx(GFX_ORDER[(GFX_ORDER.indexOf(gfx) + 1) % GFX_ORDER.length]);
+      layout();
+      try {
+        localStorage.setItem("bv-gfx", gfx);
+      } catch {
+        // ignore
+      }
+      break;
+    }
     case "check-update": {
       const btn = e.target as HTMLButtonElement;
       btn.textContent = "Checking…";
@@ -1307,6 +1342,7 @@ ui.menuBtn.addEventListener("click", () => {
   }
 });
 
+applyGfx(gfx);
 try {
   if (localStorage.getItem("bv-muted") === "1") {
     sfx.setMuted(true);

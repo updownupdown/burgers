@@ -297,3 +297,14 @@ The prototype should prove the feel: grill, flip, toss-to-stack, sauce, bell.
 3. Tray: assemble the burger on the tray (recommended) or on a separate board?
 4. Does the prototype scope above look right?
 5. Does Aloft use three.js? If so I'll reuse the same conventions.
+
+## 8. After build #7: what changed and why
+
+James's build #7 playtest asked for a deeper kitchen and an optional business layer. All of it ships behind the existing controls; business mode is off unless switched on from the title screen.
+
+- **Tickets:** orders are known recipes plus up to two modifiers (no / extra / add). Familiar recipes show a compact ticket (name, doneness, modifiers, progress pips); tap the active ticket to see every layer.
+- **Grill counter:** a full-width trash slot along the front edge; three assembly spots under a heat lamp to the right of the grill (food stays hot, then dries out after about 25 seconds); a **Warm** switch that turns the right end of the grill down to almost nothing.
+- **Melted cheese:** some recipes want the cheese melted. Drop a slice on a patty while it's on the grill (or on a patty under the heat lamp, more slowly). The cheesed patty can't be flipped and comes off as one piece.
+- **Sides:** drinks are S/M/L and fries S/L. Take an empty cup or carton from its stack first. Stacks start with 3; a wrapped sleeve from the supplies cabinet refills one (two taps to tear it open). A fryer basket holds one large or two small portions. Overflowing keeps pouring onto the drip tray: the soda costs money and the puddle must be scrubbed before that nozzle takes another cup.
+- **Business mode:** before each shift pick ingredient quality (Budget / Standard / Premium), prices (Low / Fair / High) and today's menu. Rating = execution score + 8 points per step of taste (quality) and value (price), so premium food at high prices rates like standard at fair prices but earns more per burger. Traffic scales with prices, menu size and reputation. Ingredients, cups, cartons and soda cost money as they're used, so waste shows in profit. Reviews and reputation persist across shifts.
+- **PWA:** installable, works offline after the first load; the service worker never caches `version.json`, so the update check still works.

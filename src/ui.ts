@@ -5,6 +5,7 @@ import type { Stop } from "./game/stops";
 import type { PressPiece } from "./game/press";
 import type { Order, Plate } from "./game/types";
 import { collapseCounted } from "./game/scoring";
+import { SHIFTS_TO_UNLOCK } from "./game/travel";
 import { DRINK_COLOR, DRINK_LABEL, DRINKS, KIND_COLOR, KIND_LABEL } from "./game/types";
 import { SLOT_COLORS } from "./scenes/tray";
 import { buildLabel } from "./update";
@@ -267,6 +268,8 @@ export function summaryHtml(s: {
   outcome: "passed" | "failed" | "trip";
   /** Towns whose roads this shift opened. */
   opened: Stop[];
+  /** Good shifts in this town so far, counting this one. */
+  shiftsHere?: number;
   press: PressPiece | null;
   /** Popularity before and after the shift. */
   pop: [number, number];
@@ -293,7 +296,12 @@ export function summaryHtml(s: {
       : s.offer.length
         ? ""
         : `<button class="btn primary" data-act="next">Back to the map</button>`;
-  const opened = s.opened.length ? `<p class="new">New road${s.opened.length > 1 ? "s" : ""} open: ${s.opened.map((t) => esc(t.name)).join(" and ")}.</p>` : "";
+  const left = SHIFTS_TO_UNLOCK - (s.shiftsHere ?? 0);
+  const opened = s.opened.length
+    ? `<p class="new">New road${s.opened.length > 1 ? "s" : ""} open: ${s.opened.map((t) => esc(t.name)).join(" and ")}.</p>`
+    : s.outcome === "passed" && left > 0 && s.stop.roads.length
+      ? `<p class="new">${s.shiftsHere} of ${SHIFTS_TO_UNLOCK} good shifts in ${esc(s.stop.name)}. ${left === 1 ? "One more opens" : `${left} more open`} the road on.</p>`
+      : "";
   return `<div class="card">
     <p class="sub">Closing time · ${esc(s.stop.name)}</p>
     <h2>${s.outcome === "trip" ? "Road trip complete!" : s.outcome === "failed" ? "Shift over" : "Shift complete"}</h2>

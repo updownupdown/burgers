@@ -1620,6 +1620,7 @@ function endShift(): void {
   writeSave(save);
   ui.summary.innerHTML = summaryHtml({
     stop: here,
+    shiftsHere: save.shiftsIn?.[here.id] ?? 0,
     served: game.served,
     lost: game.lost,
     stars: game.stars,
@@ -2073,7 +2074,8 @@ function frame(now: number): void {
   last = now;
   if (!manualClock) {
     tick(dt);
-    render();
+    // The home screen covers the truck completely, so skip drawing it there and save battery.
+    if (game.phase !== "title") render();
   }
   requestAnimationFrame(frame);
 }

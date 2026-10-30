@@ -26,8 +26,12 @@ const HOLD_SCALE = 0.52;
 export const WARM_X0 = 0.35;
 
 /** Cups and cartons in each stack at the start of a shift, and in a fresh sleeve. */
-const STACK_START = 3;
-export const SLEEVE = 5;
+/** A full stack of cups or cartons, and what a fresh sleeve from the cupboard refills it to. */
+const STACK_START = 10;
+/** Camera position and aim when looking into the cupboard under the counter. */
+const CUPBOARD_CAM = { y: 0.4, z: 13.5 };
+const CUPBOARD_LOOK = { y: -1.7, z: 3.4 };
+export const SLEEVE = 10;
 /** Dollars of soda lost per second of overflow. */
 const SPILL_COST = 1.5;
 
@@ -141,6 +145,10 @@ export class CounterView {
   /** Camera x offset while the player drags between counters. */
   dragOffset = 0;
   private camX = 0;
+  /** Supplies cupboard: whether it's open, and how far the camera has moved down to it (0..1). */
+  cupboardOpen = false;
+  cupboard = 0;
+  cupboards: THREE.Object3D[] = [];
   private raycaster = new THREE.Raycaster();
   private hitMeshes: THREE.Mesh[] = [];
   private pantry: THREE.Group | null = null;
@@ -494,9 +502,14 @@ export class CounterView {
     p.obj = o;
   }
 
-  /** Fresh supplies for a new shift. */
-  resetStations(): void {
-    for (const s of this.stacks) Object.assign(s, { count: STACK_START, sleeve: false, tear: 0 });
+  /** Cups and cartons left in each stack, counting an unopened sleeve as a full refill. */
+  stock(): Record<string, number> {
+    return Object.fromEntries(this.stacks.map((s) => [s.kind + s.size, s.count + (s.sleeve ? SLEEVE : 0)]));
+  }
+
+  /** Clean stations for a new shift. Stacks pick up where the last shift left them. */
+  resetStations(stock: Record<string, number> = {}): void {
+    for (const s of this.stacks) Object.assign(s, { count: Math.min(STACK_START, stock[s.kind + s.size] ?? STACK_START), sleeve: false, tear: 0 });
     this.stacks.forEach((s) => this.syncStack(s));
     this.taps.forEach((t, i) => {
       this.removeCup(i);
@@ -511,7 +524,7 @@ export class CounterView {
 
   /** Packing spot under a world point, or -1. */
   overPack(world: THREE.Vector3): number {
-    return this.packs.findIndex((p) => Math.abs(world.x - p.x) < 0.75 && Math.abs(world.z - p.z) < 0.7);
+    return this.packs.findIndex((p) => Math.abs(world.x - p.x) < 0.85 && Math.abs(world.z - p.z) < 0.95);
   }
 
   /** Nozzle slot under a world point, or -1. */
@@ -580,6 +593,12 @@ export class CounterView {
 
   setPage(i: number): void {
     this.page = THREE.MathUtils.clamp(i, 0, PAGES.length - 1);
+    this.cupboardOpen = false;
+  }
+
+  /** Whether this page has a supplies cupboard under the counter. */
+  hasCupboard(): boolean {
+    return this.page !== 1;
   }
 
   hit(ndc: THREE.Vector2): Hit | null {
@@ -751,8 +770,12 @@ export class CounterView {
     // Camera glides between counters and follows the swipe.
     const target = pageX(this.page) + this.dragOffset;
     this.camX += (target - this.camX) * Math.min(1, dt * 10);
-    this.camera.position.set(this.camX, 12.6, 5.2);
-    this.camera.lookAt(this.camX, 0, -0.1);
+    // Opening the cupboard: the view slides down the front of the counter and the doors swing open.
+    this.cupboard += ((this.cupboardOpen ? 1 : 0) - this.cupboard) * Math.min(1, dt * 7);
+    const e = this.cupboard * this.cupboard * (3 - 2 * this.cupboard);
+    this.camera.position.set(this.camX, THREE.MathUtils.lerp(12.6, CUPBOARD_CAM.y, e), THREE.MathUtils.lerp(5.2, CUPBOARD_CAM.z, e));
+    this.camera.lookAt(this.camX, THREE.MathUtils.lerp(0, CUPBOARD_LOOK.y, e), THREE.MathUtils.lerp(-0.1, CUPBOARD_LOOK.z, e));
+    for (const c of this.cupboards) c.userData.setOpen?.(THREE.MathUtils.clamp(this.cupboard * 1.4 - 0.3, 0, 1));
 
     // Grill
     const gx = pageX(1);

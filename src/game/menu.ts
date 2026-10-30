@@ -1,7 +1,7 @@
 import type { Doneness, DrinkId, ExpectedLayer, FriesSize, Kind, Modifier, Order, Size } from "./types";
 import type { Recipe, Stop } from "./stops";
 
-export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, L: 4 };
+export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, M: 3, L: 4 };
 export const DRINK_PRICE: Record<Size, number> = { S: 1, M: 2, L: 3 };
 
 export type Rng = () => number;
@@ -97,8 +97,14 @@ export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Orde
   const drink = rng() < 0.2 + level * 0.5 ? DRINKS[Math.floor(rng() * DRINKS.length)] : null;
   // Modifiers keep tickets short: a known recipe plus "no pickles" rather than a new list.
   const mods = level < 0.1 ? [] : pickMods(recipe, stop.pantry, rng, level);
-  const friesSize: FriesSize = rng() < 0.5 ? "S" : "L";
+  const f = rng();
+  const friesSize: FriesSize = f < 0.35 ? "S" : f < 0.75 ? "M" : "L";
   const r = rng();
   const drinkSize: Size = r < 0.3 ? "S" : r < 0.7 ? "M" : "L";
-  return orderFromRecipe(id, recipe, doneness, fries, drink, mods, friesSize, drinkSize);
+  const order = orderFromRecipe(id, recipe, doneness, fries, drink, mods, friesSize, drinkSize);
+  if (drink) {
+    const i = rng();
+    order.ice = i < 0.45 ? true : i < 0.7 ? false : null;
+  }
+  return order;
 }

@@ -40,10 +40,12 @@ export interface Layer {
 }
 
 export type Size = "S" | "M" | "L";
-export type FriesSize = "S" | "L";
+export type FriesSize = "S" | "M" | "L";
 export const SIZE_LABEL: Record<Size, string> = { S: "Small", M: "Medium", L: "Large" };
 /** Share of a fryer basket each carton holds. */
-export const FRIES_PORTION: Record<FriesSize, number> = { S: 0.5, L: 1 };
+export const FRIES_PORTION: Record<FriesSize, number> = { S: 1 / 3, M: 2 / 3, L: 1 };
+/** One scoop from the freezer fills a small carton; a full basket holds three. */
+export const FRIES_SCOOP = 1 / 3;
 /** Small cups fill faster than large ones. */
 export const CUP_SPEED: Record<Size, number> = { S: 1.35, M: 1, L: 0.78 };
 
@@ -58,6 +60,9 @@ export interface Drink {
   flavor: DrinkId;
   fill: number;
   size: Size;
+  ice?: boolean;
+  lid?: boolean;
+  straw?: boolean;
 }
 
 export interface Plate {
@@ -93,6 +98,8 @@ export interface Order {
   drink: DrinkId | null;
   friesSize: FriesSize;
   drinkSize: Size;
+  /** Ice in the drink: asked for, asked to leave out, or (null) either is fine. */
+  ice?: boolean | null;
   /** A food critic: their verdict goes in the paper. */
   critic?: boolean;
 }

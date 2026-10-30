@@ -206,6 +206,21 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
         q *= 0.5;
         notes.push(`wanted a ${SIZE_LABEL[order.drinkSize].toLowerCase()} drink`);
       }
+      if (order.ice === true && !plate.drink.ice) {
+        q *= 0.7;
+        notes.push("forgot the ice");
+      } else if (order.ice === false && plate.drink.ice) {
+        q *= 0.6;
+        notes.push("asked for no ice");
+      }
+      // A drink handed over without a lid and straw is a drink about to be spilled.
+      if (!plate.drink.lid) {
+        q *= 0.8;
+        notes.push("no lid");
+      } else if (!plate.drink.straw) {
+        q *= 0.9;
+        notes.push("no straw");
+      }
       sideScore += q;
     }
   }

@@ -108,6 +108,8 @@ describe("scorePlate", () => {
     expect(scorePlate(order, plate).notes).toEqual(["forgot the fries", "forgot the drink"]);
     plate.fries = { cook: 0.7, size: "S", fill: 1 };
     plate.drink = { flavor: "cola", fill: 0.9, size: "M" };
+    expect(scorePlate(order, plate).notes).toContain("no lid");
+    plate.drink = { flavor: "cola", fill: 0.9, size: "M", lid: true, straw: true };
     expect(scorePlate(order, plate).score).toBe(100);
     plate.drink = { flavor: "pine", fill: 0.9, size: "M" };
     expect(scorePlate(order, plate).notes).toContain("wrong drink");
@@ -123,6 +125,16 @@ describe("scorePlate", () => {
     expect(notes).toContain("wanted a small drink");
     plate.fries = { cook: 0.7, size: "L", fill: 0.5 };
     expect(scorePlate(order, plate).notes).toContain("skimpy fries");
+  });
+
+  it("checks ice", () => {
+    const plate = perfectPlate();
+    const drink = { flavor: "cola" as const, fill: 0.9, size: "M" as const, lid: true, straw: true };
+    plate.drink = { ...drink, ice: true };
+    expect(scorePlate({ ...classic, drink: "cola", ice: false }, plate).notes).toContain("asked for no ice");
+    expect(scorePlate({ ...classic, drink: "cola", ice: null }, plate).notes).toEqual([]);
+    plate.drink = { ...drink, ice: false };
+    expect(scorePlate({ ...classic, drink: "cola", ice: true }, plate).notes).toContain("forgot the ice");
   });
 });
 

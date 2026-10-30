@@ -458,7 +458,7 @@ export function makeCarton(size: FriesSize): THREE.Group {
   band.scale.z = 0.62;
   band.position.y = 0.38;
   g.add(carton, band);
-  g.scale.setScalar(size === "S" ? 0.8 : 1);
+  g.scale.setScalar(size === "S" ? 0.8 : size === "M" ? 0.9 : 1);
   return g;
 }
 

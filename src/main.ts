@@ -25,7 +25,7 @@ import {
   type Review,
 } from "./game/business";
 import type { DrinkId, FriesSize, Layer, Order, Piece, Plate, SauceKind, Size } from "./game/types";
-import { FRIES_PORTION, GRILLABLE, newPiece } from "./game/types";
+import { FRIES_PORTION, FRIES_SCOOP, GRILLABLE, newPiece } from "./game/types";
 import { makeCarton, makeCup, makeFood, makeFries, stackHeight } from "./render/food";
 import { disposeObject } from "./render/materials";
 import { CounterView, GRILL_SCALE, HOME_PAGE, PAGES, pageX, GRILL_TOP, SLEEVE, WARM_X0, type GrillItem, type Hit } from "./scenes/counter";
@@ -187,6 +187,7 @@ function layout(): void {
     t.style.maxHeight = `${custH - top + trayH * 0.22}px`;
   });
   ui.hint.style.top = `${bands.counter.y + 8}px`;
+  ui.cupboard.style.top = `${bands.counter.y + bands.counter.h - 46}px`;
   // Turned sideways mid-shift: pause behind the "turn your phone" overlay.
   if (W > H && H < 500 && game.phase === "playing") {
     cancelPointer();
@@ -643,17 +644,19 @@ function finishHold(pt: Pointer): void {
       const hit = counter.hit(ndcIn(bands.counter, pt.x, pt.y));
       if (hit?.type === "basket") {
         const b = counter.baskets[hit.idx];
-        if (!b.loaded) {
-          spend(FRIES_BATCH_COST);
-          b.loaded = true;
-          b.amount = payload.amount;
-          b.cook = 0;
-          b.down = true;
-          b.goldenRung = false;
+        if (b.loaded && b.amount > 1 - FRIES_SCOOP / 2) showHint("That basket is full.", 1.5);
+        else {
+          // Each scoop is one small carton's worth; raw fries added later pull the batch's cook back.
+          spend(FRIES_BATCH_COST * payload.amount);
+          const had = b.loaded ? b.amount : 0;
+          b.cook = had ? (b.cook * had) / (had + payload.amount) : 0;
+          b.amount = Math.min(1, had + payload.amount);
+          if (!b.loaded) Object.assign(b, { loaded: true, down: true, goldenRung: false });
           sfx.sizzleHit();
           done = true;
+          hintOnce("fries-scoop", "One scoop fills a small carton, two a medium, three a large.", 4);
           hintOnce("fries-ding", "The fryer chimes when fries are golden. Tap the basket to lift it.", 4);
-        } else showHint("That basket is busy.", 1.5);
+        }
       }
     }
   }
@@ -841,7 +844,7 @@ canvas.addEventListener("pointerdown", (e) => {
       pt.mode = "sauce";
       pt.sauce = hit.sauce;
       counter.liftBottle(hit.sauce, counter.groundPoint(ndcIn(bands.counter, x, y), 0.3));
-    } else if (hit.type === "friesBin") startHold(pt, { type: "fries", cook: 0, basket: null, amount: 1 });
+    } else if (hit.type === "friesBin") startHold(pt, { type: "fries", cook: 0, basket: null, amount: FRIES_SCOOP });
     else if (hit.type === "stack") {
       const s = counter.stacks[hit.idx];
       const what = s.kind === "cup" ? "cups" : "cartons";
@@ -855,7 +858,11 @@ canvas.addEventListener("pointerdown", (e) => {
         counter.syncStack(s);
         startHold(pt, { type: "empty", kind: s.kind, size: s.size, stack: hit.idx });
       } else showHint(`Out of ${what}! Grab a wrapped sleeve from the supplies cabinet and drop it here.`, 3);
-    } else if (hit.type === "supplies") startHold(pt, { type: "sleeve", kind: hit.kind });
+    } else if (hit.type === "supplies") {
+      startHold(pt, { type: "sleeve", kind: hit.kind });
+      // Take the sleeve back up to the counter to restock the stack.
+      if (counter.cupboardOpen) toggleCupboard(false);
+    }
     else if (hit.type === "pack") {
       const p = counter.packs[hit.idx];
       if (p.size && p.fill > 0) {
@@ -1076,10 +1083,20 @@ function removeTop(slot: number): void {
 
 function goToPage(p: number): void {
   const before = counter.page;
+  if (counter.cupboardOpen) toggleCupboard(false);
   counter.setPage(p);
   if (counter.page !== before) sfx.whoosh();
   armedSauce = null;
 }
+
+function toggleCupboard(open = !counter.cupboardOpen): void {
+  counter.cupboardOpen = open;
+  sfx.whoosh();
+}
+ui.cupboard.addEventListener("click", () => {
+  sfx.unlock();
+  toggleCupboard();
+});
 
 ui.tabs.forEach((t, i) =>
   t.addEventListener("click", () => {
@@ -1272,7 +1289,7 @@ function startShift(plan: Plan | null = null): void {
   });
   counter.warm = false;
   for (const b of counter.baskets) Object.assign(b, { loaded: false, cook: 0, down: false, goldenRung: false, amount: 0 });
-  counter.resetStations();
+  counter.resetStations(save.stock);
   game.town = save.town;
   game.event = eventOn(save.town, save.day);
   Object.assign(game, {
@@ -1402,6 +1419,7 @@ function endShift(): void {
     save.reviews = [...game.reviews.slice().reverse(), ...save.reviews].slice(0, 30);
   }
   save.best[here.id] = Math.max(save.best[here.id] ?? 0, avg);
+  save.stock = counter.stock();
   if (ok) {
     save.offer = upgradeChoices(save.upgrades, game.rng).map((u) => u.id);
     const firstTime = !save.passedTowns.includes(here.id);
@@ -1608,6 +1626,11 @@ function updateUi(): void {
   );
 
   ui.tabs.forEach((t, i) => t.setAttribute("aria-selected", String(i === counter.page)));
+  ui.cupboard.hidden = game.phase !== "playing" || !counter.hasCupboard();
+  if (ui.cupboard.getAttribute("aria-pressed") !== String(counter.cupboardOpen)) {
+    ui.cupboard.setAttribute("aria-pressed", String(counter.cupboardOpen));
+    ui.cupboard.querySelector("span")!.textContent = counter.cupboardOpen ? "Close" : "Supplies";
+  }
   updateGrillTags();
   updateHoldUi();
   updateStationUi();

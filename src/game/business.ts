@@ -65,8 +65,9 @@ export const KIND_COST: Record<Kind, number> = {
   ketchup: 0.06,
   mustard: 0.06,
 };
+/** Frozen fries for a full basket (three scoops). */
 export const FRIES_BATCH_COST = 1.0;
-export const CARTON_COST: Record<FriesSize, number> = { S: 0.08, L: 0.12 };
+export const CARTON_COST: Record<FriesSize, number> = { S: 0.08, M: 0.1, L: 0.12 };
 export const CUP_COST: Record<Size, number> = { S: 0.08, M: 0.1, L: 0.12 };
 /** Soda in a full cup. */
 export const SODA_COST: Record<Size, number> = { S: 0.2, M: 0.3, L: 0.4 };

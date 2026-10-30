@@ -52,12 +52,14 @@ export interface Save {
   popularity: number;
   /** Recent press, newest first. */
   press: PressPiece[];
+  /** Cups and cartons left in each stack ("cupS", "cartonL"...), carried from shift to shift. */
+  stock: Record<string, number>;
 }
 
 const KEY = "bv-save-v1";
 
 export function freshSave(): Save {
-  return { town: START_TOWN, day: 1, unlocked: [START_TOWN], passedTowns: [], upgrades: [], bank: 0, best: {}, tutorialDone: false, trips: 0, offer: [], known: {}, biz: false, plan: null, reviews: [], rep: 2, repWeight: 6, popularity: 10, press: [] };
+  return { town: START_TOWN, day: 1, unlocked: [START_TOWN], passedTowns: [], upgrades: [], bank: 0, best: {}, tutorialDone: false, trips: 0, offer: [], known: {}, biz: false, plan: null, reviews: [], rep: 2, repWeight: 6, popularity: 10, press: [], stock: {} };
 }
 
 export function loadSave(): Save {

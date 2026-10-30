@@ -401,3 +401,19 @@ html, body {
   }
 }
 @keyframes tilt { 0%, 30% { transform: rotate(-90deg); } 60%, 100% { transform: rotate(0); } }
+
+/* Grill zone switch and assembly-spot freshness. */
+.zone {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #ff9d4d;
+  color: var(--ink);
+  font: 700 11px var(--body);
+  padding: 4px 9px;
+  box-shadow: 0 2px 0 var(--ink);
+}
+.zone.on { background: #8fd0ea; }
+.gtag.hold { background: #3c8a3f; }

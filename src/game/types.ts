@@ -24,6 +24,8 @@ export interface Piece {
   cook: [number, number];
   /** Pressed flat on the grill (smash burger). */
   smashed?: boolean;
+  /** Seconds spent under the heat lamp; long waits dry food out. */
+  held?: number;
   /** Sauce stroke, in plate-local units (x, z), for ketchup/mustard layers. */
   stroke?: { x: number; z: number }[];
 }

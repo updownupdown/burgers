@@ -15,7 +15,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
   const ev = (f, a) => p.evaluate(f, a);
   const bin = (k) => ev((k) => { const b = window.__bv.bins.find(x => x.kind === k); return window.__bv.project('counter', b.x, 0.4, b.z); }, k);
   const plate = (i) => ev((i) => { const g = window.__bv.trayView.plates[i].group.position; return window.__bv.project('tray', g.x, 0.3, g.z); }, i);
-  const items = () => ev(() => window.__bv.counter.grillItems.map((it, i) => ({ i, kind: it.piece.kind, cook: it.piece.cook.slice(), rack: it.rack, flipping: it.flipT >= 0, uid: it.piece.uid, x: it.x, z: it.z, scr: window.__bv.project('counter', it.x, 0.35, it.z) })));
+  const items = () => ev(() => window.__bv.counter.grillItems.map((it, i) => ({ i, kind: it.piece.kind, cook: it.piece.cook.slice(), flipping: it.flipT >= 0, uid: it.piece.uid, x: it.x, z: it.z, scr: window.__bv.project('counter', it.x, 0.35, it.z) })));
   const page = async (n) => { await p.evaluate((n) => document.querySelectorAll('.tab')[n].click(), n); await step(p, 0.4); };
   const act = async (pts, ms) => { await gesture(p, pts, ms); await step(p, ACTION); };
   const spots = [[-2.5, 0.7], [-1.2, 0.7], [0.1, 0.7], [1.3, 0.7], [-2.5, 2.1], [-1.2, 2.1], [0.1, 2.1], [1.3, 2.1]];
@@ -34,7 +34,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
     const need = order.layers.map((l, idx) => ({ ...l, idx })).filter(l => l.kind === 'patty' || l.kind === 'bacon' || l.kind === 'egg' || l.kind === 'pineapple' || (l.kind === 'bun' && l.toasted));
     const used = new Set((await items()).map(i => i.uid));
     let si = 0;
-    const assigned = {};
+    const assigned = {}; const parked = new Map();
     for (const n of need) {
       const [bx, by] = await bin(n.kind);
       const occupied = await items();
@@ -65,6 +65,13 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       if (assigned[li]) {
         // cook, flipping when the down side reaches target
         for (let w = 0; w < 200; w++) {
+          if (parked.has(assigned[li])) {
+            // Parked under the heat lamp: drag that spot's stack onto the plate.
+            const hi = parked.get(assigned[li]); parked.delete(assigned[li]);
+            const [hx, hy] = await ev((i) => { const h = window.__bv.counter.holds[i]; return window.__bv.project('counter', h.x, 0.35, h.z); }, hi);
+            await act(line(hx, hy, px, py, 12));
+            break;
+          }
           const it = (await items()).find(i => i.uid === assigned[li]);
           if (!it) break;
           // manage all items: flip any patty/bacon whose down side reached target
@@ -76,27 +83,22 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
             const tgt = ex.kind === 'patty' ? TARGET[ex.doneness] : 0.6;
             if ((ex.kind === 'patty' || ex.kind === 'bacon') && o.cook[0] >= tgt && o.cook[1] < 0.1) {
               await act(line(o.scr[0], o.scr[1], o.scr[0], o.scr[1] - 60, 4), 16);
-            } else if (+ln[0] !== li && o.rack < 0 && process.env.RACK !== '0') {
-              // Done but not needed yet: park it on the warming rack so it doesn't overcook.
+            } else if (+ln[0] !== li && process.env.HOLD !== '0') {
+              // Done but not needed yet: park it under the heat lamp so it doesn't overcook.
               const t2 = ex.kind === 'patty' ? TARGET[ex.doneness] : ex.kind === 'bacon' ? 0.6 : 0.5;
               const done2 = ex.kind === 'patty' || ex.kind === 'bacon' ? o.cook[0] >= t2 - 0.02 && o.cook[1] >= t2 - 0.02 : o.cook[0] >= t2;
-              if (done2) {
-                const [rx, ry] = await ev(() => window.__bv.project('counter', 2.6, 0.45, 0.3));
+              const free = done2 ? await ev(() => window.__bv.counter.holds.findIndex(h => !h.layers.length)) : -1;
+              if (free >= 0 && ![...parked.values()].includes(free)) {
+                const [rx, ry] = await ev((i) => { const h = window.__bv.counter.holds[i]; return window.__bv.project('counter', h.x, 0.35, h.z); }, free);
                 await act(line(o.scr[0], o.scr[1], rx, ry, 12));
+                if (await ev((u) => !window.__bv.counter.grillItems.some(g => g.piece.uid === u), o.uid)) parked.set(o.uid, free);
               }
             }
           }
           const tgt = l.kind === 'patty' ? TARGET[l.doneness] : l.kind === 'bun' || l.kind === 'egg' || l.kind === 'pineapple' ? 0.5 : 0.6;
           const ready = l.kind === 'patty' || l.kind === 'bacon' ? it.cook[0] >= tgt - 0.02 && it.cook[1] >= tgt - 0.02 : it.cook[0] >= tgt;
           if (ready && !it.flipping) {
-            let now = (await items()).find(i => i.uid === assigned[li]);
-            // Dig it out of the warming-rack pile: tapping the pile moves its top to the bottom.
-            for (let k = 0; k < 3 && now.rack >= 0; k++) {
-              const top = Math.max(...(await items()).map(i => i.rack));
-              if (now.rack === top) break;
-              await act([[now.scr[0], now.scr[1]], [now.scr[0], now.scr[1]]], 30);
-              now = (await items()).find(i => i.uid === assigned[li]);
-            }
+            const now = (await items()).find(i => i.uid === assigned[li]);
             await act(line(now.scr[0], now.scr[1], px, py, 12));
             break;
           }

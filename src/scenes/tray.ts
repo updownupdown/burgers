@@ -21,7 +21,7 @@ interface StackEntry {
   onLand?: () => void;
 }
 
-class PlateView {
+export class PlateView {
   group = new THREE.Group();
   burger = new THREE.Group();
   ring: THREE.Mesh;

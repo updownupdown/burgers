@@ -106,6 +106,13 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
   }
 }
 
+/** Food keeps well under the heat lamp for about 25 seconds, then dries out over the next 35. */
+export const HOLD_GRACE = 25;
+export const HOLD_RUIN = 60;
+export function heldPenalty(piece: Piece): number {
+  return clamp01(((piece.held ?? 0) - HOLD_GRACE) / (HOLD_RUIN - HOLD_GRACE)) * 0.45;
+}
+
 export function scorePlate(order: Order, plate: Plate): ScoreResult {
   const notes: string[] = [];
   const exp = order.layers;
@@ -139,7 +146,10 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
     let weights = 0;
     let worst = 1;
     for (const [i, j] of pairs) {
-      const [q, note] = layerQuality(exp[i], act[j].piece);
+      const [q0, note] = layerQuality(exp[i], act[j].piece);
+      const dry = heldPenalty(act[j].piece);
+      const q = q0 * (1 - dry);
+      if (dry > 0.15 && !notes.includes("been sitting a while")) notes.push("been sitting a while");
       const w = exp[i].kind === "patty" ? 3 : 1;
       sum += q * w;
       weights += w;

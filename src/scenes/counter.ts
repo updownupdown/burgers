@@ -1,24 +1,29 @@
 import * as THREE from "three";
 import { FRY_RATE, GRILL_RATE } from "../game/cooking";
-import type { DrinkId, Kind, Piece, SauceKind } from "../game/types";
+import type { DrinkId, Kind, Layer, Piece, SauceKind } from "../game/types";
 import { newPiece } from "../game/types";
-import { bottle, makeCup, makeFood, makeFries, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
+import { bottle, makeCup, makeFood, makeFries, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
+import { PlateView } from "./tray";
 
 export const PAGES = ["Drinks", "Grill", "Fryer"] as const;
 export const HOME_PAGE = 1;
 const PAGE_GAP = 14;
-const pageX = (i: number) => (i - HOME_PAGE) * PAGE_GAP;
+export const pageX = (i: number) => (i - HOME_PAGE) * PAGE_GAP;
 
 /** Grill items are drawn a bit smaller than ingredient units. */
 export const GRILL_SCALE = 0.72;
-const GRILL_TOP = 0.26;
+export const GRILL_TOP = 0.26;
 const GRILL_CX = -0.7;
 const GRILL_W = 5.1;
 const GRILL_BOUNDS = { x0: GRILL_CX - GRILL_W / 2 + 0.45, x1: GRILL_CX + GRILL_W / 2 - 0.45, z0: 0.2, z1: 2.65 };
-const TRASH = { x: 2.6, z: 1.95, r: 0.62 };
-/** Warming rack under a heat lamp, beside the grill: food piled here stops cooking. */
-const RACK = { x: 2.6, z: 0.3, w: 1.25, d: 1.2, top: 0.42, max: 3, scale: 0.55 };
+/** Trash slot running along the front edge of the grill counter. */
+const TRASH = { z0: 3.05, z1: 3.5, x0: -3.4, x1: 3.4 };
+/** Assembly spots under the heat lamp, beside the grill. */
+export const HOLD_SPOTS = [0.05, 1.15, 2.25].map((z) => ({ x: 2.62, z }));
+const HOLD_SCALE = 0.52;
+/** The right end of the grill can be turned down to a warm hold. */
+export const WARM_X0 = 0.35;
 
 export interface GrillItem {
   piece: Piece;
@@ -30,8 +35,6 @@ export interface GrillItem {
   squashV: number;
   smoke: number;
   held: boolean;
-  /** Position in the warming rack pile (bottom first), or -1 when on the grill. */
-  rack: number;
 }
 
 export interface Basket {
@@ -60,7 +63,16 @@ export type Hit =
   | { type: "friesBin" }
   | { type: "basket"; idx: number }
   | { type: "tap"; idx: number }
-  | { type: "cup"; idx: number };
+  | { type: "cup"; idx: number }
+  | { type: "hold"; idx: number };
+
+/** A burger being put together (or food parked) under the heat lamp. */
+export interface HoldSpot {
+  layers: Layer[];
+  view: PlateView;
+  x: number;
+  z: number;
+}
 
 export interface CounterEvents {
   golden: () => void;
@@ -95,6 +107,10 @@ export class CounterView {
   fryBoost = 1;
   autoStopPour = false;
   grillItems: GrillItem[] = [];
+  holds: HoldSpot[] = [];
+  /** Right end of the grill turned down to keep food warm without cooking it much. */
+  warm = false;
+  private warmGlow!: THREE.Mesh;
   baskets: Basket[] = [];
   taps: Tap[] = [];
   bottles: Record<SauceKind, THREE.Group>;
@@ -167,32 +183,52 @@ export class CounterView {
     const lip = mesh(faceted(new THREE.BoxGeometry(GRILL_W, 0.3, 0.12)), "#2a2e30", { ink: false });
     lip.position.set(x0 + GRILL_CX, GRILL_TOP + 0.1, 2.92);
     this.scene.add(lip);
-    // Trash can beside the grill for burnt mistakes.
-    const can = mesh(faceted(new THREE.CylinderGeometry(TRASH.r, TRASH.r * 0.85, 1.1, 14)), "#7d8d89", { ink: false });
-    can.position.set(x0 + TRASH.x, 0.55, TRASH.z);
-    const rim = mesh(faceted(new THREE.TorusGeometry(TRASH.r, 0.06, 5, 16)), "#4c5855", { ink: false });
-    rim.rotation.x = Math.PI / 2;
-    rim.position.set(x0 + TRASH.x, 1.1, TRASH.z);
-    const hole = mesh(faceted(new THREE.CylinderGeometry(TRASH.r - 0.06, TRASH.r - 0.06, 0.02, 14)), "#222826", { ink: false, shadow: false });
-    hole.position.set(x0 + TRASH.x, 1.09, TRASH.z);
-    hole.receiveShadow = false;
-    can.receiveShadow = false;
-    this.scene.add(can, rim, hole);
+    // Trash slot along the front edge: drop anything past the grill to throw it away.
+    const slot = mesh(faceted(new THREE.BoxGeometry(TRASH.x1 - TRASH.x0, 0.06, TRASH.z1 - TRASH.z0)), "#1e2422", { ink: false, shadow: false });
+    slot.position.set(x0 + (TRASH.x0 + TRASH.x1) / 2, 0.02, (TRASH.z0 + TRASH.z1) / 2);
+    slot.receiveShadow = false;
+    const slotLip = mesh(faceted(new THREE.BoxGeometry(TRASH.x1 - TRASH.x0 + 0.1, 0.08, 0.08)), "#8d9a97", { ink: false });
+    slotLip.position.set(x0 + (TRASH.x0 + TRASH.x1) / 2, 0.05, TRASH.z0 - 0.02);
+    this.scene.add(slot, slotLip);
+    for (let i = 0; i < 9; i++) {
+      // Hazard stripes so it reads as "not a shelf".
+      const stripe = new THREE.Mesh(new THREE.PlaneGeometry(0.16, TRASH.z1 - TRASH.z0 - 0.06), new THREE.MeshBasicMaterial({ color: "#d9a92b" }));
+      stripe.rotation.set(-Math.PI / 2, 0, 0.5);
+      stripe.position.set(x0 + TRASH.x0 + 0.4 + i * 0.75, 0.06, (TRASH.z0 + TRASH.z1) / 2);
+      this.scene.add(stripe);
+    }
 
-    // Warming rack: a wire tray on short legs with a row of glowing lamp bulbs along the back.
-    const tray = mesh(faceted(new THREE.BoxGeometry(RACK.w, 0.12, RACK.d)), "#b8c2c0");
-    tray.position.set(x0 + RACK.x, RACK.top - 0.08, RACK.z);
-    const bed = new THREE.Mesh(new THREE.PlaneGeometry(RACK.w - 0.16, RACK.d - 0.16), new THREE.MeshBasicMaterial({ color: "#ffb15c", transparent: true, opacity: 0.55 }));
+    // Assembly spots under a heat lamp: a warm shelf with three small plates.
+    const shelf = mesh(faceted(new THREE.BoxGeometry(1.3, 0.3, 3.35)), "#b8c2c0");
+    shelf.position.set(x0 + HOLD_SPOTS[0].x, 0.15, 1.15);
+    const bed = new THREE.Mesh(new THREE.PlaneGeometry(1.14, 3.2), new THREE.MeshBasicMaterial({ color: "#ffb15c", transparent: true, opacity: 0.45 }));
     bed.rotation.x = -Math.PI / 2;
-    bed.position.set(x0 + RACK.x, RACK.top - 0.015, RACK.z);
-    const bulbGeo = new THREE.SphereGeometry(0.11, 8, 6);
+    bed.position.set(x0 + HOLD_SPOTS[0].x, 0.305, 1.15);
+    this.scene.add(shelf, bed);
+    const bulbGeo = new THREE.SphereGeometry(0.1, 8, 6);
     const bulbMat = new THREE.MeshBasicMaterial({ color: "#ff8a3d" });
-    for (let i = 0; i < 3; i++) {
+    for (const h of HOLD_SPOTS) {
+      const view = new PlateView("#e0782f");
+      view.ring.visible = false;
+      view.group.scale.setScalar(HOLD_SCALE);
+      view.group.position.set(x0 + h.x, 0.3, h.z);
+      this.scene.add(view.group);
+      this.holds.push({ layers: [], view, x: h.x, z: h.z });
       const bulb = new THREE.Mesh(bulbGeo, bulbMat);
-      bulb.position.set(x0 + RACK.x + (i - 1) * 0.42, RACK.top + 0.08, RACK.z - RACK.d / 2 - 0.02);
+      bulb.position.set(x0 + h.x + 0.6, 0.42, h.z - 0.38);
       this.scene.add(bulb);
     }
-    this.scene.add(tray, bed);
+
+    // Warm section of the grill: a dimmer glow over the right end when it's turned down.
+    const warmGlow = new THREE.Mesh(new THREE.PlaneGeometry(GRILL_CX + GRILL_W / 2 - WARM_X0 - 0.2, 2.6), new THREE.MeshBasicMaterial({ color: "#6fb7d6", transparent: true, opacity: 0 }));
+    warmGlow.rotation.x = -Math.PI / 2;
+    warmGlow.position.set(x0 + (WARM_X0 + GRILL_CX + GRILL_W / 2 - 0.2) / 2, GRILL_TOP + 0.025, 1.42);
+    this.scene.add(warmGlow);
+    this.warmGlow = warmGlow;
+    const divider = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 2.6), new THREE.MeshBasicMaterial({ color: "#2a2e30" }));
+    divider.rotation.x = -Math.PI / 2;
+    divider.position.set(x0 + WARM_X0, GRILL_TOP + 0.03, 1.42);
+    this.scene.add(divider);
 
     const puffMat = new THREE.MeshBasicMaterial({ color: "#f2f2f2", transparent: true, opacity: 0.3, depthWrite: false });
     for (let i = 0; i < 24; i++) {
@@ -340,10 +376,13 @@ export class CounterView {
 
   layout(aspect: number): void {
     this.camera.aspect = aspect;
-    // Fit about 7.2 world units across, whatever the band shape.
+    // Fit about 7.2 world units across, and on short, wide bands enough depth to reach the
+    // trash slot along the front edge.
     const dist = 13.1;
     const hfov = 2 * Math.atan(3.65 / dist);
-    this.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(hfov / 2) / aspect));
+    const fitWidth = 2 * Math.atan(Math.tan(hfov / 2) / aspect);
+    const fitDepth = 2 * Math.atan(3.55 / dist);
+    this.camera.fov = THREE.MathUtils.radToDeg(Math.max(fitWidth, fitDepth));
     this.camera.updateProjectionMatrix();
   }
 
@@ -359,14 +398,16 @@ export class CounterView {
     let best: GrillItem | null = null;
     let bestD = 0.85;
     for (const it of items) {
-      // The top of the warming-rack pile wins over the things under it.
-      const d = Math.hypot(p.x - (pageX(1) + it.x), p.z - it.z) - Math.max(0, it.rack) * 0.01;
+      const d = Math.hypot(p.x - (pageX(1) + it.x), p.z - it.z);
       if (d < bestD) {
         bestD = d;
         best = it;
       }
     }
     if (best) return { type: "grillItem", item: best };
+    const hp = this.groundPoint(ndc, 0.35);
+    const hold = this.holds.findIndex((h) => Math.hypot(hp.x - (pageX(1) + h.x), hp.z - h.z) < 0.55);
+    if (hold >= 0) return { type: "hold", idx: hold };
     const hits = this.raycaster.intersectObjects(this.hitMeshes, false);
     return hits.length ? (hits[0].object.userData.hit as Hit) : null;
   }
@@ -380,7 +421,8 @@ export class CounterView {
 
   /** True when a dropped item at this world point lands in the trash can. */
   overTrash(world: THREE.Vector3): boolean {
-    return Math.hypot(world.x - (pageX(1) + TRASH.x), world.z - TRASH.z) < TRASH.r + 0.35;
+    const x = world.x - pageX(1);
+    return world.z > TRASH.z0 - 0.05 && x > TRASH.x0 - 0.3 && x < TRASH.x1 + 0.3;
   }
 
   /** Grill-local position if the world point is over the grill plate. */
@@ -391,40 +433,21 @@ export class CounterView {
     return { x: THREE.MathUtils.clamp(x, x0, x1), z: THREE.MathUtils.clamp(world.z, z0, z1) };
   }
 
-  /** Next pile position if the world point is over the warming rack, -1 if it's full, null if not over it. */
-  overRack(world: THREE.Vector3): number | null {
-    const x = world.x - pageX(1);
-    if (Math.abs(x - RACK.x) > RACK.w / 2 + 0.3 || Math.abs(world.z - RACK.z) > RACK.d / 2 + 0.3) return null;
-    const n = this.grillItems.filter((g) => g.rack >= 0).length;
-    return n < RACK.max ? n : -1;
+  /** Assembly spot under the world point, or -1. */
+  overHold(world: THREE.Vector3): number {
+    return this.holds.findIndex((h) => Math.hypot(world.x - (pageX(1) + h.x), world.z - h.z) < 0.6);
   }
 
-  /** Move the top of the warming-rack pile to the bottom, so anything in it can be reached. */
-  cycleRack(): boolean {
-    const pile = this.grillItems.filter((g) => g.rack >= 0);
-    if (pile.length < 2) return false;
-    pile.sort((a, b) => a.rack - b.rack);
-    pile.unshift(pile.pop()!);
-    pile.forEach((g, i) => (g.rack = i));
-    for (const g of pile) g.squashV = 5;
-    return true;
+  /** Redraw an assembly spot after its layers change. */
+  syncHold(i: number, animate: boolean): void {
+    this.holds[i].view.sync({ layers: this.holds[i].layers, fries: null, drink: null }, animate, () => {});
   }
 
-  /** Keep the warming-rack pile packed from the bottom after something is taken off. */
-  private restack(): void {
-    this.grillItems.filter((g) => g.rack >= 0).sort((a, b) => a.rack - b.rack).forEach((g, i) => (g.rack = i));
-  }
-
-  addGrillItem(piece: Piece, x: number, z: number, rack = -1): GrillItem {
+  addGrillItem(piece: Piece, x: number, z: number): GrillItem {
     const obj = makeFood(piece, "top");
     obj.scale.setScalar(GRILL_SCALE);
     this.scene.add(obj);
-    if (rack >= 0) {
-      x = RACK.x;
-      z = RACK.z;
-      rack = this.grillItems.filter((g) => g.rack >= 0).length;
-    }
-    const item: GrillItem = { piece, obj, x, z, flipT: -1, squash: 0, squashV: 4, smoke: 0, held: false, rack };
+    const item: GrillItem = { piece, obj, x, z, flipT: -1, squash: 0, squashV: 4, smoke: 0, held: false };
     this.grillItems.push(item);
     return item;
   }
@@ -432,7 +455,7 @@ export class CounterView {
   /** Press a patty flat. Only fresh patties can be smashed. */
   smash(item: GrillItem): boolean {
     const p = item.piece;
-    if (p.kind !== "patty" || p.smashed || item.flipT >= 0 || item.rack >= 0 || p.cook[0] > 0.35) return false;
+    if (p.kind !== "patty" || p.smashed || item.flipT >= 0 || p.cook[0] > 0.35) return false;
     p.smashed = true;
     this.scene.remove(item.obj);
     disposeObject(item.obj);
@@ -450,11 +473,10 @@ export class CounterView {
     this.scene.remove(item.obj);
     disposeObject(item.obj);
     this.grillItems = this.grillItems.filter((g) => g !== item);
-    if (item.rack >= 0) this.restack();
   }
 
   flip(item: GrillItem): boolean {
-    if (item.flipT >= 0 || item.held || item.rack >= 0) return false;
+    if (item.flipT >= 0 || item.held) return false;
     // Eggs and buns don't flip in this shop: eggs are sunny side up, buns toast cut side down.
     if (item.piece.kind === "egg") return false;
     item.flipT = 0;
@@ -493,7 +515,12 @@ export class CounterView {
   }
 
   sizzleLevel(): number {
-    return this.grillItems.filter((g) => !g.held && g.flipT < 0 && g.rack < 0).length * 0.35;
+    return this.grillItems.filter((g) => !g.held && g.flipT < 0 && !this.isWarm(g)).length * 0.35 + this.grillItems.filter((g) => this.isWarm(g)).length * 0.08;
+  }
+
+  /** Sitting in the turned-down section of the grill. */
+  isWarm(g: GrillItem): boolean {
+    return this.warm && g.x > WARM_X0;
   }
 
   bubbleLevel(): number {
@@ -528,13 +555,11 @@ export class CounterView {
           it.piece.cook = [it.piece.cook[1], it.piece.cook[0]];
           it.squashV = 6;
         }
-      } else if (it.rack >= 0) {
-        let y = RACK.top;
-        for (const o of this.grillItems) if (o.rack >= 0 && o.rack < it.rack) y += stackHeight(o.piece, "top") * RACK.scale + 0.03;
-        it.obj.position.set(gx + it.x + (it.rack % 2) * 0.12 - 0.06, y, it.z - it.rack * 0.08);
       } else {
         // The middle of the grill runs a little hotter than the edges.
-        const heat = (1.12 - 0.25 * Math.abs((it.x - GRILL_CX) / 2.5)) * (COOK_SPEED[it.piece.kind] ?? 1) * (it.piece.smashed ? 1.6 : 1);
+        // The middle of the grill runs a little hotter than the edges; the warm section barely cooks.
+        const zone = this.isWarm(it) ? 0.07 : 1.12 - 0.25 * Math.abs((it.x - GRILL_CX) / 2.5);
+        const heat = zone * (COOK_SPEED[it.piece.kind] ?? 1) * (it.piece.smashed ? 1.6 : 1);
         const before = it.piece.cook[0];
         it.piece.cook[0] += GRILL_RATE * heat * dt;
         if (it.piece.kind === "egg") it.piece.cook[1] += GRILL_RATE * 0.35 * heat * dt;
@@ -544,15 +569,16 @@ export class CounterView {
       it.squashV += (-160 * it.squash - 12 * it.squashV) * dt;
       it.squash += it.squashV * dt;
       const s = THREE.MathUtils.clamp(it.squash * 0.07, -0.3, 0.3);
-      const k = it.rack >= 0 ? RACK.scale : GRILL_SCALE;
-      it.obj.scale.set(k * (1 + s * 0.4), k * (1 - s), k * (1 + s * 0.4));
+      it.obj.scale.set(GRILL_SCALE * (1 + s * 0.4), GRILL_SCALE * (1 - s), GRILL_SCALE * (1 + s * 0.4));
       it.obj.userData.update(it.piece);
     }
     if (anyBurning) this.events.burning();
     this.grillGlow.material instanceof THREE.MeshBasicMaterial && (this.grillGlow.material.opacity = 0.1 + 0.04 * Math.sin(this.time * 3));
 
     // Smoke: puffs drift up from cooking items; darker when burning.
-    const active = this.grillItems.filter((g) => !g.held && g.flipT < 0 && g.rack < 0);
+    const active = this.grillItems.filter((g) => !g.held && g.flipT < 0 && !this.isWarm(g));
+    for (const h of this.holds) h.view.update(dt);
+    (this.warmGlow.material as THREE.MeshBasicMaterial).opacity += ((this.warm ? 0.22 : 0) - (this.warmGlow.material as THREE.MeshBasicMaterial).opacity) * Math.min(1, dt * 8);
     this.puffs.forEach((m, i) => {
       const it = active[i % Math.max(1, active.length)];
       m.userData.t += dt * 0.5;

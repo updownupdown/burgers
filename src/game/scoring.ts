@@ -61,7 +61,7 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
       const off = Math.abs(avgCook(piece) - target);
       const uneven = Math.abs(a - b);
       // Anywhere inside the doneness band is fine; beyond it the score drops quickly.
-      const q = clamp01(1 - Math.max(0, off - 0.06) * 4 - Math.max(0, uneven - 0.2) * 1.6);
+      const q = clamp01(1 - Math.max(0, off - 0.1) * 4 - Math.max(0, uneven - 0.2) * 1.6);
       let note: string | null = null;
       if (exp.smashed && !piece.smashed) return [q * 0.6, "wanted it smashed"];
       if (off > 0.12) note = avgCook(piece) > target ? "patty overcooked" : "patty undercooked";
@@ -113,14 +113,17 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
   const pairs = alignLayers(exp, act);
 
   const structure = act.length === 0 ? 0 : pairs.length / Math.max(exp.length, act.length);
-  if (pairs.length < exp.length) {
-    const matched = new Set(pairs.map(([i]) => i));
-    const missing = exp.filter((_, i) => !matched.has(i)).map((l) => l.kind);
-    notes.push(`missing ${[...new Set(missing)].join(", ")}`);
-  }
-  if (act.length > pairs.length) notes.push("extra stuff in there");
-  else if (pairs.length === exp.length && !pairs.every(([i, j], k) => i === k && j === k)) {
+  const kinds = (ls: { kind: string }[]) => ls.map((l) => l.kind).sort().join();
+  if (pairs.length < exp.length && kinds(exp) === kinds(act.map((l) => l.piece))) {
+    // Everything's there, just stacked in the wrong order.
     notes.push("layers out of order");
+  } else {
+    if (pairs.length < exp.length) {
+      const matched = new Set(pairs.map(([i]) => i));
+      const missing = exp.filter((_, i) => !matched.has(i)).map((l) => l.kind);
+      notes.push(`missing ${[...new Set(missing)].join(", ")}`);
+    }
+    if (act.length > pairs.length) notes.push("extra stuff in there");
   }
 
   // Patties matter most, and one ruined layer spoils the whole bite: blend the weighted

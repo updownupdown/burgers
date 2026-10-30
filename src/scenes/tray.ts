@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { Piece, Plate } from "../game/types";
 import { makeCup, makeFood, makeFries, stackHeight, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
-import { faceted, mesh } from "../render/materials";
+import { disposeObject, faceted, mesh } from "../render/materials";
 
 export const SLOT_COLORS = ["#2bb3a3", "#f07d4a", "#8f6ee0"];
 
@@ -32,6 +32,9 @@ class PlateView {
   cupKey = "";
   wobble = 0;
   wobbleV = 0;
+  /** Whole-stack squish when the top bun is pressed on. */
+  private squish = 0;
+  private squishV = 0;
   /** Stack scale relative to ingredient units. */
   s = 0.6;
 
@@ -60,7 +63,10 @@ class PlateView {
     const want = p.layers.map((l, i) => ({ l, role: (i === 0 ? "bottom" : "top") as BunRole }));
     let same = 0;
     while (same < this.entries.length && same < want.length && this.entries[same].uid === want[same].l.piece.uid && this.entries[same].role === want[same].role) same++;
-    for (const e of this.entries.splice(same)) this.burger.remove(e.obj);
+    for (const e of this.entries.splice(same)) {
+      this.burger.remove(e.obj);
+      disposeObject(e.obj);
+    }
     let y = same ? this.entries[same - 1].baseY + stackHeight(this.entries[same - 1].piece, this.entries[same - 1].role) : 0;
     for (let i = same; i < want.length; i++) {
       const { l, role } = want[i];
@@ -91,7 +97,10 @@ class PlateView {
 
     const fk = p.fries ? `f${p.fries.cook.toFixed(2)}` : "";
     if (fk !== this.friesKey) {
-      if (this.fries) this.group.remove(this.fries);
+      if (this.fries) {
+        this.group.remove(this.fries);
+        disposeObject(this.fries);
+      }
       this.fries = null;
       if (p.fries) {
         this.fries = makeFries(true);
@@ -104,7 +113,10 @@ class PlateView {
     }
     const ck = p.drink ? `${p.drink.flavor}${p.drink.fill.toFixed(2)}` : "";
     if (ck !== this.cupKey) {
-      if (this.cup) this.group.remove(this.cup);
+      if (this.cup) {
+        this.group.remove(this.cup);
+        disposeObject(this.cup);
+      }
       this.cup = null;
       if (p.drink) {
         this.cup = makeCup(p.drink.flavor, true);
@@ -132,6 +144,7 @@ class PlateView {
           e.vy = 0;
           e.landed = true;
           this.kick(0.3);
+          if (e.piece.kind === "bun" && e.role === "top" && this.entries.length > 2) this.squishV += 3.2;
           e.onLand?.();
         }
       }
@@ -140,7 +153,10 @@ class PlateView {
     }
     this.wobbleV += (-60 * this.wobble - 5 * this.wobbleV) * dt;
     this.wobble += this.wobbleV * dt;
-    this.burger.scale.setScalar(this.s);
+    this.squishV += (-120 * this.squish - 9 * this.squishV) * dt;
+    this.squish += this.squishV * dt;
+    const q = THREE.MathUtils.clamp(this.squish, -0.15, 0.25);
+    this.burger.scale.set(this.s * (1 + q * 0.45), this.s * (1 - q), this.s * (1 + q * 0.45));
     for (const e of this.entries) {
       const h = e.baseY + 0.15;
       const sq = THREE.MathUtils.clamp(e.squash * 0.05, -0.3, 0.3);

@@ -2,8 +2,8 @@ import * as THREE from "three";
 import { FRY_RATE, GRILL_RATE } from "../game/cooking";
 import type { DrinkId, Kind, Piece, SauceKind } from "../game/types";
 import { newPiece } from "../game/types";
-import { bottle, makeCup, makeFood, makeFries, type CupObject, type FoodObject, type FriesObject } from "../render/food";
-import { faceted, mesh, toon } from "../render/materials";
+import { bottle, makeCup, makeFood, makeFries, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
+import { disposeObject, faceted, mesh, toon } from "../render/materials";
 
 export const PAGES = ["Drinks", "Grill", "Fryer"] as const;
 export const HOME_PAGE = 1;
@@ -16,7 +16,9 @@ const GRILL_TOP = 0.26;
 const GRILL_CX = -0.7;
 const GRILL_W = 5.1;
 const GRILL_BOUNDS = { x0: GRILL_CX - GRILL_W / 2 + 0.45, x1: GRILL_CX + GRILL_W / 2 - 0.45, z0: 0.2, z1: 2.65 };
-const TRASH = { x: 2.55, z: 1.5, r: 0.75 };
+const TRASH = { x: 2.6, z: 1.95, r: 0.62 };
+/** Warming rack under a heat lamp, beside the grill: food piled here stops cooking. */
+const RACK = { x: 2.6, z: 0.3, w: 1.25, d: 1.2, top: 0.42, max: 3, scale: 0.55 };
 
 export interface GrillItem {
   piece: Piece;
@@ -28,6 +30,8 @@ export interface GrillItem {
   squashV: number;
   smoke: number;
   held: boolean;
+  /** Position in the warming rack pile (bottom first), or -1 when on the grill. */
+  rack: number;
 }
 
 export interface Basket {
@@ -175,6 +179,21 @@ export class CounterView {
     can.receiveShadow = false;
     this.scene.add(can, rim, hole);
 
+    // Warming rack: a wire tray on short legs with a row of glowing lamp bulbs along the back.
+    const tray = mesh(faceted(new THREE.BoxGeometry(RACK.w, 0.12, RACK.d)), "#b8c2c0");
+    tray.position.set(x0 + RACK.x, RACK.top - 0.08, RACK.z);
+    const bed = new THREE.Mesh(new THREE.PlaneGeometry(RACK.w - 0.16, RACK.d - 0.16), new THREE.MeshBasicMaterial({ color: "#ffb15c", transparent: true, opacity: 0.55 }));
+    bed.rotation.x = -Math.PI / 2;
+    bed.position.set(x0 + RACK.x, RACK.top - 0.015, RACK.z);
+    const bulbGeo = new THREE.SphereGeometry(0.11, 8, 6);
+    const bulbMat = new THREE.MeshBasicMaterial({ color: "#ff8a3d" });
+    for (let i = 0; i < 3; i++) {
+      const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+      bulb.position.set(x0 + RACK.x + (i - 1) * 0.42, RACK.top + 0.08, RACK.z - RACK.d / 2 - 0.02);
+      this.scene.add(bulb);
+    }
+    this.scene.add(tray, bed);
+
     const puffMat = new THREE.MeshBasicMaterial({ color: "#f2f2f2", transparent: true, opacity: 0.3, depthWrite: false });
     for (let i = 0; i < 24; i++) {
       const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 0), puffMat.clone());
@@ -284,10 +303,16 @@ export class CounterView {
 
   /** Fill the grill counter's bins for the current stop. */
   setPantry(kinds: Kind[]): void {
-    if (this.pantry) this.scene.remove(this.pantry);
+    if (this.pantry) {
+      this.scene.remove(this.pantry);
+      disposeObject(this.pantry);
+    }
     this.hitMeshes = this.hitMeshes.filter((m) => {
       const keep = (m.userData.hit as Hit).type !== "bin";
-      if (!keep) this.scene.remove(m);
+      if (!keep) {
+        this.scene.remove(m);
+        m.geometry.dispose();
+      }
       return keep;
     });
     const g = new THREE.Group();
@@ -334,7 +359,8 @@ export class CounterView {
     let best: GrillItem | null = null;
     let bestD = 0.85;
     for (const it of items) {
-      const d = Math.hypot(p.x - (pageX(1) + it.x), p.z - it.z);
+      // The top of the warming-rack pile wins over the things under it.
+      const d = Math.hypot(p.x - (pageX(1) + it.x), p.z - it.z) - Math.max(0, it.rack) * 0.01;
       if (d < bestD) {
         bestD = d;
         best = it;
@@ -365,11 +391,40 @@ export class CounterView {
     return { x: THREE.MathUtils.clamp(x, x0, x1), z: THREE.MathUtils.clamp(world.z, z0, z1) };
   }
 
-  addGrillItem(piece: Piece, x: number, z: number): GrillItem {
+  /** Next pile position if the world point is over the warming rack, -1 if it's full, null if not over it. */
+  overRack(world: THREE.Vector3): number | null {
+    const x = world.x - pageX(1);
+    if (Math.abs(x - RACK.x) > RACK.w / 2 + 0.3 || Math.abs(world.z - RACK.z) > RACK.d / 2 + 0.3) return null;
+    const n = this.grillItems.filter((g) => g.rack >= 0).length;
+    return n < RACK.max ? n : -1;
+  }
+
+  /** Move the top of the warming-rack pile to the bottom, so anything in it can be reached. */
+  cycleRack(): boolean {
+    const pile = this.grillItems.filter((g) => g.rack >= 0);
+    if (pile.length < 2) return false;
+    pile.sort((a, b) => a.rack - b.rack);
+    pile.unshift(pile.pop()!);
+    pile.forEach((g, i) => (g.rack = i));
+    for (const g of pile) g.squashV = 5;
+    return true;
+  }
+
+  /** Keep the warming-rack pile packed from the bottom after something is taken off. */
+  private restack(): void {
+    this.grillItems.filter((g) => g.rack >= 0).sort((a, b) => a.rack - b.rack).forEach((g, i) => (g.rack = i));
+  }
+
+  addGrillItem(piece: Piece, x: number, z: number, rack = -1): GrillItem {
     const obj = makeFood(piece, "top");
     obj.scale.setScalar(GRILL_SCALE);
     this.scene.add(obj);
-    const item: GrillItem = { piece, obj, x, z, flipT: -1, squash: 0, squashV: 4, smoke: 0, held: false };
+    if (rack >= 0) {
+      x = RACK.x;
+      z = RACK.z;
+      rack = this.grillItems.filter((g) => g.rack >= 0).length;
+    }
+    const item: GrillItem = { piece, obj, x, z, flipT: -1, squash: 0, squashV: 4, smoke: 0, held: false, rack };
     this.grillItems.push(item);
     return item;
   }
@@ -377,9 +432,10 @@ export class CounterView {
   /** Press a patty flat. Only fresh patties can be smashed. */
   smash(item: GrillItem): boolean {
     const p = item.piece;
-    if (p.kind !== "patty" || p.smashed || item.flipT >= 0 || p.cook[0] > 0.35) return false;
+    if (p.kind !== "patty" || p.smashed || item.flipT >= 0 || item.rack >= 0 || p.cook[0] > 0.35) return false;
     p.smashed = true;
     this.scene.remove(item.obj);
+    disposeObject(item.obj);
     const obj = makeFood(p, "top");
     obj.scale.setScalar(GRILL_SCALE);
     obj.position.copy(item.obj.position);
@@ -392,11 +448,13 @@ export class CounterView {
 
   removeGrillItem(item: GrillItem): void {
     this.scene.remove(item.obj);
+    disposeObject(item.obj);
     this.grillItems = this.grillItems.filter((g) => g !== item);
+    if (item.rack >= 0) this.restack();
   }
 
   flip(item: GrillItem): boolean {
-    if (item.flipT >= 0 || item.held) return false;
+    if (item.flipT >= 0 || item.held || item.rack >= 0) return false;
     // Eggs and buns don't flip in this shop: eggs are sunny side up, buns toast cut side down.
     if (item.piece.kind === "egg") return false;
     item.flipT = 0;
@@ -405,7 +463,10 @@ export class CounterView {
 
   /** Show something following the player's finger in the counter scene. */
   setHeld(obj: THREE.Object3D | null): void {
-    if (this.held && this.held !== obj) this.scene.remove(this.held);
+    if (this.held && this.held !== obj) {
+      this.scene.remove(this.held);
+      disposeObject(this.held);
+    }
     this.held = obj;
     if (obj && !obj.parent) this.scene.add(obj);
   }
@@ -432,7 +493,7 @@ export class CounterView {
   }
 
   sizzleLevel(): number {
-    return this.grillItems.filter((g) => !g.held && g.flipT < 0).length * 0.35;
+    return this.grillItems.filter((g) => !g.held && g.flipT < 0 && g.rack < 0).length * 0.35;
   }
 
   bubbleLevel(): number {
@@ -467,25 +528,31 @@ export class CounterView {
           it.piece.cook = [it.piece.cook[1], it.piece.cook[0]];
           it.squashV = 6;
         }
+      } else if (it.rack >= 0) {
+        let y = RACK.top;
+        for (const o of this.grillItems) if (o.rack >= 0 && o.rack < it.rack) y += stackHeight(o.piece, "top") * RACK.scale + 0.03;
+        it.obj.position.set(gx + it.x + (it.rack % 2) * 0.12 - 0.06, y, it.z - it.rack * 0.08);
       } else {
         // The middle of the grill runs a little hotter than the edges.
         const heat = (1.12 - 0.25 * Math.abs((it.x - GRILL_CX) / 2.5)) * (COOK_SPEED[it.piece.kind] ?? 1) * (it.piece.smashed ? 1.6 : 1);
+        const before = it.piece.cook[0];
         it.piece.cook[0] += GRILL_RATE * heat * dt;
         if (it.piece.kind === "egg") it.piece.cook[1] += GRILL_RATE * 0.35 * heat * dt;
         it.obj.position.set(gx + it.x, GRILL_TOP, it.z);
-        if (it.piece.cook[0] > 0.9 && it.piece.cook[0] - GRILL_RATE * dt <= 0.9) anyBurning = true;
+        if (it.piece.cook[0] > 0.9 && before <= 0.9) anyBurning = true;
       }
       it.squashV += (-160 * it.squash - 12 * it.squashV) * dt;
       it.squash += it.squashV * dt;
       const s = THREE.MathUtils.clamp(it.squash * 0.07, -0.3, 0.3);
-      it.obj.scale.set(GRILL_SCALE * (1 + s * 0.4), GRILL_SCALE * (1 - s), GRILL_SCALE * (1 + s * 0.4));
+      const k = it.rack >= 0 ? RACK.scale : GRILL_SCALE;
+      it.obj.scale.set(k * (1 + s * 0.4), k * (1 - s), k * (1 + s * 0.4));
       it.obj.userData.update(it.piece);
     }
     if (anyBurning) this.events.burning();
     this.grillGlow.material instanceof THREE.MeshBasicMaterial && (this.grillGlow.material.opacity = 0.1 + 0.04 * Math.sin(this.time * 3));
 
     // Smoke: puffs drift up from cooking items; darker when burning.
-    const active = this.grillItems.filter((g) => !g.held && g.flipT < 0);
+    const active = this.grillItems.filter((g) => !g.held && g.flipT < 0 && g.rack < 0);
     this.puffs.forEach((m, i) => {
       const it = active[i % Math.max(1, active.length)];
       m.userData.t += dt * 0.5;

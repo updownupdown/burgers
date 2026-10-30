@@ -8,10 +8,16 @@ export class Sfx {
   private pourLoop: { gain: GainNode } | null = null;
   muted = false;
 
+  /** Silence everything while the page is hidden; the next tap resumes it. */
+  suspend(): void {
+    if (this.ctx?.state === "running") void this.ctx.suspend();
+  }
+
   /** Must be called from a user gesture. */
   unlock(): void {
     if (this.ctx) {
-      if (this.ctx.state === "suspended") void this.ctx.resume();
+      // iOS can leave the context "interrupted" after a call or a trip to the home screen.
+      if (this.ctx.state !== "running") void this.ctx.resume();
       return;
     }
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;

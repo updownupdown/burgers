@@ -27,9 +27,18 @@ export async function fetchLatest(): Promise<VersionInfo | null> {
 }
 
 /** Reload onto the new build. The query string sidesteps GitHub Pages' 10-minute HTML cache. */
-export function reloadTo(build: string): void {
+export function reloadTo(build: string, force = false): void {
+  // If a stale cached page keeps coming back, don't bounce forever: one try per build every few minutes.
+  try {
+    const last = JSON.parse(sessionStorage.getItem("bv-reload") || "null") as { build: string; at: number } | null;
+    if (!force && last && last.build === build && Date.now() - last.at < 3 * 60_000) return;
+    sessionStorage.setItem("bv-reload", JSON.stringify({ build, at: Date.now() }));
+  } catch {
+    // No session storage: just reload.
+  }
   const url = new URL(location.href);
   url.searchParams.set("v", build);
+  url.searchParams.set("r", String(Date.now() % 1e6));
   location.replace(url.toString());
 }
 

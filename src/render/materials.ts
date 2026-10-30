@@ -31,7 +31,27 @@ export function toon(color: THREE.ColorRepresentation, opts: ToonOpts = {}): THR
     opacity: opts.opacity ?? 1,
   });
   if (!opts.unique) cache.set(key, m);
+  else m.userData.disposable = true;
   return m;
+}
+
+/** Mark geometry that many objects share, so disposeObject leaves it alone. */
+export function shareGeometry<T extends THREE.BufferGeometry>(geo: T): T {
+  geo.userData.shared = true;
+  return geo;
+}
+
+/**
+ * Free the GPU buffers of an object that's gone for good. Shared geometry and cached
+ * materials are kept; everything else built for this object is released.
+ */
+export function disposeObject(obj: THREE.Object3D | null | undefined): void {
+  obj?.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    if (!m.geometry.userData.shared) m.geometry.dispose();
+    for (const mat of Array.isArray(m.material) ? m.material : [m.material]) if (mat.userData.disposable) mat.dispose();
+  });
 }
 
 export const INK = new THREE.MeshBasicMaterial({ color: 0x1d1410, side: THREE.BackSide });

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { Backdrop } from "../game/stops";
-import { faceted, mesh, toon } from "../render/materials";
+import { disposeObject, faceted, mesh, toon } from "../render/materials";
 
 export type Mood = "neutral" | "happy" | "sad" | "angry";
 
@@ -179,6 +179,7 @@ export class CustomersView {
   setBackdrop(kind: Backdrop): void {
     this.kind = kind;
     const g = this.backdrop;
+    disposeObject(g);
     g.clear();
     const add = (geo: THREE.BufferGeometry, color: string, x: number, y: number, z: number) => {
       const m = new THREE.Mesh(faceted(geo), toon(color));
@@ -252,7 +253,10 @@ export class CustomersView {
     const fig = new CustomerFigure(seed, this.kind);
     fig.root.scale.setScalar(this.figScale);
     const sl = this.slots[slot];
-    if (sl.fig) this.scene.remove(sl.fig.root);
+    if (sl.fig) {
+      this.scene.remove(sl.fig.root);
+      disposeObject(sl.fig.root);
+    }
     sl.fig = fig;
     sl.enterT = 0;
     sl.leaving = false;
@@ -276,6 +280,7 @@ export class CustomersView {
         sl.enterT -= dt * 1.6;
         if (sl.enterT <= 0) {
           this.scene.remove(sl.fig.root);
+          disposeObject(sl.fig.root);
           sl.fig = null;
           sl.leaving = false;
           const cb = sl.onGone;

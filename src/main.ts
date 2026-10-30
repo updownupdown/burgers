@@ -8,6 +8,7 @@ import { payout, scorePlate } from "./game/scoring";
 import type { DrinkId, Order, Piece, Plate, SauceKind } from "./game/types";
 import { GRILLABLE, newPiece } from "./game/types";
 import { makeCup, makeFood, makeFries } from "./render/food";
+import { disposeObject } from "./render/materials";
 import { CounterView, GRILL_SCALE, HOME_PAGE, PAGES, type GrillItem, type Hit } from "./scenes/counter";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
@@ -90,6 +91,7 @@ function layout(): void {
   const w = Math.min(W, Math.round(H * 0.62), 560);
   colX = Math.round((W - w) / 2);
   const safeB = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-b")) || 0;
+  const safeT = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-t")) || 0;
   const tabsH = 64 + safeB;
   const custH = Math.round(THREE.MathUtils.clamp(H * 0.24, 150, 230));
   const trayH = Math.round(THREE.MathUtils.clamp(H * 0.18, 110, 180));
@@ -98,8 +100,12 @@ function layout(): void {
   bands.counter = { x: colX, y: custH + trayH, w, h: H - custH - trayH - tabsH };
   bands.tabs = { x: colX, y: H - tabsH, w, h: tabsH };
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(W, H, false);
+  // Size the canvas box to the visible viewport (not 100vh, which mobile browsers measure
+  // with their toolbars hidden), so taps line up with what's drawn.
+  canvas.style.width = `${W}px`;
+  canvas.style.height = `${H}px`;
   customersView.layout(w / custH);
   trayView.layout(w / trayH);
   counter.layout(w / bands.counter.h);
@@ -112,12 +118,21 @@ function layout(): void {
   // Tickets fill the right part of each customer slot.
   const slotW = w / 3;
   ui.tickets.forEach((t, i) => {
-    t.style.left = `${i * slotW + slotW * 0.47}px`;
-    t.style.width = `${slotW * 0.51}px`;
-    t.style.top = `${custH * 0.2}px`;
-    t.style.maxHeight = `${custH * 0.78}px`;
+    // At least wide enough for "Patty Med"; on narrow phones it overlaps the customer a little.
+    const tw = Math.max(slotW * 0.51, 72);
+    t.style.left = `${(i + 1) * slotW - tw - slotW * 0.02}px`;
+    t.style.width = `${tw}px`;
+    const top = Math.max(custH * 0.16, safeT + 44);
+    t.style.top = `${top}px`;
+    t.style.maxHeight = `${custH - top + trayH * 0.22}px`;
   });
   ui.hint.style.top = `${bands.counter.y + 8}px`;
+  // Turned sideways mid-shift: pause behind the "turn your phone" overlay.
+  if (W > H && H < 500 && game.phase === "playing") {
+    cancelPointer();
+    game.phase = "paused";
+    ui.menu.hidden = false;
+  }
 }
 window.addEventListener("resize", layout);
 layout();
@@ -176,6 +191,11 @@ function customerLeaves(i: number, mood: "happy" | "sad" | "angry", say: string,
   const s = game.slots[i];
   s.leaving = true;
   s.fig?.setMood(mood);
+  // Move straight on to the next order so nothing gets dropped on the departing plate.
+  if (game.active === i) {
+    const other = game.slots.findIndex((sl) => sl.order && !sl.leaving);
+    if (other >= 0) setActive(other);
+  }
   showBubble(i, say, good);
   setTimeout(() => customersView.leave(i, () => clearSlot(i)), 1100);
 }
@@ -284,9 +304,9 @@ function tutorialHint(): string | null {
   if (!hasPatty) {
     if (!pattyOnGrill) return "Now drag a patty onto the grill.";
     const p = pattyOnGrill.piece;
-    if (p.cook[0] < 0.45 && p.cook[1] < 0.3) return "Let it sizzle until the bottom browns…";
-    if (p.cook[1] < 0.4) return "Swipe up on the patty to flip it!";
-    if (p.cook[0] < 0.42) return "Nearly there. Cook the other side too.";
+    if (p.cook[0] < 0.5 && p.cook[1] < 0.3) return "Let it sizzle until the bottom browns…";
+    if (p.cook[1] < 0.45) return "Swipe up on the patty to flip it!";
+    if (p.cook[0] < 0.47) return "Nearly there. Cook the other side too.";
     return "Medium! Drag the patty up onto the bun.";
   }
   if (layers[layers.length - 1].piece.kind !== "bun" || layers.length < 3) return "Add the top bun.";
@@ -297,7 +317,7 @@ function tutorialHint(): string | null {
 // Input
 
 type Payload =
-  | { type: "piece"; piece: Piece; fromGrill: { x: number; z: number } | null }
+  | { type: "piece"; piece: Piece; fromGrill: { x: number; z: number; rack: number } | null }
   | { type: "fries"; cook: number; basket: number | null }
   | { type: "drink"; flavor: DrinkId; fill: number; tap: number };
 
@@ -386,6 +406,10 @@ function velocity(pt: Pointer): { vx: number; vy: number } {
 
 function addToPlate(slot: number, payload: Payload, spread: number): boolean {
   const s = game.slots[slot];
+  if (s.leaving) {
+    showHint("That customer is on their way out.", 1.5);
+    return false;
+  }
   if (payload.type === "piece") {
     const p = payload.piece;
     s.plate.layers.push({ piece: p, offX: (Math.random() - 0.5) * spread, offZ: (Math.random() - 0.5) * spread });
@@ -420,6 +444,7 @@ function finishHold(pt: Pointer): void {
   const payload = held.payload;
   counter.setHeld(null);
   trayView.showGhost(-1, null);
+  disposeObject(held.trayObj);
   const band = bandAt(pt.y);
   const { vy } = velocity(pt);
   const dur = (pt.samples[pt.samples.length - 1]?.t ?? pt.t0) - pt.t0;
@@ -432,10 +457,21 @@ function finishHold(pt: Pointer): void {
     if (done && slot >= 0) setActive(slot);
   } else if (band === "counter") {
     const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3);
-    if (counter.page === HOME_PAGE && counter.overTrash(g)) {
+    const rackSlot = payload.type === "piece" && counter.page === HOME_PAGE ? counter.overRack(g) : null;
+    if (rackSlot === null && counter.page === HOME_PAGE && counter.overTrash(g)) {
       sfx.thud();
       buzz(20);
       done = true;
+    } else if (payload.type === "piece" && rackSlot !== null) {
+      const slot = rackSlot;
+      if (!GRILLABLE.has(payload.piece.kind)) showHint("The warming rack is for cooked food.", 2);
+      else if (slot < 0) showHint("The warming rack is full.", 1.5);
+      else {
+        counter.addGrillItem(payload.piece, 0, 0, slot);
+        sfx.thud();
+        hintOnce("rack", "Food on the warming rack stays hot and stops cooking. Tap the pile to shuffle it.", 3.5);
+        done = true;
+      }
     } else if (payload.type === "piece") {
       const over = counter.overGrill(g);
       if (over && GRILLABLE.has(payload.piece.kind)) {
@@ -469,7 +505,7 @@ function finishHold(pt: Pointer): void {
 
   if (!done) {
     // Put things back where they came from.
-    if (payload.type === "piece" && payload.fromGrill) counter.addGrillItem(payload.piece, payload.fromGrill.x, payload.fromGrill.z);
+    if (payload.type === "piece" && payload.fromGrill) counter.addGrillItem(payload.piece, payload.fromGrill.x, payload.fromGrill.z, payload.fromGrill.rack);
     if (payload.type === "fries" && payload.basket !== null) {
       const b = counter.baskets[payload.basket];
       b.loaded = true;
@@ -490,7 +526,8 @@ function sauceAt(pt: Pointer, kind: SauceKind): void {
     return;
   }
   let top = plate.layers[plate.layers.length - 1];
-  if (pt.drawSlot !== target || top.piece.kind !== kind || !top.piece.stroke) {
+  // Lifting the finger and carrying on keeps drawing the same squiggle rather than adding a layer.
+  if (top.piece.kind !== kind || !top.piece.stroke) {
     const p = newPiece(kind);
     p.stroke = [];
     plate.layers.push({ piece: p, offX: top.offX * 0.5, offZ: top.offZ * 0.5 });
@@ -608,7 +645,7 @@ canvas.addEventListener("pointermove", (e) => {
         const item: GrillItem = pt.hit.item;
         if (item.flipT < 0) {
           counter.removeGrillItem(item);
-          startHold(pt, { type: "piece", piece: item.piece, fromGrill: { x: item.x, z: item.z } });
+          startHold(pt, { type: "piece", piece: item.piece, fromGrill: { x: item.x, z: item.z, rack: item.rack } });
         }
       }
       break;
@@ -656,18 +693,22 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       finishHold(pt);
       break;
     case "grill":
-      if (pt.hit?.type === "grillItem" && (flickUp || !pt.moved)) {
+      if (!cancelled && pt.hit?.type === "grillItem" && (flickUp || !pt.moved)) {
         if (flickUp) {
           if (counter.flip(pt.hit.item)) {
             sfx.flip();
             buzz(15);
             hintOnce("flip-done", "Nice flip!", 1.2);
-          } else if (pt.hit.item.piece.kind === "egg") showHint("Eggs stay sunny side up. Drag it to the tray when the white sets.", 2.5);
+          } else if (pt.hit.item.rack >= 0) showHint("Move it back to the grill to keep cooking.", 2);
+          else if (pt.hit.item.piece.kind === "egg") showHint("Eggs stay sunny side up. Drag it to the tray when the white sets.", 2.5);
+        } else if (pt.hit.item.rack >= 0) {
+          if (counter.cycleRack()) sfx.plop();
+          else showHint("Drag it up to the tray, or back onto the grill.", 2);
         } else showHint("Swipe up to flip, or drag it to the tray.", 2);
       }
       break;
     case "basket":
-      if (pt.hit?.type === "basket") {
+      if (!cancelled && pt.hit?.type === "basket") {
         const b = counter.baskets[pt.hit.idx];
         if (!b.loaded) showHint("Drag frozen fries into the basket.", 2);
         else if (!pt.moved || flickUp) {
@@ -682,7 +723,7 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       break;
     case "sauce":
       counter.liftBottle(pt.sauce!, null);
-      if (!pt.moved && pt.band === "counter") {
+      if (!cancelled && !pt.moved && pt.band === "counter") {
         armedSauce = armedSauce === pt.sauce ? null : pt.sauce;
         if (armedSauce) showHint(`Draw ${armedSauce} on a plate. Tap the bottle again to stop.`, 3);
       } else if (pt.band === "tray" && armedSauce) {
@@ -690,12 +731,18 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       }
       break;
     case "plate":
-      if (pt.plate >= 0 && dy > 40 && Math.abs(dy) > Math.abs(dx)) removeTop(pt.plate);
+      if (!cancelled && pt.plate >= 0 && dy > 40 && Math.abs(dy) > Math.abs(dx)) removeTop(pt.plate);
       break;
   }
 }
 canvas.addEventListener("pointerup", (e) => endPointer(e, false));
 canvas.addEventListener("pointercancel", (e) => endPointer(e, true));
+canvas.addEventListener("lostpointercapture", (e) => endPointer(e, true));
+
+/** Drop whatever the finger was doing, putting held things back (pause, tab switch, new shift). */
+function cancelPointer(): void {
+  if (ptr) endPointer(new PointerEvent("pointercancel", { pointerId: ptr.id }), true);
+}
 
 function removeTop(slot: number): void {
   const plate = game.slots[slot].plate;
@@ -754,9 +801,13 @@ ui.bell.addEventListener("pointerdown", (e) => {
 // ---------------------------------------------------------------------------
 // Screens
 
+let screenShownAt = 0;
 ui.root.addEventListener("click", (e) => {
-  const act = (e.target as HTMLElement).closest<HTMLElement>("[data-act]")?.dataset.act;
+  const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-act]");
+  const act = btn?.dataset.act;
   if (!act) return;
+  // A double tap on one screen shouldn't also press a button on the screen that replaces it.
+  if (performance.now() - screenShownAt < 450 && btn!.closest(".screen")) return;
   sfx.unlock();
   switch (act) {
     case "start":
@@ -777,6 +828,11 @@ ui.root.addEventListener("click", (e) => {
       showTitle();
       break;
     case "new-trip":
+      if (btn!.dataset.armed !== "1") {
+        btn!.dataset.armed = "1";
+        btn!.textContent = "Tap again to start over (upgrades and savings reset)";
+        break;
+      }
       Object.assign(save, freshSave(), { tutorialDone: save.tutorialDone, trips: save.trips, best: save.best });
       writeSave(save);
       showTitle();
@@ -806,7 +862,7 @@ ui.root.addEventListener("click", (e) => {
       break;
     }
     case "update-now":
-      if (game.pendingUpdate) reloadTo(game.pendingUpdate.build);
+      if (game.pendingUpdate) reloadTo(game.pendingUpdate.build, true);
       break;
     case "update-later":
       ui.update.hidden = true;
@@ -816,18 +872,24 @@ ui.root.addEventListener("click", (e) => {
 
 ui.menuBtn.addEventListener("click", () => {
   if (game.phase === "playing") {
+    cancelPointer();
     game.phase = "paused";
     ui.menu.hidden = false;
   }
 });
 
 try {
-  if (localStorage.getItem("bv-muted") === "1") sfx.setMuted(true);
+  if (localStorage.getItem("bv-muted") === "1") {
+    sfx.setMuted(true);
+    ui.menu.querySelector('[data-act="sound"]')!.textContent = "Sound: off";
+  }
 } catch {
   // ignore
 }
 
 function startShift(): void {
+  cancelPointer();
+  armedSauce = null;
   for (let i = 0; i < 3; i++) {
     const s = game.slots[i];
     if (s.fig) customersView.leave(i, () => {});
@@ -887,6 +949,7 @@ function showTitle(): void {
     fresh: !save.tutorialDone && save.stop === 0,
   });
   game.phase = "title";
+  screenShownAt = performance.now();
   ui.title.hidden = false;
   ui.summary.hidden = true;
   ui.menu.hidden = true;
@@ -926,8 +989,13 @@ function endShift(): void {
     offer: offerList(),
   });
   ui.summary.hidden = false;
+  screenShownAt = performance.now();
   sfx.chime();
-  if (game.pendingUpdate) reloadTo(game.pendingUpdate.build);
+  // A pending update waits until the player leaves this screen (see showTitle).
+  if (game.pendingUpdate) {
+    ui.updateText.textContent = `Build #${game.pendingUpdate.build} will load when you continue.`;
+    ui.update.hidden = false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -935,10 +1003,15 @@ function endShift(): void {
 
 const checkNow = startUpdateChecks((v) => {
   game.pendingUpdate = v;
-  if (game.phase === "title" || game.phase === "summary") {
+  if (game.phase === "title") {
     ui.updateText.textContent = `Updating to build #${v.build}…`;
     ui.update.hidden = false;
-    setTimeout(() => reloadTo(v.build), 1200);
+    setTimeout(() => {
+      if (game.phase === "title") reloadTo(v.build);
+    }, 1200);
+  } else if (game.phase === "summary") {
+    ui.updateText.textContent = `Build #${v.build} will load when you continue.`;
+    ui.update.hidden = false;
   } else {
     ui.updateText.textContent = `Build #${v.build} is ready (you're on #${__BUILD__}).`;
     ui.update.hidden = false;
@@ -951,7 +1024,8 @@ console.info(`Bun Voyage ${buildLabel()}`);
 
 function tick(dt: number): void {
   if (game.phase === "playing") {
-    game.time += dt;
+    // The shift clock waits while the first customer is talked through their burger.
+    if (!(game.tutorial && game.spawned >= 1)) game.time += dt;
     // Customers arrive while the window is open.
     const free = game.slots.findIndex((s) => !s.order && !s.fig);
     const tutorialHold = game.tutorial && game.spawned >= 1;
@@ -1021,7 +1095,8 @@ function updateUi(): void {
     ui.timer.classList.toggle("closing", left <= 0);
     lastTimerText = tText;
   }
-  ui.money.textContent = `$${game.money + game.tips}`;
+  const money = `$${game.money + game.tips}`;
+  if (ui.money.textContent !== money) ui.money.textContent = money;
 
   game.slots.forEach((s, i) => {
     const t = ui.tickets[i];
@@ -1031,8 +1106,14 @@ function updateUi(): void {
     const pct = s.patience / s.maxPatience;
     const key = `${s.order.id}|${s.plate.layers.map((l) => l.piece.kind).join(",")}|${!!s.plate.fries}|${s.plate.drink?.flavor}|${Math.round(pct * 50)}`;
     if (key !== s.ticketKey) {
+      const fresh = !s.ticketKey.startsWith(`${s.order.id}|`);
       t.innerHTML = ticketHtml(s.order, s.plate, game.tutorial && game.spawned === 1 && i === game.slots.findIndex((x) => x.order) ? 1 : pct);
       s.ticketKey = key;
+      // Long orders on short screens get a denser ticket rather than being cut off.
+      if (fresh) {
+        t.classList.remove("tight");
+        if (t.scrollHeight > t.clientHeight + 1) t.classList.add("tight");
+      }
     }
     t.classList.toggle("active", i === game.active);
   });
@@ -1067,7 +1148,7 @@ function updateUi(): void {
   const tut = tutorialHint();
   const now = performance.now();
   const text = now < hintUntil ? hintText : tut;
-  if (text) ui.hint.textContent = text;
+  if (text && ui.hint.textContent !== text) ui.hint.textContent = text;
   ui.hint.hidden = !text || game.phase !== "playing";
 }
 
@@ -1117,12 +1198,14 @@ function updateGrillTags(): void {
     }
     const v = it.obj.position.clone().add(new THREE.Vector3(0, 0.2, 0.75)).project(counter.camera);
     const x = ((v.x + 1) / 2) * bands.counter.w;
-    el.hidden = x < 0 || x > bands.counter.w || it.flipT >= 0;
+    const buried = it.rack >= 0 && items.some((o) => o.rack > it.rack);
+    el.hidden = x < 0 || x > bands.counter.w || it.flipT >= 0 || buried;
     if (el.hidden) return;
     const html = itemTag(it.piece);
     if (el.innerHTML !== html) el.innerHTML = html;
     const burning = Math.max(it.piece.cook[0], it.piece.cook[1]) >= (it.piece.kind === "patty" || it.piece.kind === "bacon" ? 0.92 : 0.95);
-    el.classList.toggle("hot", burning);
+    el.classList.toggle("hot", burning && it.rack < 0);
+    el.classList.toggle("warm", it.rack >= 0);
     el.style.left = `${x}px`;
     el.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
   });
@@ -1162,11 +1245,16 @@ showTitle();
 requestAnimationFrame(frame);
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden" && game.phase === "playing") {
-    game.phase = "paused";
-    ui.menu.hidden = false;
+  if (document.visibilityState === "hidden") {
+    cancelPointer();
+    if (game.phase === "playing") {
+      game.phase = "paused";
+      ui.menu.hidden = false;
+    }
+    sfx.suspend();
   }
 });
+window.addEventListener("blur", cancelPointer);
 
 // Debug/automation hook for playtesting in a headless browser.
 (window as unknown as { __bv: unknown }).__bv = {
@@ -1178,6 +1266,7 @@ document.addEventListener("visibilitychange", () => {
   serve,
   gesture: () => lastGesture,
   ptr: () => ptr && { mode: ptr.mode, hit: ptr.hit?.type, band: ptr.band },
+  mem: () => ({ ...renderer.info.memory }),
   step: (seconds: number) => {
     for (let t = 0; t < seconds; t += 1 / 30) tick(1 / 30);
     render();

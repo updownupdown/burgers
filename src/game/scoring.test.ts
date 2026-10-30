@@ -155,3 +155,12 @@ describe("road trip progress", () => {
     expect(offer.some((u) => u.id === "bench" || u.id === "tipjar")).toBe(false);
   });
 });
+
+describe("feedback notes", () => {
+  it("calls swapped layers out of order rather than missing", () => {
+    const order: Order = { id: 1, name: "t", price: 10, layers: [{ kind: "bun" }, { kind: "cheese" }, { kind: "pickle" }, { kind: "bun" }], fries: false, drink: null };
+    const r = scorePlate(order, { layers: ["bun", "pickle", "cheese", "bun"].map((k) => ({ piece: piece(k as Kind), offX: 0, offZ: 0 })), fries: null, drink: null });
+    expect(r.notes).toContain("layers out of order");
+    expect(r.notes.join()).not.toMatch(/missing|extra/);
+  });
+});

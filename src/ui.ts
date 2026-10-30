@@ -73,6 +73,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     </div>
   </div>
   <div class="screen" data-r="summary" hidden></div>
+  <div class="rotate" aria-live="polite"><div><span class="phone"></span><p>Turn your phone upright to keep cooking.</p></div></div>
   `;
   const q = (r: string) => root.querySelector<HTMLElement>(`[data-r="${r}"]`)!;
   const tabs = [...root.querySelectorAll<HTMLButtonElement>('[data-r="tab"]')];
@@ -114,7 +115,7 @@ export function ticketHtml(order: Order, plate: Plate, patience: number): string
     if (exp.kind === "patty") extra = exp.smashed ? ` <em>Smash</em>` : ` <em>${exp.doneness === "rare" ? "Rare" : exp.doneness === "well" ? "Well" : "Med"}</em>`;
     if (exp.kind === "pineapple") extra = ` <em>Grilled</em>`;
     if (exp.kind === "bun" && exp.toasted) extra = ` <em>Toast</em>`;
-    lines.push(`<li class="${okFlags[i] ? "ok" : ""}"><b style="background:${KIND_COLOR[exp.kind]}"></b>${KIND_LABEL[exp.kind]}${extra}</li>`);
+    lines.push(`<li class="${okFlags[i] ? "ok" : ""}"><b style="background:${KIND_COLOR[exp.kind]}"></b><span class="l">${KIND_LABEL[exp.kind]}</span>${extra}</li>`);
   }
   const sides: string[] = [];
   if (order.fries) sides.push(`<span class="${plate.fries ? "ok" : ""}"><b style="background:#f3d36b"></b>Fries</span>`);

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { avgCook, bunToast } from "../game/cooking";
 import type { DrinkId, Kind, Piece } from "../game/types";
 import { DRINK_COLOR } from "../game/types";
-import { faceted, mesh, outline, ramp, toon } from "./materials";
+import { faceted, mesh, outline, ramp, shareGeometry, toon } from "./materials";
 
 /** Thickness each piece adds to a stack, in ingredient units (a patty is ~2 units wide). */
 export const LAYER_HEIGHT: Record<Kind, number> = {
@@ -118,6 +118,8 @@ const GEO = {
   jalapenoCore: faceted(new THREE.CylinderGeometry(0.12, 0.12, 0.03, 8)),
   yolk: faceted(new THREE.SphereGeometry(0.3, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2)),
 };
+
+for (const g of Object.values(GEO)) for (const geo of Array.isArray(g) ? g : [g]) shareGeometry(geo);
 
 function pattyGeo(): THREE.BufferGeometry {
   const g = new THREE.CylinderGeometry(1, 1, 0.28, 26, 2);

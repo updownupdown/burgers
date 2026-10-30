@@ -6,11 +6,18 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
   const { b, p } = await open({ query: process.argv[2] || '' });
   // STOP=n plays that stop of the road trip (tutorial already done).
   if (process.env.STOP) {
-    await p.evaluate((n) => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: n, tutorialDone: true })), +process.env.STOP);
+    // BIZ=quality,price plays business mode with that plan, e.g. BIZ=premium,high.
+    const biz = process.env.BIZ ? process.env.BIZ.split(',') : null;
+    await p.evaluate(([n, biz]) => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: n, tutorialDone: true, biz: !!biz, plan: biz ? { quality: biz[0], price: biz[1], menu: [] } : null })), [+process.env.STOP, biz]);
     await p.reload();
     await p.waitForTimeout(600);
   }
   await p.click('[data-act=start]');
+  if (process.env.BIZ) {
+    await p.waitForTimeout(600);
+    await p.screenshot({ path: '/tmp/claude-0/pt/plan.png' });
+    await p.click('[data-act=open]');
+  }
   await p.evaluate(() => window.__bv.manual(true));
   const ev = (f, a) => p.evaluate(f, a);
   const bin = (k) => ev((k) => { const b = window.__bv.bins.find(x => x.kind === k); return window.__bv.project('counter', b.x, 0.4, b.z); }, k);
@@ -189,6 +196,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
   }
   const fin = await state(p);
   console.log('FINAL', JSON.stringify({ t: fin.t, phase: fin.phase, served: fin.served, lost: fin.lost, money: fin.money, tips: fin.tips, refills, spill: await ev(() => window.__bv.counter.spillCost) }));
+  if (process.env.BIZ) await p.screenshot({ path: '/tmp/claude-0/pt/bizsum.png', fullPage: true });
   console.log('SAVE', await ev(() => localStorage.getItem('bv-save-v1')));
   console.log('SUMMARY', await ev(() => document.querySelector('[data-r=summary]').innerText.replace(/\s+/g, ' ').slice(0, 400)));
   await p.screenshot({ path: out + 'bot-end.png' });

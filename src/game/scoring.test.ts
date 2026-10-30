@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { nextReputation, planFor, ratingBonus, trafficMult } from "./business";
 import { applyMods, makeOrder, seededRng } from "./menu";
 import { STOPS } from "./stops";
 import { passed, upgradeChoices } from "./progress";
@@ -220,5 +221,31 @@ describe("recipe modifiers", () => {
         expect(o.layers[o.layers.length - 1].kind).toBe("bun");
       }
     }
+  });
+});
+
+describe("business mode", () => {
+  it("premium food at high prices rates the same as standard at fair prices", () => {
+    expect(ratingBonus({ quality: "premium", price: "high", menu: [] })).toBe(0);
+    expect(ratingBonus({ quality: "budget", price: "fair", menu: [] })).toBeLessThan(0);
+    expect(ratingBonus({ quality: "standard", price: "low", menu: [] })).toBeGreaterThan(0);
+  });
+
+  it("low prices and a good reputation bring more customers", () => {
+    const plan = (price: "low" | "high") => ({ quality: "standard" as const, price, menu: [] });
+    expect(trafficMult(plan("low"), 2, 4)).toBeGreaterThan(trafficMult(plan("high"), 2, 4));
+    expect(trafficMult(plan("low"), 3, 4)).toBeGreaterThan(trafficMult(plan("low"), 1, 4));
+  });
+
+  it("keeps saved menus valid for the stop", () => {
+    const plan = planFor(STOPS[0], { quality: "budget", price: "low", menu: ["Mesa Smash"] });
+    expect(plan.menu.length).toBe(STOPS[0].menu.length);
+    expect(plan.quality).toBe("budget");
+  });
+
+  it("moves reputation gradually", () => {
+    const r = nextReputation(2, 6, [3, 3, 3]);
+    expect(r.rep).toBeGreaterThan(2);
+    expect(r.rep).toBeLessThan(3);
   });
 });

@@ -116,6 +116,10 @@ export function heldPenalty(piece: Piece): number {
   return clamp01(((piece.held ?? 0) - HOLD_GRACE) / (HOLD_RUIN - HOLD_GRACE)) * 0.45;
 }
 
+export function starsFor(score: number): ScoreResult["stars"] {
+  return score >= 90 ? 3 : score >= 70 ? 2 : score >= 45 ? 1 : 0;
+}
+
 export function scorePlate(order: Order, plate: Plate): ScoreResult {
   const notes: string[] = [];
   const exp = order.layers;
@@ -209,8 +213,7 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
 
   const burger = structure * (0.25 + 0.75 * quality) * (0.85 + 0.15 * presentation);
   const score = Math.round(clamp01(burger * 0.85 + sides * 0.15) * 100);
-  const stars: ScoreResult["stars"] = score >= 90 ? 3 : score >= 70 ? 2 : score >= 45 ? 1 : 0;
-  return { score, stars, structure, quality, presentation, sides, notes };
+  return { score, stars: starsFor(score), structure, quality, presentation, sides, notes };
 }
 
 /** Money earned: part of the price is always paid, the rest scales with score; tips need speed too. */

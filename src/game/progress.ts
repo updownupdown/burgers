@@ -1,3 +1,4 @@
+import type { Plan, Review } from "./business";
 import { STOPS } from "./stops";
 
 export type UpgradeId = "bench" | "tipjar" | "turbo" | "autostop" | "steady";
@@ -30,12 +31,21 @@ export interface Save {
   offer: UpgradeId[];
   /** Times each recipe was served well; familiar recipes get compact tickets. */
   known: Record<string, number>;
+  /** Business mode: buy ingredients, set prices and pick the menu before each shift. */
+  biz: boolean;
+  /** Last shift's plan, reused as the starting point for the next one. */
+  plan: Plan | null;
+  /** Most recent reviews, newest first. */
+  reviews: Review[];
+  /** Average stars across recent reviews, and how many reviews it's built on. */
+  rep: number;
+  repWeight: number;
 }
 
 const KEY = "bv-save-v1";
 
 export function freshSave(): Save {
-  return { stop: 0, upgrades: [], bank: 0, best: {}, tutorialDone: false, trips: 0, offer: [], known: {} };
+  return { stop: 0, upgrades: [], bank: 0, best: {}, tutorialDone: false, trips: 0, offer: [], known: {}, biz: false, plan: null, reviews: [], rep: 2, repWeight: 6 };
 }
 
 export function loadSave(): Save {

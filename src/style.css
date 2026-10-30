@@ -420,3 +420,22 @@ html, body {
 }
 .zone.on { background: #8fd0ea; }
 .gtag.hold { background: #3c8a3f; }
+
+/* Business mode: planning screen, reviews */
+.card .note { font-size: 13px; color: var(--muted); }
+.card.plan { gap: 9px; }
+.card.plan h3 { font-size: 16px; margin-top: 2px; }
+.card .rep { font-size: 14px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 2px solid var(--ink); border-radius: 12px; overflow: hidden; }
+.seg button { font: 700 14px var(--body); padding: 9px 4px; border: 0; background: transparent; color: var(--ink); }
+.seg button + button { border-left: 2px solid var(--ink); }
+.seg button.on { background: var(--ink); color: var(--cream); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { font: 700 13px var(--body); padding: 6px 10px; border-radius: 999px; border: 2px solid var(--ink); background: transparent; color: var(--muted); text-decoration: line-through; }
+.chips button.on { background: #fff1c2; color: var(--ink); text-decoration: none; }
+.reviews { list-style: none; padding: 0 !important; font-size: 13px !important; }
+.reviews li { background: #fff; border-radius: 10px; padding: 6px 9px; }
+.reviews .rs { color: #e0a100; letter-spacing: 1px; }
+.reviews i { color: var(--muted); font-size: 12px; }
+.stats dd.neg { color: var(--tomato); }
+.btn.biz.on { color: var(--ink); text-decoration: underline; }

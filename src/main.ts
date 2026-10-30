@@ -4,7 +4,24 @@ import { avgCook, bunToast, MELT_RATE, pattyLabel } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { freshSave, loadSave, passed, upgradeChoices, UPGRADES, writeSave, type UpgradeId } from "./game/progress";
 import { STOPS } from "./game/stops";
-import { HOLD_GRACE, HOLD_RUIN, payout, scorePlate } from "./game/scoring";
+import { HOLD_GRACE, HOLD_RUIN, payout, scorePlate, starsFor } from "./game/scoring";
+import {
+  CARTON_COST,
+  CUP_COST,
+  FRIES_BATCH_COST,
+  KIND_COST,
+  menuOf,
+  nextReputation,
+  planFor,
+  PRICE,
+  QUALITY,
+  ratingBonus,
+  reviewFor,
+  SODA_COST,
+  trafficMult,
+  type Plan,
+  type Review,
+} from "./game/business";
 import type { DrinkId, FriesSize, Layer, Order, Piece, Plate, SauceKind, Size } from "./game/types";
 import { FRIES_PORTION, GRILLABLE, newPiece } from "./game/types";
 import { makeCarton, makeCup, makeFood, makeFries, stackHeight } from "./render/food";
@@ -13,7 +30,7 @@ import { CounterView, GRILL_SCALE, HOME_PAGE, PAGES, pageX, GRILL_TOP, SLEEVE, W
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
 import "./style.css";
-import { buildUi, summaryHtml, ticketHtml, titleHtml } from "./ui";
+import { buildUi, planHtml, summaryHtml, ticketHtml, titleHtml } from "./ui";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 
 // ---------------------------------------------------------------------------
@@ -71,7 +88,30 @@ const game = {
   ),
   hintsShown: new Set<string>(),
   pendingUpdate: null as VersionInfo | null,
+  /** Customers expected this shift (business mode changes it). */
+  customers: 0,
+  /** Business mode: today's plan, ingredient spend and the reviews written so far. */
+  plan: null as Plan | null,
+  costs: 0,
+  reviews: [] as Review[],
+  /** Every rating this shift, walk-outs as zero, for reputation. */
+  ratings: [] as number[],
 };
+
+/** In business mode, ingredients cost money as they come out of the bins. */
+function spend(amount: number): void {
+  if (game.plan) game.costs += amount * QUALITY[game.plan.quality].cost;
+}
+
+/** The stop as the customers see it: just today's menu in business mode. */
+function shopStop() {
+  const st = stop();
+  return game.plan ? { ...st, menu: menuOf(st, game.plan) } : st;
+}
+
+function plannedCustomers(plan: Plan): number {
+  return Math.max(4, Math.round(stop().customers * trafficMult(plan, save.rep, menuOf(stop(), plan).length)));
+}
 
 // ---------------------------------------------------------------------------
 // Layout: a phone-shaped column split into bands
@@ -156,7 +196,8 @@ function ndcIn(r: Rect, x: number, y: number): THREE.Vector2 {
 function spawnCustomer(slotIdx: number): void {
   const s = game.slots[slotIdx];
   const level = game.time / stop().shiftLength;
-  let order = makeOrder(game.orderSeq++, game.rng, level, stop());
+  let order = makeOrder(game.orderSeq++, game.rng, level, shopStop());
+  if (game.plan) order.price = Math.round(order.price * PRICE[game.plan.price].mult);
   // The very first order of the trip is the simplest burger, with no sides.
   if (game.tutorial && game.spawned === 0) order = orderFromRecipe(order.id, stop().menu[0], "medium", false, null);
   s.order = order;
@@ -215,6 +256,13 @@ function serve(i: number): void {
     return;
   }
   const r = scorePlate(s.order, s.plate);
+  if (game.plan) {
+    // Ingredient quality and prices tilt every rating.
+    r.score = Math.max(0, Math.min(100, r.score + ratingBonus(game.plan)));
+    r.stars = starsFor(r.score);
+    game.ratings.push(r.stars);
+    game.reviews.push({ stars: r.stars, text: reviewFor(r.stars, r.notes, game.plan, game.rng), stop: stop().name });
+  }
   const { pay, tip: baseTip } = payout(s.order, r.score, s.patience / s.maxPatience);
   const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1));
   game.money += pay;
@@ -573,6 +621,7 @@ function finishHold(pt: Pointer): void {
       if (hit?.type === "basket") {
         const b = counter.baskets[hit.idx];
         if (!b.loaded) {
+          spend(FRIES_BATCH_COST);
           b.loaded = true;
           b.amount = payload.amount;
           b.cook = 0;
@@ -603,6 +652,7 @@ function finishHold(pt: Pointer): void {
     if (payload.type === "drink") {
       counter.placeCup(payload.tap, payload.size);
       counter.taps[payload.tap].fill = payload.fill;
+      spend(-payload.fill * SODA_COST[payload.size]);
     }
     if (payload.type === "carton") {
       Object.assign(counter.packs[payload.pack], { size: payload.size, cook: payload.cook, fill: payload.fill });
@@ -625,6 +675,7 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
     else if (t.puddle > 0.05) showHint("Wipe up the spill first: scrub it with your finger.", 2.5);
     else {
       counter.placeCup(ti, payload.size);
+      spend(CUP_COST[payload.size]);
       sfx.plop();
       hintOnce("pour", "Hold the button above the cup. Let go before it overflows!", 3);
       return true;
@@ -640,6 +691,7 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
       return false;
     }
     Object.assign(p, { size: payload.size as FriesSize, cook: 0, fill: 0 });
+    spend(CARTON_COST[payload.size as FriesSize]);
     counter.syncPack(pi);
     sfx.plop();
     hintOnce("pack", "Drag the fries from the basket into the carton.", 3);
@@ -756,7 +808,10 @@ canvas.addEventListener("pointerdown", (e) => {
     const hit = counter.hit(ndcIn(bands.counter, x, y));
     pt.hit = hit;
     if (!hit) pt.mode = "swipe";
-    else if (hit.type === "bin") startHold(pt, { type: "piece", piece: newPiece(hit.kind), fromGrill: null });
+    else if (hit.type === "bin") {
+      spend(KIND_COST[hit.kind]);
+      startHold(pt, { type: "piece", piece: newPiece(hit.kind), fromGrill: null });
+    }
     else if (hit.type === "grillItem") pt.mode = "grill";
     else if (hit.type === "hold") pt.mode = "hold";
     else if (hit.type === "bottle") {
@@ -798,6 +853,7 @@ canvas.addEventListener("pointerdown", (e) => {
       const t = counter.taps[hit.idx];
       if (t.cup && t.fill > 0.05) {
         startHold(pt, { type: "drink", flavor: t.flavor, fill: t.fill, tap: hit.idx, size: t.size! });
+        spend(t.fill * SODA_COST[t.size!]);
         counter.removeCup(hit.idx);
       } else if (!t.cup && t.puddle > 0.01) {
         pt.mode = "wipe";
@@ -1054,7 +1110,35 @@ ui.root.addEventListener("click", (e) => {
   switch (act) {
     case "start":
     case "restart":
-      startShift();
+      if (save.biz && save.tutorialDone) {
+        showPlan();
+        screenShownAt = performance.now();
+      }
+      else startShift();
+      break;
+    case "biz":
+      save.biz = !save.biz;
+      writeSave(save);
+      showTitle();
+      break;
+    case "plan-q":
+    case "plan-p":
+    case "plan-m": {
+      const plan = planFor(stop(), save.plan);
+      const v = btn!.dataset.v!;
+      if (act === "plan-q") plan.quality = v as Plan["quality"];
+      else if (act === "plan-p") plan.price = v as Plan["price"];
+      else if (plan.menu.includes(v)) {
+        if (plan.menu.length > 2) plan.menu = plan.menu.filter((n) => n !== v);
+        else showHint("Keep at least two recipes on the menu.", 2);
+      } else plan.menu = [...plan.menu, v];
+      save.plan = plan;
+      writeSave(save);
+      showPlan();
+      break;
+    }
+    case "open":
+      startShift(planFor(stop(), save.plan));
       break;
     case "pick": {
       const id = (e.target as HTMLElement).closest<HTMLElement>("[data-id]")?.dataset.id as UpgradeId | undefined;
@@ -1132,7 +1216,7 @@ try {
   // ignore
 }
 
-function startShift(): void {
+function startShift(plan: Plan | null = null): void {
   cancelPointer();
   armedSauce = null;
   for (let i = 0; i < 3; i++) {
@@ -1163,6 +1247,11 @@ function startShift(): void {
     nextSpawn: 1.2,
     active: 0,
     tutorial: !save.tutorialDone,
+    plan,
+    costs: 0,
+    reviews: [],
+    ratings: [],
+    customers: plan ? plannedCustomers(plan) : stop().customers,
   });
   applyStop();
   counter.fryBoost = has("turbo") ? 1.35 : 1;
@@ -1185,6 +1274,20 @@ function applyStop(): void {
 
 const offerList = () => save.offer.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean);
 
+/** The best, a middling and the worst review of the shift, without repeats. */
+function highlights(reviews: Review[]): Review[] {
+  const sorted = [...reviews].sort((a, b) => b.stars - a.stars);
+  const picks = [sorted[0], sorted[Math.floor(sorted.length / 2)], sorted[sorted.length - 1]].filter(Boolean);
+  return picks.filter((r, i) => picks.findIndex((q) => q.text === r.text) === i);
+}
+
+function showPlan(): void {
+  const plan = planFor(stop(), save.plan);
+  ui.title.innerHTML = planHtml({ stop: stop(), plan, rep: save.rep, reviews: save.reviews, customers: plannedCustomers(plan) });
+  ui.title.hidden = false;
+  ui.summary.hidden = true;
+}
+
 function showTitle(): void {
   game.stopIdx = save.stop;
   applyStop();
@@ -1197,6 +1300,9 @@ function showTitle(): void {
     owned: save.upgrades.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean),
     offer: offerList(),
     fresh: !save.tutorialDone && save.stop === 0,
+    biz: save.biz,
+    rep: save.rep,
+    reviews: save.reviews,
   });
   game.phase = "title";
   screenShownAt = performance.now();
@@ -1214,9 +1320,17 @@ function endShift(): void {
   }
   const here = stop();
   const avg = game.stars.length ? game.stars.reduce((a, b) => a + b, 0) / game.stars.length : 0;
-  const ok = passed(avg, game.served, here.customers);
+  const ok = passed(avg, game.served, game.customers);
   const lastStop = game.stopIdx === STOPS.length - 1;
-  save.bank += Math.max(0, game.money + game.tips - spills());
+  const profit = game.money + game.tips - spills() - game.costs;
+  save.bank += Math.max(0, Math.round(profit));
+  const repBefore = save.rep;
+  if (game.plan) {
+    const r = nextReputation(save.rep, save.repWeight, game.ratings);
+    save.rep = r.rep;
+    save.repWeight = r.weight;
+    save.reviews = [...game.reviews.slice().reverse(), ...save.reviews].slice(0, 30);
+  }
   save.best[here.id] = Math.max(save.best[here.id] ?? 0, avg);
   if (ok) {
     save.offer = upgradeChoices(save.upgrades, game.rng).map((u) => u.id);
@@ -1234,6 +1348,16 @@ function endShift(): void {
     earned: game.money,
     tips: game.tips,
     spills: spills(),
+    biz: game.plan
+      ? {
+          costs: game.costs,
+          profit,
+          // Show the most telling ones: the best and the worst of the day.
+          reviews: highlights(game.reviews),
+          rep: save.rep,
+          repBefore,
+        }
+      : null,
     best: game.best?.name ?? null,
     outcome: !ok ? "failed" : lastStop ? "trip" : "passed",
     next: STOPS[save.stop],
@@ -1293,10 +1417,11 @@ function tick(dt: number): void {
     // Customers arrive while the window is open.
     const free = game.slots.findIndex((s) => !s.order && !s.fig);
     const tutorialHold = game.tutorial && game.spawned >= 1;
-    if (game.time < stop().shiftLength && game.spawned < stop().customers && free >= 0 && game.time >= game.nextSpawn && !tutorialHold) {
+    if (game.time < stop().shiftLength && game.spawned < game.customers && free >= 0 && game.time >= game.nextSpawn && !tutorialHold) {
       spawnCustomer(free);
       const level = game.time / stop().shiftLength;
-      game.nextSpawn = game.time + (17 - 8 * level) * (0.8 + game.rng() * 0.4);
+      const busy = game.customers / stop().customers;
+      game.nextSpawn = game.time + ((17 - 8 * level) * (0.8 + game.rng() * 0.4)) / busy;
     }
     // If the window is empty, don't make the player wait.
     if (!game.slots.some((s) => s.order) && game.nextSpawn > game.time + 2 && !game.tutorial) game.nextSpawn = game.time + 2;
@@ -1307,6 +1432,10 @@ function tick(dt: number): void {
       if (s.fig) s.fig.setMood(s.patience / s.maxPatience < 0.3 ? "sad" : "neutral");
       if (s.patience <= 0) {
         game.lost++;
+        if (game.plan) {
+          game.ratings.push(0);
+          game.reviews.push({ stars: 0, text: reviewFor(0, [], game.plan, game.rng, true), stop: stop().name });
+        }
         sfx.grumble();
         customerLeaves(i, "angry", "Too slow! I'm off.", false);
       }
@@ -1334,7 +1463,7 @@ function tick(dt: number): void {
       }
     }
 
-    const doneSpawning = game.time >= stop().shiftLength || game.spawned >= stop().customers;
+    const doneSpawning = game.time >= stop().shiftLength || game.spawned >= game.customers;
     if (doneSpawning && game.slots.every((s) => !s.order && !s.fig)) endShift();
   }
 
@@ -1375,7 +1504,7 @@ function updateUi(): void {
     ui.timer.classList.toggle("closing", left <= 0);
     lastTimerText = tText;
   }
-  const net = game.money + game.tips - spills();
+  const net = Math.round(game.money + game.tips - spills() - game.costs);
   const money = net < 0 ? `−$${-net}` : `$${net}`;
   if (ui.money.textContent !== money) ui.money.textContent = money;
 

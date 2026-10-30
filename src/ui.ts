@@ -1,3 +1,5 @@
+import type { Plan, Review } from "./game/business";
+import { menuOf, PRICE, QUALITY, recipeCost, ratingBonus } from "./game/business";
 import type { Upgrade } from "./game/progress";
 import type { Stop } from "./game/stops";
 import type { Order, Plate } from "./game/types";
@@ -15,8 +17,59 @@ const HOW_TO = `
   <li><b>Patties, bacon, eggs, buns and pineapple</b> go on the grill first. <b>Swipe up</b> on a patty to flip it, then drag it up to the plate. Press and hold a fresh patty to smash it flat.</li>
   <li><b>Sauce:</b> drag a bottle up to the tray and draw on the burger.</li>
   <li><b>Swipe sideways</b> or use the tabs for the Drinks and Fryer counters.</li>
-  <li><b>Ring the bell twice</b> to serve. Swipe down on a plate to take the top layer off.</li>
+  <li><b>Melted cheese:</b> drop a slice on a patty while it's on the grill.</li>
+  <li><b>Heat lamp spots</b> next to the grill hold food or a half-built burger. Drag the whole stack to a plate. Don't leave it too long.</li>
+  <li><b>Drinks and fries</b> need a cup or carton from the stacks first. Watch the size on the ticket. Overflowing costs money and makes a mess to wipe up.</li>
+  <li><b>Ring the bell twice</b> to serve. Swipe down on a plate to take the top layer off. Drop mistakes in the trash slot at the front of the grill.</li>
 </ul>`;
+
+const starsText = (n: number) => `${"★".repeat(n)}${"☆".repeat(3 - n)}`;
+const money = (n: number) => (n < 0 ? `−$${(-n).toFixed(2)}` : `$${n.toFixed(2)}`);
+
+function reviewsHtml(reviews: Review[], max: number): string {
+  if (!reviews.length) return "";
+  return `<ul class="reviews">${reviews
+    .slice(0, max)
+    .map((r) => `<li><span class="rs">${starsText(r.stars)}</span> “${esc(r.text)}” <i>${esc(r.stop)}</i></li>`)
+    .join("")}</ul>`;
+}
+
+/** Before a business-mode shift: ingredient quality, prices and today's menu. */
+export function planHtml(p: { stop: Stop; plan: Plan; rep: number; reviews: Review[]; customers: number }): string {
+  const seg = (act: string, cur: string, opts: [string, string][]) =>
+    `<div class="seg">${opts.map(([v, l]) => `<button class="${v === cur ? "on" : ""}" data-act="${act}" data-v="${v}">${l}</button>`).join("")}</div>`;
+  const menu = menuOf(p.stop, p.plan);
+  const avgCost = menu.reduce((s, r) => s + recipeCost(r, p.plan.quality), 0) / menu.length;
+  const avgPrice = (menu.reduce((s, r) => s + r.price, 0) / menu.length) * PRICE[p.plan.price].mult;
+  const bonus = ratingBonus(p.plan);
+  return `<div class="card plan">
+    <p class="sub">Before opening · ${esc(p.stop.name)}</p>
+    <h2>Plan the shift</h2>
+    <p class="rep">Reputation <b>${p.rep.toFixed(1)} ★</b>${p.reviews.length ? ` from ${p.reviews.length} reviews` : " (new truck)"}</p>
+    <h3>Ingredients</h3>
+    ${seg("plan-q", p.plan.quality, Object.entries(QUALITY).map(([k, q]) => [k, q.label]))}
+    <p class="note">${esc(QUALITY[p.plan.quality].blurb)}</p>
+    <h3>Prices</h3>
+    ${seg("plan-p", p.plan.price, Object.entries(PRICE).map(([k, q]) => [k, q.label]))}
+    <p class="note">${esc(PRICE[p.plan.price].blurb)}</p>
+    <h3>Menu</h3>
+    <div class="chips">${p.stop.menu
+      .map((r) => `<button class="${p.plan.menu.includes(r.name) ? "on" : ""}" data-act="plan-m" data-v="${esc(r.name)}">${esc(r.name)}</button>`)
+      .join("")}</div>
+    <p class="note">More choice brings more customers. Two recipes minimum.</p>
+    <dl class="stats">
+      <dt>Expected customers</dt><dd>about ${p.customers}</dd>
+      <dt>Average burger price</dt><dd>${money(avgPrice)}</dd>
+      <dt>Ingredients per burger</dt><dd>${money(avgCost)}</dd>
+      <dt>Rating effect</dt><dd>${bonus > 0 ? "+" : bonus < 0 ? "−" : "±"}${Math.abs(bonus)} pts</dd>
+    </dl>
+    ${reviewsHtml(p.reviews, 2)}
+    <div class="btn-row">
+      <button class="btn primary" data-act="open">Open for business</button>
+      <button class="btn small" data-act="next">Back</button>
+    </div>
+  </div>`;
+}
 
 export interface Ui {
   root: HTMLElement;
@@ -170,7 +223,19 @@ function offerHtml(offer: Upgrade[]): string {
     <div class="offers">${offer.map((u) => `<button class="offer" data-act="pick" data-id="${u.id}"><b>${esc(u.name)}</b><span>${esc(u.text)}</span></button>`).join("")}</div>`;
 }
 
-export function titleHtml(t: { stop: Stop; stopNum: number; stops: number; trips: number; bank: number; owned: Upgrade[]; offer: Upgrade[]; fresh: boolean }): string {
+export function titleHtml(t: {
+  stop: Stop;
+  stopNum: number;
+  stops: number;
+  trips: number;
+  bank: number;
+  owned: Upgrade[];
+  offer: Upgrade[];
+  fresh: boolean;
+  biz: boolean;
+  rep: number;
+  reviews: Review[];
+}): string {
   const trip = t.trips > 0 ? `Trip ${t.trips + 1} · ` : "";
   return `<div class="card">
     <p class="sub">${trip}A food truck road trip · Stop ${t.stopNum} of ${t.stops}</p>
@@ -182,8 +247,10 @@ export function titleHtml(t: { stop: Stop; stopNum: number; stops: number; trips
     ${t.fresh ? HOW_TO : `<details><summary><b>How to play</b></summary>${HOW_TO}</details>`}
     <div class="btn-row">
       <button class="btn primary" data-act="start" ${t.offer.length ? "disabled" : ""}>Open the window in ${esc(t.stop.name)}</button>
+      ${t.fresh ? "" : `<button class="btn small biz ${t.biz ? "on" : ""}" data-act="biz">Business mode: ${t.biz ? "on" : "off"}</button>`}
       ${t.fresh ? "" : `<button class="btn small" data-act="new-trip">Start a new trip</button>`}
     </div>
+    ${t.biz ? `<p class="note">You buy the ingredients, set prices and pick the menu. Reviews stick around: reputation <b>${t.rep.toFixed(1)} ★</b>.</p>${reviewsHtml(t.reviews, 1)}` : ""}
     ${t.bank ? `<p class="build">Savings: $${t.bank}</p>` : ""}
     <p class="build">${esc(buildLabel())}</p>
   </div>`;
@@ -201,6 +268,8 @@ export function summaryHtml(s: {
   outcome: "passed" | "failed" | "trip";
   next: Stop | null;
   offer: Upgrade[];
+  /** Business mode extras. */
+  biz: { costs: number; profit: number; reviews: Review[]; rep: number; repBefore: number } | null;
 }): string {
   const avg = s.stars.length ? s.stars.reduce((a, b) => a + b, 0) / s.stars.length : 0;
   const rounded = Math.round(avg);
@@ -235,9 +304,11 @@ export function summaryHtml(s: {
       <dt>Sales</dt><dd>$${s.earned}</dd>
       <dt>Tips</dt><dd>$${s.tips}</dd>
       ${s.spills ? `<dt>Spilled soda</dt><dd>−$${s.spills}</dd>` : ""}
-      <dt>Total</dt><dd>$${s.earned + s.tips - s.spills}</dd>
+      ${s.biz ? `<dt>Ingredients</dt><dd>−$${Math.round(s.biz.costs)}</dd><dt>Profit</dt><dd class="${s.biz.profit < 0 ? "neg" : ""}">${s.biz.profit < 0 ? "−" : ""}$${Math.abs(Math.round(s.biz.profit))}</dd>` : `<dt>Total</dt><dd>$${s.earned + s.tips - s.spills}</dd>`}
+      ${s.biz ? `<dt>Reputation</dt><dd>${s.biz.repBefore.toFixed(1)} → ${s.biz.rep.toFixed(1)} ★</dd>` : ""}
       ${s.best ? `<dt>Best order</dt><dd>${esc(s.best)}</dd>` : ""}
     </dl>
+    ${s.biz ? reviewsHtml(s.biz.reviews, 3) : ""}
     ${s.outcome !== "failed" ? offerHtml(s.offer) : ""}
     <div class="btn-row">${buttons}</div>
     <p class="build">${esc(buildLabel())}</p>

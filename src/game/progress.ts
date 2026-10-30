@@ -1,4 +1,5 @@
 import type { Plan, Review } from "./business";
+import type { PressPiece } from "./press";
 import { REGION_START_IDS, START_TOWN, STOPS, townById } from "./stops";
 
 export type UpgradeId = "bench" | "tipjar" | "turbo" | "autostop" | "steady";
@@ -47,12 +48,16 @@ export interface Save {
   /** Average stars across recent reviews, and how many reviews it's built on. */
   rep: number;
   repWeight: number;
+  /** How well known the truck is, 10..100. Critics' pieces move it. */
+  popularity: number;
+  /** Recent press, newest first. */
+  press: PressPiece[];
 }
 
 const KEY = "bv-save-v1";
 
 export function freshSave(): Save {
-  return { town: START_TOWN, day: 1, unlocked: [START_TOWN], passedTowns: [], upgrades: [], bank: 0, best: {}, tutorialDone: false, trips: 0, offer: [], known: {}, biz: false, plan: null, reviews: [], rep: 2, repWeight: 6 };
+  return { town: START_TOWN, day: 1, unlocked: [START_TOWN], passedTowns: [], upgrades: [], bank: 0, best: {}, tutorialDone: false, trips: 0, offer: [], known: {}, biz: false, plan: null, reviews: [], rep: 2, repWeight: 6, popularity: 10, press: [] };
 }
 
 export function loadSave(): Save {

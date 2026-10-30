@@ -468,3 +468,13 @@ html, body {
 .events li { background: #fff; border-radius: 9px; padding: 5px 9px; cursor: pointer; }
 .events li b { color: var(--tomato); margin-right: 4px; }
 .card .event { font-size: 13px; background: #ffe3d6; border-radius: 10px; padding: 6px 9px; }
+.press { background: #f4efe2; border: 1px solid #cfc3a6; border-radius: 6px; padding: 8px 10px; display: grid; gap: 3px; font-family: Georgia, "Times New Roman", serif; }
+.press.tv { background: #1f2a33; color: #f3f1ea; border-color: #1f2a33; }
+.press.magazine { background: #fff4f0; border-color: #e5a28f; }
+.press .plabel { font: 700 12px var(--body); color: var(--tomato); }
+.press.tv .plabel { color: #ffb199; }
+.press .psrc { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
+.press .phead { font-size: 18px; font-weight: 700; line-height: 1.15; }
+.press .pquote { font-size: 13px; font-style: italic; }
+.press .rs { color: #e0a100; font-style: normal; }
+.ticket .critic { font: 800 9px var(--body); background: var(--ink); color: #ffd166; border-radius: 4px; padding: 0 3px; margin-right: 3px; text-transform: uppercase; flex: none; }

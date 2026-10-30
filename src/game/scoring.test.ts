@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { nextReputation, planFor, ratingBonus, trafficMult } from "./business";
+import { pieceFor, popularityChange, willingnessToPay } from "./press";
 import { applyMods, makeOrder, seededRng } from "./menu";
 import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent } from "./stops";
 import { passed, upgradeChoices } from "./progress";
@@ -282,5 +283,24 @@ describe("events", () => {
     expect(on.customers).toBeGreaterThan(t.customers);
     expect(on.crowd).toBe(rodeo.crowd);
     expect(on.menu.some((r) => r.name === rodeo.special!.name)).toBe(true);
+  });
+});
+
+describe("critics and popularity", () => {
+  it("a great TV spot moves popularity more than a newspaper piece", () => {
+    expect(popularityChange(3, "tv")).toBeGreaterThan(popularityChange(3, "paper"));
+    expect(popularityChange(0, "paper")).toBeLessThan(0);
+  });
+
+  it("fame and good reviews raise what people will pay", () => {
+    expect(willingnessToPay(80, 2.8)).toBeGreaterThan(willingnessToPay(10, 2));
+    const high = { quality: "standard" as const, price: "high" as const, menu: [] };
+    expect(ratingBonus(high, "families", willingnessToPay(90, 3))).toBeGreaterThan(ratingBonus(high, "families", 0));
+  });
+
+  it("writes a piece with a headline and quote", () => {
+    const p = pieceFor(3, [], townById("summit"), null, seededRng(1));
+    expect(p.headline.length).toBeGreaterThan(5);
+    expect(p.pop).toBeGreaterThan(0);
   });
 });

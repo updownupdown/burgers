@@ -4,6 +4,7 @@ import { avgCook, bunToast, MELT_RATE, pattyLabel } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { freshSave, loadSave, passed, passTown, upgradeChoices, UPGRADES, writeSave, type UpgradeId } from "./game/progress";
 import { eventOn, townById, withEvent, type TownEvent } from "./game/stops";
+import { criticChance, fadePopularity, pieceFor, popularityTraffic, willingnessToPay, type PressPiece } from "./game/press";
 import { HOLD_GRACE, HOLD_RUIN, payout, scorePlate, starsFor } from "./game/scoring";
 import {
   CARTON_COST,
@@ -102,7 +103,18 @@ const game = {
   reviews: [] as Review[],
   /** Every rating this shift, walk-outs as zero, for reputation. */
   ratings: [] as number[],
+  /** Which customer (by arrival order) is a food critic today, or -1; and what they wrote. */
+  criticAt: -1,
+  press: null as PressPiece | null,
 };
+
+/** A critic's verdict counts like this many ordinary reviews. */
+const CRITIC_WEIGHT = 5;
+
+function criticVerdict(stars: number, notes: string[]): void {
+  game.press = pieceFor(stars, notes, stop(), game.event, game.rng);
+  if (game.plan) for (let k = 1; k < CRITIC_WEIGHT; k++) game.ratings.push(stars);
+}
 
 /** In business mode, ingredients cost money as they come out of the bins. */
 function spend(amount: number): void {
@@ -116,7 +128,7 @@ function shopStop() {
 }
 
 function plannedCustomers(plan: Plan): number {
-  return Math.max(4, Math.round(stop().customers * trafficMult(plan, save.rep, menuOf(stop(), plan).length, stop().crowd)));
+  return Math.max(4, Math.round(stop().customers * trafficMult(plan, save.rep, menuOf(stop(), plan).length, stop().crowd) * popularityTraffic(save.popularity)));
 }
 
 // ---------------------------------------------------------------------------
@@ -214,6 +226,10 @@ function spawnCustomer(slotIdx: number): void {
   if (game.tutorial && game.spawned === 0) s.maxPatience = 600;
   s.patience = s.maxPatience;
   s.leaving = false;
+  if (game.spawned === game.criticAt && !game.tutorial) {
+    order.critic = true;
+    showHint("A food critic just ordered. Their verdict goes in the papers!", 3.5);
+  }
   s.fig = customersView.arrive(slotIdx, Math.floor(game.rng() * 1000));
   game.spawned++;
   sfx.pop();
@@ -264,11 +280,12 @@ function serve(i: number): void {
   const r = scorePlate(s.order, s.plate);
   if (game.plan) {
     // Ingredient quality and prices tilt every rating.
-    r.score = Math.max(0, Math.min(100, r.score + ratingBonus(game.plan, stop().crowd)));
+    r.score = Math.max(0, Math.min(100, r.score + ratingBonus(game.plan, stop().crowd, willingnessToPay(save.popularity, save.rep))));
     r.stars = starsFor(r.score);
     game.ratings.push(r.stars);
     game.reviews.push({ stars: r.stars, text: reviewFor(r.stars, r.notes, game.plan, game.rng), stop: stop().name });
   }
+  if (s.order.critic) criticVerdict(r.stars, r.notes);
   const { pay, tip: baseTip } = payout(s.order, r.score, s.patience / s.maxPatience);
   const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1) * CROWD[stop().crowd].tips);
   game.money += pay;
@@ -1275,9 +1292,12 @@ function startShift(plan: Plan | null = null): void {
     costs: 0,
     reviews: [],
     ratings: [],
-    customers: plan ? plannedCustomers(plan) : Math.round(stop().customers * CROWD[stop().crowd].traffic),
+    customers: plan ? plannedCustomers(plan) : Math.round(stop().customers * CROWD[stop().crowd].traffic * popularityTraffic(save.popularity)),
+    press: null,
   });
   applyStop();
+  // Maybe a critic in today's line, never the very first customer.
+  game.criticAt = game.rng() < criticChance(stop().crowd, game.event) ? 1 + Math.floor(game.rng() * Math.max(1, game.customers - 2)) : -1;
   counter.fryBoost = has("turbo") ? 1.35 : 1;
   counter.autoStopPour = has("autostop");
   counter.setPage(HOME_PAGE);
@@ -1310,7 +1330,15 @@ function highlights(reviews: Review[]): Review[] {
 function showPlan(): void {
   game.event = eventOn(save.town, save.day);
   const plan = planFor(stop(), save.plan);
-  ui.title.innerHTML = planHtml({ stop: stop(), plan, rep: save.rep, reviews: save.reviews, customers: plannedCustomers(plan) });
+  ui.title.innerHTML = planHtml({
+    stop: stop(),
+    plan,
+    rep: save.rep,
+    reviews: save.reviews,
+    customers: plannedCustomers(plan),
+    wtp: willingnessToPay(save.popularity, save.rep),
+    popularity: save.popularity,
+  });
   ui.title.hidden = false;
   ui.summary.hidden = true;
 }
@@ -1328,6 +1356,8 @@ function showTitle(keepScroll = false): void {
     passed: save.passedTowns,
     best: save.best,
     day: save.day,
+    popularity: save.popularity,
+    press: save.press[0] ?? null,
     trips: save.trips,
     bank: save.bank,
     owned: save.upgrades.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean),
@@ -1349,6 +1379,10 @@ function showTitle(keepScroll = false): void {
 function endShift(): void {
   game.phase = "summary";
   save.day++;
+  const popBefore = save.popularity;
+  save.popularity = Math.min(100, fadePopularity(save.popularity) + (game.press?.pop ?? 0));
+  save.popularity = Math.max(10, save.popularity);
+  if (game.press) save.press = [game.press, ...save.press].slice(0, 10);
   for (const s of game.slots) {
     s.bubble?.remove();
     s.bubble = null;
@@ -1399,6 +1433,8 @@ function endShift(): void {
     best: game.best?.name ?? null,
     outcome: !ok ? "failed" : lastStop ? "trip" : "passed",
     opened,
+    press: game.press,
+    pop: [popBefore, save.popularity],
     offer: offerList(),
   });
   ui.summary.hidden = false;
@@ -1470,6 +1506,7 @@ function tick(dt: number): void {
       if (s.fig) s.fig.setMood(s.patience / s.maxPatience < 0.3 ? "sad" : "neutral");
       if (s.patience <= 0) {
         game.lost++;
+        if (s.order.critic) criticVerdict(0, []);
         if (game.plan) {
           game.ratings.push(0);
           game.reviews.push({ stars: 0, text: reviewFor(0, [], game.plan, game.rng, true), stop: stop().name });

@@ -93,6 +93,8 @@ export interface Order {
   drink: DrinkId | null;
   friesSize: FriesSize;
   drinkSize: Size;
+  /** A food critic: their verdict goes in the paper. */
+  critic?: boolean;
 }
 
 export const GRILLABLE: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon", "egg", "pineapple"]);

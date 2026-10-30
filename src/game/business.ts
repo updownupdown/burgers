@@ -89,9 +89,11 @@ export function menuOf(stop: Stop, plan: Plan): Recipe[] {
 }
 
 /** Points added to (or taken from) every order's score. Premium food at high prices nets out to zero. */
-export function ratingBonus(plan: Plan, crowd: CrowdId = "families"): number {
+export function ratingBonus(plan: Plan, crowd: CrowdId = "families", wtp = 0): number {
   const c = CROWD[crowd];
-  return Math.round(STEP * (QUALITY[plan.quality].taste * c.qualityWeight + PRICE[plan.price].value * c.priceSensitivity));
+  // Willingness to pay (from fame and reviews) makes the same price feel like better value, up to a point.
+  const value = Math.min(1, PRICE[plan.price].value + wtp);
+  return Math.round(STEP * (QUALITY[plan.quality].taste * c.qualityWeight + value * c.priceSensitivity));
 }
 
 /** A bigger menu and a better reputation both bring more people to the window. */

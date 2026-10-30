@@ -2,6 +2,7 @@ import type { Plan, Review } from "./game/business";
 import { CROWD, menuOf, PRICE, QUALITY, recipeCost, ratingBonus } from "./game/business";
 import type { Upgrade } from "./game/progress";
 import { EVENTS, eventOn, nextDay, REGIONS, STOPS, townById, type Stop } from "./game/stops";
+import type { PressPiece } from "./game/press";
 import type { Order, Plate } from "./game/types";
 import { DRINK_COLOR, DRINK_LABEL, KIND_COLOR, KIND_LABEL } from "./game/types";
 import { SLOT_COLORS } from "./scenes/tray";
@@ -35,18 +36,18 @@ function reviewsHtml(reviews: Review[], max: number): string {
 }
 
 /** Before a business-mode shift: ingredient quality, prices and today's menu. */
-export function planHtml(p: { stop: Stop; plan: Plan; rep: number; reviews: Review[]; customers: number }): string {
+export function planHtml(p: { stop: Stop; plan: Plan; rep: number; reviews: Review[]; customers: number; wtp: number; popularity: number }): string {
   const seg = (act: string, cur: string, opts: [string, string][]) =>
     `<div class="seg">${opts.map(([v, l]) => `<button class="${v === cur ? "on" : ""}" data-act="${act}" data-v="${v}">${l}</button>`).join("")}</div>`;
   const menu = menuOf(p.stop, p.plan);
   const avgCost = menu.reduce((s, r) => s + recipeCost(r, p.plan.quality), 0) / menu.length;
   const avgPrice = (menu.reduce((s, r) => s + r.price, 0) / menu.length) * PRICE[p.plan.price].mult;
-  const bonus = ratingBonus(p.plan, p.stop.crowd);
+  const bonus = ratingBonus(p.plan, p.stop.crowd, p.wtp);
   return `<div class="card plan">
     <p class="sub">Before opening · ${esc(p.stop.name)}</p>
     <h2>Plan the shift</h2>
     ${crowdHtml(p.stop.crowd)}
-    <p class="rep">Reputation <b>${p.rep.toFixed(1)} ★</b>${p.reviews.length ? ` from ${p.reviews.length} reviews` : " (new truck)"}</p>
+    <p class="rep">Reputation <b>${p.rep.toFixed(1)} ★</b>${p.reviews.length ? ` from ${p.reviews.length} reviews` : " (new truck)"} · Popularity <b>${p.popularity}</b></p>
     <h3>Ingredients</h3>
     ${seg("plan-q", p.plan.quality, Object.entries(QUALITY).map(([k, q]) => [k, q.label]))}
     <p class="note">${esc(QUALITY[p.plan.quality].blurb)}</p>
@@ -62,6 +63,7 @@ export function planHtml(p: { stop: Stop; plan: Plan; rep: number; reviews: Revi
       <dt>Expected customers</dt><dd>about ${p.customers}</dd>
       <dt>Average burger price</dt><dd>${money(avgPrice)}</dd>
       <dt>Ingredients per burger</dt><dd>${money(avgCost)}</dd>
+      <dt>Customers will pay</dt><dd>${p.wtp >= 0.5 ? "well above fair" : p.wtp >= 0.15 ? "a bit above fair" : p.wtp > -0.15 ? "fair prices" : "below fair"}</dd>
       <dt>Rating effect</dt><dd>${bonus > 0 ? "+" : bonus < 0 ? "−" : "±"}${Math.abs(bonus)} pts</dd>
     </dl>
     ${reviewsHtml(p.reviews, 2)}
@@ -213,7 +215,7 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, expande
   const pct = Math.max(0, Math.min(1, patience));
   const color = pct > 0.5 ? "#4caf50" : pct > 0.25 ? "#f0a92b" : "#e5432b";
   return `<div class="pat"><i style="width:${(pct * 100).toFixed(0)}%;background:${color}"></i></div>
-    <div class="name"><span class="l">#${order.id} ${esc(order.name)}</span><span class="exp">${expanded ? "▴" : "▾"}</span></div>
+    <div class="name">${order.critic ? `<span class="critic" title="Food critic">Critic</span>` : ""}<span class="l">#${order.id} ${esc(order.name)}</span><span class="exp">${expanded ? "▴" : "▾"}</span></div>
     ${body}
     ${sides.length ? `<div class="sides">${sides.join("")}</div>` : ""}`;
 }
@@ -265,6 +267,18 @@ function mapSvg(m: { town: string; selected: string; unlocked: string[]; passed:
   return `<svg class="map" viewBox="0 0 100 140" role="img" aria-label="Road map">${land}${roads}${towns}${truck}</svg>`;
 }
 
+const OUTLET_LABEL = { paper: "Newspaper", magazine: "Magazine", tv: "On TV" } as const;
+
+/** A press clipping: newspaper, magazine or TV spot. */
+export function pressHtml(p: PressPiece, label?: string): string {
+  return `<div class="press ${p.outlet}">
+    ${label ? `<p class="plabel">${esc(label)}</p>` : ""}
+    <p class="psrc">${OUTLET_LABEL[p.outlet]} · ${esc(p.source)}</p>
+    <p class="phead">${esc(p.headline)}</p>
+    <p class="pquote"><span class="rs">${starsText(p.stars)}</span> “${esc(p.quote)}”</p>
+  </div>`;
+}
+
 const crowdHtml = (c: Stop["crowd"]) => `<p class="crowd"><b>${CROWD[c].label}:</b> ${esc(CROWD[c].blurb)}</p>`;
 
 /** What's on soon, anywhere on the map. */
@@ -292,6 +306,8 @@ export function titleHtml(t: {
   passed: string[];
   best: Record<string, number>;
   day: number;
+  popularity: number;
+  press: PressPiece | null;
   trips: number;
   bank: number;
   owned: Upgrade[];
@@ -313,11 +329,12 @@ export function titleHtml(t: {
       ? `<button class="btn primary" data-act="drive" data-id="${sel.id}" ${t.offer.length ? "disabled" : ""}>Drive to ${esc(sel.name)}</button>`
       : `<button class="btn primary" disabled>Locked: pass a town next to it first</button>`;
   return `<div class="card title">
-    <p class="sub">${trip}Day ${t.day} on the road · ${t.passed.length} of ${STOPS.length} towns</p>
+    <p class="sub">${trip}Day ${t.day} on the road · ${t.passed.length} of ${STOPS.length} towns · Popularity ${t.popularity}</p>
     <h1>Bun Voyage</h1>
     ${offerHtml(t.offer)}
     ${t.fresh ? "" : mapSvg({ town: t.town.id, selected: sel.id, unlocked: t.unlocked, passed: t.passed, best: t.best, day: t.day })}
     ${t.fresh ? "" : eventsHtml(t.day)}
+    ${t.press ? pressHtml(t.press, "Latest press") : ""}
     <div class="townCard">
       <h3>${esc(sel.name)} <span class="rg">${esc(region.name)}${sel.capital ? " · big city" : ""}</span></h3>
       <p>${esc(sel.blurb)}</p>
@@ -351,6 +368,9 @@ export function summaryHtml(s: {
   outcome: "passed" | "failed" | "trip";
   /** Towns whose roads this shift opened. */
   opened: Stop[];
+  press: PressPiece | null;
+  /** Popularity before and after the shift. */
+  pop: [number, number];
   offer: Upgrade[];
   /** Business mode extras. */
   biz: { costs: number; profit: number; reviews: Review[]; rep: number; repBefore: number } | null;
@@ -391,7 +411,9 @@ export function summaryHtml(s: {
       ${s.biz ? `<dt>Ingredients</dt><dd>−$${Math.round(s.biz.costs)}</dd><dt>Profit</dt><dd class="${s.biz.profit < 0 ? "neg" : ""}">${s.biz.profit < 0 ? "−" : ""}$${Math.abs(Math.round(s.biz.profit))}</dd>` : `<dt>Total</dt><dd>$${s.earned + s.tips - s.spills}</dd>`}
       ${s.biz ? `<dt>Reputation</dt><dd>${s.biz.repBefore.toFixed(1)} → ${s.biz.rep.toFixed(1)} ★</dd>` : ""}
       ${s.best ? `<dt>Best order</dt><dd>${esc(s.best)}</dd>` : ""}
+      ${s.pop[0] !== s.pop[1] ? `<dt>Popularity</dt><dd>${s.pop[0]} → ${s.pop[1]}</dd>` : ""}
     </dl>
+    ${s.press ? pressHtml(s.press, `A critic ate here today. ${s.press.pop >= 0 ? "+" : "−"}${Math.abs(s.press.pop)} popularity.`) : ""}
     ${s.biz ? reviewsHtml(s.biz.reviews, 3) : ""}
     ${s.outcome !== "failed" ? offerHtml(s.offer) : ""}
     <div class="btn-row">${buttons}</div>

@@ -71,9 +71,23 @@ function ensureHost(): HTMLElement {
   host.className = "bv menu-host";
   document.body.appendChild(host);
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && stack.length) {
+    if (!stack.length) return;
+    if (e.key === "Escape") {
       e.preventDefault();
       popModal();
+    } else if (e.key === "Tab") {
+      // Keep keyboard focus inside the top card.
+      const card = stack[stack.length - 1].card;
+      const f = [...card.querySelectorAll<HTMLElement>("button:not([disabled]):not([tabindex='-1']), [href], input")].filter((x) => x.offsetParent !== null);
+      if (!f.length) return;
+      const inside = card.contains(document.activeElement);
+      if (e.shiftKey && (!inside || document.activeElement === f[0] || document.activeElement === card)) {
+        e.preventDefault();
+        f[f.length - 1].focus();
+      } else if (!e.shiftKey && (!inside || document.activeElement === f[f.length - 1])) {
+        e.preventDefault();
+        f[0].focus();
+      }
     }
   });
   return host;

@@ -167,7 +167,7 @@ export function openMenu(over: Partial<MenuDeps> & { tab?: MenuTab } = {}): void
         d.newTrip();
         break;
       case "menuref":
-        openMenuRef();
+        openMenuRef(d.town(), { priceMult: d.priceMult?.() ?? 1 });
         break;
       case "sound": {
         const on = !d.sound();

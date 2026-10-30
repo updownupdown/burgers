@@ -215,8 +215,6 @@ function layout(): void {
     t.style.maxHeight = `${custH - top + trayH * 0.22}px`;
   });
   ui.hint.style.top = `${bands.counter.y + 8}px`;
-  // Top right of the counter, clear of the stations along the front edge.
-  ui.cupboard.style.top = `${bands.counter.y + 8}px`;
   // Turned sideways mid-shift: pause behind the "turn your phone" overlay.
   if (W > H && H < 500 && game.phase === "playing") {
     cancelPointer();
@@ -234,8 +232,9 @@ function bandAt(y: number): "customers" | "tray" | "counter" | "tabs" {
   return "tabs";
 }
 
+/** Pointer x is already relative to the game column (see pointerdown), so only y is offset by the band. */
 function ndcIn(r: Rect, x: number, y: number): THREE.Vector2 {
-  return new THREE.Vector2(((x - r.x) / r.w) * 2 - 1, -((y - r.y) / r.h) * 2 + 1);
+  return new THREE.Vector2((x / r.w) * 2 - 1, -((y - r.y) / r.h) * 2 + 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -544,6 +543,22 @@ function moveHold(pt: Pointer): void {
   }
 }
 
+/** Carrying something over a tab for a moment switches to that counter, so items can move between counters. */
+let hover = { tab: -1, since: 0 };
+function hoverTab(pt: Pointer, now: number): void {
+  if (bandAt(pt.y) !== "tabs") {
+    hover.tab = -1;
+    return;
+  }
+  const cx = pt.x + colX;
+  const tab = ui.tabs.findIndex((t) => {
+    const r = t.getBoundingClientRect();
+    return cx >= r.left && cx <= r.right;
+  });
+  if (tab !== hover.tab) hover = { tab, since: now };
+  else if (tab >= 0 && tab !== counter.page && now - hover.since > 280) goToPage(tab);
+}
+
 function velocity(pt: Pointer): { vx: number; vy: number } {
   const end = pt.samples[pt.samples.length - 1]?.t ?? 0;
   const recent = pt.samples.filter((s) => end - s.t < 120);
@@ -628,12 +643,15 @@ function finishHold(pt: Pointer): void {
   } else if (band === "counter") {
     const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3);
     const hold = counter.page === HOME_PAGE ? counter.overHold(g) : -1;
-    if (payload.type === "empty" || payload.type === "sleeve" || payload.type === "carton" || payload.type === "drink" || payload.type === "ice" || payload.type === "lid" || payload.type === "straw" || (payload.type === "fries" && payload.basket !== null)) {
-      done = dropAtStation(payload, g);
-    } else if (counter.page === HOME_PAGE && counter.overTrash(g)) {
+    const station = payload.type === "empty" || payload.type === "sleeve" || payload.type === "carton" || payload.type === "drink" || payload.type === "ice" || payload.type === "lid" || payload.type === "straw" || (payload.type === "fries" && payload.basket !== null);
+    if (station) done = dropAtStation(payload, g);
+    if (!done && counter.overTrash(g)) {
+      // Every counter has a trash slot along its front edge.
       sfx.thud();
       buzz(20);
       done = true;
+    } else if (station) {
+      // Missed the station: it goes back where it came from below.
     } else if (hold >= 0 && (payload.type === "piece" || payload.type === "stack")) {
       // Build a burger ahead (or park food) under the heat lamp.
       const spot = counter.holds[hold];
@@ -923,14 +941,13 @@ canvas.addEventListener("pointerdown", (e) => {
         s.count--;
         counter.syncStack(s);
         startHold(pt, { type: "empty", kind: s.kind, size: s.size, stack: hit.idx });
-      } else showHint(`Out of ${what}! Grab a wrapped sleeve from the supplies cabinet and drop it here.`, 3);
+      } else showHint(`Out of ${what}! Fetch a wrapped sleeve from the Supplies counter.`, 3);
     } else if (hit.type === "ice") startHold(pt, { type: "ice" });
     else if (hit.type === "lids") startHold(pt, { type: "lid" });
     else if (hit.type === "straws") startHold(pt, { type: "straw" });
     else if (hit.type === "supplies") {
       startHold(pt, { type: "sleeve", kind: hit.kind });
-      // Take the sleeve back up to the counter to restock the stack.
-      if (counter.cupboardOpen) toggleCupboard(false);
+      hintOnce("carry", `Hold the sleeve over the ${hit.kind === "cup" ? "Drinks" : "Fryer"} tab to carry it there, then drop it on an empty stack.`, 3.5);
     }
     else if (hit.type === "pack") {
       const p = counter.packs[hit.idx];
@@ -965,6 +982,8 @@ canvas.addEventListener("pointerdown", (e) => {
       pt.mode = "sauce";
       pt.sauce = armedSauce;
       sauceAt(pt, armedSauce);
+    } else if (trayView.bellHit(ndcIn(bands.tray, x, y))) {
+      ringBell();
     } else {
       pt.mode = "plate";
       pt.plate = trayView.pick(ndcIn(bands.tray, x, y));
@@ -992,10 +1011,11 @@ canvas.addEventListener("pointermove", (e) => {
 
   switch (pt.mode) {
     case "swipe":
-      counter.dragOffset = -dx * (7.3 / bands.counter.w);
+      // Sideways swipes on the counter are free for station actions; counters change from the tab bar.
       break;
     case "held":
       moveHold(pt);
+      hoverTab(pt, e.timeStamp);
       break;
     case "wipe": {
       // Scrub back and forth to mop up an overflow.
@@ -1064,11 +1084,8 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
   lastGesture = { mode: pt.mode, dx, dy, dt, vy, flickUp, moved: pt.moved };
 
   switch (pt.mode) {
-    case "swipe": {
-      counter.dragOffset = 0;
-      if (!cancelled && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) goToPage(counter.page + (dx < 0 ? 1 : -1));
+    case "swipe":
       break;
-    }
     case "held":
       if (cancelled) {
         pt.y = pt.y0;
@@ -1153,20 +1170,41 @@ function removeTop(slot: number): void {
 
 function goToPage(p: number): void {
   const before = counter.page;
-  if (counter.cupboardOpen) toggleCupboard(false);
   counter.setPage(p);
   if (counter.page !== before) sfx.whoosh();
   armedSauce = null;
 }
 
-function toggleCupboard(open = !counter.cupboardOpen): void {
-  counter.cupboardOpen = open;
-  sfx.whoosh();
+// Swipe along the tab bar to move between counters (the counters themselves don't swipe).
+{
+  const nav = ui.tabs[0].parentElement!;
+  let sx = -1;
+  let swiped = false;
+  nav.addEventListener("pointerdown", (e) => {
+    sx = e.clientX;
+    swiped = false;
+  });
+  nav.addEventListener("pointermove", (e) => {
+    if (sx < 0 || swiped) return;
+    const dx = e.clientX - sx;
+    if (Math.abs(dx) > 36) {
+      swiped = true;
+      sfx.unlock();
+      goToPage(counter.page + (dx < 0 ? 1 : -1));
+    }
+  });
+  const end = () => (sx = -1);
+  nav.addEventListener("pointerup", end);
+  nav.addEventListener("pointercancel", end);
+  // A swipe that started on a tab shouldn't also count as tapping it.
+  nav.addEventListener("click", (e) => {
+    if (swiped) {
+      e.stopPropagation();
+      e.preventDefault();
+      swiped = false;
+    }
+  }, true);
 }
-ui.cupboard.addEventListener("click", () => {
-  sfx.unlock();
-  toggleCupboard();
-});
 
 ui.tabs.forEach((t, i) =>
   t.addEventListener("click", () => {
@@ -1185,15 +1223,12 @@ ui.tickets.forEach((t, i) =>
 
 let lastDing = 0;
 let singleDingTimer = 0;
-ui.bell.addEventListener("pointerdown", (e) => {
-  e.preventDefault();
-  sfx.unlock();
+/** The service bell on the tray: one ding is just a ding, two quick ones serve the active plate. */
+function ringBell(): void {
   if (game.phase !== "playing") return;
   sfx.ding();
   buzz(10);
-  ui.bell.classList.remove("ring");
-  void ui.bell.offsetWidth;
-  ui.bell.classList.add("ring");
+  trayView.ring();
   const now = performance.now();
   if (now - lastDing < 550) {
     clearTimeout(singleDingTimer);
@@ -1204,7 +1239,7 @@ ui.bell.addEventListener("pointerdown", (e) => {
     clearTimeout(singleDingTimer);
     singleDingTimer = window.setTimeout(() => showHint("Ding ding! Ring twice to serve.", 1.6), 600);
   }
-});
+}
 
 // ---------------------------------------------------------------------------
 // Screens
@@ -1707,18 +1742,13 @@ function updateUi(): void {
   );
 
   ui.tabs.forEach((t, i) => t.setAttribute("aria-selected", String(i === counter.page)));
-  ui.cupboard.hidden = game.phase !== "playing" || !counter.hasCupboard();
-  if (ui.cupboard.getAttribute("aria-pressed") !== String(counter.cupboardOpen)) {
-    ui.cupboard.setAttribute("aria-pressed", String(counter.cupboardOpen));
-    ui.cupboard.querySelector("span")!.textContent = counter.cupboardOpen ? "Close" : "Supplies";
-  }
   updateGrillTags();
   updateHoldUi();
   updateStationUi();
   ui.drinkLabels.forEach((el, i) => {
     const v = counter.drinkLabelPoint(i).project(counter.camera);
     const x = ((v.x + 1) / 2) * bands.counter.w;
-    const visible = game.phase === "playing" && counter.cupboardT < 0.05 && x > 20 && x < bands.counter.w - 20;
+    const visible = game.phase === "playing" && x > 20 && x < bands.counter.w - 20;
     el.hidden = !visible;
     if (visible) {
       el.style.left = `${x}px`;
@@ -1729,8 +1759,10 @@ function updateUi(): void {
   const friesReady = counter.baskets.some((b) => b.loaded && b.cook >= 0.55);
   const friesBurning = counter.baskets.some((b) => b.loaded && b.down && b.cook >= 0.9);
   const grillBurning = counter.grillItems.some((g) => g.piece.cook[0] > 0.85);
-  const dots = [false, grillBurning, friesReady || friesBurning];
-  const hot = [false, grillBurning, friesBurning];
+  // Supplies: a stack is out (or nearly), so a sleeve is needed.
+  const lowStock = counter.stacks.some((st) => !st.sleeve && st.count <= 1);
+  const dots = [false, grillBurning, friesReady || friesBurning, lowStock];
+  const hot = [false, grillBurning, friesBurning, counter.stacks.some((st) => !st.sleeve && st.count === 0)];
   ui.tabDots.forEach((d, i) => {
     d.hidden = !dots[i] || i === counter.page;
     d.classList.toggle("hot", hot[i]);
@@ -1798,6 +1830,7 @@ const stationTag = (cls: string): HTMLElement => {
 };
 const stackTags = counter.stacks.map(() => stationTag("stack"));
 const puddleTags = counter.taps.map(() => stationTag("hot"));
+const supplyTags = [0, 1].map(() => stationTag("stack"));
 function placeTag(el: HTMLElement, world: THREE.Vector3, text: string, cls?: [string, boolean]): void {
   el.hidden = false;
   if (el.textContent !== text) el.textContent = text;
@@ -1807,13 +1840,20 @@ function placeTag(el: HTMLElement, world: THREE.Vector3, text: string, cls?: [st
   el.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
 }
 function updateStationUi(): void {
-  const playing = game.phase === "playing" && counter.dragOffset === 0 && counter.cupboardT < 0.05;
+  const playing = game.phase === "playing" && counter.dragOffset === 0;
   const on = (page: number) => playing && Math.abs(counter.page - page) < 1;
   counter.stacks.forEach((s, i) => {
     const page = s.kind === "cup" ? 0 : 2;
     if (!on(page)) return void (stackTags[i].hidden = true);
     const text = s.sleeve ? "Tap to unwrap" : s.count ? `${s.size} · ${s.count}` : `${s.size} · empty`;
     placeTag(stackTags[i], new THREE.Vector3(s.x, 0, s.z + 0.6), text, ["low", !s.sleeve && s.count <= 1]);
+  });
+  // Supplies counter: each crate's label lists how full the stacks it restocks are.
+  (["cup", "carton"] as const).forEach((kind, k) => {
+    if (!on(3)) return void (supplyTags[k].hidden = true);
+    const st = counter.stacks.filter((x) => x.kind === kind);
+    const text = `${kind === "cup" ? "Cups" : "Cartons"}: ${st.map((x) => `${x.size} ${x.sleeve ? "sleeve" : x.count}`).join(" · ")}`;
+    placeTag(supplyTags[k], counter.supplyAt[kind].clone().add(new THREE.Vector3(0, 0, 1.55)), text, ["low", st.some((x) => !x.sleeve && x.count <= 1)]);
   });
   counter.taps.forEach((t, i) => {
     if (!on(0) || t.puddle < 0.01) return void (puddleTags[i].hidden = true);

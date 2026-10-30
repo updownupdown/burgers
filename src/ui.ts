@@ -9,7 +9,6 @@ import { SLOT_COLORS } from "./scenes/tray";
 import { buildLabel } from "./update";
 import { icon } from "./ui/icons";
 
-const BELL_SVG = `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 5a2 2 0 0 1 2 2v1.2A9 9 0 0 1 25 17v5H7v-5a9 9 0 0 1 7-8.8V7a2 2 0 0 1 2-2z" fill="#1d1410"/><rect x="4" y="22" width="24" height="4" rx="2" fill="#1d1410"/><circle cx="16" cy="4" r="2" fill="#1d1410"/></svg>`;
 const MENU_SVG = `<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="2.4" rx="1.2" fill="currentColor"/><rect x="3" y="9" width="14" height="2.4" rx="1.2" fill="currentColor"/><rect x="3" y="14" width="14" height="2.4" rx="1.2" fill="currentColor"/></svg>`;
 
 const HOW_TO = `
@@ -83,10 +82,8 @@ export interface Ui {
   tickets: HTMLElement[];
   drinkLabels: HTMLElement[];
   hint: HTMLElement;
-  cupboard: HTMLButtonElement;
   tabs: HTMLButtonElement[];
   tabDots: HTMLElement[];
-  bell: HTMLButtonElement;
   menuBtn: HTMLButtonElement;
   title: HTMLElement;
   menu: HTMLElement;
@@ -95,6 +92,9 @@ export interface Ui {
   install: HTMLElement;
   updateText: HTMLElement;
 }
+
+/** Icons on the counter tabs. */
+const TAB_ICONS: Record<string, string> = { Drinks: "drink", Grill: "grill", Fryer: "fryer", Supplies: "box" };
 
 export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   root.innerHTML = `
@@ -107,11 +107,9 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   </div>
   ${[0, 1, 2].map((i) => `<div class="ticket" data-r="ticket" data-slot="${i}" style="--slot:${SLOT_COLORS[i]}" hidden></div>`).join("")}
   <div class="hint" data-r="hint" hidden></div>
-  <button class="cupbtn" data-r="cupboard" aria-pressed="false" hidden>${icon("box")}<span>Supplies</span></button>
   ${DRINKS.map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_LABEL[d]}</div>`).join("")}
   <nav class="tabs">
-    ${pages.map((p, i) => `<button class="tab" data-r="tab" data-page="${i}" aria-selected="false">${p}<span class="dot" hidden></span></button>`).join("")}
-    <button class="bell" data-r="bell" aria-label="Ring the bell (twice to serve)">${BELL_SVG}</button>
+    ${pages.map((p, i) => `<button class="tab" data-r="tab" data-page="${i}" aria-selected="false">${icon(TAB_ICONS[p] ?? "box")}<span>${p}</span><span class="dot" hidden></span></button>`).join("")}
   </nav>
   <div class="update" data-r="update" hidden>
     <span data-r="updateText">A new build is ready.</span>
@@ -148,10 +146,8 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     tickets: [...root.querySelectorAll<HTMLElement>('[data-r="ticket"]')],
     drinkLabels: [...root.querySelectorAll<HTMLElement>('[data-r="dlabel"]')],
     hint: q("hint"),
-    cupboard: q("cupboard") as HTMLButtonElement,
     tabs,
     tabDots: tabs.map((t) => t.querySelector<HTMLElement>(".dot")!),
-    bell: q("bell") as HTMLButtonElement,
     menuBtn: q("menuBtn") as HTMLButtonElement,
     title: q("title"),
     menu: q("menu"),

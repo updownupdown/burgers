@@ -219,58 +219,53 @@ html, body {
 }
 .hint[hidden] { display: block !important; opacity: 0; }
 
-/* ---- Tabs + bell ----------------------------------------------------- */
+/* ---- Counter tabs (Bistro): tap one, or swipe along the bar ---------- */
 .tabs {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   height: calc(var(--tabs-h) + var(--safe-b));
-  padding: 8px 10px calc(8px + var(--safe-b));
-  background: var(--teal);
+  padding: 6px 8px calc(6px + var(--safe-b));
+  background: rgb(250 247 241 / 0.98);
+  box-shadow: 0 -1px 0 var(--bv-rule), 0 -6px 16px rgb(42 38 34 / 0.08);
   display: flex;
-  gap: 6px;
+  gap: 4px;
   align-items: stretch;
   pointer-events: auto;
+  touch-action: none;
+  font-family: var(--bv-font-ui);
 }
 .tab {
   flex: 1;
   border: 0;
-  border-radius: 12px;
-  background: var(--teal-2);
-  color: #cfe3dd;
-  font-weight: 700;
-  font-size: 14px;
+  border-radius: var(--bv-r-md);
+  background: transparent;
+  color: var(--bv-mute);
+  font: 700 12px var(--bv-font-ui);
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  transition: color var(--bv-fast), background var(--bv-fast);
 }
-.tab[aria-selected="true"] { background: var(--cream); color: var(--ink); }
+.tab .bv-icon { width: 24px; height: 24px; }
+.tab[aria-selected="true"] { color: var(--bv-ink); background: var(--bv-paper-2); }
+.tab[aria-selected="true"]::after { content: ""; position: absolute; left: 26%; right: 26%; bottom: 2px; height: 2px; border-radius: 1px; background: var(--bv-paprika); }
 .tab .dot {
   position: absolute;
   top: 5px;
-  right: 7px;
+  right: calc(50% - 20px);
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--mustard);
-  box-shadow: 0 0 0 2px var(--teal);
+  background: var(--bv-amber);
+  box-shadow: 0 0 0 2px var(--bv-paper);
 }
-.tab .dot.hot { background: var(--tomato); animation: blink 0.6s infinite alternate; }
+.tab .dot.hot { background: var(--bv-paprika); animation: blink 0.6s infinite alternate; }
 @keyframes blink { to { opacity: 0.35; } }
-.bell {
-  flex: 0 0 74px;
-  border: 0;
-  border-radius: 14px;
-  background: var(--mustard);
-  color: var(--ink);
-  display: grid;
-  place-items: center;
-  padding: 0;
-  box-shadow: 0 3px 0 #b8861d;
-}
-.bell:active { transform: translateY(2px); box-shadow: 0 1px 0 #b8861d; }
-.bell svg { width: 34px; height: 34px; }
-.bell.ring svg { animation: ring 0.35s; }
-@keyframes ring { 25% { transform: rotate(-18deg); } 75% { transform: rotate(14deg); } }
 
 /* ---- Screens --------------------------------------------------------- */
 .screen {
@@ -494,8 +489,3 @@ html, body {
 .pind b.ok { box-shadow: inset 0 0 0 2.5px #5fd35f; }
 .ticket .sides .ice { font-style: normal; font-weight: 700; margin-left: 3px; color: #2f7fb5; }
 .ticket .sides .ice.no { color: #9b3a2c; }
-/* Opens the supplies cupboard under the drinks and fryer counters. */
-.cupbtn { position: absolute; left: calc(var(--gx) + var(--gw) - 8px); transform: translateX(-100%); z-index: 4; pointer-events: auto; display: inline-flex; align-items: center; gap: 5px; height: 36px; padding: 0 12px 0 9px; border: 2px solid var(--ink); border-radius: 18px; background: var(--paper); color: var(--ink); font: 800 13px var(--body); box-shadow: 0 3px 0 rgb(0 0 0 / 0.2); }
-.cupbtn .bv-icon { width: 18px; height: 18px; }
-.cupbtn[aria-pressed="true"] { background: var(--mustard, #f3c33c); }
-.cupbtn[hidden] { display: none; }

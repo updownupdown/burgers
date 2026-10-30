@@ -1,7 +1,9 @@
 # Bun Voyage
 
 A touch-first, portrait burger grilling and stacking game. Your food truck is on a road
-trip; the first stop is Pinecrest, a mountain town full of hungry hikers.
+trip through three stops: Pinecrest (mountains), Saltwater Bay (beach, grilled pineapple)
+and Red Mesa (desert, jalapeños and smash burgers). Pass a shift to drive on and pick a
+truck upgrade; progress is saved in the browser.
 
 Play it at https://updownupdown.github.io/burgers/ (deployed from `main` by GitHub Actions).
 The build number shows on the title screen and in the pause menu, and the game reloads

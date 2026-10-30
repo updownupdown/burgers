@@ -8,6 +8,8 @@ export type Kind =
   | "tomato"
   | "onion"
   | "pickle"
+  | "pineapple"
+  | "jalapeno"
   | "ketchup"
   | "mustard";
 
@@ -20,6 +22,8 @@ export interface Piece {
   uid: number;
   kind: Kind;
   cook: [number, number];
+  /** Pressed flat on the grill (smash burger). */
+  smashed?: boolean;
   /** Sauce stroke, in plate-local units (x, z), for ketchup/mustard layers. */
   stroke?: { x: number; z: number }[];
 }
@@ -50,6 +54,7 @@ export interface ExpectedLayer {
   kind: Kind;
   doneness?: Doneness;
   toasted?: boolean;
+  smashed?: boolean;
 }
 
 export interface Order {
@@ -62,7 +67,7 @@ export interface Order {
   drink: DrinkId | null;
 }
 
-export const GRILLABLE: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon", "egg"]);
+export const GRILLABLE: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon", "egg", "pineapple"]);
 export const SAUCES: ReadonlySet<Kind> = new Set<Kind>(["ketchup", "mustard"]);
 
 export const KIND_LABEL: Record<Kind, string> = {
@@ -75,6 +80,8 @@ export const KIND_LABEL: Record<Kind, string> = {
   tomato: "Tomato",
   onion: "Onion",
   pickle: "Pickles",
+  pineapple: "Pineapple",
+  jalapeno: "Jalapeños",
   ketchup: "Ketchup",
   mustard: "Mustard",
 };
@@ -90,6 +97,8 @@ export const KIND_COLOR: Record<Kind, string> = {
   tomato: "#e5432b",
   onion: "#d9b8e2",
   pickle: "#7fa34a",
+  pineapple: "#f5d33f",
+  jalapeno: "#3f8f3a",
   ketchup: "#d8261b",
   mustard: "#f0c419",
 };

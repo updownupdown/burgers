@@ -63,6 +63,7 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
       // Anywhere inside the doneness band is fine; beyond it the score drops quickly.
       const q = clamp01(1 - Math.max(0, off - 0.06) * 4 - Math.max(0, uneven - 0.2) * 1.6);
       let note: string | null = null;
+      if (exp.smashed && !piece.smashed) return [q * 0.6, "wanted it smashed"];
       if (off > 0.12) note = avgCook(piece) > target ? "patty overcooked" : "patty undercooked";
       else if (uneven > 0.3) note = "patty cooked on one side";
       return [q, note];
@@ -79,6 +80,12 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
       const t = avgCook(piece);
       if (t >= 1) return [0.2, "burnt bacon"];
       if (t < 0.4) return [0.35, "floppy bacon"];
+      return [1, null];
+    }
+    case "pineapple": {
+      const t = Math.max(piece.cook[0], piece.cook[1]);
+      if (t >= 1) return [0.2, "burnt pineapple"];
+      if (t < 0.35) return [0.5, "pineapple not grilled"];
       return [1, null];
     }
     case "egg": {

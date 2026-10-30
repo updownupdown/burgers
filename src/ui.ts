@@ -1,3 +1,5 @@
+import type { Upgrade } from "./game/progress";
+import type { Stop } from "./game/stops";
 import type { Order, Plate } from "./game/types";
 import { DRINK_COLOR, DRINK_LABEL, KIND_COLOR, KIND_LABEL } from "./game/types";
 import { SLOT_COLORS } from "./scenes/tray";
@@ -10,7 +12,7 @@ const HOW_TO = `
 <ul>
   <li><b>Customers</b> wait at the window. Their ticket shows the burger from top to bottom. Tap a ticket or plate to work on that order.</li>
   <li><b>Drag</b> ingredients up onto the tray, or <b>flick</b> them up to toss them on.</li>
-  <li><b>Patties, bacon, eggs and buns</b> go on the grill first. <b>Swipe up</b> on a patty to flip it, then drag it up to the plate.</li>
+  <li><b>Patties, bacon, eggs, buns and pineapple</b> go on the grill first. <b>Swipe up</b> on a patty to flip it, then drag it up to the plate. Press and hold a fresh patty to smash it flat.</li>
   <li><b>Sauce:</b> drag a bottle up to the tray and draw on the burger.</li>
   <li><b>Swipe sideways</b> or use the tabs for the Drinks and Fryer counters.</li>
   <li><b>Ring the bell twice</b> to serve. Swipe down on a plate to take the top layer off.</li>
@@ -38,7 +40,7 @@ export interface Ui {
 export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   root.innerHTML = `
   <div class="hud">
-    <span class="chip" data-r="stop">Pinecrest</span>
+    <span class="chip" data-r="stop"></span>
     <span class="chip" data-r="timer">3:00</span>
     <span class="chip money" data-r="money">$0</span>
     <span class="spacer"></span>
@@ -56,18 +58,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     <button class="later" data-act="update-later">Later</button>
     <button data-act="update-now">Update</button>
   </div>
-  <div class="screen" data-r="title">
-    <div class="card">
-      <p class="sub">A food truck road trip · Stop 1</p>
-      <h1>Bun Voyage</h1>
-      <p>The truck has rolled into <b>Pinecrest</b>, a mountain town full of hungry hikers. Keep them fed until closing time.</p>
-      ${HOW_TO}
-      <div class="btn-row">
-        <button class="btn primary" data-act="start">Open the window</button>
-      </div>
-      <p class="build" data-r="build1"></p>
-    </div>
-  </div>
+  <div class="screen" data-r="title"></div>
   <div class="screen" data-r="menu" hidden>
     <div class="card">
       <h2>Paused</h2>
@@ -85,7 +76,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   `;
   const q = (r: string) => root.querySelector<HTMLElement>(`[data-r="${r}"]`)!;
   const tabs = [...root.querySelectorAll<HTMLButtonElement>('[data-r="tab"]')];
-  for (const b of ["build1", "build2"]) q(b).textContent = buildLabel();
+  q("build2").textContent = buildLabel();
   return {
     root,
     timer: q("timer"),
@@ -120,7 +111,8 @@ export function ticketHtml(order: Order, plate: Plate, patience: number): string
   for (let i = order.layers.length - 1; i >= 0; i--) {
     const exp = order.layers[i];
     let extra = "";
-    if (exp.kind === "patty") extra = ` <em>${exp.doneness === "rare" ? "Rare" : exp.doneness === "well" ? "Well" : "Med"}</em>`;
+    if (exp.kind === "patty") extra = exp.smashed ? ` <em>Smash</em>` : ` <em>${exp.doneness === "rare" ? "Rare" : exp.doneness === "well" ? "Well" : "Med"}</em>`;
+    if (exp.kind === "pineapple") extra = ` <em>Grilled</em>`;
     if (exp.kind === "bun" && exp.toasted) extra = ` <em>Toast</em>`;
     lines.push(`<li class="${okFlags[i] ? "ok" : ""}"><b style="background:${KIND_COLOR[exp.kind]}"></b>${KIND_LABEL[exp.kind]}${extra}</li>`);
   }
@@ -135,22 +127,67 @@ export function ticketHtml(order: Order, plate: Plate, patience: number): string
     ${sides.length ? `<div class="sides">${sides.join("")}</div>` : ""}`;
 }
 
+function offerHtml(offer: Upgrade[]): string {
+  if (!offer.length) return "";
+  return `<h3>Pick a truck upgrade</h3>
+    <div class="offers">${offer.map((u) => `<button class="offer" data-act="pick" data-id="${u.id}"><b>${esc(u.name)}</b><span>${esc(u.text)}</span></button>`).join("")}</div>`;
+}
+
+export function titleHtml(t: { stop: Stop; stopNum: number; stops: number; trips: number; bank: number; owned: Upgrade[]; offer: Upgrade[]; fresh: boolean }): string {
+  const trip = t.trips > 0 ? `Trip ${t.trips + 1} · ` : "";
+  return `<div class="card">
+    <p class="sub">${trip}A food truck road trip · Stop ${t.stopNum} of ${t.stops}</p>
+    <h1>Bun Voyage</h1>
+    ${offerHtml(t.offer)}
+    <p>${esc(t.stop.blurb)}</p>
+    ${t.stop.newThing ? `<p class="new">${esc(t.stop.newThing)}</p>` : ""}
+    ${t.owned.length ? `<p class="owned">On the truck: ${t.owned.map((u) => esc(u.name)).join(", ")}</p>` : ""}
+    ${t.fresh ? HOW_TO : `<details><summary><b>How to play</b></summary>${HOW_TO}</details>`}
+    <div class="btn-row">
+      <button class="btn primary" data-act="start" ${t.offer.length ? "disabled" : ""}>Open the window in ${esc(t.stop.name)}</button>
+      ${t.fresh ? "" : `<button class="btn small" data-act="new-trip">Start a new trip</button>`}
+    </div>
+    ${t.bank ? `<p class="build">Savings: $${t.bank}</p>` : ""}
+    <p class="build">${esc(buildLabel())}</p>
+  </div>`;
+}
+
 export function summaryHtml(s: {
+  stop: Stop;
   served: number;
   lost: number;
   stars: number[];
   earned: number;
   tips: number;
   best: string | null;
+  outcome: "passed" | "failed" | "trip";
+  next: Stop | null;
+  offer: Upgrade[];
 }): string {
   const avg = s.stars.length ? s.stars.reduce((a, b) => a + b, 0) / s.stars.length : 0;
   const rounded = Math.round(avg);
   const starRow = [0, 1, 2].map((i) => `<span class="${i < rounded ? "" : "off"}">★</span>`).join("");
   const verdict =
-    s.served === 0 ? "The truck stayed quiet today." : avg >= 2.5 ? "Pinecrest will be talking about this for weeks." : avg >= 1.5 ? "Solid shift. The hikers left full." : "Rough day at the grill. Tomorrow's a new town.";
+    s.served === 0
+      ? "The truck stayed quiet today."
+      : s.outcome === "failed"
+        ? `${s.stop.name} wasn't impressed. Serve at least half the customers with a 1★ average to move on.`
+        : avg >= 2.5
+          ? `${s.stop.name} will be talking about this for weeks.`
+          : avg >= 1.5
+            ? "Solid shift. Everyone left full."
+            : "A rough day at the grill, but you made it.";
+  const buttons =
+    s.outcome === "failed"
+      ? `<button class="btn primary" data-act="restart">Try ${esc(s.stop.name)} again</button>`
+      : s.offer.length
+        ? ""
+        : s.outcome === "trip"
+          ? `<button class="btn primary" data-act="next">Head home and start a new trip</button>`
+          : `<button class="btn primary" data-act="next">Drive to ${esc(s.next!.name)}</button>`;
   return `<div class="card">
-    <p class="sub">Closing time · Pinecrest</p>
-    <h2>Shift complete</h2>
+    <p class="sub">Closing time · ${esc(s.stop.name)}</p>
+    <h2>${s.outcome === "trip" ? "Road trip complete!" : s.outcome === "failed" ? "Shift over" : "Shift complete"}</h2>
     <div class="stars" aria-label="${avg.toFixed(1)} stars average">${starRow}</div>
     <p>${verdict}</p>
     <dl class="stats">
@@ -162,10 +199,8 @@ export function summaryHtml(s: {
       <dt>Total</dt><dd>$${s.earned + s.tips}</dd>
       ${s.best ? `<dt>Best order</dt><dd>${esc(s.best)}</dd>` : ""}
     </dl>
-    <div class="btn-row">
-      <button class="btn primary" data-act="restart">Play again</button>
-    </div>
+    ${s.outcome !== "failed" ? offerHtml(s.offer) : ""}
+    <div class="btn-row">${buttons}</div>
     <p class="build">${esc(buildLabel())}</p>
   </div>`;
 }
-

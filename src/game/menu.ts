@@ -1,21 +1,5 @@
-import type { Doneness, DrinkId, ExpectedLayer, Kind, Order } from "./types";
-
-export interface Recipe {
-  name: string;
-  price: number;
-  /** Bottom to top. "patty" layers get a random doneness per order. */
-  layers: Kind[];
-  toasted: boolean;
-}
-
-/** Stop 1: Pinecrest, a mountain town. */
-export const PINECREST_MENU: Recipe[] = [
-  { name: "Trailhead Classic", price: 9, layers: ["bun", "ketchup", "patty", "lettuce", "tomato", "bun"], toasted: true },
-  { name: "Cheesy Switchback", price: 10, layers: ["bun", "patty", "cheese", "pickle", "mustard", "bun"], toasted: false },
-  { name: "Sunrise Summit", price: 11, layers: ["bun", "lettuce", "patty", "egg", "bun"], toasted: true },
-  { name: "Lumberjack Stack", price: 15, layers: ["bun", "patty", "cheese", "bacon", "onion", "patty", "ketchup", "bun"], toasted: true },
-  { name: "Plain Jane", price: 6, layers: ["bun", "patty", "bun"], toasted: false },
-];
+import type { Doneness, DrinkId, ExpectedLayer, Order } from "./types";
+import type { Recipe, Stop } from "./stops";
 
 export const FRIES_PRICE = 3;
 export const DRINK_PRICE = 2;
@@ -31,21 +15,28 @@ export function seededRng(seed: number): Rng {
 const DONENESS: Doneness[] = ["rare", "medium", "well"];
 const DRINKS: DrinkId[] = ["pine", "lemon", "cola"];
 
+export function orderFromRecipe(id: number, recipe: Recipe, doneness: Doneness, fries: boolean, drink: DrinkId | null): Order {
+  const layers: ExpectedLayer[] = recipe.layers.map((kind) => {
+    if (kind === "patty") return recipe.smash ? { kind, doneness, smashed: true } : { kind, doneness };
+    if (kind === "bun") return { kind, toasted: recipe.toasted };
+    return { kind };
+  });
+  const price = recipe.price + (fries ? FRIES_PRICE : 0) + (drink ? DRINK_PRICE : 0);
+  return { id, name: recipe.name, price, layers, fries, drink };
+}
+
 /**
  * `level` (0..1) ramps difficulty through the shift: early orders are simpler and rarely
  * come with sides.
  */
-export function makeOrder(id: number, rng: Rng, level: number): Order {
-  const pool = level < 0.25 ? PINECREST_MENU.filter((r) => r.layers.length <= 6) : PINECREST_MENU;
+export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Order {
+  let pool = stop.menu.filter((r) => (r.from ?? 0) <= level);
+  if (level < 0.25) pool = pool.filter((r) => r.layers.length <= 6);
+  if (!pool.length) pool = stop.menu;
   const recipe = pool[Math.floor(rng() * pool.length)];
-  const doneness = DONENESS[Math.floor(rng() * DONENESS.length)];
-  const layers: ExpectedLayer[] = recipe.layers.map((kind) => {
-    if (kind === "patty") return { kind, doneness };
-    if (kind === "bun") return { kind, toasted: recipe.toasted };
-    return { kind };
-  });
+  // Smashed patties are thin, so they're always cooked through.
+  const doneness = recipe.smash ? "well" : DONENESS[Math.floor(rng() * DONENESS.length)];
   const fries = rng() < 0.25 + level * 0.4;
   const drink = rng() < 0.2 + level * 0.5 ? DRINKS[Math.floor(rng() * DRINKS.length)] : null;
-  const price = recipe.price + (fries ? FRIES_PRICE : 0) + (drink ? DRINK_PRICE : 0);
-  return { id, name: recipe.name, price, layers, fries, drink };
+  return orderFromRecipe(id, recipe, doneness, fries, drink);
 }

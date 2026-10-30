@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { makeOrder, seededRng } from "./menu";
+import { STOPS } from "./stops";
+import { passed, upgradeChoices } from "./progress";
 import { alignLayers, payout, scorePlate } from "./scoring";
 import type { Kind, Layer, Order, Piece, Plate } from "./types";
 import { DONENESS_TARGET, newPiece } from "./types";
@@ -115,13 +117,41 @@ describe("payout", () => {
 });
 
 describe("makeOrder", () => {
-  it("builds burgers that start and end with a bun", () => {
+  it("builds burgers that start and end with a bun at every stop", () => {
     const rng = seededRng(42);
-    for (let i = 0; i < 50; i++) {
-      const o = makeOrder(i, rng, i / 50);
+    for (let i = 0; i < 150; i++) {
+      const stop = STOPS[i % STOPS.length];
+      const o = makeOrder(i, rng, (i % 50) / 50, stop);
+      for (const l of o.layers) if (l.kind !== "ketchup" && l.kind !== "mustard") expect(stop.pantry).toContain(l.kind);
       expect(o.layers[0].kind).toBe("bun");
       expect(o.layers[o.layers.length - 1].kind).toBe("bun");
       expect(o.price).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("smash burgers", () => {
+  it("wants smashed patties when the recipe says so", () => {
+    const order: Order = { ...classic, layers: classic.layers.map((l) => (l.kind === "patty" ? { ...l, doneness: "well", smashed: true } : l)) };
+    const p = perfectPlate();
+    const w = DONENESS_TARGET.well;
+    p.layers[1].piece.cook = [w, w];
+    expect(scorePlate(order, p).notes).toContain("wanted it smashed");
+    p.layers[1].piece.smashed = true;
+    expect(scorePlate(order, p).score).toBe(100);
+  });
+});
+
+describe("road trip progress", () => {
+  it("needs most customers served at one star or better to move on", () => {
+    expect(passed(1.2, 6, 9)).toBe(true);
+    expect(passed(0.8, 9, 9)).toBe(false);
+    expect(passed(3, 4, 9)).toBe(false);
+  });
+
+  it("only offers upgrades the truck doesn't have", () => {
+    const offer = upgradeChoices(["bench", "tipjar"], seededRng(3));
+    expect(offer).toHaveLength(3);
+    expect(offer.some((u) => u.id === "bench" || u.id === "tipjar")).toBe(false);
   });
 });

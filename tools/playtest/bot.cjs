@@ -4,6 +4,12 @@ const ACTION = 0.5; // seconds of game time each gesture costs
 const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
 (async () => {
   const { b, p } = await open({ query: process.argv[2] || '' });
+  // STOP=n plays that stop of the road trip (tutorial already done).
+  if (process.env.STOP) {
+    await p.evaluate((n) => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: n, tutorialDone: true })), +process.env.STOP);
+    await p.reload();
+    await p.waitForTimeout(600);
+  }
   await p.click('[data-act=start]');
   await p.evaluate(() => window.__bv.manual(true));
   const ev = (f, a) => p.evaluate(f, a);
@@ -25,7 +31,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
     const t0 = st.t;
     await page(1);
     // 1. Put grill items on.
-    const need = order.layers.map((l, idx) => ({ ...l, idx })).filter(l => l.kind === 'patty' || l.kind === 'bacon' || l.kind === 'egg' || (l.kind === 'bun' && l.toasted));
+    const need = order.layers.map((l, idx) => ({ ...l, idx })).filter(l => l.kind === 'patty' || l.kind === 'bacon' || l.kind === 'egg' || l.kind === 'pineapple' || (l.kind === 'bun' && l.toasted));
     const used = new Set((await items()).map(i => i.uid));
     let si = 0;
     const assigned = {};
@@ -38,7 +44,11 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       await act(line(bx, by, gx, gy, 10));
       const after = await items();
       const fresh = after.find(i => !used.has(i.uid));
-      if (fresh) { used.add(fresh.uid); assigned[n.idx] = fresh.uid; }
+      if (fresh) {
+        used.add(fresh.uid);
+        assigned[n.idx] = fresh.uid;
+        if (n.smashed) await hold(p, fresh.scr[0], fresh.scr[1], 600);
+      }
     }
     // 2. Fries
     if (order.fries) {
@@ -68,7 +78,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
               await act(line(o.scr[0], o.scr[1], o.scr[0], o.scr[1] - 60, 4), 16);
             }
           }
-          const tgt = l.kind === 'patty' ? TARGET[l.doneness] : l.kind === 'bun' ? 0.5 : l.kind === 'egg' ? 0.5 : 0.6;
+          const tgt = l.kind === 'patty' ? TARGET[l.doneness] : l.kind === 'bun' || l.kind === 'egg' || l.kind === 'pineapple' ? 0.5 : 0.6;
           const ready = l.kind === 'patty' || l.kind === 'bacon' ? it.cook[0] >= tgt - 0.02 && it.cook[1] >= tgt - 0.02 : it.cook[0] >= tgt;
           if (ready && !it.flipping) {
             const now = (await items()).find(i => i.uid === assigned[li]);
@@ -99,10 +109,10 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
     if (order.drink) {
       await page(0);
       const idx = ['pine', 'lemon', 'cola'].indexOf(order.drink);
-      const x = -14 + (idx - 1) * 2.0;
-      const [tx, ty] = await ev((x) => window.__bv.project('counter', x, 1.9, -1.7), x);
+      const x = -14 + (idx - 1) * 2.05;
+      const [tx, ty] = await ev((x) => window.__bv.project('counter', x, 1.2, -2.4), x);
       await hold(p, tx, ty, 2100);
-      const [cx, cy] = await ev((x) => window.__bv.project('counter', x, 0.6, -0.8), x);
+      const [cx, cy] = await ev((x) => window.__bv.project('counter', x, 0.5, -0.3), x);
       await act(line(cx, cy, px, py, 12));
       await page(1);
     }
@@ -116,6 +126,8 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
   }
   const fin = await state(p);
   console.log('FINAL', JSON.stringify({ t: fin.t, phase: fin.phase, served: fin.served, lost: fin.lost, money: fin.money, tips: fin.tips }));
+  console.log('SAVE', await ev(() => localStorage.getItem('bv-save-v1')));
+  console.log('SUMMARY', await ev(() => document.querySelector('[data-r=summary]').innerText.replace(/\s+/g, ' ').slice(0, 400)));
   await p.screenshot({ path: out + 'bot-end.png' });
   await b.close();
 })();

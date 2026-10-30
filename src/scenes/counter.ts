@@ -64,20 +64,14 @@ export interface CounterEvents {
   burning: () => void;
 }
 
-export const BIN_LAYOUT: { kind: Kind; x: number; z: number }[] = [
-  { kind: "bun", x: -2.6, z: -2.35 },
-  { kind: "patty", x: -1.3, z: -2.35 },
-  { kind: "bacon", x: 0, z: -2.35 },
-  { kind: "egg", x: 1.3, z: -2.35 },
-  { kind: "cheese", x: 2.6, z: -2.35 },
-  { kind: "lettuce", x: -2.6, z: -1.15 },
-  { kind: "tomato", x: -1.3, z: -1.15 },
-  { kind: "onion", x: 0, z: -1.15 },
-  { kind: "pickle", x: 1.3, z: -1.15 },
+/** Bin slots on the grill counter: two rows of five, the last slot of row two holds the sauces. */
+const BIN_SLOTS: { x: number; z: number }[] = [
+  ...[-2.6, -1.3, 0, 1.3, 2.6].map((x) => ({ x, z: -2.35 })),
+  ...[-2.6, -1.3, 0, 1.3].map((x) => ({ x, z: -1.15 })),
 ];
 
 /** Buns toast and eggs set more slowly than meat, so they're forgiving to leave on. */
-const COOK_SPEED: Record<string, number> = { patty: 1, bacon: 1.1, egg: 0.75, bun: 0.6 };
+const COOK_SPEED: Record<string, number> = { patty: 1, bacon: 1.1, egg: 0.75, bun: 0.6, pineapple: 0.7 };
 
 const DRINKS: DrinkId[] = ["pine", "lemon", "cola"];
 const DRINK_LABEL_COLOR: Record<DrinkId, string> = { pine: "#4fae5c", lemon: "#e8c43a", cola: "#7a3b26" };
@@ -91,6 +85,11 @@ export class CounterView {
   private camX = 0;
   private raycaster = new THREE.Raycaster();
   private hitMeshes: THREE.Mesh[] = [];
+  private pantry: THREE.Group | null = null;
+  bins: { kind: Kind; x: number; z: number }[] = [];
+  /** Upgrade multipliers. */
+  fryBoost = 1;
+  autoStopPour = false;
   grillItems: GrillItem[] = [];
   baskets: Basket[] = [];
   taps: Tap[] = [];
@@ -151,24 +150,6 @@ export class CounterView {
 
   private buildGrill(): { glow: THREE.Mesh } {
     const x0 = pageX(1);
-    for (const b of BIN_LAYOUT) {
-      const bin = mesh(faceted(new THREE.BoxGeometry(1.18, 0.3, 1.0)), "#d9e2df");
-      bin.position.set(x0 + b.x, 0.15, b.z);
-      this.scene.add(bin);
-      const inner = mesh(faceted(new THREE.BoxGeometry(1.04, 0.05, 0.86)), "#8fa5a0", { ink: false });
-      inner.position.set(x0 + b.x, 0.3, b.z);
-      this.scene.add(inner);
-      const n = b.kind === "bun" || b.kind === "patty" || b.kind === "egg" ? 2 : 1;
-      for (let i = 0; i < n; i++) {
-        const p = newPiece(b.kind);
-        const f = makeFood(p, "top");
-        f.scale.setScalar(b.kind === "bun" ? 0.36 : 0.42);
-        f.position.set(x0 + b.x + (n > 1 ? (i - 0.5) * 0.38 : 0), 0.33 + i * 0.05, b.z + (n > 1 ? (i - 0.5) * 0.12 : 0));
-        if (b.kind === "bacon") f.rotation.y = 0.3;
-        this.scene.add(f);
-      }
-      this.proxy(new THREE.BoxGeometry(1.25, 0.9, 1.15), new THREE.Vector3(x0 + b.x, 0.3, b.z), { type: "bin", kind: b.kind });
-    }
     const grill = mesh(faceted(new THREE.BoxGeometry(GRILL_W, GRILL_TOP, 3.05)), "#3d4245", { ink: false });
     grill.position.set(x0 + GRILL_CX, GRILL_TOP / 2, 1.42);
     this.scene.add(grill);
@@ -301,6 +282,37 @@ export class CounterView {
     return new THREE.Vector3(pageX(0) + (i - 1) * 2.05, 0.1, 0.55);
   }
 
+  /** Fill the grill counter's bins for the current stop. */
+  setPantry(kinds: Kind[]): void {
+    if (this.pantry) this.scene.remove(this.pantry);
+    this.hitMeshes = this.hitMeshes.filter((m) => {
+      const keep = (m.userData.hit as Hit).type !== "bin";
+      if (!keep) this.scene.remove(m);
+      return keep;
+    });
+    const g = new THREE.Group();
+    const x0 = pageX(1);
+    this.bins = kinds.slice(0, BIN_SLOTS.length).map((kind, i) => ({ kind, ...BIN_SLOTS[i] }));
+    for (const b of this.bins) {
+      const bin = mesh(faceted(new THREE.BoxGeometry(1.18, 0.3, 1.0)), "#d9e2df");
+      bin.position.set(x0 + b.x, 0.15, b.z);
+      const inner = mesh(faceted(new THREE.BoxGeometry(1.04, 0.05, 0.86)), "#8fa5a0", { ink: false });
+      inner.position.set(x0 + b.x, 0.3, b.z);
+      g.add(bin, inner);
+      const n = b.kind === "bun" || b.kind === "patty" || b.kind === "egg" || b.kind === "pineapple" ? 2 : 1;
+      for (let i = 0; i < n; i++) {
+        const f = makeFood(newPiece(b.kind), "top");
+        f.scale.setScalar(b.kind === "bun" ? 0.36 : 0.42);
+        f.position.set(x0 + b.x + (n > 1 ? (i - 0.5) * 0.38 : 0), 0.33 + i * 0.05, b.z + (n > 1 ? (i - 0.5) * 0.12 : 0));
+        if (b.kind === "bacon") f.rotation.y = 0.3;
+        g.add(f);
+      }
+      this.proxy(new THREE.BoxGeometry(1.25, 0.9, 1.15), new THREE.Vector3(x0 + b.x, 0.3, b.z), { type: "bin", kind: b.kind });
+    }
+    this.pantry = g;
+    this.scene.add(g);
+  }
+
   layout(aspect: number): void {
     this.camera.aspect = aspect;
     // Fit about 7.2 world units across, whatever the band shape.
@@ -360,6 +372,22 @@ export class CounterView {
     const item: GrillItem = { piece, obj, x, z, flipT: -1, squash: 0, squashV: 4, smoke: 0, held: false };
     this.grillItems.push(item);
     return item;
+  }
+
+  /** Press a patty flat. Only fresh patties can be smashed. */
+  smash(item: GrillItem): boolean {
+    const p = item.piece;
+    if (p.kind !== "patty" || p.smashed || item.flipT >= 0 || p.cook[0] > 0.35) return false;
+    p.smashed = true;
+    this.scene.remove(item.obj);
+    const obj = makeFood(p, "top");
+    obj.scale.setScalar(GRILL_SCALE);
+    obj.position.copy(item.obj.position);
+    this.scene.add(obj);
+    item.obj = obj;
+    item.squash = 0;
+    item.squashV = 12;
+    return true;
   }
 
   removeGrillItem(item: GrillItem): void {
@@ -441,7 +469,7 @@ export class CounterView {
         }
       } else {
         // The middle of the grill runs a little hotter than the edges.
-        const heat = (1.12 - 0.25 * Math.abs(it.x / 3)) * (COOK_SPEED[it.piece.kind] ?? 1);
+        const heat = (1.12 - 0.25 * Math.abs((it.x - GRILL_CX) / 2.5)) * (COOK_SPEED[it.piece.kind] ?? 1) * (it.piece.smashed ? 1.6 : 1);
         it.piece.cook[0] += GRILL_RATE * heat * dt;
         if (it.piece.kind === "egg") it.piece.cook[1] += GRILL_RATE * 0.35 * heat * dt;
         it.obj.position.set(gx + it.x, GRILL_TOP, it.z);
@@ -487,7 +515,7 @@ export class CounterView {
       b.obj.position.y = b.y + (b.down && b.loaded ? Math.sin(this.time * 18) * 0.015 : 0);
       b.fries.visible = b.loaded;
       if (b.loaded && b.down) {
-        b.cook += FRY_RATE * dt;
+        b.cook += FRY_RATE * this.fryBoost * dt;
         if (!b.goldenRung && b.cook >= 0.55) {
           b.goldenRung = true;
           this.events.golden();
@@ -500,6 +528,7 @@ export class CounterView {
     for (const t of this.taps) {
       if (t.pouring) {
         t.fill += dt * 0.42;
+        if (this.autoStopPour && t.fill >= 0.9) t.pouring = false;
         if (t.fill > 1.1) {
           t.fill = 0;
           t.pouring = false;

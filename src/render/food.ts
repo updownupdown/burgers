@@ -15,6 +15,8 @@ export const LAYER_HEIGHT: Record<Kind, number> = {
   tomato: 0.1,
   onion: 0.09,
   pickle: 0.07,
+  pineapple: 0.13,
+  jalapeno: 0.06,
   ketchup: 0.04,
   mustard: 0.04,
 };
@@ -53,6 +55,12 @@ const eggWhite = ramp([
   [0.4, "#fbfaf4"],
   [0.85, "#f4e6c8"],
   [1.2, "#a8743c"],
+]);
+const pineRamp = ramp([
+  [0, "#f7dc4a"],
+  [0.4, "#e8b03a"],
+  [0.8, "#b9702a"],
+  [1.1, "#4a2a16"],
 ]);
 const friesRamp = ramp([
   [0, "#f6efc9"],
@@ -105,6 +113,9 @@ const GEO = {
   onion: [0.32, 0.44].map((r) => faceted(new THREE.TorusGeometry(r, 0.045, 5, 20))),
   pickle: faceted(new THREE.CylinderGeometry(0.24, 0.24, 0.05, 12)),
   pickleCore: faceted(new THREE.CylinderGeometry(0.15, 0.15, 0.055, 8)),
+  pineapple: lathe([[0.3, 0], [0.88, 0], [0.92, 0.06], [0.88, 0.12], [0.3, 0.12], [0.28, 0.06], [0.3, 0]], 18),
+  jalapeno: faceted(new THREE.TorusGeometry(0.16, 0.05, 5, 12)),
+  jalapenoCore: faceted(new THREE.CylinderGeometry(0.12, 0.12, 0.03, 8)),
   yolk: faceted(new THREE.SphereGeometry(0.3, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2)),
 };
 
@@ -222,6 +233,7 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       m.castShadow = m.receiveShadow = true;
       outline(m, 1.045);
       const g = group("patty", LAYER_HEIGHT.patty, (p) => {
+        if (p.smashed) m.scale.set(1.22, 0.5, 1.22);
         pattyRamp(p.cook[0], tmpA);
         pattyRamp(p.cook[1], tmpB);
         pattyRamp(avgCook(p) * 0.85, tmpC);
@@ -270,6 +282,36 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       });
       g.add(white, yolk);
       g.userData.update(piece);
+      return g;
+    }
+    case "pineapple": {
+      const ring = mesh(GEO.pineapple, "#f5d33f", { unique: true });
+      const g = group("pineapple", LAYER_HEIGHT.pineapple, (p) => {
+        const t = Math.max(p.cook[0], p.cook[1]);
+        (ring.material as THREE.MeshToonMaterial).color.copy(pineRamp(t, tmpA));
+      });
+      g.add(ring);
+      g.userData.update(piece);
+      return g;
+    }
+    case "jalapeno": {
+      const g = group("jalapeno", LAYER_HEIGHT.jalapeno);
+      const spots = [
+        [0.45, 0.15],
+        [-0.4, 0.3],
+        [-0.15, -0.5],
+        [0.2, 0.55],
+        [0.05, -0.05],
+      ];
+      spots.forEach(([x, z], i) => {
+        // One ripe red slice makes the pile read as "hot peppers" rather than pickles.
+        const r = mesh(GEO.jalapeno, i === 2 ? "#d8392b" : "#2fa83a", { ink: 1.15 });
+        r.rotation.x = Math.PI / 2;
+        r.position.set(x, 0.03 + i * 0.004, z);
+        const c = mesh(GEO.jalapenoCore, "#fff4b8", { ink: false, shadow: false });
+        c.position.set(x, 0.03, z);
+        g.add(r, c);
+      });
       return g;
     }
     case "cheese": {
@@ -355,10 +397,11 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
   }
 }
 
-/** Height of a stacked piece, accounting for bun shape. */
-export function stackHeight(kind: Kind, role: BunRole): number {
-  if (kind === "bun") return role === "bottom" ? LAYER_HEIGHT.bun : TOP_BUN_HEIGHT;
-  return LAYER_HEIGHT[kind];
+/** Height of a stacked piece, accounting for bun shape and smashed patties. */
+export function stackHeight(piece: Pick<Piece, "kind" | "smashed">, role: BunRole): number {
+  if (piece.kind === "bun") return role === "bottom" ? LAYER_HEIGHT.bun : TOP_BUN_HEIGHT;
+  if (piece.smashed) return LAYER_HEIGHT.patty * 0.55;
+  return LAYER_HEIGHT[piece.kind];
 }
 
 // ---- sides -----------------------------------------------------------------

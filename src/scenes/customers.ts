@@ -1,12 +1,18 @@
 import * as THREE from "three";
+import type { Backdrop } from "../game/stops";
 import { faceted, mesh, toon } from "../render/materials";
 
 export type Mood = "neutral" | "happy" | "sad" | "angry";
 
 const BODY_COLORS = ["#7fb7e6", "#f29e6d", "#9fd27a", "#e889b8", "#f2cf5b", "#a99be8", "#6fd1c4", "#e7766f"];
-const HATS = ["none", "beanie", "cap", "ranger", "antlers"] as const;
+const HATS: Record<Backdrop, Hat[]> = {
+  mountains: ["none", "beanie", "cap", "ranger", "antlers"],
+  beach: ["none", "sunhat", "shades", "cap", "shades"],
+  desert: ["none", "cowboy", "cowboy", "shades", "bandana"],
+};
+type Hat = "none" | "beanie" | "cap" | "ranger" | "antlers" | "sunhat" | "shades" | "cowboy" | "bandana";
 
-/** A chunky Pinecrest local built from rounded primitives. */
+/** A chunky local built from rounded primitives, dressed for the town. */
 export class CustomerFigure {
   root = new THREE.Group();
   private body: THREE.Group;
@@ -17,9 +23,10 @@ export class CustomerFigure {
   private bob = Math.random() * 10;
   private jump = 0;
 
-  constructor(seed: number) {
+  constructor(seed: number, backdrop: Backdrop = "mountains") {
     const color = BODY_COLORS[seed % BODY_COLORS.length];
-    const hat = HATS[Math.floor(seed / 3) % HATS.length];
+    const hats = HATS[backdrop];
+    const hat = hats[Math.floor(seed / 3) % hats.length];
     this.body = new THREE.Group();
     const torso = mesh(faceted(new THREE.SphereGeometry(0.85, 14, 10)), color);
     torso.scale.set(1, 1.15, 0.85);
@@ -80,6 +87,38 @@ export class CustomerFigure {
         tine.rotation.z = 0.4 * s;
         this.body.add(a, tine);
       }
+    } else if (hat === "sunhat") {
+      const brim = mesh(faceted(new THREE.CylinderGeometry(1.1, 1.1, 0.05, 18)), "#f1d98f");
+      brim.position.y = 1.82;
+      const crown = mesh(faceted(new THREE.SphereGeometry(0.5, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2)), "#f1d98f");
+      crown.position.y = 1.8;
+      const band = mesh(faceted(new THREE.CylinderGeometry(0.51, 0.51, 0.1, 14)), "#e5432b", { ink: false });
+      band.position.y = 1.86;
+      this.body.add(brim, crown, band);
+    } else if (hat === "shades") {
+      for (const s of [-1, 1]) {
+        const lens = mesh(faceted(new THREE.CylinderGeometry(0.2, 0.2, 0.05, 12)), "#1d1410", { ink: false });
+        lens.rotation.x = Math.PI / 2;
+        lens.position.set(0.28 * s, 1.37, 0.78);
+        this.body.add(lens);
+      }
+      const bridge = mesh(faceted(new THREE.BoxGeometry(0.2, 0.04, 0.04)), "#1d1410", { ink: false });
+      bridge.position.set(0, 1.42, 0.78);
+      this.body.add(bridge);
+    } else if (hat === "cowboy") {
+      const brim = mesh(faceted(new THREE.CylinderGeometry(1.05, 1.05, 0.06, 18)), "#8a5a32");
+      brim.scale.z = 0.8;
+      brim.position.y = 1.86;
+      const crown = mesh(faceted(new THREE.CylinderGeometry(0.42, 0.5, 0.5, 12)), "#8a5a32");
+      crown.position.y = 2.12;
+      const dent = mesh(faceted(new THREE.BoxGeometry(0.1, 0.12, 0.7)), "#6e4524", { ink: false });
+      dent.position.y = 2.36;
+      this.body.add(brim, crown, dent);
+    } else if (hat === "bandana") {
+      const b = mesh(faceted(new THREE.CylinderGeometry(0.62, 0.7, 0.3, 14)), "#c8382c");
+      b.position.y = 0.95;
+      b.scale.z = 0.85;
+      this.body.add(b);
     }
     this.root.add(this.body);
     this.setMood("neutral");
@@ -115,35 +154,16 @@ export class CustomersView {
   slots: { fig: CustomerFigure | null; x: number; enterT: number; leaving: boolean; onGone?: () => void }[] = [];
   private raycaster = new THREE.Raycaster();
   private slotX = [0, 0, 0];
+  private backdrop = new THREE.Group();
+  private kind: Backdrop = "mountains";
 
   constructor() {
-    this.scene.background = new THREE.Color("#9fd3e8");
     this.scene.add(new THREE.HemisphereLight("#fff7e6", "#7a9a8a", 1.4));
     const sun = new THREE.DirectionalLight("#fff1d6", 1.4);
     sun.position.set(-3, 6, 6);
     this.scene.add(sun);
-    // Pinecrest backdrop: mountains and pines.
-    const mtn = (x: number, h: number, c: string) => {
-      const m = new THREE.Mesh(faceted(new THREE.ConeGeometry(h * 0.9, h, 5)), toon(c));
-      m.position.set(x, h / 2 - 0.5, -9);
-      this.scene.add(m);
-      const snow = new THREE.Mesh(faceted(new THREE.ConeGeometry(h * 0.27, h * 0.3, 5)), toon("#f4f7f8"));
-      snow.position.set(x, h - 0.5 - h * 0.15, -8.95);
-      this.scene.add(snow);
-    };
-    mtn(-7, 6, "#8aa6b8");
-    mtn(-1, 7.5, "#7c98ad");
-    mtn(6, 6.5, "#8aa6b8");
-    for (let i = 0; i < 14; i++) {
-      const x = -11 + i * 1.7 + Math.sin(i * 7) * 0.4;
-      const h = 1.6 + Math.abs(Math.sin(i * 3.1)) * 1.2;
-      const tree = new THREE.Mesh(faceted(new THREE.ConeGeometry(h * 0.35, h, 6)), toon(i % 2 ? "#2f6b4f" : "#3b7d5a"));
-      tree.position.set(x, h / 2 - 0.4, -5.5);
-      this.scene.add(tree);
-    }
-    const ground = new THREE.Mesh(new THREE.BoxGeometry(60, 0.4, 20), toon("#9cc77a"));
-    ground.position.set(0, -0.6, -6);
-    this.scene.add(ground);
+    this.scene.add(this.backdrop);
+    this.setBackdrop("mountains");
     // Truck window frame and serving ledge, in front of the customers.
     const ledge = mesh(faceted(new THREE.BoxGeometry(40, 0.5, 1.4)), "#f3efe4");
     ledge.position.set(0, 0.45, 1.8);
@@ -154,6 +174,60 @@ export class CustomersView {
     for (let i = 0; i < 3; i++) this.slots.push({ fig: null, x: 0, enterT: 0, leaving: false });
     this.camera.position.set(0, 2.6, 10);
     this.camera.lookAt(0, 2.15, 0);
+  }
+
+  setBackdrop(kind: Backdrop): void {
+    this.kind = kind;
+    const g = this.backdrop;
+    g.clear();
+    const add = (geo: THREE.BufferGeometry, color: string, x: number, y: number, z: number) => {
+      const m = new THREE.Mesh(faceted(geo), toon(color));
+      m.position.set(x, y, z);
+      g.add(m);
+      return m;
+    };
+    if (kind === "mountains") {
+      this.scene.background = new THREE.Color("#9fd3e8");
+      for (const [x, h, c] of [[-7, 6, "#8aa6b8"], [-1, 7.5, "#7c98ad"], [6, 6.5, "#8aa6b8"]] as const) {
+        add(new THREE.ConeGeometry(h * 0.9, h, 5), c, x, h / 2 - 0.5, -9);
+        add(new THREE.ConeGeometry(h * 0.27, h * 0.3, 5), "#f4f7f8", x, h - 0.5 - h * 0.15, -8.95);
+      }
+      for (let i = 0; i < 14; i++) {
+        const h = 1.6 + Math.abs(Math.sin(i * 3.1)) * 1.2;
+        add(new THREE.ConeGeometry(h * 0.35, h, 6), i % 2 ? "#2f6b4f" : "#3b7d5a", -11 + i * 1.7 + Math.sin(i * 7) * 0.4, h / 2 - 0.4, -5.5);
+      }
+      add(new THREE.BoxGeometry(60, 0.4, 20), "#9cc77a", 0, -0.6, -6);
+    } else if (kind === "beach") {
+      this.scene.background = new THREE.Color("#8fd6f0");
+      add(new THREE.BoxGeometry(60, 0.2, 10), "#3fa7c9", 0, 0.2, -12);
+      add(new THREE.BoxGeometry(60, 0.4, 14), "#f2dca0", 0, -0.6, -4);
+      add(new THREE.SphereGeometry(1.4, 16, 10), "#ffe08a", 7, 6.5, -14);
+      for (const [x, z, lean] of [[-8, -6, 0.25], [-3.5, -7, -0.15], [4, -6.5, 0.2], [9, -7.5, -0.2]] as const) {
+        const trunk = add(new THREE.CylinderGeometry(0.16, 0.24, 4.2, 6), "#9a6a3c", x, 1.6, z);
+        trunk.rotation.z = lean;
+        for (let k = 0; k < 5; k++) {
+          const leaf = add(new THREE.ConeGeometry(0.35, 2.2, 4), "#3c9a52", x - lean * 3.6, 3.6, z);
+          leaf.rotation.set(0, (k * Math.PI * 2) / 5, Math.PI / 2.3);
+        }
+      }
+      for (let i = 0; i < 3; i++) {
+        const umb = add(new THREE.ConeGeometry(1.2, 0.5, 8), i % 2 ? "#e5432b" : "#f3bd3d", -6 + i * 6, 1.6, -3.5);
+        umb.rotation.z = 0.15;
+      }
+    } else {
+      this.scene.background = new THREE.Color("#f6c48a");
+      add(new THREE.BoxGeometry(60, 0.4, 20), "#e0a868", 0, -0.6, -6);
+      for (const [x, w, h] of [[-8, 4, 3.5], [-1, 6, 5], [7, 3.5, 4]] as const) {
+        add(new THREE.BoxGeometry(w, h, 2), "#c4623a", x, h / 2 - 0.5, -11);
+        add(new THREE.BoxGeometry(w + 0.4, 0.4, 2.2), "#a94f2e", x, h - 0.4, -11);
+      }
+      add(new THREE.SphereGeometry(1.2, 16, 10), "#fff1c4", -5, 6.2, -14);
+      for (const [x, z] of [[-6, -5], [-1.5, -6], [3.5, -5.5], [8, -6]] as const) {
+        add(new THREE.CylinderGeometry(0.28, 0.32, 2.2, 8), "#4f8f4a", x, 0.7, z);
+        const arm = add(new THREE.CylinderGeometry(0.18, 0.2, 0.9, 8), "#4f8f4a", x + 0.45, 1.1, z);
+        arm.rotation.z = -0.2;
+      }
+    }
   }
 
   layout(aspect: number): void {
@@ -175,7 +249,7 @@ export class CustomersView {
   private figScale = 1;
 
   arrive(slot: number, seed: number): CustomerFigure {
-    const fig = new CustomerFigure(seed);
+    const fig = new CustomerFigure(seed, this.kind);
     fig.root.scale.setScalar(this.figScale);
     const sl = this.slots[slot];
     if (sl.fig) this.scene.remove(sl.fig.root);

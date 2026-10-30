@@ -1,16 +1,18 @@
 import * as THREE from "three";
 import { buzz, Sfx } from "./audio";
 import { avgCook, bunToast, pattyLabel } from "./game/cooking";
-import { makeOrder, PINECREST_MENU, seededRng, type Rng } from "./game/menu";
+import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
+import { freshSave, loadSave, passed, upgradeChoices, UPGRADES, writeSave, type UpgradeId } from "./game/progress";
+import { STOPS } from "./game/stops";
 import { payout, scorePlate } from "./game/scoring";
 import type { DrinkId, Order, Piece, Plate, SauceKind } from "./game/types";
 import { GRILLABLE, newPiece } from "./game/types";
 import { makeCup, makeFood, makeFries } from "./render/food";
-import { BIN_LAYOUT, CounterView, GRILL_SCALE, HOME_PAGE, PAGES, type GrillItem, type Hit } from "./scenes/counter";
+import { CounterView, GRILL_SCALE, HOME_PAGE, PAGES, type GrillItem, type Hit } from "./scenes/counter";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
 import "./style.css";
-import { buildUi, summaryHtml, ticketHtml } from "./ui";
+import { buildUi, summaryHtml, ticketHtml, titleHtml } from "./ui";
 import { buildLabel, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 
 // ---------------------------------------------------------------------------
@@ -28,8 +30,9 @@ const trayView = new TrayView();
 const counter = new CounterView();
 const ui = buildUi(document.getElementById("ui")!, PAGES);
 
-const SHIFT_LENGTH = 180;
-const TOTAL_CUSTOMERS = 9;
+const save = loadSave();
+const stop = () => STOPS[game.stopIdx];
+const has = (u: UpgradeId) => save.upgrades.includes(u);
 
 interface Slot {
   order: Order | null;
@@ -58,6 +61,7 @@ const game = {
   orderSeq: 1,
   active: 0,
   tutorial: true,
+  stopIdx: save.stop,
   rng: seededRng(Date.now() % 100000) as Rng,
   slots: [0, 1, 2].map(
     (): Slot => ({ order: null, plate: emptyPlate(), patience: 0, maxPatience: 1, leaving: false, fig: null, ticketKey: "", bubble: null }),
@@ -134,15 +138,13 @@ function ndcIn(r: Rect, x: number, y: number): THREE.Vector2 {
 
 function spawnCustomer(slotIdx: number): void {
   const s = game.slots[slotIdx];
-  const level = game.time / SHIFT_LENGTH;
-  let order = makeOrder(game.orderSeq++, game.rng, level);
-  if (game.tutorial && game.spawned === 0) {
-    const plain = PINECREST_MENU.find((r) => r.name === "Plain Jane")!;
-    order = { id: order.id, name: plain.name, price: plain.price, layers: plain.layers.map((kind) => (kind === "patty" ? { kind, doneness: "medium" } : { kind, toasted: false })), fries: false, drink: null };
-  }
+  const level = game.time / stop().shiftLength;
+  let order = makeOrder(game.orderSeq++, game.rng, level, stop());
+  // The very first order of the trip is the simplest burger, with no sides.
+  if (game.tutorial && game.spawned === 0) order = orderFromRecipe(order.id, stop().menu[0], "medium", false, null);
   s.order = order;
   s.plate = emptyPlate();
-  s.maxPatience = 50 + order.layers.length * 7 + (order.fries ? 12 : 0) + (order.drink ? 9 : 0);
+  s.maxPatience = (50 + order.layers.length * 7 + (order.fries ? 12 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1);
   if (game.tutorial && game.spawned === 0) s.maxPatience = 600;
   s.patience = s.maxPatience;
   s.leaving = false;
@@ -189,7 +191,8 @@ function serve(i: number): void {
     return;
   }
   const r = scorePlate(s.order, s.plate);
-  const { pay, tip } = payout(s.order, r.score, s.patience / s.maxPatience);
+  const { pay, tip: baseTip } = payout(s.order, r.score, s.patience / s.maxPatience);
+  const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1));
   game.money += pay;
   game.tips += tip;
   game.served++;
@@ -215,6 +218,8 @@ function serve(i: number): void {
   if (game.tutorial) {
     game.tutorial = false;
     game.nextSpawn = game.time + 2;
+    save.tutorialDone = true;
+    writeSave(save);
   }
 }
 
@@ -307,6 +312,8 @@ interface Pointer {
   x0: number;
   y0: number;
   t0: number;
+  /** Game time at pointer down, for hold gestures that must work with a stepped clock. */
+  gt0: number;
   x: number;
   y: number;
   band: ReturnType<typeof bandAt>;
@@ -421,7 +428,7 @@ function finishHold(pt: Pointer): void {
 
   if (band === "tray" || band === "customers") {
     const slot = band === "tray" ? trayView.pick(ndcIn(bands.tray, pt.x, pt.y)) : game.active;
-    done = addToPlate(slot >= 0 ? slot : game.active, payload, 0.08);
+    done = addToPlate(slot >= 0 ? slot : game.active, payload, has("steady") ? 0.03 : 0.08);
     if (done && slot >= 0) setActive(slot);
   } else if (band === "counter") {
     const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3);
@@ -438,7 +445,7 @@ function finishHold(pt: Pointer): void {
         done = true;
       } else if (fast && !payload.fromGrill) {
         // Flicked up from a bin: toss it onto the active plate, a little less neatly.
-        done = addToPlate(game.active, payload, 0.22);
+        done = addToPlate(game.active, payload, has("steady") ? 0.08 : 0.22);
         sfx.whoosh();
       } else if (over && !GRILLABLE.has(payload.piece.kind)) {
         showHint(`${capitalise(payload.piece.kind)} doesn't go on the grill. Drag it up to the tray.`, 2.5);
@@ -520,6 +527,7 @@ canvas.addEventListener("pointerdown", (e) => {
     x0: x,
     y0: y,
     t0: e.timeStamp,
+    gt0: game.time,
     x,
     y,
     band: bandAt(y),
@@ -755,6 +763,24 @@ ui.root.addEventListener("click", (e) => {
     case "restart":
       startShift();
       break;
+    case "pick": {
+      const id = (e.target as HTMLElement).closest<HTMLElement>("[data-id]")?.dataset.id as UpgradeId | undefined;
+      if (!id || !save.offer.includes(id)) break;
+      save.upgrades.push(id);
+      save.offer = [];
+      writeSave(save);
+      sfx.coin();
+      showTitle();
+      break;
+    }
+    case "next":
+      showTitle();
+      break;
+    case "new-trip":
+      Object.assign(save, freshSave(), { tutorialDone: save.tutorialDone, trips: save.trips, best: save.best });
+      writeSave(save);
+      showTitle();
+      break;
     case "resume":
       game.phase = "playing";
       ui.menu.hidden = true;
@@ -824,13 +850,47 @@ function startShift(): void {
     spawned: 0,
     nextSpawn: 1.2,
     active: 0,
-    tutorial: !game.hintsShown.has("tutorial-done"),
+    tutorial: !save.tutorialDone,
   });
-  game.hintsShown.add("tutorial-done");
+  applyStop();
+  counter.fryBoost = has("turbo") ? 1.35 : 1;
+  counter.autoStopPour = has("autostop");
   counter.setPage(HOME_PAGE);
+  const intro = stop().newThing;
+  if (intro && !game.tutorial) showHint(intro, 6);
   ui.title.hidden = true;
   ui.menu.hidden = true;
   ui.summary.hidden = true;
+}
+
+/** Dress the truck for the current stop: scenery, pantry bins and HUD label. */
+function applyStop(): void {
+  const st = stop();
+  counter.setPantry(st.pantry);
+  customersView.setBackdrop(st.backdrop);
+  ui.stop.textContent = st.name;
+}
+
+const offerList = () => save.offer.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean);
+
+function showTitle(): void {
+  game.stopIdx = save.stop;
+  applyStop();
+  ui.title.innerHTML = titleHtml({
+    stop: stop(),
+    stopNum: game.stopIdx + 1,
+    stops: STOPS.length,
+    trips: save.trips,
+    bank: save.bank,
+    owned: save.upgrades.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean),
+    offer: offerList(),
+    fresh: !save.tutorialDone && save.stop === 0,
+  });
+  game.phase = "title";
+  ui.title.hidden = false;
+  ui.summary.hidden = true;
+  ui.menu.hidden = true;
+  if (game.pendingUpdate) reloadTo(game.pendingUpdate.build);
 }
 
 function endShift(): void {
@@ -839,13 +899,31 @@ function endShift(): void {
     s.bubble?.remove();
     s.bubble = null;
   }
+  const here = stop();
+  const avg = game.stars.length ? game.stars.reduce((a, b) => a + b, 0) / game.stars.length : 0;
+  const ok = passed(avg, game.served, here.customers);
+  const lastStop = game.stopIdx === STOPS.length - 1;
+  save.bank += game.money + game.tips;
+  save.best[here.id] = Math.max(save.best[here.id] ?? 0, avg);
+  if (ok) {
+    save.offer = upgradeChoices(save.upgrades, game.rng).map((u) => u.id);
+    if (lastStop) {
+      save.stop = 0;
+      save.trips++;
+    } else save.stop = game.stopIdx + 1;
+  }
+  writeSave(save);
   ui.summary.innerHTML = summaryHtml({
+    stop: here,
     served: game.served,
     lost: game.lost,
     stars: game.stars,
     earned: game.money,
     tips: game.tips,
     best: game.best?.name ?? null,
+    outcome: !ok ? "failed" : lastStop ? "trip" : "passed",
+    next: STOPS[save.stop],
+    offer: offerList(),
   });
   ui.summary.hidden = false;
   sfx.chime();
@@ -877,9 +955,9 @@ function tick(dt: number): void {
     // Customers arrive while the window is open.
     const free = game.slots.findIndex((s) => !s.order && !s.fig);
     const tutorialHold = game.tutorial && game.spawned >= 1;
-    if (game.time < SHIFT_LENGTH && game.spawned < TOTAL_CUSTOMERS && free >= 0 && game.time >= game.nextSpawn && !tutorialHold) {
+    if (game.time < stop().shiftLength && game.spawned < stop().customers && free >= 0 && game.time >= game.nextSpawn && !tutorialHold) {
       spawnCustomer(free);
-      const level = game.time / SHIFT_LENGTH;
+      const level = game.time / stop().shiftLength;
       game.nextSpawn = game.time + (17 - 8 * level) * (0.8 + game.rng() * 0.4);
     }
     // If the window is empty, don't make the player wait.
@@ -896,7 +974,18 @@ function tick(dt: number): void {
       }
     });
 
-    const doneSpawning = game.time >= SHIFT_LENGTH || game.spawned >= TOTAL_CUSTOMERS;
+    // Press and hold a fresh patty to smash it (at stops that serve smash burgers).
+    if (ptr && ptr.mode === "grill" && !ptr.moved && ptr.hit?.type === "grillItem" && game.time - ptr.gt0 > 0.45 && stop().menu.some((r) => r.smash)) {
+      if (counter.smash(ptr.hit.item)) {
+        sfx.thud();
+        sfx.sizzleHit();
+        buzz(40);
+        ptr.mode = "none";
+        hintOnce("smash", "Smashed! Thin patties cook fast, so flip them soon.", 3);
+      }
+    }
+
+    const doneSpawning = game.time >= stop().shiftLength || game.spawned >= stop().customers;
     if (doneSpawning && game.slots.every((s) => !s.order && !s.fig)) endShift();
   }
 
@@ -925,7 +1014,7 @@ counter.events.burning = () => {
 
 let lastTimerText = "";
 function updateUi(): void {
-  const left = Math.max(0, SHIFT_LENGTH - game.time);
+  const left = Math.max(0, stop().shiftLength - game.time);
   const tText = left > 0 ? `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, "0")}` : "Closing";
   if (tText !== lastTimerText) {
     ui.timer.textContent = tText;
@@ -1000,6 +1089,10 @@ function itemTag(p: Piece): string {
       const t = Math.max(p.cook[0], p.cook[1]);
       return t >= 1 ? "Rubbery" : t >= 0.35 ? "Set" : "Runny";
     }
+    case "pineapple": {
+      const t = Math.max(p.cook[0], p.cook[1]);
+      return t >= 1 ? "Burnt" : t >= 0.35 ? "Grilled" : "Grilling";
+    }
     case "bun": {
       const t = bunToast(p);
       return t >= 0.95 ? "Burnt" : t >= 0.35 ? "Toasted" : "Toasting";
@@ -1065,6 +1158,7 @@ function frame(now: number): void {
   }
   requestAnimationFrame(frame);
 }
+showTitle();
 requestAnimationFrame(frame);
 
 document.addEventListener("visibilitychange", () => {
@@ -1096,7 +1190,11 @@ document.addEventListener("visibilitychange", () => {
     const r = bands[band];
     return [r.x + ((v.x + 1) / 2) * r.w, r.y + ((1 - v.y) / 2) * r.h];
   },
-  bins: BIN_LAYOUT,
+  get bins() {
+    return counter.bins;
+  },
+  save,
+  showTitle,
   manual: (on: boolean) => {
     manualClock = on;
   },

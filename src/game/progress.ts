@@ -1,6 +1,7 @@
 import type { Plan, Review } from "./business";
 import type { PressPiece } from "./press";
 import { REGION_START_IDS, START_TOWN, STOPS, townById } from "./stops";
+import { SHIFTS_TO_UNLOCK, START_BANK } from "./travel";
 
 export type UpgradeId = "bench" | "tipjar" | "turbo" | "autostop" | "steady";
 
@@ -28,8 +29,20 @@ export interface Save {
   /** Towns the truck can drive to, and towns whose shift has been passed. */
   unlocked: string[];
   passedTowns: string[];
+  /** Passed shifts per town; SHIFTS_TO_UNLOCK of them open the town's roads (see travel.ts). */
+  shiftsIn: Record<string, number>;
+  /** The truck already drove one road tonight; another drive takes a day. Reset by a shift. */
+  overnightUsed: boolean;
   upgrades: UpgradeId[];
+  /** Gas money and savings. Starts at START_BANK; shifts add their profit, drives cost gas. */
   bank: number;
+  /**
+   * Lifetime rating: every served order's stars (0–3) in either mode, summed and counted, so
+   * the home screen can show the truck's average with how many orders it rests on. Customers
+   * who walk out don't rate. Business-mode reputation (`rep`) is separate and recency-weighted.
+   */
+  ratingCount: number;
+  ratingSum: number;
   /** Best average stars per stop id. */
   best: Record<string, number>;
   tutorialDone: boolean;
@@ -59,25 +72,61 @@ export interface Save {
 const KEY = "bv-save-v1";
 
 export function freshSave(): Save {
-  return { town: START_TOWN, day: 1, unlocked: [START_TOWN], passedTowns: [], upgrades: [], bank: 0, best: {}, tutorialDone: false, trips: 0, offer: [], known: {}, biz: false, plan: null, reviews: [], rep: 2, repWeight: 6, popularity: 10, press: [], stock: {} };
+  return {
+    town: START_TOWN,
+    day: 1,
+    unlocked: [START_TOWN],
+    passedTowns: [],
+    shiftsIn: {},
+    overnightUsed: false,
+    upgrades: [],
+    bank: START_BANK,
+    ratingCount: 0,
+    ratingSum: 0,
+    best: {},
+    tutorialDone: false,
+    trips: 0,
+    offer: [],
+    known: {},
+    biz: false,
+    plan: null,
+    reviews: [],
+    rep: 2,
+    repWeight: 6,
+    popularity: 10,
+    press: [],
+    stock: {},
+  };
+}
+
+/** A stored save brought up to date: missing fields filled in, old shapes converted. */
+export function migrateSave(p: Partial<Save>): Save {
+  const s: Save = { ...freshSave(), ...p };
+  if (s.stop !== undefined && !p.town) {
+    // Saves from before the map: start at the first town of the region they'd reached.
+    const r = Math.max(0, Math.min(REGION_START_IDS.length - 1, s.stop | 0));
+    s.town = REGION_START_IDS[r];
+    s.unlocked = REGION_START_IDS.slice(0, r + 1);
+    s.passedTowns = REGION_START_IDS.slice(0, r);
+  }
+  delete s.stop;
+  if (!STOPS.some((t) => t.id === s.town)) s.town = START_TOWN;
+  if (!s.unlocked.includes(s.town)) s.unlocked.push(s.town);
+  if (!p.shiftsIn) {
+    // Saves from before gas money and shift counts: towns already passed count as fully
+    // worked (their roads are open anyway), and the truck gets its starting budget once.
+    s.shiftsIn = {};
+    for (const id of s.passedTowns) s.shiftsIn[id] = SHIFTS_TO_UNLOCK;
+    s.bank = (p.bank ?? 0) + START_BANK;
+  }
+  return s;
 }
 
 export function loadSave(): Save {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return freshSave();
-    const s = { ...freshSave(), ...(JSON.parse(raw) as Partial<Save>) };
-    if (s.stop !== undefined && !(JSON.parse(raw) as Partial<Save>).town) {
-      // Saves from before the map: start at the first town of the region they'd reached.
-      const r = Math.max(0, Math.min(REGION_START_IDS.length - 1, s.stop | 0));
-      s.town = REGION_START_IDS[r];
-      s.unlocked = REGION_START_IDS.slice(0, r + 1);
-      s.passedTowns = REGION_START_IDS.slice(0, r);
-    }
-    delete s.stop;
-    if (!STOPS.some((t) => t.id === s.town)) s.town = START_TOWN;
-    if (!s.unlocked.includes(s.town)) s.unlocked.push(s.town);
-    return s;
+    return migrateSave(JSON.parse(raw) as Partial<Save>);
   } catch {
     return freshSave();
   }
@@ -91,10 +140,14 @@ export function writeSave(s: Save): void {
   }
 }
 
-/** After passing a town's shift: open its roads. Returns true when that was the last town of the trip. */
+/**
+ * After passing a town's shift: count it, and once SHIFTS_TO_UNLOCK shifts have been passed
+ * there, open its roads. Returns true when the town is the last of the trip.
+ */
 export function passTown(s: Save, id: string): boolean {
+  s.shiftsIn[id] = (s.shiftsIn[id] ?? 0) + 1;
   if (!s.passedTowns.includes(id)) s.passedTowns.push(id);
-  for (const next of townById(id).roads) if (!s.unlocked.includes(next)) s.unlocked.push(next);
+  if (s.shiftsIn[id] >= SHIFTS_TO_UNLOCK) for (const next of townById(id).roads) if (!s.unlocked.includes(next)) s.unlocked.push(next);
   return townById(id).roads.length === 0;
 }
 

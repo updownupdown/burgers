@@ -14,7 +14,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
     await p.reload();
     await p.waitForTimeout(600);
   }
-  await p.click('[data-act=start]');
+  await p.click('[data-home=open]');
   if (process.env.BIZ) {
     await p.waitForTimeout(600);
     await p.screenshot({ path: '/tmp/claude-0/pt/plan.png' });

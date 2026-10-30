@@ -1,0 +1,280 @@
+/*
+ * Home screen: a full-screen road map under night-variant Bistro chrome. The map itself is
+ * daylight paper in the Sorbet palette; the HUD, dock and city sheet are dark. Nothing scrolls.
+ */
+.home {
+  --home-sea: #a9cfe0;
+  --home-ink: #3b2a3a;
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: var(--bv-night);
+  color: var(--bv-ink);
+  font-family: var(--bv-font-ui);
+  font-size: var(--bv-fs-md);
+  font-weight: 600;
+  line-height: 1.35;
+  overflow: hidden;
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.home-host { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: var(--bv-night) !important; }
+
+/* ---- top bar ---------------------------------------------------------- */
+.home-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(var(--safe-t) + 8px) 14px 8px;
+}
+.home-brand { display: grid; gap: 1px; min-width: 0; }
+.home-logo { font-family: var(--bv-font-serif); font-weight: 400; font-size: 28px; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; }
+.home-logo i { font-style: italic; color: var(--bv-paprika); }
+.home-brand .bv-eyebrow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-actions { margin-left: auto; display: flex; gap: 6px; }
+.home-actions .bv-btn { border-color: var(--bv-rule-2); }
+.home-actions .bv-btn .bv-icon { font-size: 18px; }
+.home-actions .bv-btn.sm:not(.icon) { padding: 0 12px 0 10px; }
+
+/* ---- stats strip (floats over the top of the map) --------------------- */
+.home-stats {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  background: rgb(31 28 25 / 0.94);
+  border-radius: var(--bv-r-md);
+  box-shadow: 0 0 0 1px var(--bv-rule), var(--bv-shadow-2);
+  pointer-events: none;
+}
+.home-stat { display: grid; gap: 1px; padding: 7px 10px; min-width: 0; border-right: 1px solid var(--bv-rule); }
+.home-stat:last-child { border-right: 0; }
+.home-stat .bv-eyebrow { font-size: 10px; letter-spacing: 0.12em; }
+.home-stat b { display: flex; align-items: baseline; gap: 4px; font-family: var(--bv-font-mono); font-weight: 500; font-size: 15px; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.home-stat b .bv-icon { align-self: center; font-size: 13px; color: var(--bv-amber); }
+.home-stat small { font-family: var(--bv-font-ui); font-size: 10px; font-weight: 600; color: var(--bv-mute); }
+.home-stat.low b { color: var(--bv-paprika); }
+
+/* ---- map -------------------------------------------------------------- */
+.home-map {
+  position: relative;
+  overflow: hidden;
+  background: var(--home-sea);
+  touch-action: none;
+  cursor: grab;
+  contain: strict;
+}
+.home-map:active { cursor: grabbing; }
+.home-world { position: absolute; left: 0; top: 0; }
+.home-svg { display: block; overflow: visible; }
+.home-svg text { font-family: var(--bv-font-ui); user-select: none; pointer-events: none; }
+.home-svg .rname { font-family: var(--bv-font-serif); font-style: italic; font-size: 5px; fill: #4a5c6a; letter-spacing: 0.06em; opacity: 0.85; }
+.home-svg .compass { font-family: var(--bv-font-serif); font-size: 3.2px; fill: var(--home-ink); text-anchor: middle; }
+.home-svg .scale { font-family: var(--bv-font-mono); font-size: 2.4px; fill: #4a5c6a; text-anchor: middle; }
+
+/* locked regions: grey land under cross-hatching, faded drawings and labels */
+.home-region .fog { fill: none; }
+.home-static.lock-mountains [data-region="mountains"] .fill,
+.home-static.lock-coast [data-region="coast"] .fill,
+.home-static.lock-desert [data-region="desert"] .fill { fill: #d9d3c8; }
+.home-static.lock-mountains [data-region="mountains"] .edge,
+.home-static.lock-coast [data-region="coast"] .edge,
+.home-static.lock-desert [data-region="desert"] .edge { stroke: #8d857a; }
+.home-static.lock-mountains .home-region[data-region="mountains"] .fog,
+.home-static.lock-coast .home-region[data-region="coast"] .fog,
+.home-static.lock-desert .home-region[data-region="desert"] .fog { fill: url(#home-hatch); }
+.home-static.lock-mountains .home-deco[data-region="mountains"],
+.home-static.lock-coast .home-deco[data-region="coast"],
+.home-static.lock-desert .home-deco[data-region="desert"] { opacity: 0.4; filter: saturate(0.2); }
+.home-static.lock-mountains .rname[data-region="mountains"],
+.home-static.lock-coast .rname[data-region="coast"],
+.home-static.lock-desert .rname[data-region="desert"] { opacity: 0.45; }
+
+/* roads */
+.home-svg .road { fill: none; stroke: #c9a97e; stroke-width: 1.5; stroke-linecap: round; }
+.home-svg .road-dash { fill: none; stroke: #fff7e6; stroke-width: 0.3; stroke-dasharray: 1.3 1.1; stroke-linecap: round; }
+.home-svg .road.locked { stroke: #a9a295; stroke-width: 0.7; stroke-dasharray: 1 1.6; opacity: 0.9; }
+.home-svg .home-route { fill: none; stroke: #c8472e; stroke-width: 1; stroke-dasharray: 1.8 1.3; stroke-linecap: round; animation: home-march 1.1s linear infinite; }
+@keyframes home-march { to { stroke-dashoffset: -3.1; } }
+
+/* towns */
+.home-town { cursor: pointer; }
+.home-town .hit { fill: transparent; }
+.home-town .node { fill: #faf3e6; stroke: var(--home-ink); stroke-width: 0.55; transition: stroke-width 120ms; }
+.home-town .core { fill: var(--home-ink); }
+.home-town .ring { fill: none; stroke: var(--home-ink); stroke-width: 0.4; }
+.home-town .halo { fill: none; stroke: #c8472e; stroke-width: 0.55; opacity: 0; transform-box: fill-box; transform-origin: center; }
+.home-town.here .halo { opacity: 1; animation: home-halo 2s ease-out infinite; }
+@keyframes home-halo { 0% { transform: scale(0.75); opacity: 0.9; } 100% { transform: scale(1.5); opacity: 0; } }
+.home-town.sel .node { stroke: #c8472e; stroke-width: 1; }
+.home-town.sel .ring { stroke: #c8472e; }
+.home-town .tname { font-size: 2.8px; font-weight: 700; text-anchor: middle; fill: var(--home-ink); paint-order: stroke; stroke: #faf3e6; stroke-width: 0.9px; stroke-linejoin: round; }
+.home-town.capital .tname { font-size: 2.55px; letter-spacing: 0.22px; font-weight: 800; }
+.home-town.locked .node { fill: #d7d1c6; stroke: #8d857a; stroke-dasharray: 0.9 0.7; }
+.home-town.locked .ring { stroke: #8d857a; stroke-dasharray: 0.9 0.7; }
+.home-town.locked .core { fill: #8d857a; }
+.home-town.locked .tname { fill: #7b746b; }
+.home-town .pip { fill: #faf3e6; stroke: var(--home-ink); stroke-width: 0.3; }
+.home-town .pip.on { fill: #5f6b4a; stroke: #5f6b4a; }
+.home-town .flag { fill: #c8472e; stroke: var(--home-ink); stroke-width: 0.32; stroke-linejoin: round; }
+.home-town .flag.soon { fill: #e1b55c; }
+.home-town .lock { fill: none; stroke: #7b746b; stroke-width: 0.45; stroke-linejoin: round; }
+@media (hover: hover) {
+  .home-town:hover .node { stroke-width: 1; }
+}
+
+/* the truck */
+.home-truck { pointer-events: none; }
+.home-truck .shadow { fill: var(--home-ink); opacity: 0.18; }
+.home-truck.west .truck-body { transform: translate(0, -4.6px) scaleX(-1); }
+
+/* ---- zoom buttons ------------------------------------------------------ */
+.home-zoom { position: absolute; right: 10px; top: 78px; display: grid; gap: 6px; }
+.home-zoom button {
+  width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
+  background: rgb(31 28 25 / 0.92); color: var(--bv-ink); box-shadow: 0 0 0 1px var(--bv-rule), var(--bv-shadow-1);
+  font-size: 18px; transition: transform var(--bv-fast) var(--bv-ease);
+}
+.home-zoom button:active { transform: scale(0.94); }
+.home-zoom button .bv-icon { font-size: 19px; }
+.home-zoom button.locate .bv-icon { color: var(--bv-paprika); }
+
+/* ---- first-time tip ---------------------------------------------------- */
+.home-tip {
+  position: absolute; left: 50%; bottom: calc(var(--safe-b) + 96px); transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: var(--bv-r-pill);
+  background: rgb(42 38 34 / 0.88); color: var(--bv-paper); font-size: var(--bv-fs-sm); font-weight: 700; white-space: nowrap;
+  box-shadow: var(--bv-shadow-2); pointer-events: none; animation: home-rise 0.35s var(--bv-ease);
+}
+.home-tip .bv-icon { color: var(--bv-amber); font-size: 16px; }
+.home-tip[hidden] { display: none; }
+
+/* ---- dock (the current town, always one tap from a shift) ------------- */
+.home-dock {
+  position: absolute; left: 10px; right: 10px; bottom: calc(var(--safe-b) + 10px);
+  display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px;
+  background: rgb(31 28 25 / 0.96); border-radius: var(--bv-r-lg); box-shadow: 0 0 0 1px var(--bv-rule), var(--bv-shadow-3);
+  animation: home-rise 0.3s var(--bv-ease);
+}
+.home-dock-info { display: grid; gap: 2px; min-width: 0; flex: 1; text-align: left; }
+.home-dock-info b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 24px; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-dock-info .bv-caption { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; }
+.home-dock .bv-btn { flex: none; }
+.home-dock .bv-btn .bv-icon { font-size: 20px; }
+
+/* shift pips in text */
+.home-pips { display: inline-flex; gap: 3px; align-items: center; }
+.home-pips i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--bv-mute); box-sizing: border-box; }
+.home-pips i.on { background: var(--bv-olive); border-color: var(--bv-olive); }
+
+/* ---- city sheet -------------------------------------------------------- */
+.home-sheet {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: grid; gap: 10px; padding: 10px 16px calc(var(--safe-b) + 14px);
+  max-height: calc(100% - 70px); overflow: hidden;
+  background: var(--bv-paper); color: var(--bv-ink);
+  border-radius: 16px 16px 0 0; box-shadow: 0 0 0 1px var(--bv-rule), var(--bv-shadow-3);
+  animation: home-rise 0.28s var(--bv-ease);
+}
+.home-sheet[hidden] { display: none; }
+.home-sheet .grip { width: 36px; height: 4px; border-radius: 2px; background: var(--bv-rule-2); margin: 0 auto; }
+.home-sheet-head { display: flex; align-items: flex-start; gap: 10px; }
+.home-sheet-head > div { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.home-sheet-head .bv-title { font-size: 30px; }
+.home-sheet-head .bv-eyebrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.home-sheet-head .bv-eyebrow .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25); }
+.home-sheet-head .bv-btn.icon { flex: none; border-color: transparent; color: var(--bv-mute); }
+.home-blurb { font-size: var(--bv-fs-md); }
+.home-crowd { display: flex; align-items: center; gap: 8px; font-size: var(--bv-fs-sm); color: var(--bv-ink-2); font-weight: 600; }
+.home-crowd .bv-icon { font-size: 16px; color: var(--bv-mute); flex: none; }
+.home-crowd b { color: var(--bv-ink); }
+
+.home-cal-wrap { display: grid; gap: 6px; }
+.home-cal-wrap .bv-eyebrow { display: flex; justify-content: space-between; }
+.home-cal { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 3px; }
+.home-day {
+  position: relative; display: grid; place-items: center; aspect-ratio: 1 / 1.1; border-radius: 5px;
+  background: var(--bv-paper-2); font-family: var(--bv-font-mono); font-weight: 500; font-size: 11px; color: var(--bv-mute); line-height: 1;
+}
+.home-day.ev { background: var(--bv-amber-soft); color: #8a5a10; font-weight: 700; box-shadow: inset 0 0 0 1px var(--bv-amber); }
+.home-day.ev::after { content: ""; position: absolute; top: 2px; right: 2px; width: 4px; height: 4px; border-radius: 50%; background: var(--bv-amber); }
+.home-day.today { box-shadow: inset 0 0 0 1.5px var(--bv-paprika); color: var(--bv-ink); background: var(--bv-paprika-soft); }
+.home-day.today.ev { box-shadow: inset 0 0 0 1.5px var(--bv-paprika); }
+.home-cal-note { display: grid; gap: 3px; font-size: var(--bv-fs-sm); color: var(--bv-ink-2); font-weight: 600; }
+.home-cal-note div { display: flex; align-items: center; gap: 6px; }
+.home-cal-note .bv-icon { color: var(--bv-paprika); font-size: 14px; flex: none; }
+.home-cal-note .when { font-family: var(--bv-font-mono); font-weight: 500; color: var(--bv-paprika); white-space: nowrap; }
+.home-cal-note .mute { color: var(--bv-mute); }
+
+.home-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.home-facts > div { display: grid; gap: 3px; padding: 8px 10px; border-radius: var(--bv-r-md); background: var(--bv-paper-2); min-width: 0; }
+.home-facts .bv-eyebrow { font-size: 10px; letter-spacing: 0.1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-facts b { display: flex; align-items: center; gap: 5px; font-family: var(--bv-font-mono); font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; }
+.home-facts b .bv-icon { font-size: 14px; color: var(--bv-amber); flex: none; }
+.home-facts b .home-pips i { width: 6px; height: 6px; }
+
+.home-sheet .bv-callout { padding: 8px 10px; font-size: var(--bv-fs-sm); }
+.home-action { display: grid; gap: 6px; }
+.home-action .bv-btn { gap: 10px; }
+.home-action .bv-btn .cost { font-family: var(--bv-font-mono); font-weight: 500; opacity: 0.85; }
+.home-action .bv-caption { text-align: center; }
+.home-action .bv-caption.warn { color: var(--bv-paprika); }
+
+/* ---- upgrade offer ----------------------------------------------------- */
+.home-offer { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: var(--bv-scrim); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); animation: home-fade 0.25s; }
+.home-offer[hidden] { display: none; }
+.home-offer .bv-card { width: min(380px, 100%); gap: 12px; }
+.home-offers { display: grid; gap: 8px; }
+.home-offer-btn {
+  display: grid; gap: 2px; text-align: left; padding: 10px 12px; border-radius: var(--bv-r-md);
+  border: 1px solid var(--bv-rule-2); background: var(--bv-paper-2); color: var(--bv-ink);
+  transition: transform var(--bv-fast) var(--bv-ease), border-color var(--bv-fast);
+}
+.home-offer-btn b { font-size: var(--bv-fs-lg); font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.home-offer-btn b .bv-icon { color: var(--bv-paprika); font-size: 18px; }
+.home-offer-btn span { font-size: var(--bv-fs-sm); color: var(--bv-mute); font-weight: 600; }
+.home-offer-btn:active { transform: translateY(1px); border-color: var(--bv-paprika); }
+@media (hover: hover) { .home-offer-btn:hover { border-color: var(--bv-ink); } }
+
+/* ---- toast ------------------------------------------------------------- */
+.home-toast {
+  position: absolute; left: 50%; bottom: calc(var(--safe-b) + 92px); transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: var(--bv-r-md);
+  background: var(--bv-paprika); color: #fff; font-weight: 700; font-size: var(--bv-fs-md); box-shadow: var(--bv-shadow-2);
+  white-space: nowrap; max-width: calc(100% - 24px); pointer-events: none; animation: home-rise 0.25s var(--bv-ease);
+}
+.home-toast .bv-icon { font-size: 18px; flex: none; }
+
+@keyframes home-rise { from { transform: translateY(14px); opacity: 0; } }
+@keyframes home-fade { from { opacity: 0; } }
+
+/* ---- wide screens (desktop, tablets): the map fills the window, chrome floats centred ---- */
+@media (min-width: 720px) {
+  .home-top { padding-left: 20px; padding-right: 20px; }
+  .home-stats { left: 50%; right: auto; transform: translateX(-50%); width: min(560px, calc(100% - 24px)); }
+  .home-dock { left: 50%; right: auto; transform: translateX(-50%); width: min(480px, calc(100% - 24px)); bottom: 16px; }
+  .home-sheet { left: 50%; right: auto; transform: translateX(-50%); width: min(480px, calc(100% - 24px)); bottom: 16px; border-radius: 14px; max-height: calc(100% - 90px); }
+  .home-sheet .grip { display: none; }
+  .home-zoom { right: 16px; top: auto; bottom: 16px; }
+  .home-toast { bottom: 100px; }
+}
+@media (max-width: 379px) {
+  .home-logo { font-size: 24px; }
+  .home-stat { padding: 6px 7px; }
+  .home-stat b { font-size: 14px; }
+  .home-dock-info b { font-size: 21px; }
+  .home-sheet-head .bv-title { font-size: 26px; }
+}
+@media (max-height: 700px) {
+  .home-sheet { gap: 8px; }
+  .home-blurb { display: none; }
+  .home-day { aspect-ratio: 1 / 1; font-size: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home *, .home *::before, .home *::after { animation: none !important; transition: none !important; }
+}

@@ -319,7 +319,8 @@ James's idea (2026-10-30): replace the fixed list of stops with a simple overwor
 - Each town plays one shift. Passing a shift (the current pass rule) opens the roads out of it, so the map fills in as you go. Some towns sit on side roads you can skip; a few are gated ("needs 2.5 ★ reputation", "needs a fryer upgrade").
 - Regions follow the current stops: **Mountains** (Pinecrest), **Coast** (Saltwater Bay), **Desert** (Red Mesa), each with 3–5 towns. Reaching a region's big city finishes it and opens the next region's road.
 - Each town keeps a postcard: best stars, best profit, and a one-line note from the locals. That's the story, told in small pieces rather than cut-scenes.
-- The road trip has a day counter. Each shift is one day and driving to a neighbouring town is free, so the counter only matters for events.
+- The road trip has a day counter. Each shift is one day. Driving (built 2026-10-30, `src/game/travel.ts`): one road can be driven overnight for a little gas money ($4 minimum, $0.40 per map unit, so $7–10 for most roads and about $21 between regions) without a day passing, but only once per night; a second drive that night, or any trip of two roads or more, takes a whole day and costs gas by distance. The truck starts with $120. Three passed shifts in a town open its roads (`shiftsIn` in the save), including a capital's road into the next region.
+- The home screen (`src/screens/home.ts`) is the map itself, full screen, with pan and zoom: day, budget, popularity and the lifetime rating (average stars over every served order, with the count) stay in view; tapping a town opens a sheet with its crowd, a two-week event calendar, shifts worked there and the drive there.
 
 ### Crowds
 

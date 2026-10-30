@@ -2,9 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    # The work branch is listed until main becomes the repo's default branch: the
-    # github-pages environment only accepts deploys from the default branch.
-    branches: [main, claude/project-thread-bjvr3f]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -13,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages-${{ github.ref }}
+  group: pages
   cancel-in-progress: true
 
 jobs:

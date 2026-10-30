@@ -4,6 +4,10 @@ import type { Recipe, Stop } from "./stops";
 
 export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, M: 3, L: 4 };
 export const DRINK_PRICE: Record<Size, number> = { S: 1, M: 2, L: 3 };
+/** What an extra helping of a counted topping (pickles, onions, tomato, jalapeños) adds to the price. */
+export const EXTRA_PRICE = 0.5;
+/** What adding (or doubling) any other layer adds to the price, as orderFromRecipe charges it. */
+export const ADD_PRICE = 1;
 
 export type Rng = () => number;
 

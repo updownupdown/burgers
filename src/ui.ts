@@ -89,10 +89,8 @@ export interface Ui {
   bell: HTMLButtonElement;
   menuBtn: HTMLButtonElement;
   title: HTMLElement;
-  menu: HTMLElement;
   summary: HTMLElement;
   update: HTMLElement;
-  install: HTMLElement;
   updateText: HTMLElement;
 }
 
@@ -119,27 +117,11 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     <button data-act="update-now">Update</button>
   </div>
   <div class="screen" data-r="title"></div>
-  <div class="screen" data-r="menu" hidden>
-    <div class="card">
-      <h2>Paused</h2>
-      <div class="btn-row">
-        <button class="btn primary" data-act="resume">Resume</button>
-        <button class="btn" data-act="restart">Restart shift</button>
-        <button class="btn" data-act="sound">Sound: on</button>
-        <button class="btn" data-act="gfx">Graphics: high</button>
-        <button class="btn" data-act="check-update">Check for updates</button>
-        <button class="btn" data-act="install" data-r="install" hidden>Install the app</button>
-      </div>
-      <details><summary><b>How to play</b></summary>${HOW_TO}</details>
-      <p class="build" data-r="build2"></p>
-    </div>
-  </div>
   <div class="screen" data-r="summary" hidden></div>
   <div class="rotate" aria-live="polite"><div><span class="phone"></span><p>Turn your phone upright to keep cooking.</p></div></div>
   `;
   const q = (r: string) => root.querySelector<HTMLElement>(`[data-r="${r}"]`)!;
   const tabs = [...root.querySelectorAll<HTMLButtonElement>('[data-r="tab"]')];
-  q("build2").textContent = buildLabel();
   return {
     root,
     timer: q("timer"),
@@ -154,10 +136,8 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     bell: q("bell") as HTMLButtonElement,
     menuBtn: q("menuBtn") as HTMLButtonElement,
     title: q("title"),
-    menu: q("menu"),
     summary: q("summary"),
     update: q("update"),
-    install: q("install"),
     updateText: q("updateText"),
   };
 }

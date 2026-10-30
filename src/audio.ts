@@ -157,7 +157,27 @@ export class Sfx {
   }
 }
 
+/** Vibration on/off, from the game menu. Remembered on this device. */
+let haptics = (() => {
+  try {
+    return localStorage.getItem("bv-haptics") !== "0";
+  } catch {
+    return true;
+  }
+})();
+export const hapticsSupported = (): boolean => typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
+export const hapticsOn = (): boolean => haptics;
+export function setHaptics(on: boolean): void {
+  haptics = on;
+  try {
+    localStorage.setItem("bv-haptics", on ? "1" : "0");
+  } catch {
+    // Storage can be unavailable (private mode); the setting just won't stick.
+  }
+}
+
 export function buzz(ms: number | number[]): void {
+  if (!haptics) return;
   try {
     navigator.vibrate?.(ms);
   } catch {

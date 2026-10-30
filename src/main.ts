@@ -37,6 +37,7 @@ import "./ui/components.css";
 import "./style.css";
 import { buildUi, patienceMood, planHtml, summaryHtml, ticketHtml, titleHtml } from "./ui";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
+import { closeAll, initMenu, openHowTo, openMenu, openMenuRef } from "./screens/menu";
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -57,7 +58,6 @@ const counter = new CounterView();
  * shadows, low = no shadows and a 1x pixel ratio for slower phones.
  */
 type Gfx = "high" | "standard" | "low";
-const GFX_ORDER: Gfx[] = ["high", "standard", "low"];
 let gfx: Gfx = "high";
 try {
   const saved = localStorage.getItem("bv-gfx");
@@ -73,8 +73,6 @@ function applyGfx(level: Gfx): void {
     sun.shadow.radius = level === "high" ? 5 : 1;
   }
   renderer.shadowMap.needsUpdate = true;
-  const btn = ui.menu.querySelector('[data-act="gfx"]');
-  if (btn) btn.textContent = `Graphics: ${level}`;
 }
 const ui = buildUi(document.getElementById("ui")!, PAGES);
 
@@ -221,7 +219,7 @@ function layout(): void {
   if (W > H && H < 500 && game.phase === "playing") {
     cancelPointer();
     game.phase = "paused";
-    ui.menu.hidden = false;
+    openMenu();
   }
 }
 window.addEventListener("resize", layout);
@@ -1289,45 +1287,8 @@ ui.root.addEventListener("click", (e) => {
       writeSave(save);
       showTitle();
       break;
-    case "resume":
-      game.phase = "playing";
-      ui.menu.hidden = true;
-      break;
-    case "sound": {
-      sfx.setMuted(!sfx.muted);
-      (e.target as HTMLElement).textContent = `Sound: ${sfx.muted ? "off" : "on"}`;
-      try {
-        localStorage.setItem("bv-muted", sfx.muted ? "1" : "0");
-      } catch {
-        // Storage can be unavailable (private mode); the setting just won't stick.
-      }
-      break;
-    }
-    case "gfx": {
-      applyGfx(GFX_ORDER[(GFX_ORDER.indexOf(gfx) + 1) % GFX_ORDER.length]);
-      layout();
-      try {
-        localStorage.setItem("bv-gfx", gfx);
-      } catch {
-        // ignore
-      }
-      break;
-    }
-    case "check-update": {
-      const btn = e.target as HTMLButtonElement;
-      btn.textContent = "Checking…";
-      void checkNow().then((v) => {
-        if (!v) btn.textContent = "Couldn't reach the server";
-        else if (Number(v.build) > Number(__BUILD__)) btn.textContent = `Build #${v.build} is available`;
-        else btn.textContent = "You're on the latest build";
-      });
-      break;
-    }
     case "update-now":
       if (game.pendingUpdate) reloadTo(game.pendingUpdate.build, true);
-      break;
-    case "install":
-      void installPrompt?.prompt();
       break;
     case "update-later":
       ui.update.hidden = true;
@@ -1335,11 +1296,63 @@ ui.root.addEventListener("click", (e) => {
   }
 });
 
+// The game menu (src/screens/menu.ts). In a shift it pauses; closing it resumes.
+const inShift = () => game.phase === "playing" || game.phase === "paused";
+initMenu({
+  inShift,
+  town: () => (inShift() ? shopStop() : withEvent(townById(game.mapSel), eventOn(game.mapSel, save.day))),
+  priceMult: () => (inShift() && game.plan ? PRICE[game.plan.price].mult : 1),
+  subtitle: () => `Day ${save.day} · ${townById(save.town).name}`,
+  sound: () => !sfx.muted,
+  setSound: (on) => {
+    sfx.unlock();
+    sfx.setMuted(!on);
+    try {
+      localStorage.setItem("bv-muted", on ? "0" : "1");
+    } catch {
+      // Storage can be unavailable (private mode); the setting just won't stick.
+    }
+  },
+  gfx: () => gfx,
+  setGfx: (level) => {
+    applyGfx(level);
+    layout();
+    try {
+      localStorage.setItem("bv-gfx", level);
+    } catch {
+      // ignore
+    }
+  },
+  biz: () => save.biz,
+  setBiz: (on) => {
+    save.biz = on;
+    writeSave(save);
+    if (game.phase === "title") showTitle(true);
+  },
+  canInstall: () => !!installPrompt,
+  install: () => void installPrompt?.prompt(),
+  checkUpdate: () => checkNow(),
+  resume: () => {
+    if (game.phase === "paused") game.phase = "playing";
+  },
+  restart: () => {
+    if (save.biz && save.tutorialDone) showPlan();
+    else startShift();
+  },
+  quit: () => showTitle(),
+  newTrip: () => {
+    Object.assign(save, freshSave(), { tutorialDone: save.tutorialDone, trips: save.trips, best: save.best });
+    game.mapSel = save.town;
+    writeSave(save);
+    showTitle();
+  },
+});
+
 ui.menuBtn.addEventListener("click", () => {
   if (game.phase === "playing") {
     cancelPointer();
     game.phase = "paused";
-    ui.menu.hidden = false;
+    openMenu();
   }
 });
 
@@ -1347,7 +1360,6 @@ applyGfx(gfx);
 try {
   if (localStorage.getItem("bv-muted") === "1") {
     sfx.setMuted(true);
-    ui.menu.querySelector('[data-act="sound"]')!.textContent = "Sound: off";
   }
 } catch {
   // ignore
@@ -1404,7 +1416,7 @@ function startShift(plan: Plan | null = null): void {
     : stop().newThing;
   if (intro && !game.tutorial) showHint(intro, 6);
   ui.title.hidden = true;
-  ui.menu.hidden = true;
+  closeAll();
   ui.summary.hidden = true;
 }
 
@@ -1470,7 +1482,6 @@ function showTitle(keepScroll = false): void {
   if (!keepScroll) screenShownAt = performance.now();
   ui.title.hidden = false;
   ui.summary.hidden = true;
-  ui.menu.hidden = true;
   if (game.pendingUpdate) reloadTo(game.pendingUpdate.build);
 }
 
@@ -1573,11 +1584,9 @@ let installPrompt: (Event & { prompt: () => Promise<void> }) | null = null;
 window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   installPrompt = e as typeof installPrompt;
-  ui.install.hidden = false;
 });
 window.addEventListener("appinstalled", () => {
   installPrompt = null;
-  ui.install.hidden = true;
 });
 
 // ---------------------------------------------------------------------------
@@ -1924,7 +1933,7 @@ document.addEventListener("visibilitychange", () => {
     cancelPointer();
     if (game.phase === "playing") {
       game.phase = "paused";
-      ui.menu.hidden = false;
+      openMenu();
     }
     sfx.suspend();
   }
@@ -1959,6 +1968,7 @@ window.addEventListener("blur", cancelPointer);
   },
   save,
   showTitle,
+  menu: { openMenu, openHowTo, openMenuRef, closeAll },
   manual: (on: boolean) => {
     manualClock = on;
   },

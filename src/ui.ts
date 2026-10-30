@@ -1,7 +1,7 @@
 import type { Plan, Review } from "./game/business";
 import { CROWD, menuOf, PRICE, QUALITY, recipeCost, ratingBonus } from "./game/business";
 import type { Upgrade } from "./game/progress";
-import { EVENTS, eventOn, nextDay, REGIONS, STOPS, townById, type Stop } from "./game/stops";
+import type { Stop } from "./game/stops";
 import type { PressPiece } from "./game/press";
 import type { Order, Plate } from "./game/types";
 import { collapseCounted } from "./game/scoring";
@@ -12,18 +12,6 @@ import { icon } from "./ui/icons";
 
 const MENU_SVG = `<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="2.4" rx="1.2" fill="currentColor"/><rect x="3" y="9" width="14" height="2.4" rx="1.2" fill="currentColor"/><rect x="3" y="14" width="14" height="2.4" rx="1.2" fill="currentColor"/></svg>`;
 
-const HOW_TO = `
-<ul>
-  <li><b>Customers</b> wait at the window. Their ticket shows the burger from top to bottom. Tap a ticket or plate to work on that order.</li>
-  <li><b>Drag</b> ingredients up onto the tray, or <b>flick</b> them up to toss them on.</li>
-  <li><b>Patties, bacon, eggs, buns and pineapple</b> go on the grill first. <b>Swipe up</b> on a patty to flip it, then drag it up to the plate. Press and hold a fresh patty to smash it flat.</li>
-  <li><b>Sauce:</b> drag a bottle up to the tray and draw on the burger.</li>
-  <li><b>Swipe sideways</b> or use the tabs for the Drinks and Fryer counters.</li>
-  <li><b>Melted cheese:</b> drop a slice on a patty while it's on the grill.</li>
-  <li><b>Heat lamp spots</b> next to the grill hold food or a half-built burger. Drag the whole stack to a plate. Don't leave it too long.</li>
-  <li><b>Drinks and fries</b> need a cup or carton from the stacks first. Watch the size on the ticket. Overflowing costs money and makes a mess to wipe up.</li>
-  <li><b>Ring the bell twice</b> to serve. Swipe down on a plate to take the top layer off. Drop mistakes in the trash slot at the front of the grill.</li>
-</ul>`;
 
 const starsText = (n: number) => `${"★".repeat(n)}${"☆".repeat(3 - n)}`;
 const money = (n: number) => (n < 0 ? `−$${(-n).toFixed(2)}` : `$${n.toFixed(2)}`);
@@ -253,47 +241,6 @@ function offerHtml(offer: Upgrade[]): string {
     <div class="offers">${offer.map((u) => `<button class="offer" data-act="pick" data-id="${u.id}"><b>${esc(u.name)}</b><span>${esc(u.text)}</span></button>`).join("")}</div>`;
 }
 
-/** The road map: regions, roads and towns. Locked towns are greyed out; the truck sits on the current one. */
-function mapSvg(m: { town: string; selected: string; unlocked: string[]; passed: string[]; best: Record<string, number>; day: number }): string {
-  const byId = new Map(STOPS.map((t) => [t.id, t]));
-  const open = (id: string) => m.unlocked.includes(id);
-  const land = REGIONS.map((r) => {
-    const ts = STOPS.filter((t) => t.region === r.id);
-    const x0 = Math.min(...ts.map((t) => t.x)) - 9;
-    const x1 = Math.max(...ts.map((t) => t.x)) + 9;
-    const y0 = Math.min(...ts.map((t) => t.y)) - 9;
-    const y1 = Math.max(...ts.map((t) => t.y)) + 9;
-    const lit = ts.some((t) => open(t.id));
-    return `<g class="region ${lit ? "" : "locked"}"><rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" rx="9" fill="${r.color}"/>
-      <text x="${r.label === "left" ? x0 + 3 : x1 - 3}" y="${y0 + 5}" class="rname" text-anchor="${r.label === "left" ? "start" : "end"}">${esc(r.name)}</text></g>`;
-  }).join("");
-  const roads = STOPS.flatMap((a) =>
-    a.roads.map((id) => {
-      const b = byId.get(id)!;
-      const lit = open(a.id) && open(b.id);
-      return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" class="road ${lit ? "" : "locked"}"/>`;
-    }),
-  ).join("");
-  const towns = STOPS.map((t) => {
-    const cls = ["town", open(t.id) ? "" : "locked", m.passed.includes(t.id) ? "passed" : "", t.id === m.selected ? "sel" : "", t.capital ? "capital" : ""].join(" ");
-    const stars = Math.round(m.best[t.id] ?? 0);
-    const r = t.capital ? 3.6 : 2.8;
-    return `<g class="${cls}" data-act="town" data-id="${t.id}">
-      <circle cx="${t.x}" cy="${t.y}" r="7" class="hit"/>
-      <circle cx="${t.x}" cy="${t.y}" r="${r}" class="dot"/>
-      <text x="${t.x}" y="${t.y + r + 3.6}" class="tname">${esc(t.name)}</text>
-      ${eventOn(t.id, m.day) ? `<g class="flag"><circle cx="${t.x + r + 1.6}" cy="${t.y - r - 0.4}" r="2.3"/><text x="${t.x + r + 1.6}" y="${t.y - r + 0.7}">!</text></g>` : ""}
-      ${m.passed.includes(t.id) ? `<text x="${t.x}" y="${t.y - r - 1.2}" class="tstars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</text>` : ""}
-    </g>`;
-  }).join("");
-  const here = byId.get(m.town)!;
-  const truck = `<g class="truck" transform="translate(${here.x - 4} ${here.y - 9.5})">
-    <rect x="0" y="0" width="8" height="4.6" rx="1.2" fill="#e5432b" stroke="#1d1410" stroke-width="0.6"/>
-    <rect x="5" y="0.8" width="2.2" height="1.8" rx="0.4" fill="#bfe3f2"/>
-    <circle cx="2" cy="4.8" r="1" fill="#1d1410"/><circle cx="6" cy="4.8" r="1" fill="#1d1410"/></g>`;
-  return `<svg class="map" viewBox="0 0 100 140" role="img" aria-label="Road map">${land}${roads}${towns}${truck}</svg>`;
-}
-
 const OUTLET_LABEL = { paper: "Newspaper", magazine: "Magazine", tv: "On TV" } as const;
 
 /** A press clipping: newspaper, magazine or TV spot. */
@@ -307,81 +254,6 @@ export function pressHtml(p: PressPiece, label?: string): string {
 }
 
 const crowdHtml = (c: Stop["crowd"]) => `<p class="crowd"><b>${CROWD[c].label}:</b> ${esc(CROWD[c].blurb)}</p>`;
-
-/** What's on soon, anywhere on the map. */
-function eventsHtml(day: number): string {
-  const soon = EVENTS.map((e) => ({ e, d: nextDay(e, day) }))
-    .sort((a, b) => a.d - b.d)
-    .slice(0, 3);
-  return `<ul class="events">${soon
-    .map(({ e, d }) => `<li data-act="town" data-id="${e.town}"><b>${d === day ? "Today" : d === day + 1 ? "Tomorrow" : `Day ${d}`}</b> ${esc(e.name)} · ${esc(townById(e.town).name)}</li>`)
-    .join("")}</ul>`;
-}
-
-function townEventHtml(town: string, day: number): string {
-  const e = EVENTS.find((x) => x.town === town);
-  if (!e) return "";
-  const d = nextDay(e, day);
-  const when = d === day ? "today" : d === day + 1 ? "tomorrow" : `on day ${d}`;
-  return `<p class="event"><b>${esc(e.name)} ${when}.</b> ${esc(e.blurb)}${e.special ? ` Special: ${esc(e.special.name)}.` : ""} Busier, longer shift.</p>`;
-}
-
-export function titleHtml(t: {
-  town: Stop;
-  selected: Stop;
-  unlocked: string[];
-  passed: string[];
-  best: Record<string, number>;
-  day: number;
-  popularity: number;
-  press: PressPiece | null;
-  trips: number;
-  bank: number;
-  owned: Upgrade[];
-  offer: Upgrade[];
-  fresh: boolean;
-  biz: boolean;
-  rep: number;
-  reviews: Review[];
-}): string {
-  const trip = t.trips > 0 ? `Trip ${t.trips + 1} · ` : "";
-  const sel = t.selected;
-  const here = sel.id === t.town.id;
-  const canGo = t.unlocked.includes(sel.id);
-  const best = t.best[sel.id];
-  const region = REGIONS.find((r) => r.id === sel.region)!;
-  const action = here
-    ? `<button class="btn primary" data-act="start" ${t.offer.length ? "disabled" : ""}>Open the window in ${esc(sel.name)}</button>`
-    : canGo
-      ? `<button class="btn primary" data-act="drive" data-id="${sel.id}" ${t.offer.length ? "disabled" : ""}>Drive to ${esc(sel.name)}</button>`
-      : `<button class="btn primary" disabled>Locked: pass a town next to it first</button>`;
-  return `<div class="card title">
-    <p class="sub">${trip}Day ${t.day} on the road · ${t.passed.length} of ${STOPS.length} towns · Popularity ${t.popularity}</p>
-    <h1>Bun Voyage</h1>
-    ${offerHtml(t.offer)}
-    ${t.fresh ? "" : mapSvg({ town: t.town.id, selected: sel.id, unlocked: t.unlocked, passed: t.passed, best: t.best, day: t.day })}
-    ${t.fresh ? "" : eventsHtml(t.day)}
-    ${t.press ? pressHtml(t.press, "Latest press") : ""}
-    <div class="townCard">
-      <h3>${esc(sel.name)} <span class="rg">${esc(region.name)}${sel.capital ? " · big city" : ""}</span></h3>
-      <p>${esc(sel.blurb)}</p>
-      ${crowdHtml(eventOn(sel.id, t.day)?.crowd ?? sel.crowd)}
-      ${townEventHtml(sel.id, t.day)}
-      ${best !== undefined ? `<p class="note">Best shift here: ${best.toFixed(1)} ★</p>` : ""}
-      ${canGo && sel.newThing ? `<p class="new">${esc(sel.newThing)}</p>` : ""}
-    </div>
-    ${t.owned.length ? `<p class="owned">On the truck: ${t.owned.map((u) => esc(u.name)).join(", ")}</p>` : ""}
-    ${t.fresh ? HOW_TO : `<details><summary><b>How to play</b></summary>${HOW_TO}</details>`}
-    <div class="btn-row">
-      ${action}
-      ${t.fresh ? "" : `<button class="btn small biz ${t.biz ? "on" : ""}" data-act="biz">Business mode: ${t.biz ? "on" : "off"}</button>`}
-      ${t.fresh ? "" : `<button class="btn small" data-act="new-trip">Start a new trip</button>`}
-    </div>
-    ${t.biz ? `<p class="note">You buy the ingredients, set prices and pick the menu. Reviews stick around: reputation <b>${t.rep.toFixed(1)} ★</b>.</p>${reviewsHtml(t.reviews, 1)}` : ""}
-    ${t.bank ? `<p class="build">Savings: $${t.bank}</p>` : ""}
-    <p class="build">${esc(buildLabel())}</p>
-  </div>`;
-}
 
 export function summaryHtml(s: {
   stop: Stop;

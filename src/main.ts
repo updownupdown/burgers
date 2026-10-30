@@ -36,7 +36,8 @@ import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
 import "./ui/components.css";
 import "./style.css";
-import { buildUi, donenessPill, patienceMood, planHtml, summaryHtml, ticketHtml, titleHtml } from "./ui";
+import { mountHome } from "./screens/home";
+import { buildUi, donenessPill, patienceMood, planHtml, summaryHtml, ticketHtml } from "./ui";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 import { closeAll, initMenu, openHowTo, openMenu, openMenuRef } from "./screens/menu";
 
@@ -1363,21 +1364,6 @@ ui.root.addEventListener("click", (e) => {
     case "next":
       showTitle();
       break;
-    case "town": {
-      const id = btn!.dataset.id!;
-      game.mapSel = id;
-      showTitle(true);
-      break;
-    }
-    case "drive": {
-      const id = btn!.dataset.id!;
-      if (!save.unlocked.includes(id) || save.offer.length) break;
-      save.town = id;
-      writeSave(save);
-      sfx.whoosh();
-      showTitle(true);
-      break;
-    }
     case "new-trip":
       if (btn!.dataset.armed !== "1") {
         btn!.dataset.armed = "1";
@@ -1429,7 +1415,7 @@ initMenu({
   setBiz: (on) => {
     save.biz = on;
     writeSave(save);
-    if (game.phase === "title") showTitle(true);
+    if (game.phase === "title") showTitle();
   },
   canInstall: () => !!installPrompt,
   install: () => void installPrompt?.prompt(),
@@ -1555,35 +1541,38 @@ function showPlan(): void {
   ui.summary.hidden = true;
 }
 
-function showTitle(keepScroll = false): void {
+/**
+ * The home screen: the road map with the truck's numbers, where the player drives, opens the
+ * window or picks a pending upgrade. Lives in src/screens/home.ts; this only hands it what it needs.
+ */
+function showTitle(): void {
   game.town = save.town;
   game.event = eventOn(save.town, save.day);
   applyStop();
-  const card = ui.title.querySelector(".card");
-  const scroll = keepScroll && card ? card.scrollTop : 0;
-  ui.title.innerHTML = titleHtml({
-    town: stop(),
-    selected: townById(game.mapSel),
-    unlocked: save.unlocked,
-    passed: save.passedTowns,
-    best: save.best,
-    day: save.day,
-    popularity: save.popularity,
-    press: save.press[0] ?? null,
-    trips: save.trips,
-    bank: save.bank,
-    owned: save.upgrades.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean),
-    offer: offerList(),
-    fresh: !save.tutorialDone && save.passedTowns.length === 0,
-    biz: save.biz,
-    rep: save.rep,
-    reviews: save.reviews,
-  });
-  ui.title.querySelector(".card")!.scrollTop = scroll;
   game.phase = "title";
-  if (!keepScroll) screenShownAt = performance.now();
+  screenShownAt = performance.now();
   ui.title.hidden = false;
   ui.summary.hidden = true;
+  mountHome(ui.title, {
+    save,
+    focus: game.mapSel,
+    startShift: () => {
+      if (save.biz && save.tutorialDone) {
+        showPlan();
+        screenShownAt = performance.now();
+      } else startShift();
+    },
+    commit: () => {
+      writeSave(save);
+      game.town = save.town;
+      game.event = eventOn(save.town, save.day);
+      applyStop();
+    },
+    openMenu: () => openMenu({ tab: "general" }),
+    openHowTo: () => openHowTo(),
+    sfx: { whoosh: () => sfx.whoosh(), coin: () => sfx.coin(), tap: () => sfx.unlock() },
+  });
+  game.mapSel = save.town;
   if (game.pendingUpdate) reloadTo(game.pendingUpdate.build);
 }
 
@@ -1600,6 +1589,11 @@ function endShift(): void {
   }
   const here = stop();
   const avg = game.stars.length ? game.stars.reduce((a, b) => a + b, 0) / game.stars.length : 0;
+  // Lifetime rating for the home screen: every served order's stars, in either mode.
+  save.ratingCount += game.stars.length;
+  save.ratingSum += game.stars.reduce((a, b) => a + b, 0);
+  // A shift ends the day, so the truck may drive one road overnight again.
+  save.overnightUsed = false;
   const ok = passed(avg, game.served, game.customers);
   let lastStop = false;
   const before = [...save.unlocked];
@@ -1793,6 +1787,7 @@ function updateUi(): void {
   const money = net < 0 ? `−$${-net}` : `$${net}`;
   if (ui.money.textContent !== money) ui.money.textContent = money;
 
+  ui.rail.hidden = game.phase === "title";
   game.slots.forEach((s, i) => {
     const t = ui.tickets[i];
     const show = !!s.order && !s.leaving && game.phase !== "title";

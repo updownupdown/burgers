@@ -98,6 +98,7 @@ html, body {
   z-index: 1;
   pointer-events: none;
 }
+.rail[hidden] { display: none; }
 .ticket {
   position: absolute;
   z-index: 2;

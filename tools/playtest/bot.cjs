@@ -1,5 +1,5 @@
 // A sequential "competent player" bot that plays a whole shift through real gestures.
-const { open, gesture, line, hold, step, state, out } = require('./lib');
+const { open, gesture, line, hold, step, state, out } = require('./lib.cjs');
 const ACTION = 0.5; // seconds of game time each gesture costs
 const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
 (async () => {
@@ -12,7 +12,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
   const items = () => ev(() => window.__bv.counter.grillItems.map((it, i) => ({ i, kind: it.piece.kind, cook: it.piece.cook.slice(), flipping: it.flipT >= 0, uid: it.piece.uid, x: it.x, z: it.z, scr: window.__bv.project('counter', it.x, 0.35, it.z) })));
   const page = async (n) => { await p.evaluate((n) => document.querySelectorAll('.tab')[n].click(), n); await step(p, 0.4); };
   const act = async (pts, ms) => { await gesture(p, pts, ms); await step(p, ACTION); };
-  const spots = [[-2.2, 0.7], [-0.7, 0.7], [0.8, 0.7], [2.3, 0.7], [-2.2, 2.1], [-0.7, 2.1], [0.8, 2.1], [2.3, 2.1]];
+  const spots = [[-2.5, 0.7], [-1.2, 0.7], [0.1, 0.7], [1.3, 0.7], [-2.5, 2.1], [-1.2, 2.1], [0.1, 2.1], [1.3, 2.1]];
   const log = [];
   let guard = 0;
   while (guard++ < 400) {

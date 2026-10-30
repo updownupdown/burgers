@@ -13,7 +13,10 @@ const pageX = (i: number) => (i - HOME_PAGE) * PAGE_GAP;
 /** Grill items are drawn a bit smaller than ingredient units. */
 export const GRILL_SCALE = 0.72;
 const GRILL_TOP = 0.26;
-const GRILL_BOUNDS = { x0: -2.9, x1: 2.9, z0: 0.2, z1: 2.65 };
+const GRILL_CX = -0.7;
+const GRILL_W = 5.1;
+const GRILL_BOUNDS = { x0: GRILL_CX - GRILL_W / 2 + 0.45, x1: GRILL_CX + GRILL_W / 2 - 0.45, z0: 0.2, z1: 2.65 };
+const TRASH = { x: 2.55, z: 1.5, r: 0.75 };
 
 export interface GrillItem {
   piece: Piece;
@@ -166,19 +169,28 @@ export class CounterView {
       }
       this.proxy(new THREE.BoxGeometry(1.25, 0.9, 1.15), new THREE.Vector3(x0 + b.x, 0.3, b.z), { type: "bin", kind: b.kind });
     }
-    const grill = mesh(faceted(new THREE.BoxGeometry(6.5, GRILL_TOP, 3.05)), "#3d4245", { ink: false });
-    grill.position.set(x0, GRILL_TOP / 2, 1.42);
+    const grill = mesh(faceted(new THREE.BoxGeometry(GRILL_W, GRILL_TOP, 3.05)), "#3d4245", { ink: false });
+    grill.position.set(x0 + GRILL_CX, GRILL_TOP / 2, 1.42);
     this.scene.add(grill);
-    const plate = mesh(faceted(new THREE.BoxGeometry(6.2, 0.02, 2.75)), "#55595b", { ink: false, shadow: false });
-    plate.position.set(x0, GRILL_TOP + 0.005, 1.42);
+    const plate = mesh(faceted(new THREE.BoxGeometry(GRILL_W - 0.3, 0.02, 2.75)), "#55595b", { ink: false, shadow: false });
+    plate.position.set(x0 + GRILL_CX, GRILL_TOP + 0.005, 1.42);
     this.scene.add(plate);
-    const glow = new THREE.Mesh(new THREE.PlaneGeometry(6.1, 2.6), new THREE.MeshBasicMaterial({ color: "#ff6a2b", transparent: true, opacity: 0.12 }));
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(GRILL_W - 0.4, 2.6), new THREE.MeshBasicMaterial({ color: "#ff6a2b", transparent: true, opacity: 0.12 }));
     glow.rotation.x = -Math.PI / 2;
-    glow.position.set(x0, GRILL_TOP + 0.02, 1.42);
+    glow.position.set(x0 + GRILL_CX, GRILL_TOP + 0.02, 1.42);
     this.scene.add(glow);
-    const lip = mesh(faceted(new THREE.BoxGeometry(6.5, 0.3, 0.12)), "#2a2e30", { ink: false });
-    lip.position.set(x0, GRILL_TOP + 0.1, 2.92);
+    const lip = mesh(faceted(new THREE.BoxGeometry(GRILL_W, 0.3, 0.12)), "#2a2e30", { ink: false });
+    lip.position.set(x0 + GRILL_CX, GRILL_TOP + 0.1, 2.92);
     this.scene.add(lip);
+    // Trash can beside the grill for burnt mistakes.
+    const can = mesh(faceted(new THREE.CylinderGeometry(TRASH.r, TRASH.r * 0.85, 1.1, 14)), "#6f7f7b");
+    can.position.set(x0 + TRASH.x, 0.55, TRASH.z);
+    const rim = mesh(faceted(new THREE.TorusGeometry(TRASH.r, 0.06, 5, 16)), "#4c5855", { ink: false });
+    rim.rotation.x = Math.PI / 2;
+    rim.position.set(x0 + TRASH.x, 1.1, TRASH.z);
+    const hole = mesh(faceted(new THREE.CylinderGeometry(TRASH.r - 0.06, TRASH.r - 0.06, 0.02, 14)), "#222826", { ink: false, shadow: false });
+    hole.position.set(x0 + TRASH.x, 1.09, TRASH.z);
+    this.scene.add(can, rim, hole);
 
     const puffMat = new THREE.MeshBasicMaterial({ color: "#f2f2f2", transparent: true, opacity: 0.3, depthWrite: false });
     for (let i = 0; i < 24; i++) {
@@ -324,6 +336,11 @@ export class CounterView {
     const out = new THREE.Vector3();
     this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -y), out);
     return out;
+  }
+
+  /** True when a dropped item at this world point lands in the trash can. */
+  overTrash(world: THREE.Vector3): boolean {
+    return Math.hypot(world.x - (pageX(1) + TRASH.x), world.z - TRASH.z) < TRASH.r + 0.35;
   }
 
   /** Grill-local position if the world point is over the grill plate. */

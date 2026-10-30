@@ -425,7 +425,11 @@ function finishHold(pt: Pointer): void {
     if (done && slot >= 0) setActive(slot);
   } else if (band === "counter") {
     const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3);
-    if (payload.type === "piece") {
+    if (counter.page === HOME_PAGE && counter.overTrash(g)) {
+      sfx.thud();
+      buzz(20);
+      done = true;
+    } else if (payload.type === "piece") {
       const over = counter.overGrill(g);
       if (over && GRILLABLE.has(payload.piece.kind)) {
         counter.addGrillItem(payload.piece, over.x, over.z);
@@ -916,7 +920,7 @@ counter.events.spill = () => {
 };
 counter.events.burning = () => {
   if (counter.page !== HOME_PAGE) showHint("Something's burning on the grill! ←", 2.5);
-  else hintOnce("burning", "Smoke means burning. Get it off the grill!", 2.5);
+  else hintOnce("burning", "Smoke means burning! Drag it to the trash can.", 2.5);
 };
 
 let lastTimerText = "";

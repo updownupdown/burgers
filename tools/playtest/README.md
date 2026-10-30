@@ -7,7 +7,7 @@ coordinates.
 
 ```sh
 npm run build && npx vite preview --port 4173 &
-node tools/playtest/bot.js        # plays a full shift, logs each order, screenshots to tools/playtest/out/
+node tools/playtest/bot.cjs        # plays a full shift, logs each order, screenshots to tools/playtest/out/
 ```
 
 Needs Playwright with Chromium available (`require('playwright')`).

@@ -40,10 +40,10 @@ export interface Layer {
 }
 
 export type Size = "S" | "M" | "L";
-export type FriesSize = "S" | "L";
+export type FriesSize = "S" | "M" | "L";
 export const SIZE_LABEL: Record<Size, string> = { S: "Small", M: "Medium", L: "Large" };
 /** Share of a fryer basket each carton holds. */
-export const FRIES_PORTION: Record<FriesSize, number> = { S: 0.5, L: 1 };
+export const FRIES_PORTION: Record<FriesSize, number> = { S: 0.5, M: 0.75, L: 1 };
 /** Small cups fill faster than large ones. */
 export const CUP_SPEED: Record<Size, number> = { S: 1.35, M: 1, L: 0.78 };
 

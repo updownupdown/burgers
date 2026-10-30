@@ -66,8 +66,8 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       await page(2);
       freshB = await ev(() => window.__bv.counter.baskets.findIndex(b => !b.loaded));
       if (freshB >= 0) {
-        const [fx, fy] = await ev(() => window.__bv.project('counter', 14 - 1.7, 0.6, -2.2));
-        const [kx, ky] = await ev((i) => window.__bv.project('counter', 14 + (i ? 1.55 : -1.55), 1.0, 0.45), freshB);
+        const [fx, fy] = await ev(() => { const v = window.__bv.counter.friesBinAt; return window.__bv.project('counter', v.x, v.y, v.z); });
+        const [kx, ky] = await ev((i) => { const v = window.__bv.counter.baskets[i].obj.position; return window.__bv.project('counter', v.x, 1.0, v.z); }, freshB);
         await act(line(fx, fy, kx, ky, 10));
       }
       await page(1);
@@ -164,13 +164,13 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
         if (bi < 0) {
           // Nothing left anywhere: start another batch.
           const free = bs.findIndex(b => !b.loaded);
-          const [fx, fy] = await ev(() => window.__bv.project('counter', 14 - 1.7, 0.6, -2.2));
-          const [bx2, by2] = await ev((i) => window.__bv.project('counter', 14 + (i ? 1.55 : -1.55), 1.0, 0.45), free);
+          const [fx, fy] = await ev(() => { const v = window.__bv.counter.friesBinAt; return window.__bv.project('counter', v.x, v.y, v.z); });
+          const [bx2, by2] = await ev((i) => { const v = window.__bv.counter.baskets[i].obj.position; return window.__bv.project('counter', v.x, 1.0, v.z); }, free);
           await act(line(fx, fy, bx2, by2, 10));
           continue;
         }
         for (let w = 0; w < 80; w++) { const c = await ev((i) => window.__bv.counter.baskets[i].cook, bi); if (c >= 0.6) break; await step(p, 0.25); }
-        const [bx, by] = await ev((i) => window.__bv.project('counter', 14 + (i ? 1.55 : -1.55), 1.0, 0.45), bi);
+        const [bx, by] = await ev((i) => { const v = window.__bv.counter.baskets[i].obj.position; return window.__bv.project('counter', v.x, 1.0, v.z); }, bi);
         await act(line(bx, by, kx2, ky2, 10));
       }
       await act(line(kx2, ky2, px, py, 12));

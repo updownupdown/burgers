@@ -1,7 +1,7 @@
 import type { Doneness, DrinkId, ExpectedLayer, FriesSize, Kind, Modifier, Order, Size } from "./types";
 import type { Recipe, Stop } from "./stops";
 
-export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, L: 4 };
+export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, M: 3, L: 4 };
 export const DRINK_PRICE: Record<Size, number> = { S: 1, M: 2, L: 3 };
 
 export type Rng = () => number;

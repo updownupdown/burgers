@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
-import { makeFryPile } from "./food";
+import { curdLumps, GRAVY, makeFryPile } from "./food";
 import { faceted, shareGeometry, toon } from "./materials";
 
 /**
@@ -259,5 +259,43 @@ export function makeShaker(): THREE.Mesh {
   const p = new Parts();
   p.add(cyl(0.15, 0.17, 0.42, 10), "#f2f4f3", { p: [0, 0.21, 0] });
   p.add(cyl(0.12, 0.16, 0.14, 10), "#aab4b6", { p: [0, 0.49, 0] });
+  return bakedMesh(bakeShared(p));
+}
+
+/** A tub of cheese curds for poutine. */
+export const CURD_TUB = { r: 0.38, h: 0.42 };
+export function makeCurdTub(): THREE.Mesh {
+  const p = new Parts();
+  p.add(cyl(CURD_TUB.r, CURD_TUB.r * 0.88, CURD_TUB.h, 14), "#f3f6f6", { p: [0, CURD_TUB.h / 2, 0] });
+  p.add(cyl(CURD_TUB.r + 0.02, CURD_TUB.r + 0.02, 0.07, 14), "#5e8fb8", { p: [0, CURD_TUB.h - 0.06, 0], ink: 0 });
+  curdLumps(p, 16, CURD_TUB.r * 0.8, CURD_TUB.r * 0.8, CURD_TUB.h - 0.02, 5, 1.3);
+  return bakedMesh(bakeShared(p));
+}
+
+/** A pot of hot gravy with a ladle resting in it. */
+export const GRAVY_POT = { r: 0.4, h: 0.46 };
+export function makeGravyPot(): THREE.Mesh {
+  const p = new Parts();
+  p.add(cyl(GRAVY_POT.r, GRAVY_POT.r * 0.95, GRAVY_POT.h, 14), STEEL, { p: [0, GRAVY_POT.h / 2, 0] });
+  p.add(cyl(GRAVY_POT.r - 0.04, GRAVY_POT.r - 0.04, 0.02, 14), GRAVY, { p: [0, GRAVY_POT.h + 0.005, 0], ink: 0 });
+  for (const s of [-1, 1]) p.add(box(0.12, 0.05, 0.1), "#3a3a3a", { p: [s * (GRAVY_POT.r + 0.05), GRAVY_POT.h - 0.08, 0] });
+  // Ladle handle leaning on the rim.
+  p.add(cyl(0.025, 0.025, 0.7, 6), "#9aa3a6", { p: [0.12, GRAVY_POT.h + 0.2, -0.12], r: [0.5, 0, -0.45] });
+  return bakedMesh(bakeShared(p));
+}
+
+/** What you carry from the tub: a pinch of curds. */
+export function makeCurdHandful(): THREE.Mesh {
+  const p = new Parts();
+  curdLumps(p, 7, 0.14, 0.12, 0.05, 9, 1.2);
+  return bakedMesh(bakeShared(p));
+}
+
+/** A ladle of gravy, to pour over a carton. */
+export function makeLadle(): THREE.Mesh {
+  const p = new Parts();
+  p.add(new THREE.SphereGeometry(0.17, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), "#c9d1cf", { p: [0, 0.17, 0] });
+  p.add(cyl(0.15, 0.15, 0.02, 10), GRAVY, { p: [0, 0.16, 0], ink: 0 });
+  p.add(cyl(0.025, 0.025, 0.8, 6), "#9aa3a6", { p: [0.3, 0.45, 0], r: [0, 0, 0.9] });
   return bakedMesh(bakeShared(p));
 }

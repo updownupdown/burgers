@@ -4,6 +4,22 @@ import type { Recipe, Stop } from "./stops";
 
 export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, M: 3, L: 4 };
 export const DRINK_PRICE: Record<Size, number> = { S: 1, M: 2, L: 3 };
+/** A poutine meal: a large carton of fries under cheese curds and gravy. */
+export const POUTINE_PRICE = 8;
+/** Share of orders, once the shift is going, that are a poutine instead of a burger. */
+const POUTINE_CHANCE = 0.12;
+
+function poutineOrder(id: number, rng: Rng, level: number): Order {
+  const drink = rng() < 0.2 + level * 0.4 ? DRINKS[Math.floor(rng() * DRINKS.length)] : null;
+  const r = rng();
+  const drinkSize: Size = r < 0.3 ? "S" : r < 0.7 ? "M" : "L";
+  const order: Order = { id, name: "Poutine", price: POUTINE_PRICE + (drink ? DRINK_PRICE[drinkSize] : 0), mods: [], layers: [], fries: true, friesSize: "L", drink, drinkSize, poutine: true };
+  if (drink) {
+    const i = rng();
+    order.ice = i < 0.45 ? true : i < 0.7 ? false : null;
+  }
+  return order;
+}
 
 export type Rng = () => number;
 
@@ -87,6 +103,7 @@ export function pickMods(recipe: Recipe, pantry: Kind[], rng: Rng, level: number
  * come with sides.
  */
 export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Order {
+  if (level >= 0.15 && rng() < POUTINE_CHANCE) return poutineOrder(id, rng, level);
   let pool = stop.menu.filter((r) => (r.from ?? 0) <= level);
   if (level < 0.25) pool = pool.filter((r) => r.layers.length <= 6);
   if (!pool.length) pool = stop.menu;

@@ -55,6 +55,11 @@ export interface Fries {
   size: FriesSize;
   /** How full the carton is, 0..1. */
   fill: number;
+  /** Shaken with salt. Plain fries want it; poutine doesn't need it. */
+  salt?: boolean;
+  /** Poutine toppings: cheese curds, then gravy. */
+  curds?: boolean;
+  gravy?: boolean;
 }
 
 export interface Drink {
@@ -103,6 +108,8 @@ export interface Order {
   ice?: boolean | null;
   /** A food critic: their verdict goes in the paper. */
   critic?: boolean;
+  /** A poutine meal: a large carton of fries with curds and gravy, and no burger. */
+  poutine?: boolean;
 }
 
 export const GRILLABLE: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon", "egg", "pineapple"]);

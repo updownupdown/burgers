@@ -644,7 +644,7 @@ function friesGroup(baked: Baked | null): FriesObject {
  * Fries in a carton of `size`, or a loose handful without one. `fill` (0..1) hides sticks for
  * a part-filled carton or a part-emptied basket. Bottom at y = 0.
  */
-export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1): FriesObject {
+export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1, top?: { salt?: boolean; curds?: boolean; gravy?: boolean }): FriesObject {
   const f = Math.min(1, Math.max(0, fill));
   if (!withCarton) {
     const n = Math.round(16 * f);
@@ -653,6 +653,13 @@ export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1):
   const n = Math.round(FRY_COUNT[size] * f);
   const g = friesGroup(n ? cartonFries(size, n) : null);
   g.add(makeCarton(size));
+  if (n && top) {
+    const [sw, sh] = CARTON_SIZE[size];
+    const sink = (1 - n / FRY_COUNT[size]) * 0.3 * sh;
+    const y = 0.1 * sh - sink + 0.8 * (0.55 + 0.45 * sh);
+    const t = friesToppings((CART.a1 - CART.wall) * sw, (CART.b1 - CART.wall) * sw + 0.03, y, !!top.salt, !!top.curds, !!top.gravy);
+    if (t) g.add(t);
+  }
   return g;
 }
 
@@ -695,6 +702,56 @@ export function makeFryPile(w: number, d: number, layers: number, seed: number, 
     };
   }
   return g;
+}
+
+/** Cheese curds: squeaky off-white lumps. */
+export const CURD = "#f5edcf";
+export const GRAVY = "#6e4020";
+const lump = shareGeometry(faceted(new THREE.IcosahedronGeometry(0.07, 0)));
+
+export function curdLumps(p: Parts, n: number, rx: number, rz: number, y: number, seed: number, s = 1): void {
+  const r = rng(seed);
+  for (let i = 0; i < n; i++) {
+    const a = i * 2.39996;
+    const rr = Math.sqrt((i + 0.5) / n);
+    p.add(lump, CURD, {
+      p: [Math.cos(a) * rr * rx, y + r() * 0.05 * s, Math.sin(a) * rr * rz],
+      r: [r() * 3, r() * 3, r() * 3],
+      s: [s * (0.9 + r() * 0.5), s * (0.7 + r() * 0.4), s * (0.9 + r() * 0.4)],
+      ink: 0.01,
+    });
+  }
+}
+
+/**
+ * Toppings on fries in a carton: a sprinkle of salt, curds and a pour of gravy. Built in
+ * carton units around the top of the fries at height `top` (half-width `rx`, half-depth `rz`).
+ */
+const TOPPED = new Map<string, Baked>();
+export function friesToppings(rx: number, rz: number, top: number, salt: boolean, curds: boolean, gravy: boolean): THREE.Mesh | null {
+  if (!salt && !curds && !gravy) return null;
+  const key = `${rx.toFixed(2)}|${rz.toFixed(2)}|${top.toFixed(2)}|${+salt}${+curds}${+gravy}`;
+  let b = TOPPED.get(key);
+  if (!b) {
+    const p = new Parts();
+    const r = rng(17);
+    if (gravy) {
+      p.add(new THREE.SphereGeometry(1, 12, 6), GRAVY, { p: [0, top - 0.02, 0], s: [rx * 1.25, 0.1, rz * 1.6], ink: 0.012 });
+      // A few runs down the outside sticks.
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + 0.4;
+        p.add(new THREE.SphereGeometry(1, 8, 5), GRAVY, { p: [Math.cos(a) * rx * 0.8, top - 0.12, Math.sin(a) * rz * 0.8], s: [0.05, 0.12, 0.05], ink: 0 });
+      }
+    }
+    if (curds) curdLumps(p, 8, rx * 0.9, rz * 1.2, top + 0.02, 23, 0.75);
+    if (salt) {
+      const grain = new THREE.BoxGeometry(0.018, 0.018, 0.018);
+      for (let i = 0; i < 26; i++) p.add(grain, "#ffffff", { p: [(r() - 0.5) * rx * 1.7, top + 0.03 + r() * 0.05, (r() - 0.5) * rz * 1.7], ink: 0 });
+    }
+    b = bakeShared(p);
+    TOPPED.set(key, b);
+  }
+  return bakedMesh(b);
 }
 
 // Cups moved to models/drinks.ts; re-exported so existing imports keep working.

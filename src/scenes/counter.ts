@@ -1,10 +1,10 @@
 import * as THREE from "three";
-import { FRY_RATE, GRILL_RATE, MELT_RATE } from "../game/cooking";
+import { FRIES_PERFECT, FRY_RATE, GRILL_RATE, MELT_RATE } from "../game/cooking";
 import type { DrinkId, FriesSize, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
 import { CUP_SPEED, DRINKS } from "../game/types";
 import { bottle, CUP_SCALE, makeCarton, makeCartonStack, makeCup, makeFood, makeFries, makeFryPile, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { dressCup } from "../render/cup";
-import { BASKET, BUBBLES_GEO, FREEZER, makeBasket, makeFreezer, makeOil, makePackStation, makePadMark, makeShaker, makeVat, PAD, VAT, WELL } from "../render/fryer";
+import { BASKET, BUBBLES_GEO, FREEZER, makeBasket, makeCurdHandful, makeCurdTub, makeFreezer, makeGravyPot, makeLadle, makeOil, makePackStation, makePadMark, makeShaker, makeVat, PAD, VAT, WELL } from "../render/fryer";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { makeBin } from "../render/heaps";
 import { makeIceBin, makeLidStack, makeStrawHolder } from "../render/models/drinks";
@@ -48,8 +48,13 @@ const FRYER = {
   // Pads level with or below the baskets: dragging fries up from a basket is the lift flick.
   station: { x: 2.25, z: 1.04, w: 2.2, d: 3.04 },
   packZ: [0.3, 1.78],
-  shaker: { x: 0.62, z: -1.0 },
+  // Salt, curds and gravy in a column between the vats and the packing pads.
+  shaker: { x: 0.66, z: -1.3 },
+  curds: { x: 0.66, z: -0.15 },
+  gravy: { x: 0.66, z: 1.15 },
 };
+/** A packing pad with nothing on it. */
+export const EMPTY_PACK = { size: null, cook: 0, fill: 0, salt: false, curds: false, gravy: false } as const;
 /** Fryer basket heights: lifted out and resting in the oil. */
 const BASKET_UP = 1.0;
 const BASKET_DOWN = 0.34;
@@ -110,6 +115,9 @@ export interface Pack {
   size: FriesSize | null;
   cook: number;
   fill: number;
+  salt: boolean;
+  curds: boolean;
+  gravy: boolean;
   obj: THREE.Object3D | null;
   x: number;
   z: number;
@@ -147,7 +155,10 @@ export type Hit =
   | { type: "hold"; idx: number }
   | { type: "stack"; idx: number }
   | { type: "supplies"; kind: "cup" | "carton" }
-  | { type: "pack"; idx: number };
+  | { type: "pack"; idx: number }
+  | { type: "shaker" }
+  | { type: "curds" }
+  | { type: "gravy" };
 
 /** A burger being put together (or food parked) under the heat lamp. */
 export interface HoldSpot {
@@ -360,7 +371,7 @@ export class CounterView {
     const bulbGeo = new THREE.SphereGeometry(0.1, 8, 6);
     const bulbMat = new THREE.MeshBasicMaterial({ color: "#ff8a3d" });
     for (const z of F.packZ) {
-      this.packs.push({ size: null, cook: 0, fill: 0, obj: null, x: x0 + st.x, z });
+      this.packs.push({ ...EMPTY_PACK, obj: null, x: x0 + st.x, z });
       this.proxy(new THREE.BoxGeometry(PAD.w + 0.1, 1.6, PAD.d + 0.1), new THREE.Vector3(x0 + st.x, 0.6, z), { type: "pack", idx: this.packs.length - 1 });
       const mark = makePadMark();
       mark.position.x = x0 + st.x;
@@ -374,6 +385,15 @@ export class CounterView {
     const shaker = makeShaker();
     shaker.position.set(x0 + F.shaker.x, 0, F.shaker.z);
     this.scene.add(shaker);
+    this.proxy(new THREE.BoxGeometry(0.8, 1.2, 0.8), new THREE.Vector3(x0 + F.shaker.x, 0.4, F.shaker.z), { type: "shaker" });
+    const tub = makeCurdTub();
+    tub.position.set(x0 + F.curds.x, 0, F.curds.z);
+    this.scene.add(tub);
+    this.proxy(new THREE.BoxGeometry(0.95, 1.2, 1.0), new THREE.Vector3(x0 + F.curds.x, 0.4, F.curds.z), { type: "curds" });
+    const pot = makeGravyPot();
+    pot.position.set(x0 + F.gravy.x, 0, F.gravy.z);
+    this.scene.add(pot);
+    this.proxy(new THREE.BoxGeometry(0.95, 1.4, 1.1), new THREE.Vector3(x0 + F.gravy.x, 0.5, F.gravy.z), { type: "gravy" });
     this.addTrash(x0, TRASH_RAIL[2]);
 
     // The vats, each with a wire basket and a pile of fries that empties from the top.
@@ -532,6 +552,26 @@ export class CounterView {
   }
 
   /** A scoop of ice, one lid or one straw: on the counter and in hand. */
+  /** What you carry from the fryer's topping column. */
+  fryTopMesh(what: "salt" | "curds" | "gravy"): THREE.Object3D {
+    if (what === "salt") {
+      const m = makeShaker();
+      // Tipped over, ready to shake.
+      m.rotation.z = 2.3;
+      m.position.y = 0.4;
+      const g = new THREE.Group();
+      g.add(m);
+      return g;
+    }
+    return what === "curds" ? makeCurdHandful() : makeLadle();
+  }
+
+  /** Packing pad with fries under a world point, or -1. */
+  friedPackAt(g: THREE.Vector3): number {
+    const i = this.overPack(g);
+    return i >= 0 && this.packs[i].size && this.packs[i].fill > 0 ? i : -1;
+  }
+
   extraMesh(what: "ice" | "lid" | "straw"): THREE.Object3D {
     if (what === "ice") {
       const g = new THREE.Group();
@@ -646,7 +686,7 @@ export class CounterView {
     if (!p.size) return;
     let o: THREE.Object3D;
     if (p.fill > 0) {
-      const f = makeFries(true, p.size, p.fill);
+      const f = makeFries(true, p.size, p.fill, p);
       f.userData.setCook(p.cook);
       f.scale.setScalar(PACK_SCALE * f.userData.sizeScale);
       o = f;
@@ -674,7 +714,7 @@ export class CounterView {
       t.puddle = 0;
     });
     this.packs.forEach((p, i) => {
-      Object.assign(p, { size: null, cook: 0, fill: 0 });
+      Object.assign(p, EMPTY_PACK);
       this.syncPack(i);
     });
     this.spillCost = 0;
@@ -1001,7 +1041,7 @@ export class CounterView {
       }
       if (inOil) {
         b.cook += FRY_RATE * this.fryBoost * dt;
-        if (!b.goldenRung && b.cook >= 0.55) {
+        if (!b.goldenRung && b.cook >= FRIES_PERFECT - 0.04) {
           b.goldenRung = true;
           this.events.golden();
         }

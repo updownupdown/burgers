@@ -406,6 +406,31 @@ html, body {
 .gtag[hidden] { display: none; }
 .gtag.stack.low { background: #c9651f; }
 .gtag.supply { background: #6b4329; }
+
+/* Fries meter over baskets and cartons: underdone | done | overdone, a line at perfect, a marker for now. */
+.ftag { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; z-index: 1; }
+.ftag[hidden] { display: none; }
+.fmeter {
+  position: relative;
+  display: block;
+  width: 78px;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e9e2c4 0 var(--u), #e7b43c var(--u) var(--d), #9a5a22 var(--d) 100%);
+  box-shadow: 0 0 0 1.5px rgb(42 38 34 / 0.75), 0 2px 4px rgb(0 0 0 / 0.3);
+}
+/* Perfect: a thin dark line in the middle of the done zone. */
+.fmeter::before { content: ""; position: absolute; left: var(--p); top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--bv-ink); border-radius: 1px; }
+.fmeter i { position: absolute; top: 50%; width: 10px; height: 18px; margin: -9px 0 0 -5px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 1.5px var(--bv-ink), 0 1px 3px rgb(0 0 0 / 0.4); transition: left 0.2s linear; }
+.fmeter.done i { background: #fff7d6; }
+.fmeter.over i, .fmeter.burnt i { background: var(--bv-paprika); }
+.fmeter.burnt { animation: fmeter-hot 0.5s ease-in-out infinite alternate; }
+@keyframes fmeter-hot { to { box-shadow: 0 0 0 2px var(--bv-paprika), 0 2px 6px rgb(194 59 72 / 0.6); } }
+.ftag .scoops { display: flex; gap: 3px; }
+.ftag .scoops b { width: 7px; height: 7px; border-radius: 50%; background: rgb(255 255 255 / 0.5); box-shadow: 0 0 0 1px rgb(42 38 34 / 0.7); }
+.ftag .scoops b.on { background: #e7b43c; }
+.ftag .tops { display: flex; gap: 2px; }
+.ftag .tops em { font: 800 9.5px var(--bv-font-ui); font-style: normal; color: #fff; background: rgb(42 38 34 / 0.8); border-radius: 4px; padding: 0 4px; }
 .ticket .sides .sz { font: 700 10px var(--bv-font-mono); font-style: normal; border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; }
 
 /* Landscape phones: the kitchen only fits upright. */

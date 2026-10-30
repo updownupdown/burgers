@@ -206,7 +206,12 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, expande
   });
   const modded = new Set(order.mods.filter((m) => m.type !== "no").map((m) => m.kind));
   let body: string;
-  if (expanded) {
+  if (order.poutine && !order.layers.length) {
+    // A poutine meal: the carton, then curds and gravy on top.
+    const f = plate.fries;
+    const line = (ok: boolean, color: string, label: string) => `<li class="${ok ? "ok" : ""}"><b style="background:${color}"></b><span class="l">${label}</span></li>`;
+    body = `<ol>${line(!!f && f.size === order.friesSize, "#f3d36b", `<i class="sz">${order.friesSize}</i> Fries`)}${line(!!f?.curds, "#f5edcf", "Cheese curds")}${line(!!f?.gravy, "#6e4020", "Gravy")}</ol>`;
+  } else if (expanded) {
     const lines: string[] = [];
     for (let i = order.layers.length - 1; i >= 0; i--) {
       const exp = order.layers[i];
@@ -237,7 +242,7 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, expande
   }
   const sides: string[] = [];
   // Sizes lead so they're the first thing read: "L Fries", "S Pine Fizz".
-  if (order.fries)
+  if (order.fries && !(order.poutine && !order.layers.length))
     sides.push(`<span class="${plate.fries?.size === order.friesSize ? "ok" : ""}"><b style="background:#f3d36b"></b><i class="sz">${order.friesSize}</i>Fries</span>`);
   if (order.drink) {
     const d = plate.drink;

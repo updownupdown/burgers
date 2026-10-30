@@ -1,5 +1,5 @@
-import { avgCook, bunToast, isMelted } from "./cooking";
-import type { ExpectedLayer, Layer, Order, Piece, Plate } from "./types";
+import { avgCook, bunToast, friesQuality, friesZone, FRIES_ZONE, isMelted } from "./cooking";
+import type { Drink, ExpectedLayer, Fries, Layer, Order, Piece, Plate } from "./types";
 import { DONENESS_TARGET, KIND_LABEL, SIZE_LABEL } from "./types";
 
 export interface ScoreResult {
@@ -11,6 +11,8 @@ export interface ScoreResult {
   presentation: number;
   sides: number;
   notes: string[];
+  /** Nice things that softened the review: a free side they didn't order. */
+  perks: string[];
 }
 
 /** Longest common subsequence of layer kinds, returned as index pairs (expected, actual). */
@@ -175,60 +177,110 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
 
   let sideParts = 0;
   let sideScore = 0;
+  let friesQ = 0;
+  let drinkQ = 0;
   if (order.fries) {
     sideParts++;
-    if (!plate.fries) notes.push("forgot the fries");
-    else {
-      const c = plate.fries.cook;
-      let q = c >= 1.05 ? 0.2 : c < 0.5 ? 0.4 : 1;
-      if (q < 1) notes.push(c >= 1.05 ? "burnt fries" : "soggy fries");
-      if (plate.fries.size !== order.friesSize) {
-        q *= 0.5;
-        notes.push(`wanted ${SIZE_LABEL[order.friesSize].toLowerCase()} fries`);
-      } else if (plate.fries.fill < 0.95) {
-        q *= 0.6;
-        notes.push("skimpy fries");
-      }
-      sideScore += q;
-    }
+    if (!plate.fries) notes.push(order.poutine ? "forgot the poutine" : "forgot the fries");
+    else friesQ = friesScore(order, plate.fries, notes);
+    sideScore += friesQ;
   }
   if (order.drink) {
     sideParts++;
     if (!plate.drink) notes.push("forgot the drink");
-    else if (plate.drink.flavor !== order.drink) {
-      notes.push("wrong drink");
-      sideScore += 0.3;
-    } else {
-      const f = plate.drink.fill;
-      let q = f < 0.6 ? 0.4 : f < 0.78 ? 0.75 : 1;
-      if (q < 1) notes.push("drink not full");
-      if (plate.drink.size !== order.drinkSize) {
-        q *= 0.5;
-        notes.push(`wanted a ${SIZE_LABEL[order.drinkSize].toLowerCase()} drink`);
-      }
-      if (order.ice === true && !plate.drink.ice) {
-        q *= 0.7;
-        notes.push("forgot the ice");
-      } else if (order.ice === false && plate.drink.ice) {
-        q *= 0.6;
-        notes.push("asked for no ice");
-      }
-      // A drink handed over without a lid and straw is a drink about to be spilled.
-      if (!plate.drink.lid) {
-        q *= 0.8;
-        notes.push("no lid");
-      } else if (!plate.drink.straw) {
-        q *= 0.9;
-        notes.push("no straw");
-      }
-      sideScore += q;
-    }
+    else drinkQ = drinkScore(order, plate.drink, notes);
+    sideScore += drinkQ;
   }
   const sides = sideParts ? sideScore / sideParts : act.length ? 1 : 0;
 
-  const burger = structure * (0.25 + 0.75 * quality) * (0.85 + 0.15 * presentation);
-  const score = Math.round(clamp01(burger * 0.85 + sides * 0.15) * 100);
-  return { score, stars: starsFor(score), structure, quality, presentation, sides, notes };
+  let total: number;
+  if (order.poutine && exp.length === 0) {
+    // A poutine meal: the poutine is the meal, a drink is the side.
+    if (act.length) notes.push("didn't order a burger");
+    total = (order.drink ? 0.75 * friesQ + 0.25 * drinkQ : friesQ) * (act.length ? 0.8 : 1);
+  } else {
+    const burger = structure * (0.25 + 0.75 * quality) * (0.85 + 0.15 * presentation);
+    total = burger * 0.85 + sides * 0.15;
+  }
+
+  // A side they didn't order, made well, softens a bad review: the worse it was going, the more
+  // a freebie helps. It never lifts a great meal much, and a bad freebie doesn't count.
+  const perks: string[] = [];
+  const freebie = (q: number, what: string) => {
+    if (q < 0.5) return;
+    total += Math.min(0.12, (1 - total) * 0.35) * q;
+    perks.push(what);
+  };
+  if (!order.fries && plate.fries && plate.fries.fill > 0.5) freebie(friesScore({ ...order, poutine: !!plate.fries.curds }, plate.fries, []), plate.fries.curds ? "free poutine" : "free fries");
+  if (!order.drink && plate.drink && plate.drink.fill > 0.6) freebie(Math.min(1, plate.drink.fill), "free drink");
+
+  const score = Math.round(clamp01(total) * 100);
+  return { score, stars: starsFor(score), structure, quality, presentation, sides, notes, perks };
+}
+
+/** Fries or poutine against the order, 0..1. */
+function friesScore(order: Order, fries: Fries, notes: string[]): number {
+  const c = fries.cook;
+  let q = friesQuality(c);
+  const zone = friesZone(c);
+  if (zone === "under") notes.push("soggy fries");
+  else if (zone === "over") notes.push(c >= FRIES_ZONE.burnt ? "burnt fries" : "overdone fries");
+  if (fries.size !== order.friesSize) {
+    q *= 0.5;
+    notes.push(`wanted ${SIZE_LABEL[order.friesSize].toLowerCase()} fries`);
+  } else if (fries.fill < 0.95) {
+    q *= 0.6;
+    notes.push(order.poutine ? "skimpy poutine" : "skimpy fries");
+  }
+  if (order.poutine) {
+    if (!fries.curds) {
+      q *= 0.5;
+      notes.push("where are the curds?");
+    }
+    if (!fries.gravy) {
+      q *= 0.5;
+      notes.push("no gravy on the poutine");
+    }
+  } else {
+    // Salt is optional but plain fries without it taste flat; poutine toppings on plain fries are a surprise.
+    if (!fries.salt) {
+      q *= 0.85;
+      notes.push("fries needed salt");
+    }
+    if (fries.curds || fries.gravy) q *= 0.8;
+  }
+  return q;
+}
+
+/** A drink against the order, 0..1. */
+function drinkScore(order: Order, d: Drink, notes: string[]): number {
+  if (d.flavor !== order.drink) {
+    notes.push("wrong drink");
+    return 0.3;
+  }
+  const f = d.fill;
+  let q = f < 0.6 ? 0.4 : f < 0.78 ? 0.75 : 1;
+  if (q < 1) notes.push("drink not full");
+  if (d.size !== order.drinkSize) {
+    q *= 0.5;
+    notes.push(`wanted a ${SIZE_LABEL[order.drinkSize].toLowerCase()} drink`);
+  }
+  if (order.ice === true && !d.ice) {
+    q *= 0.7;
+    notes.push("forgot the ice");
+  } else if (order.ice === false && d.ice) {
+    q *= 0.6;
+    notes.push("asked for no ice");
+  }
+  // A drink handed over without a lid and straw is a drink about to be spilled.
+  if (!d.lid) {
+    q *= 0.8;
+    notes.push("no lid");
+  } else if (!d.straw) {
+    q *= 0.9;
+    notes.push("no straw");
+  }
+  return q;
 }
 
 /** Money earned: part of the price is always paid, the rest scales with score; tips need speed too. */

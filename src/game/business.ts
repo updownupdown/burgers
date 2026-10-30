@@ -69,6 +69,8 @@ export const KIND_COST: Record<Kind, number> = {
 export const FRIES_BATCH_COST = 1.0;
 export const CARTON_COST: Record<FriesSize, number> = { S: 0.08, M: 0.1, L: 0.12 };
 export const CUP_COST: Record<Size, number> = { S: 0.08, M: 0.1, L: 0.12 };
+/** A shake of salt, a pinch of cheese curds, a ladle of gravy. */
+export const FRY_TOP_COST = { salt: 0.01, curds: 0.35, gravy: 0.25 };
 /** A scoop of ice, a lid, a straw. */
 export const EXTRA_COST = { ice: 0.02, lid: 0.03, straw: 0.02 };
 /** Soda in a full cup. */

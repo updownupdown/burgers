@@ -1,9 +1,10 @@
 import { CROWD } from "../game/business";
 import { expectedCustomers, rangeMiles, rangeUnits, runningCost } from "../game/day";
 import { UPGRADES, type Save, type UpgradeId } from "../game/progress";
-import { EVENTS, eventOn, nextDay, REGIONS, STOPS, townById, withEvent, type Stop } from "../game/stops";
+import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent, type Stop } from "../game/stops";
 import { applyTrip, canAfford, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Legs, type Trip } from "../game/travel";
 import { icon } from "../ui/icons";
+import { dropBack, pushBack } from "./nav";
 import { renderMap, roadPath, routePoints, SEA, townPoint, VIEW } from "./map";
 import { PanZoom } from "./panzoom";
 import "./home.css";
@@ -29,7 +30,7 @@ export interface HomeDeps {
   /** The save changed here (a drive, an upgrade picked): persist it and sync the truck's town. */
   commit(): void;
   /** The game menu (General & Settings). Another module owns it; home only asks for it. */
-  openMenu(tab?: "general" | "settings"): void;
+  openSettings(): void;
   /** The How to Play modal. */
   openHowTo(): void;
   /** A town to open the sheet on straight away, e.g. one the last shift unlocked. */
@@ -109,6 +110,7 @@ export function unmountHome(): void {
   const m = cur;
   if (!m) return;
   cur = null;
+  if (m.selected) dropBack("sheet");
   m.observer.disconnect();
   window.removeEventListener("resize", m.onResize);
   m.pz.destroy();
@@ -121,6 +123,8 @@ export function refreshHome(): void {
   if (!cur) return;
   cur.el.classList.toggle("evening", cur.deps.save.time === "evening");
   renderMapInto(cur);
+  // A fresh SVG has no size until fitMap gives it one; without this the map came back as open sea.
+  fitMap(true);
   cur.el.querySelector(".home-stats")!.outerHTML = statsHtml(cur.deps.save);
   renderDock(cur);
   renderOffer(cur);
@@ -128,17 +132,14 @@ export function refreshHome(): void {
 }
 
 function shellHtml(save: Save): string {
-  const fresh = save.passedTowns.length === 0;
   return `<div class="home bv bv-night">
     <header class="home-top">
       <div class="home-brand">
-        <span class="home-logo">Bun <i>Voyage</i></span>
-        <span class="bv-eyebrow">${save.trips > 0 ? `Trip ${save.trips + 1} · ` : ""}${save.passedTowns.length} of ${STOPS.length} towns</span>
+        <span class="home-logo">Bun <i>Voyage</i></span>${save.trips > 0 ? `<span class="bv-eyebrow">Trip ${save.trips + 1}</span>` : ""}
       </div>
       <div class="home-actions">
-        <button class="bv-btn icon sm" data-home="howto" aria-label="How to play" title="How to play">${icon("help")}</button>
-        <button class="bv-btn icon sm" data-home="settings" aria-label="Options" title="Options">${icon("settings")}</button>
-        <button class="bv-btn sm" data-home="menu" aria-label="Menu">${icon("menu")}Menu</button>
+        <button class="bv-btn sm" data-home="howto">${icon("help")}Help</button>
+        <button class="bv-btn sm" data-home="settings">${icon("settings")}Settings</button>
       </div>
     </header>
     <div class="home-map" style="--home-sea:${SEA}">
@@ -149,7 +150,6 @@ function shellHtml(save: Save): string {
         <button data-home="zoom-out" aria-label="Zoom out">${icon("minus")}</button>
         <button class="locate" data-home="locate" aria-label="Find the truck">${icon("truck")}</button>
       </div>
-      <div class="home-tip" ${fresh ? "" : "hidden"}>${icon("map")}Tap a town to see what's on. Drag to look around.</div>
       <div class="home-dock"></div>
       <div class="home-sheet" hidden></div>
       <div class="home-offer" hidden></div>
@@ -243,7 +243,6 @@ function onMapTap(target: Element): void {
   const m = cur;
   if (!m || m.driving) return;
   const id = target.closest<HTMLElement>("[data-town]")?.dataset.town;
-  m.el.querySelector<HTMLElement>(".home-tip")?.setAttribute("hidden", "");
   if (id) {
     m.deps.sfx?.tap();
     select(m, id, true);
@@ -251,6 +250,7 @@ function onMapTap(target: Element): void {
 }
 
 function select(m: Mounted, id: string, pan: boolean): void {
+  if (!m.selected) pushBack("sheet", () => cur === m && deselect(m, true));
   m.selected = id;
   for (const t of m.world.querySelectorAll<SVGGElement>(".home-town")) t.classList.toggle("sel", t.dataset.town === id);
   // Route preview from the truck.
@@ -263,7 +263,8 @@ function select(m: Mounted, id: string, pan: boolean): void {
   if (pan) revealTown(m, id);
 }
 
-function deselect(m: Mounted): void {
+function deselect(m: Mounted, fromBack = false): void {
+  if (!fromBack) dropBack("sheet");
   m.selected = null;
   for (const t of m.world.querySelectorAll<SVGGElement>(".home-town.sel")) t.classList.remove("sel");
   m.world.querySelector<SVGPathElement>(".home-route")!.setAttribute("d", "");
@@ -362,7 +363,6 @@ function calendarHtml(t: Stop, day: number): string {
 function renderSheet(m: Mounted, id: string): void {
   const s = m.deps.save;
   const t = townById(id);
-  const region = REGIONS.find((r) => r.id === t.region)!;
   const here = id === s.town;
   const open = s.unlocked.includes(id);
   const ev = eventOn(id, s.day);
@@ -401,25 +401,28 @@ function renderSheet(m: Mounted, id: string): void {
   } else if (!open) {
     const gates = openedBy(id).map((g) => ({ t: townById(g), ...unlockProgress(s.shiftsIn, g) }));
     const reachable = gates.filter((g) => s.unlocked.includes(g.t.id));
-    const list = (gates.length ? (reachable.length ? reachable : gates) : []).map((g) => `${esc(g.t.name)} (${g.done}/${g.need})`).join(" or ");
-    action = `<button class="bv-btn lg block" disabled>${icon("lock")}Locked</button>
-      <span class="bv-caption">${list ? `Opens after ${SHIFTS_TO_UNLOCK} passed shifts in ${list}.` : "Opens later on the trip."}</span>`;
+    const near = gates.length ? (reachable.length ? reachable : gates) : [];
+    action = `<div class="home-locked">${icon("lock")}<div><b>Locked</b><span>${
+      near.length ? `Pass ${SHIFTS_TO_UNLOCK} shifts in ${near.map((g) => esc(g.t.name)).join(" or ")} to open the road.` : "Opens later on the trip."
+    }</span>${near.map((g) => `<span class="prog">${pipsHtml(g.done, g.need)} ${esc(g.t.name)} · ${g.done} of ${g.need}</span>`).join("")}</div></div>`;
   } else {
-    action = `<button class="bv-btn lg block" disabled>${icon("lock")}No road from ${esc(townById(s.town).name)}</button>`;
+    action = `<div class="home-locked">${icon("lock")}<div><b>No road from ${esc(townById(s.town).name)}</b><span>Drive to a town that joins it first.</span></div></div>`;
   }
 
   const sheet = m.el.querySelector<HTMLElement>(".home-sheet")!;
   sheet.innerHTML = `
-    <div class="grip"></div>
     <div class="home-sheet-head">
       <div>
-        <span class="bv-eyebrow"><i class="sw" style="background:${region.color}"></i>${esc(region.name)}${t.capital ? " · Big city" : ""}${here ? " · You are here" : ""}</span>
         <h2 class="bv-title">${esc(t.name)}</h2>
+        <div class="home-tags">
+          <span class="bv-chip pill crowd">${icon(CROWD_ICON[ev?.crowd ?? t.crowd] ?? "people")}${crowd.label}${ev ? " today" : ""}</span>
+          ${t.capital ? `<span class="bv-chip pill">${icon("city")}Big city</span>` : ""}
+          ${here ? `<span class="bv-chip pill here">${icon("truck")}You're here</span>` : ""}
+        </div>
       </div>
-      <button class="bv-btn icon sm" data-home="close" aria-label="Close">${icon("close")}</button>
+      <button class="bv-btn icon" data-home="close" aria-label="Close">${icon("close")}</button>
     </div>
-    <p class="bv-body home-blurb">${esc(t.blurb)}</p>
-    <div class="home-crowd">${icon(CROWD_ICON[ev?.crowd ?? t.crowd] ?? "people")}<span><b>${crowd.label}${ev ? " (event crowd)" : ""}.</b> ${esc(crowd.blurb)}</span></div>
+    <p class="bv-body home-blurb">${esc(t.blurb)} ${esc(crowd.blurb)}</p>
     ${calendarHtml(t, s.day)}
     <div class="home-facts">
       <div><span class="bv-eyebrow">Shifts here</span><b>${t.roads.length ? pipsHtml(unlockProgress(s.shiftsIn, id).done, SHIFTS_TO_UNLOCK) : ""}${s.shiftsIn[id] ?? 0}</b></div>
@@ -493,11 +496,8 @@ function onClick(e: Event): void {
     case "pick":
       pick(m, btn.dataset.id as UpgradeId);
       break;
-    case "menu":
-      m.deps.openMenu("general");
-      break;
     case "settings":
-      m.deps.openMenu("settings");
+      m.deps.openSettings();
       break;
     case "howto":
       m.deps.openHowTo();

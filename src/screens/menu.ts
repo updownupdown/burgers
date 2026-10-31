@@ -1,35 +1,35 @@
 /**
- * The game menu: two tabs, General & Settings and How to Play. It opens from the menu button
- * in the truck (the shift waits while it's open) and from the home screen.
+ * The in-game menus, as three cards:
  *
- *   initMenu(deps)            once, from main.ts
- *   openMenu({ tab })         the menu (any deps can be overridden for one call)
- *   openHowTo(section?)       How to Play on its own
- *   openMenuRef(town?)        Today's menu
- *   closeAll()                close everything, without resuming
+ *   openMenu()        the pause menu, in a shift: Resume, Restart, Quit, and doors to the
+ *                     menu, Settings and How to Play. Closing it resumes.
+ *   openSettings()    Settings on their own: pacing, complexity, sound, graphics, the app.
+ *                     From the map's Settings button, and from the pause menu.
+ *   openHowTo()       How to Play on its own (howto.ts). From the map's Help button.
+ *   openMenuRef()     The menu: every dish, open or locked (menuref.ts).
+ *   closeAll()        close everything, without resuming
+ *
+ *   initMenu(deps)    once, from main.ts
  */
 import { hapticsOn, hapticsSupported, setHaptics } from "../audio";
 import { buildLabel, CURRENT, reloadTo } from "../update";
 import { icon } from "../ui/icons";
-import { howToHtml, mountHowTo } from "./howto";
+import { openHowTo } from "./howto";
 import { openMenuRef } from "./menuref";
-import { closeAllModals, esc, getDeps, modalOpen, popModal, pushModal, setDeps, type GfxLevel, type MenuDeps } from "./modal";
+import { closeAllModals, esc, getDeps, modalDepth, modalOpen, popModal, pushModal, setDeps, type GfxLevel, type MenuDeps } from "./modal";
 
 export type { GfxLevel, MenuDeps } from "./modal";
 export { openHowTo } from "./howto";
 export { openMenuRef } from "./menuref";
 
+import { COMPLEXITIES, COMPLEXITY, type Complexity } from "../game/complexity";
 import { DIFFICULTIES, DIFFICULTY, type Difficulty } from "../game/difficulty";
-
-export type MenuTab = "general" | "howto";
 
 const GFX: { id: GfxLevel; label: string; blurb: string }[] = [
   { id: "high", label: "High", blurb: "Soft shadows. Looks its best." },
   { id: "standard", label: "Standard", blurb: "Hard shadows. A little lighter on the battery." },
   { id: "low", label: "Low", blurb: "No shadows, for older or slower phones." },
 ];
-
-let lastTab: MenuTab = "general";
 
 /** Register what the menu needs from the game. Call once at startup. */
 export function initMenu(deps: MenuDeps): void {
@@ -52,85 +52,76 @@ const row = (m: string, ic: string, label: string, note: string, trail = icon("f
 const confirmBox = (id: string, text: string, yes: string) =>
   `<div class="bv-callout warn menu-confirm" data-confirm="${id}" hidden>${icon("warning")}<div><p>${text}</p><div class="bv-btn-row inline"><button class="bv-btn sm" data-m="cancel">Cancel</button><button class="bv-btn sm accent" data-m="${id}-yes">${yes}</button></div></div></div>`;
 
-function generalHtml(d: MenuDeps, inShift: boolean): string {
-  const town = d.town();
-  const gfx = d.gfx();
-  const shift = inShift
-    ? `<button class="bv-btn primary lg block" data-m="resume">${icon("play")}Resume</button>
-      <div class="bv-btn-row inline">
-        <button class="bv-btn" data-m="restart">${icon("restart")}Restart</button>
-        <button class="bv-btn" data-m="quit">${icon("map")}Quit to map</button>
-      </div>
-      ${confirmBox("restart", "Start this shift again from the top? Today's customers and takings so far are lost.", "Restart")}
-      ${confirmBox("quit", `Leave ${esc(town.name)} for the map? This shift's takings are lost and it won't count.`, "Quit to map")}`
-    : "";
-  return `${shift}
-    ${row("menuref", "menu-book", "Today's menu", `${esc(town.name)} · ${town.menu.length} burgers, sides and drinks`)}
-    <h3 class="menu-h">${icon("settings")}Settings</h3>
-    <div class="menu-field">
-      <span class="lead">${icon("clock")}</span>
-      <div class="lbl"><b>Difficulty</b><small data-r="diff-note">${DIFFICULTY[d.difficulty()].blurb}${inShift ? " New customers feel it straight away." : ""}</small></div>
-      <div class="bv-seg compact" role="radiogroup" aria-label="Difficulty">${DIFFICULTIES.map((k) => `<button role="radio" aria-pressed="${k === d.difficulty()}" aria-checked="${k === d.difficulty()}" data-m="difficulty" data-v="${k}">${DIFFICULTY[k].label}</button>`).join("")}</div>
-    </div>
-    ${toggle("sound", d.sound() ? "sound-on" : "sound-off", "Sound", d.sound())}
-    ${hapticsSupported() ? toggle("haptics", "vibrate", "Vibration", hapticsOn(), "A buzz on flips, dings and burns") : ""}
-    <div class="menu-field">
-      <span class="lead">${icon("sparkle")}</span>
-      <div class="lbl"><b>Graphics</b><small data-r="gfx-note">${GFX.find((g) => g.id === gfx)!.blurb}</small></div>
-      <div class="bv-seg compact" role="radiogroup" aria-label="Graphics">${GFX.map((g) => `<button role="radio" aria-pressed="${g.id === gfx}" aria-checked="${g.id === gfx}" data-m="gfx" data-v="${g.id}">${g.label}</button>`).join("")}</div>
-    </div>
-    ${toggle("biz", "chart", "Business mode", d.biz(), `Buy ingredients, set prices and pick the menu before each shift. Reviews build a reputation.${inShift ? " Starts with your next shift." : ""}`)}
-    <h3 class="menu-h">${icon("truck")}App</h3>
-    ${row("update", "update", "Check for updates", "", "")}
-    ${d.canInstall() ? row("install", "pin", "Install the app", "Add Bun Voyage to your home screen and play offline", "") : ""}
-    ${row("newtrip", "flag", "Start a new trip", "Back to the first town. Upgrades and savings reset.", "", 'data-tone="danger"')}
-    ${confirmBox("newtrip", inShift ? "End this shift and wipe the trip? Towns, upgrades and savings reset; best scores are kept." : "Wipe the trip and start again from the first town? Towns, upgrades and savings reset; best scores are kept.", "Start over")}
-    <p class="menu-build bv-mono">${esc(buildLabel())}</p>`;
+/** A three-way choice with a line under it that follows the pick. */
+const field = (m: string, ic: string, label: string, note: string, opts: { v: string; label: string }[], cur: string) =>
+  `<div class="menu-field">
+    <span class="lead">${icon(ic)}</span>
+    <div class="lbl"><b>${label}</b><small data-r="${m}-note">${note}</small></div>
+    <div class="bv-seg compact" role="radiogroup" aria-label="${label}">${opts.map((o) => `<button role="radio" aria-pressed="${o.v === cur}" aria-checked="${o.v === cur}" data-m="${m}" data-v="${o.v}">${o.label}</button>`).join("")}</div>
+  </div>`;
+
+function head(eyebrow: string, title: string, stacked: boolean, closeLabel = "Close"): string {
+  return `<header class="menu-head">
+    ${stacked ? `<button class="bv-btn icon sm ghost menu-back" data-m="close" aria-label="Back">${icon("back")}</button>` : ""}
+    <div class="menu-headtext"><span class="bv-eyebrow">${esc(eyebrow)}</span><h2 class="bv-title">${esc(title)}</h2></div>
+    ${stacked ? "" : `<button class="bv-btn icon sm ghost menu-x" data-m="close" aria-label="${closeLabel}">${icon("close")}</button>`}
+  </header>`;
 }
 
-/** Open the game menu. In a shift, closing it (Resume, ×, Escape or a tap outside) resumes. */
-export function openMenu(over: Partial<MenuDeps> & { tab?: MenuTab } = {}): void {
+function resolveDeps(over: Partial<MenuDeps>): MenuDeps {
   const base = getDeps();
   const d = { ...base, ...over } as MenuDeps;
-  if (!d.inShift || !d.town) throw new Error("openMenu: call initMenu(deps) first");
-  const tab = over.tab ?? lastTab;
+  if (!d.inShift || !d.town) throw new Error("menu: call initMenu(deps) first");
+  return d;
+}
+
+/** Pick a radio in a segmented control and update the note under it. */
+function pickSeg(card: HTMLElement, btn: HTMLElement, note: string): void {
+  btn.parentElement!.querySelectorAll<HTMLElement>("button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b === btn));
+    b.setAttribute("aria-checked", String(b === btn));
+  });
+  const n = card.querySelector(`[data-r="${btn.dataset.m}-note"]`);
+  if (n) n.textContent = note;
+}
+
+// ---------------------------------------------------------------------------
+// The pause menu
+
+/** Open the pause menu. Closing it (Resume, ×, Escape, Back or a tap outside) resumes. */
+export function openMenu(over: Partial<MenuDeps> = {}): void {
+  const d = resolveDeps(over);
   if (modalOpen("menu")) return;
   const inShift = d.inShift();
   const town = d.town();
-  const sub = inShift ? `Paused · ${town.name}` : (d.subtitle?.() ?? town.name);
   const card = pushModal({
     key: "menu",
     label: "Menu",
-    cls: "tall gamemenu",
+    cls: "gamemenu",
     onDismiss: () => {
       if (inShift) d.resume();
     },
-    html: `<header class="menu-head">
-        <div class="menu-headtext"><span class="bv-eyebrow">${esc(sub)}</span><h2 class="bv-title">Menu</h2></div>
-        <button class="bv-btn icon sm ghost menu-x" data-m="close" aria-label="${inShift ? "Close and resume" : "Close"}">${icon("close")}</button>
-      </header>
-      <div class="bv-seg compact menu-tabs" role="tablist">
-        <button role="tab" data-m="tab" data-v="general">${icon("settings")}<span>General &amp; Settings</span></button>
-        <button role="tab" data-m="tab" data-v="howto">${icon("help")}<span>How to Play</span></button>
-      </div>
-      <div class="menu-body menu-scroll menu-general" role="tabpanel" data-panel="general">${generalHtml(d, inShift)}</div>
-      <div class="menu-body menu-scroll" role="tabpanel" data-panel="howto" hidden>${howToHtml()}</div>`,
+    html: `${head(inShift ? "Paused" : (d.subtitle?.() ?? "Menu"), town.name, false, inShift ? "Close and resume" : "Close")}
+      <div class="menu-body menu-scroll menu-general">
+        ${
+          inShift
+            ? `<button class="bv-btn primary lg block" data-m="resume">${icon("play")}Resume</button>
+          <div class="bv-btn-row inline">
+            <button class="bv-btn" data-m="restart">${icon("restart")}Restart</button>
+            <button class="bv-btn" data-m="quit">${icon("map")}Quit to map</button>
+          </div>
+          ${confirmBox("restart", "Start this shift again from the top? Today's customers and takings so far are lost.", "Restart")}
+          ${confirmBox("quit", `Leave ${esc(town.name)} for the map? This shift's takings are lost and it won't count.`, "Quit to map")}
+          <h3 class="menu-h">${icon("sun")}Today</h3>`
+            : ""
+        }
+        ${row("menuref", "menu-book", "Menu", `${esc(town.name)} · ${town.menu.length} burgers, sides and drinks`)}
+        <h3 class="menu-h">${icon("truck")}Bun Voyage</h3>
+        ${row("settings", "settings", "Settings", "Pacing, complexity, sound, graphics")}
+        ${row("howto", "help", "How to Play", "The grill, the fryer, the drinks, the road")}
+        <p class="menu-build bv-mono">${esc(buildLabel())}</p>
+      </div>`,
   });
-  mountHowTo(card.querySelector<HTMLElement>('[data-panel="howto"]')!);
-  const showTab = (t: MenuTab) => {
-    lastTab = t;
-    card.querySelectorAll<HTMLElement>('[data-m="tab"]').forEach((b) => {
-      const on = b.dataset.v === t;
-      b.setAttribute("aria-pressed", String(on));
-      b.setAttribute("aria-selected", String(on));
-    });
-    card.querySelectorAll<HTMLElement>("[data-panel]").forEach((p) => {
-      p.hidden = p.dataset.panel !== t;
-      // A panel shown while hidden measured nothing; nudge its scroll spy.
-      if (!p.hidden) p.dispatchEvent(new Event("scroll"));
-    });
-  };
-  showTab(tab);
 
   const confirm = (id: string | null) =>
     card.querySelectorAll<HTMLElement>("[data-confirm]").forEach((c) => {
@@ -144,19 +135,14 @@ export function openMenu(over: Partial<MenuDeps> & { tab?: MenuTab } = {}): void
   card.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-m]");
     if (!btn || !card.contains(btn)) return;
-    const m = btn.dataset.m!;
-    switch (m) {
+    switch (btn.dataset.m!) {
       case "close":
       case "resume":
         popModal();
         break;
-      case "tab":
-        showTab(btn.dataset.v as MenuTab);
-        break;
       case "restart":
       case "quit":
-      case "newtrip":
-        confirm(m);
+        confirm(btn.dataset.m!);
         break;
       case "cancel":
         confirm(null);
@@ -169,12 +155,77 @@ export function openMenu(over: Partial<MenuDeps> & { tab?: MenuTab } = {}): void
         closeAllModals();
         d.quit();
         break;
+      case "menuref":
+        openMenuRef(d.town(), { priceMult: d.priceMult?.() ?? 1 });
+        break;
+      case "settings":
+        openSettings(over);
+        break;
+      case "howto":
+        openHowTo();
+        break;
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+
+/** Open Settings. Stacks over the pause menu in a shift; stands alone from the map. */
+export function openSettings(over: Partial<MenuDeps> = {}): void {
+  const d = resolveDeps(over);
+  if (modalOpen("settings")) return;
+  const inShift = d.inShift();
+  const stacked = modalDepth() > 0;
+  const gfx = d.gfx();
+  const card = pushModal({
+    key: "settings",
+    label: "Settings",
+    cls: "tall settings",
+    html: `${head("Bun Voyage", "Settings", stacked)}
+      <div class="menu-body menu-scroll menu-general">
+        <h3 class="menu-h">${icon("grill")}The game</h3>
+        ${field("difficulty", "clock", "Pacing", DIFFICULTY[d.difficulty()].blurb + (inShift ? " New customers feel it straight away." : ""), DIFFICULTIES.map((k) => ({ v: k, label: DIFFICULTY[k].label })), d.difficulty())}
+        ${field("complexity", "chart", "Complexity", COMPLEXITY[d.complexity()].blurb, COMPLEXITIES.map((k) => ({ v: k, label: COMPLEXITY[k].label })), d.complexity())}
+        <p class="menu-note">${icon("info")}<span>Change either any time. Stepping down keeps your reputation, reviews and upgrades for when you step back up.${inShift ? " Complexity changes take effect with your next shift." : ""}</span></p>
+        <h3 class="menu-h">${icon("settings")}Phone</h3>
+        ${toggle("sound", d.sound() ? "sound-on" : "sound-off", "Sound", d.sound())}
+        ${hapticsSupported() ? toggle("haptics", "vibrate", "Vibration", hapticsOn(), "A buzz on flips, dings and burns") : ""}
+        ${field("gfx", "sparkle", "Graphics", GFX.find((g) => g.id === gfx)!.blurb, GFX.map((g) => ({ v: g.id, label: g.label })), gfx)}
+        <h3 class="menu-h">${icon("truck")}App</h3>
+        ${row("update", "update", "Check for updates", "", "")}
+        ${d.canInstall() ? row("install", "pin", "Install the app", "Add Bun Voyage to your home screen and play offline", "") : ""}
+        ${row("newtrip", "flag", "Start a new trip", "Back to the first town. Upgrades and savings reset.", "", 'data-tone="danger"')}
+        ${confirmBox("newtrip", inShift ? "End this shift and wipe the trip? Towns, upgrades and savings reset; best scores are kept." : "Wipe the trip and start again from the first town? Towns, upgrades and savings reset; best scores are kept.", "Start over")}
+        <p class="menu-build bv-mono">${esc(buildLabel())}</p>
+      </div>`,
+  });
+
+  const confirm = (id: string | null) =>
+    card.querySelectorAll<HTMLElement>("[data-confirm]").forEach((c) => {
+      const show = c.dataset.confirm === id;
+      if (show && c.hidden) {
+        c.hidden = false;
+        c.scrollIntoView({ block: "nearest" });
+      } else if (!show) c.hidden = true;
+    });
+
+  card.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-m]");
+    if (!btn || !card.contains(btn)) return;
+    switch (btn.dataset.m!) {
+      case "close":
+        popModal();
+        break;
+      case "newtrip":
+        confirm("newtrip");
+        break;
+      case "cancel":
+        confirm(null);
+        break;
       case "newtrip-yes":
         closeAllModals();
         d.newTrip();
-        break;
-      case "menuref":
-        openMenuRef(d.town(), { priceMult: d.priceMult?.() ?? 1 });
         break;
       case "sound": {
         const on = !d.sound();
@@ -190,30 +241,22 @@ export function openMenu(over: Partial<MenuDeps> & { tab?: MenuTab } = {}): void
         if (on) navigator.vibrate?.(20);
         break;
       }
-      case "biz": {
-        const on = !d.biz();
-        d.setBiz(on);
-        setToggle(btn, on);
-        break;
-      }
       case "difficulty": {
         const v = btn.dataset.v as Difficulty;
         d.setDifficulty(v);
-        btn.parentElement!.querySelectorAll<HTMLElement>("button").forEach((b) => {
-          b.setAttribute("aria-pressed", String(b === btn));
-          b.setAttribute("aria-checked", String(b === btn));
-        });
-        card.querySelector('[data-r="diff-note"]')!.textContent = DIFFICULTY[v].blurb;
+        pickSeg(card, btn, DIFFICULTY[v].blurb + (inShift ? " New customers feel it straight away." : ""));
+        break;
+      }
+      case "complexity": {
+        const v = btn.dataset.v as Complexity;
+        d.setComplexity(v);
+        pickSeg(card, btn, COMPLEXITY[v].blurb);
         break;
       }
       case "gfx": {
         const v = btn.dataset.v as GfxLevel;
         d.setGfx(v);
-        btn.parentElement!.querySelectorAll<HTMLElement>("button").forEach((b) => {
-          b.setAttribute("aria-pressed", String(b === btn));
-          b.setAttribute("aria-checked", String(b === btn));
-        });
-        card.querySelector('[data-r="gfx-note"]')!.textContent = GFX.find((g) => g.id === v)!.blurb;
+        pickSeg(card, btn, GFX.find((g) => g.id === v)!.blurb);
         break;
       }
       case "update":

@@ -1,3 +1,4 @@
+import type { Complexity } from "../game/complexity";
 import type { Difficulty } from "../game/difficulty";
 /**
  * A small stack of modal layers for the game menu, How to Play and the menu reference.
@@ -10,6 +11,7 @@ import type { Difficulty } from "../game/difficulty";
 import "./menu.css";
 import type { Stop } from "../game/stops";
 import type { VersionInfo } from "../update";
+import { dropBack, pushBack } from "./nav";
 
 export type GfxLevel = "high" | "standard" | "low";
 
@@ -22,7 +24,7 @@ export interface MenuDeps {
   inShift(): boolean;
   /** The town whose menu "Today's menu" shows: the one being played (event and business plan applied), else the current or selected one. */
   town(): Stop;
-  /** Business mode price multiplier for today's menu (1 when off or outside a shift). */
+  /** Price multiplier for today's menu (1 at simple complexity or outside a shift). */
   priceMult?(): number;
   /** Poutine's price if it's on today's menu, else null. */
   poutine?(): number | null;
@@ -34,8 +36,10 @@ export interface MenuDeps {
   setDifficulty(d: Difficulty): void;
   gfx(): GfxLevel;
   setGfx(level: GfxLevel): void;
-  biz(): boolean;
-  setBiz(on: boolean): void;
+  complexity(): Complexity;
+  setComplexity(c: Complexity): void;
+  /** Which towns are open and how many shifts each has, for the menu's locked dishes. */
+  progress?(): { unlocked: string[]; shiftsIn: Record<string, number> };
   canInstall(): boolean;
   install(): void;
   checkUpdate(): Promise<VersionInfo | null>;
@@ -131,6 +135,10 @@ export function pushModal(o: ModalOpts): HTMLElement {
   }, true);
   const layer: Layer = { el, card, onDismiss: o.onDismiss, restoreFocus: document.activeElement, key: o.key };
   stack.push(layer);
+  // The phone's back button closes this layer like its × would.
+  pushBack(`modal:${o.key}`, () => {
+    if (stack[stack.length - 1] === layer) popModal();
+  });
   h.appendChild(el);
   card.focus({ preventScroll: true });
   return card;
@@ -140,6 +148,7 @@ export function pushModal(o: ModalOpts): HTMLElement {
 export function popModal(silent = false): void {
   const layer = stack.pop();
   if (!layer) return;
+  dropBack(`modal:${layer.key}`);
   layer.el.remove();
   if (layer.restoreFocus instanceof HTMLElement && document.contains(layer.restoreFocus)) layer.restoreFocus.focus({ preventScroll: true });
   if (!silent) layer.onDismiss?.();

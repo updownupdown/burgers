@@ -189,9 +189,9 @@ export function prepHtml(p: PrepInput): string {
       <span class="bv-chip pill">${crowd.label}</span>
     </header>
     <div class="day-scroll">
-      <div class="day-pref"><span>${simple ? "Simple view" : "Full view"}</span><button data-act="prep-simple">${simple ? "Show more detail" : "Keep it simple"}</button></div>
+      ${plan ? `<div class="day-pref"><span>${simple ? "Balanced" : "Complex"}</span><button data-act="prep-simple">${simple ? "Show more detail" : "Keep it simple"}</button></div>` : ""}
       ${boxes.map((b) => boxHtml(b, "prep-box")).join("")}
-      ${plan ? "" : `<span class="day-hint">Business mode (in Settings) adds the menu, ingredient quality and prices to this screen.</span>`}
+      ${plan ? "" : `<span class="day-hint">Simple complexity: the menu and prices are set for you. Balanced or Complex (in Settings) puts them on this screen.</span>`}
     </div>
     <footer class="day-foot">
       <div class="sum"><span class="bv-eyebrow">Projected net</span><b>${range(proj.lo, proj.hi)}</b></div>
@@ -381,7 +381,7 @@ export function reviewsHtml(save: Save, filter: ReviewFilter): string {
       <div class="day-rlist">
         ${showPress ? press.map((p) => `<div class="day-rcard critic">${pressHtml(p)}</div>`).join("") : ""}
         ${list.map((r) => `<div class="day-rcard"><div class="h">${stars(r.stars)}<span class="who">${esc(r.stop)}</span></div><q>${esc(r.text)}</q></div>`).join("")}
-        ${!list.length && !(showPress && press.length) ? `<span class="day-hint">${reviews.length || press.length ? "Nothing here yet." : save.biz ? "No reviews yet. Customers write one after they eat." : "Written reviews come with business mode (in Settings). Critics write in either mode."}</span>` : ""}
+        ${!list.length && !(showPress && press.length) ? `<span class="day-hint">${reviews.length || press.length ? "Nothing here yet." : save.biz ? "No reviews yet. Customers write one after they eat." : "Written reviews come with Balanced or Complex complexity (in Settings). Critics write at any level."}</span>` : ""}
       </div>
     </div>
   </div>`;

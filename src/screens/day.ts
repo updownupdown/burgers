@@ -245,7 +245,7 @@ export function closingHtml(c: Closing, save: Save, offer: Upgrade[]): string {
       id: "closing:rev",
       icon: "star",
       title: "Today's reviews",
-      sub: `${c.reviews.length} of ${c.served} left one`,
+      sub: c.served ? (c.reviews.length ? `From ${c.served} orders; best and worst below` : `${c.served} orders, no written reviews`) : "Nobody was served",
       value: `${avg.toFixed(1)}★`,
       unit: `rep ${c.repBefore.toFixed(1)} → ${c.rep.toFixed(1)}`,
       body: `<ul class="day-rev">${c.reviews.slice(0, 3).map((r) => `<li>${stars(r.stars)}<q>${esc(r.text)}</q></li>`).join("")}</ul>

@@ -192,7 +192,6 @@
 }
 .home-zoom button:active { transform: scale(0.94); }
 .home-zoom button .bv-icon { font-size: 19px; }
-.home-zoom button.locate .bv-icon { color: var(--bv-paprika); }
 
 
 /* ---- dock (the current town, always one tap from a shift) ------------- */

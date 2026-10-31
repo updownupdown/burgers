@@ -43,7 +43,7 @@ export const ICONS: Record<string, IconDef> = {
   pause: { group: "system", svg: P("M8 5v14M16 5v14") },
   restart: { group: "system", svg: P("M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"), tags: "retry again refresh" },
   update: { group: "system", svg: P("M12 4v10M8 10l4 4 4-4M5 19h14"), tags: "download new build" },
-  settings: { group: "system", svg: C(12, 12, 3) + P("M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6"), tags: "gear options" },
+  settings: { group: "system", svg: P("M4 8h2.6M11.4 8H20M4 16h8.6M17.4 16H20") + C(9, 8, 2.4) + C(15, 16, 2.4), tags: "sliders toggles options" },
   "sound-on": { group: "system", svg: P("M4 10v4h3l5 4V6L7 10zM15.5 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10"), tags: "volume speaker audio" },
   "sound-off": { group: "system", svg: P("M4 10v4h3l5 4V6L7 10zM16 10l4 4M20 10l-4 4"), tags: "mute volume speaker" },
   music: { group: "system", svg: P("M9 18V6l10-2v12") + C(7, 18, 2) + C(17, 16, 2), tags: "radio note" },

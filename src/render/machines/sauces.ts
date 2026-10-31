@@ -14,7 +14,9 @@ const BOTTLE_H = 1.7;
 const BOTTLE_R = 0.32;
 /** The nozzle tip sits this far below the valve cap. */
 const NUB = 0.14;
-const SLOT_X = 0.39;
+/** Bottles sit well apart, so a quick grab doesn't take the wrong sauce. */
+const SLOT_X = 0.8;
+const BASE_W = 2 * SLOT_X + 0.82;
 /** Height of the nozzle tip in the caddy (hidden inside the base). */
 const SEAT_Y = 0.22;
 
@@ -65,13 +67,13 @@ export function makeSauceBottle(kind: SauceKind): SauceBottleObject {
 
 const caddy = cached(() => {
   const p = new Parts();
-  p.add(rbox(1.6, 0.5, 1.1, 0.06), "#3a4043", { p: [0, 0.25, 0] });
+  p.add(rbox(BASE_W, 0.5, 1.1, 0.06), "#3a4043", { p: [0, 0.25, 0] });
   for (const x of [-SLOT_X, SLOT_X]) {
     p.add(tor(0.36, 0.04, 6, 24), "#8e9a98", { p: [x, 0.52, 0], r: [Math.PI / 2, 0, 0] });
     p.add(tor(0.36, 0.035, 6, 24), "#8e9a98", { p: [x, 1.4, 0], r: [Math.PI / 2, 0, 0] });
   }
-  for (const x of [-0.77, 0.77]) p.add(box(0.06, 1.0, 0.06), "#8e9a98", { p: [x, 0.95, 0] });
-  p.add(box(1.56, 0.05, 0.05), "#8e9a98", { p: [0, 1.4, 0] });
+  for (const x of [-BASE_W / 2 + 0.03, 0, BASE_W / 2 - 0.03]) p.add(box(0.06, 1.0, 0.06), "#8e9a98", { p: [x, 0.95, 0] });
+  p.add(box(BASE_W - 0.04, 0.05, 0.05), "#8e9a98", { p: [0, 1.4, 0] });
   return p;
 });
 
@@ -85,7 +87,7 @@ export interface SauceCaddyObject extends THREE.Group {
   };
 }
 
-/** The caddy with both bottles, in game units: 1.07 x 0.73, 1.53 tall; fits a cold-rail slot. */
+/** The caddy with both bottles, one at each end: about 1.7 x 0.73 game units, 1.53 tall. */
 export function makeSauceCaddy(): SauceCaddyObject {
   const g = new THREE.Group() as SauceCaddyObject;
   g.add(bakedMesh(caddy()));
@@ -100,7 +102,7 @@ export function makeSauceCaddy(): SauceCaddyObject {
     g.add(b);
     bottles[k] = b;
   }
-  machine(g, 1.6, 1.1, SEAT_Y + NUB + 0.22 + BOTTLE_H, { bottles: spots });
+  machine(g, BASE_W, 1.1, SEAT_Y + NUB + 0.22 + BOTTLE_H, { bottles: spots });
   g.userData.bottles = bottles;
   return g;
 }

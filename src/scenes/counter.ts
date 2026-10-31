@@ -52,7 +52,7 @@ const GRIDDLE = { x: 1.12, z: 0.62 };
 /** The row of grillable pans behind the griddle, and the cold rail of everything else. */
 const GRILL_PANS = { x: 1.12, z: -2.45 };
 const SIDE_PANS = { x: -3.0, z: -1.05 };
-const CADDY = { x: -2.9, z: 2.2 };
+const CADDY = { x: -2.55, z: 2.2 };
 /** The griddle's cook surface, zones and buttons, griddle-local (read once from the model). */
 const GRIDDLE_SPOTS = makeGriddle().userData.spots;
 const GRIDDLE_SURFACE = GRIDDLE_SPOTS.surface;

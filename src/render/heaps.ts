@@ -118,13 +118,12 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
     };
     // Slightly different bakes, so neighbouring buns separate.
     const buns = [bun("#e3a03c"), bun("#d48f30")];
-    // Two rows of buns, each leaning back on the one behind it like a bakery tray.
-    const s = 0.4;
-    const spots: [number, number, number, number, number][] = [];
-    for (let row = 0; row < 3; row++) {
-      for (const x of [-0.23, 0.23]) spots.push([x + (row % 2) * 0.03, 0.17 - row * 0.03, -0.2 + row * 0.2, -0.75 + row * 0.12, x * 0.4]);
+    // Bigger buns stacked three high, each a little off the one below, like a bakery bag tipped out.
+    const s = 0.52;
+    for (let i = 0; i < 3; i++) {
+      const y = PAN.floor + i * 0.5;
+      parts.addParts(buns[i % 2], { p: [jitter(r, 0.04), y, 0.04 - i * 0.03], r: [jitter(r, 0.08) - 0.06, r() * 6, jitter(r, 0.08)], s });
     }
-    spots.forEach(([x, y, z, tx, tz], i) => parts.addParts(buns[(i + (i >> 1)) % 2], { p: [x, PAN.floor + y, z], r: [tx, r() * 6, tz], s }));
   },
   patty: (parts, r) => {
     // A stack of raw patties with paper between them, one more slid off the top.

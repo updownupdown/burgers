@@ -1,5 +1,6 @@
 import type { Plan, Review } from "./business";
 import type { PressPiece } from "./press";
+import type { AdLevel } from "./line";
 import { REGION_START_IDS, START_TOWN, STOPS, townById } from "./stops";
 import { SHIFTS_TO_UNLOCK, START_BANK } from "./travel";
 
@@ -65,6 +66,8 @@ export interface Save {
   popularity: number;
   /** Recent press, newest first. */
   press: PressPiece[];
+  /** Social media bought for the next shift (see ADS in line.ts); stays on until changed. */
+  ads: AdLevel;
   /** Cups and cartons left in each stack ("cupS", "cartonL"...), carried from shift to shift. */
   stock: Record<string, number>;
 }
@@ -95,6 +98,7 @@ export function freshSave(): Save {
     repWeight: 6,
     popularity: 10,
     press: [],
+    ads: 0,
     stock: {},
   };
 }

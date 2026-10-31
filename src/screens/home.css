@@ -302,3 +302,10 @@
 @media (prefers-reduced-motion: reduce) {
   .home *, .home *::before, .home *::after { animation: none !important; transition: none !important; }
 }
+
+/* Social media for the day, above the Open button on the town sheet. */
+.home-ads { display: grid; gap: 6px; margin-bottom: 10px; }
+.home-ads .bv-eyebrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.home-ads .bv-eyebrow .bv-icon { width: 14px; height: 14px; margin-right: 4px; vertical-align: -2px; }
+.home-ads .bv-seg button { border: 0; background: transparent; }
+.home-ads .bv-seg button[aria-pressed="true"] { background: var(--bv-ink); }

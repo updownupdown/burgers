@@ -18,7 +18,7 @@ export interface DifficultySpec {
 }
 
 export const DIFFICULTY: Record<Difficulty, DifficultySpec> = {
-  chill: { label: "Chill", blurb: "Patient customers, gaps between them, and only a really wrong order comes back.", patience: 1.75, spawnGap: 1.45, sendBack: 40, refuse: 12 },
+  chill: { label: "Chill", blurb: "Patient customers, gaps between them, two at the window at most, and only a really wrong order comes back.", patience: 1.75, spawnGap: 1.45, sendBack: 40, refuse: 12 },
   balanced: { label: "Balanced", blurb: "A steady lunch rush. Customers send back what's clearly off.", patience: 1.3, spawnGap: 1.15, sendBack: 55, refuse: 22 },
   stressful: { label: "Stressful", blurb: "Short fuses and a packed line. Picky about every order.", patience: 0.92, spawnGap: 0.9, sendBack: 68, refuse: 32 },
 };

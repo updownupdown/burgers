@@ -246,6 +246,7 @@ export class CustomersView {
     const d = hv / 2 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     const yc = sill + (railF - 0.5) * hv;
     this.camera.position.set(0, yc + 0.35, d);
+    this.camD = d;
     this.camera.lookAt(0, yc, 0);
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
@@ -263,6 +264,50 @@ export class CustomersView {
     this.figScale = s;
   }
   private figScale = 1;
+
+  /** The people waiting behind the window, front first, shown small and off to the left, in depth. */
+  private line: { seed: number; fig: CustomerFigure; x: number; z: number; in: number }[] = [];
+  private static LINE_SHOWN = 4;
+
+  /**
+   * Place in line `k` stands here: the front of the line just left of the first customer, the
+   * rest further back and spread to the right so they show in the gaps between customers. Perspective pulls
+   * distant points toward the centre, so the world x is widened by depth to hold the screen x.
+   */
+  private lineSpot(k: number): { x: number; z: number } {
+    const spacing = this.slotX[1] - this.slotX[0] || 4;
+    const z = -2.4 - k * 1.4;
+    const screenX = this.slotX[0] - spacing * 0.36 + k * spacing * 0.9;
+    return { x: screenX * (1 + -z / this.camD), z };
+  }
+  /** Camera distance from the window plane (set by layout). */
+  private camD = 12;
+
+  /** Sync the drawn line to who's waiting (front first). Figures are kept by seed, so people keep their look as they move up. */
+  setLine(entries: { seed: number; mood: Mood }[]): void {
+    const shown = entries.slice(0, CustomersView.LINE_SHOWN);
+    for (const l of [...this.line]) {
+      if (!shown.some((e) => e.seed === l.seed)) {
+        this.scene.remove(l.fig.root);
+        disposeObject(l.fig.root);
+        this.line.splice(this.line.indexOf(l), 1);
+      }
+    }
+    shown.forEach((e, k) => {
+      let l = this.line.find((q) => q.seed === e.seed);
+      const spot = this.lineSpot(k);
+      if (!l) {
+        const fig = new CustomerFigure(e.seed, this.kind);
+        fig.root.scale.setScalar(this.figScale * 0.92);
+        l = { seed: e.seed, fig, x: spot.x - 4, z: spot.z, in: 0 };
+        fig.root.position.set(l.x, 0.2, l.z);
+        this.scene.add(fig.root);
+        this.line.push(l);
+      }
+      l.fig.setMood(e.mood);
+      l.fig.root.userData.target = spot;
+    });
+  }
 
   arrive(slot: number, seed: number): CustomerFigure {
     const fig = new CustomerFigure(seed, this.kind);
@@ -310,5 +355,17 @@ export class CustomersView {
       sl.fig.root.rotation.y = (1 - e) * (sl.leaving ? 0.8 : -0.8);
       sl.fig.update(dt, i === activeSlot ? 0 : (activeSlot - i) * 0.05);
     });
+    for (const l of this.line) {
+      const t = l.fig.root.userData.target as { x: number; z: number } | undefined;
+      if (t) {
+        const k = Math.min(1, dt * 3.5);
+        l.x += (t.x - l.x) * k;
+        l.z += (t.z - l.z) * k;
+      }
+      l.fig.root.position.set(l.x, 0.2, l.z);
+      // Facing the window, a little, as they shuffle along.
+      l.fig.root.rotation.y = 0.45;
+      l.fig.update(dt, 0.08);
+    }
   }
 }

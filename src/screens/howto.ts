@@ -93,7 +93,7 @@ function sections(): Sec[] {
       points: [
         "<b>Customers and plates stay put</b> while you switch counters, so you never lose an order.",
         "Most things are a <b>drag</b>: from a bin, the grill or a counter up to a plate.",
-        "Three customers at a time. Keep everyone moving rather than perfecting one burger.",
+        "People wait in a <b>line</b> outside. When the window is empty the first steps up by themselves; otherwise <b>ring the bell twice</b> to call the next one. Serving more at once earns more, if you can keep up.",
       ],
     },
     {
@@ -288,7 +288,9 @@ function sections(): Sec[] {
         "To fix a burger, <b>drag it down</b> off the plate onto a prep spot under the heat lamp, then <b>swipe down</b> on it to peel layers off one at a time.",
         "Held items light up the <b>trash slot</b> red when a drop would bin them.",
         "<b>Unordered extras</b>, like fries or a drink they didn't ask for, can soften a bad review, and nobody ever turns down a freebie. They cost you, so save them for rescues.",
-        "How picky customers are, how patient, and how busy the line gets depends on the <b>Difficulty</b> setting in the menu.",
+        "The bell shows how many are in line. Waiting has its own patience: the back of the line drifts off first, and people nearly at the window almost never leave. An order's patience only starts once they've ordered.",
+        "A truck nobody knows yet draws a small crowd, and strangers won't join a long line. Good shifts spread the word; <b>social media</b> on the town sheet buys a busier day.",
+        "How picky customers are, how patient, how many may stand at the window and how busy the line gets depends on the <b>Difficulty</b> setting in the menu.",
       ],
     },
     {

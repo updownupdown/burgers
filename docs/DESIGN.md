@@ -371,3 +371,17 @@ In numbers, a profile sets base traffic, how much prices put people off, how muc
 - **Free sides:** a side the customer didn't order, made well, softens a bad review; the worse the meal, the more it helps.
 - **Drinks:** labels sit in a row on the machine; the pour falls from a spout into the back of the cup so it can be seen.
 - **Service bell:** a 3D bell beside the plates; ring twice to serve.
+
+## 11. The line, the bell and fame
+
+James's note after build #31: the pace was hectic even on Chill, because three customers always stood at the window and the only way to cope was to serve them. The fix is to make the player the one who decides how many orders are open.
+
+- **The line.** People arrive over the shift and join a line outside (small figures off to the left of the window, receding into the back). The bell at the window's edge shows how many are waiting. Nobody stands at the window until called, except that an empty window calls the first in line up on its own after a beat, so a quiet truck never waits on the bell.
+- **The bell.** Ring it twice (two taps within 1.4 s) to call the next person up. More people at the window means more orders in flight and more money, if the player can keep up. Difficulty caps the window: **Chill 2, Balanced 3, Stressful 3** (`WINDOW` in `src/game/line.ts`).
+- **Two patiences.** Waiting in line has its own meter (45 s base, scaled by difficulty and crowd). It drains at 0.3x at the front, 0.65x second in line, 1x further back, so people about to order almost never give up and the back of the line drifts off first. An order's patience starts only when they order, as before. Someone who gives up in line never ordered, so they don't rate or review; they do cost a little fame.
+- **Fame.** The old `popularity` number (10–100) is now how well known the truck is, and it drives traffic harder: about half the town's trade for a truck nobody knows, the usual trade around 65, 1.3x when famous. Strangers won't join a long line: behind one person about 40% join at fame 10, 17% behind two; a famous truck's line is part of the draw (`joinChance`). Fame grows by word of mouth (+1 per three 2★+ orders, up to +6 a shift), from the press as before, and from posts; it falls when people walk out or give up in line, and fades a point a day.
+- **Social media.** On the town sheet above Open: *Word of mouth* (free), *A post* ($12, +20 fame for the day, +2 for good), *Campaign* ($30, +45 today, +5 for good). Charged from the tin when the window opens; it stays on until changed, and shows the expected customer count for each level so it's a traffic dial as much as a purchase.
+- **Passing.** Half the people who *ordered* must be served with a 1★ average (never fewer than 40% of the expected crowd), so a short line can't fail a shift by itself.
+- **Summary** now lists walk-outs after ordering, people who gave up in line and people who walked past, plus the day's social media spend.
+
+Open: the Day Ledger / pre-open redesign (separate thread) should take over the social media control when it lands; it's one small block in `src/screens/home.ts` (`adsHtml`).

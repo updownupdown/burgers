@@ -77,6 +77,10 @@ export interface Ui {
   tabs: HTMLButtonElement[];
   tabDots: HTMLElement[];
   menuBtn: HTMLButtonElement;
+  /** The service bell: ring twice to call the next person in line. */
+  bell: HTMLButtonElement;
+  bellCount: HTMLElement;
+  bellLabel: HTMLElement;
   title: HTMLElement;
   summary: HTMLElement;
   update: HTMLElement;
@@ -93,6 +97,9 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     <span class="chip" data-r="timer">3:00</span>
     <span class="chip money" data-r="money">$0</span>
     <span class="spacer"></span>
+    <button class="bell-btn" data-r="bell" hidden aria-label="Ring the bell for the next customer">
+      <span class="bell-count" data-r="bellCount">0</span>${icon("bell")}<span class="bell-label" data-r="bellLabel">line</span>
+    </button>
     <button class="icon-btn" data-r="menuBtn" aria-label="Menu">${icon("menu")}</button>
   </div>
   <div class="rail" data-r="rail"></div>
@@ -127,6 +134,9 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     tabs,
     tabDots: tabs.map((t) => t.querySelector<HTMLElement>(".dot")!),
     menuBtn: q("menuBtn") as HTMLButtonElement,
+    bell: q("bell") as HTMLButtonElement,
+    bellCount: q("bellCount"),
+    bellLabel: q("bellLabel"),
     title: q("title"),
     summary: q("summary"),
     update: q("update"),
@@ -416,6 +426,12 @@ export function summaryHtml(s: {
   stop: Stop;
   served: number;
   lost: number;
+  /** Gave up waiting in line before ordering. */
+  leftLine: number;
+  /** Saw the line and kept walking. */
+  walkedPast: number;
+  /** Spent on social media for the day. */
+  adCost: number;
   stars: number[];
   earned: number;
   tips: number;
@@ -466,11 +482,14 @@ export function summaryHtml(s: {
     ${s.outcome === "trip" ? `<p class="new">You've reached the end of the road. Every town stays open, so keep touring or start a new trip.</p>` : opened}
     <dl class="stats">
       <dt>Orders served</dt><dd>${s.served}</dd>
-      <dt>Customers who left</dt><dd>${s.lost}</dd>
+      <dt>Walked out after ordering</dt><dd>${s.lost}</dd>
+      ${s.leftLine ? `<dt>Gave up in line</dt><dd>${s.leftLine}</dd>` : ""}
+      ${s.walkedPast ? `<dt>Walked past the line</dt><dd>${s.walkedPast}</dd>` : ""}
       <dt>Average rating</dt><dd>${avg.toFixed(1)} ★</dd>
       <dt>Sales</dt><dd>$${s.earned}</dd>
       <dt>Tips</dt><dd>$${s.tips}</dd>
       ${s.spills ? `<dt>Spilled soda</dt><dd>−$${s.spills}</dd>` : ""}
+      ${s.adCost ? `<dt>Social media</dt><dd>−$${s.adCost}</dd>` : ""}
       ${s.biz ? `<dt>Ingredients</dt><dd>−$${Math.round(s.biz.costs)}</dd><dt>Profit</dt><dd class="${s.biz.profit < 0 ? "neg" : ""}">${s.biz.profit < 0 ? "−" : ""}$${Math.abs(Math.round(s.biz.profit))}</dd>` : `<dt>Total</dt><dd>$${s.earned + s.tips - s.spills}</dd>`}
       ${s.biz ? `<dt>Reputation</dt><dd>${s.biz.repBefore.toFixed(1)} → ${s.biz.rep.toFixed(1)} ★</dd>` : ""}
       ${s.best ? `<dt>Best order</dt><dd>${esc(s.best)}</dd>` : ""}

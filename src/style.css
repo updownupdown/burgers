@@ -96,6 +96,51 @@ html, body {
 .icon-btn:active { background: var(--bv-paper-3); }
 .icon-btn svg { width: 16px; height: 16px; }
 
+/* ---- The service bell -------------------------------------------------- */
+/* In the HUD bar: the line count, the bell, and a word. Ring twice to call the next person up. */
+.bell-btn {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 9px 0 4px;
+  border: 1px solid var(--bv-ink);
+  border-radius: 15px;
+  background: var(--bv-paper);
+  color: var(--bv-ink);
+  font: 500 12px var(--bv-font-ui);
+  white-space: nowrap;
+  flex: none;
+}
+.bell-btn[hidden] { display: none; }
+.bell-btn:active { background: var(--bv-paper-3); }
+.bell-btn svg { width: 16px; height: 16px; }
+.bell-btn .bell-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--bv-ink);
+  color: var(--bv-paper);
+  font: 600 12px var(--bv-font-mono);
+  font-variant-numeric: tabular-nums;
+  display: grid;
+  place-items: center;
+}
+.bell-btn.empty { color: var(--bv-mute); border-color: var(--bv-rule); }
+.bell-btn.empty .bell-count { background: var(--bv-paper-3); color: var(--bv-mute); }
+.bell-btn.armed { border-color: var(--bv-paprika); color: var(--bv-paprika); }
+.bell-btn.armed .bell-count { background: var(--bv-paprika); color: #fff; }
+.bell-btn.full { opacity: 0.55; }
+.bell-btn.ring svg { animation: bell-ring 0.45s ease; transform-origin: 50% 20%; }
+@keyframes bell-ring {
+  0% { transform: rotate(0); }
+  25% { transform: rotate(-16deg); }
+  55% { transform: rotate(13deg); }
+  100% { transform: rotate(0); }
+}
+
 /* ---- Order receipts on the rail -------------------------------------- */
 /* A steel order rail runs under the customers; each order is a till receipt clipped to it. */
 .rail {

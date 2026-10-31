@@ -1,4 +1,6 @@
-import { CROWD } from "../game/business";
+import { CROWD, type CrowdId } from "../game/business";
+import { ADS, todayPopularity, type AdLevel } from "../game/line";
+import { popularityTraffic } from "../game/press";
 import { UPGRADES, type Save, type UpgradeId } from "../game/progress";
 import { EVENTS, eventOn, nextDay, REGIONS, STOPS, townById, type Stop } from "../game/stops";
 import { applyTrip, canAfford, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Trip } from "../game/travel";
@@ -328,7 +330,8 @@ function renderSheet(m: Mounted, id: string): void {
 
   let action: string;
   if (here) {
-    action = `<button class="bv-btn primary lg block" data-home="open" ${busy ? "disabled" : ""}>${icon("bell")}Open for the day${ev ? ` · ${esc(ev.name)}` : ""}</button>
+    action = `${adsHtml(s, t.customers * (ev?.busy ?? 1), ev?.crowd ?? t.crowd)}
+      <button class="bv-btn primary lg block" data-home="open" ${busy ? "disabled" : ""}>${icon("bell")}Open for the day${ev ? ` · ${esc(ev.name)}` : ""}</button>
       <span class="bv-caption">${busy ? "Pick your upgrade first." : ev ? "Event day: a longer, busier shift with its own crowd." : `Shift ${(s.shiftsIn[id] ?? 0) + 1} here. Each shift is one day.`}</span>`;
   } else if (trip) {
     const afford = canAfford(trip, s.bank);
@@ -370,11 +373,32 @@ function renderSheet(m: Mounted, id: string): void {
     <div class="home-facts">
       <div><span class="bv-eyebrow">Shifts here</span><b>${t.roads.length ? pipsHtml(unlockProgress(s.shiftsIn, id).done, SHIFTS_TO_UNLOCK) : ""}${s.shiftsIn[id] ?? 0}</b></div>
       <div><span class="bv-eyebrow">Best shift</span><b>${best !== undefined ? `${icon("star")}${best.toFixed(1)}` : "–"}</b></div>
-      <div><span class="bv-eyebrow">${trip ? "From here" : "Customers"}</span><b>${trip ? `${miles(trip.distance)} mi` : `${icon("people")}~${(ev ? Math.round(t.customers * ev.busy) : t.customers)}`}</b></div>
+      <div><span class="bv-eyebrow">${trip ? "From here" : "Customers"}</span><b>${trip ? `${miles(trip.distance)} mi` : `${icon("people")}~${expectedAt(s, t.customers * (ev?.busy ?? 1), ev?.crowd ?? t.crowd, here ? s.ads : 0)}`}</b></div>
     </div>
     ${open && t.newThing && !(s.shiftsIn[id] ?? 0) ? `<div class="bv-callout new">${icon("new")}<span>${esc(t.newThing)}</span></div>` : ""}
     <div class="home-action">${action}</div>`;
   sheet.hidden = false;
+}
+
+/** Customers to expect: the town's trade scaled by crowd and fame (plus any buzz bought). Business mode's plan can move it further. */
+function expectedAt(s: Save, trade: number, crowd: CrowdId, lvl: AdLevel): number {
+  return Math.max(3, Math.round(trade * CROWD[crowd].traffic * popularityTraffic(todayPopularity(s.popularity, lvl))));
+}
+
+/**
+ * Social media for today's shift: how many people to expect at each level, and what it costs.
+ * The expected count is the town's trade scaled by crowd and fame; business mode's plan can move it further.
+ */
+function adsHtml(s: Save, trade: number, crowd: CrowdId): string {
+  const cur = ADS[s.ads];
+  return `<div class="home-ads">
+    <span class="bv-eyebrow"><span>${icon("people")}Social media</span><span>Fame ${s.popularity}</span></span>
+    <div class="bv-seg compact" role="group" aria-label="Social media">${ADS.map((a, i) => {
+      const afford = s.bank >= a.cost;
+      return `<button data-home="ads" data-v="${i}" aria-pressed="${s.ads === i}" ${afford ? "" : "disabled"}>${esc(a.label)}<b>${a.cost ? `$${a.cost}` : "free"} · ~${expectedAt(s, trade, crowd, i as AdLevel)}</b></button>`;
+    }).join("")}</div>
+    <span class="bv-caption">${esc(cur.blurb)}${cur.buzz ? ` Fame +${cur.buzz} today, +${cur.lasting} for good.` : ""} Fewer people come to a truck nobody knows yet; good shifts spread the word.</span>
+  </div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -398,6 +422,15 @@ function onClick(e: Event): void {
     case "drive":
       drive(m, btn.dataset.id!);
       break;
+    case "ads": {
+      const lvl = Math.max(0, Math.min(2, Number(btn.dataset.v))) as AdLevel;
+      if (s.bank < ADS[lvl].cost) break;
+      s.ads = lvl;
+      m.deps.sfx?.tap();
+      m.deps.commit();
+      if (m.selected) renderSheet(m, m.selected);
+      break;
+    }
     case "here":
       m.deps.sfx?.tap();
       select(m, s.town, true);

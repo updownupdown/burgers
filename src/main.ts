@@ -6,6 +6,7 @@ import { freshSave, loadSave, passed, passTown, upgradeChoices, UPGRADES, writeS
 import { eventOn, townById, withEvent, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, popularityTraffic, willingnessToPay, type PressPiece } from "./game/press";
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
+import { ADS, joinChance, lineDrain, linePatience, todayPopularity, WINDOW, wordOfMouth } from "./game/line";
 import { HOLD_GRACE, HOLD_RUIN, payout, scorePlate, starsFor } from "./game/scoring";
 import {
   CARTON_COST,
@@ -109,6 +110,13 @@ interface Slot {
 
 const emptyPlate = (): Plate => ({ layers: [], fries: null, drink: null });
 
+/** Someone waiting in line, not yet at the window. Their look is fixed by `seed` so they keep it when called up. */
+interface Waiting {
+  seed: number;
+  patience: number;
+  maxPatience: number;
+}
+
 const game = {
   phase: "title" as "title" | "playing" | "paused" | "summary",
   time: 0,
@@ -119,6 +127,8 @@ const game = {
   stars: [] as number[],
   best: null as { name: string; score: number } | null,
   spawned: 0,
+  /** Customers who have reached the window and ordered. */
+  ordered: 0,
   nextSpawn: 1.2,
   orderSeq: 1,
   active: 0,
@@ -136,6 +146,18 @@ const game = {
   pendingUpdate: null as VersionInfo | null,
   /** Customers expected this shift (business mode changes it). */
   customers: 0,
+  /** The line outside, front first. People step up when the bell rings (or when the window is empty). */
+  line: [] as Waiting[],
+  /** Gave up waiting in line, and saw the line and kept walking. Neither ordered, so neither rates. */
+  leftLine: 0,
+  walkedPast: 0,
+  /** Bell taps so far (two within BELL_WINDOW call the next person) and when the first landed. */
+  bellTaps: 0,
+  bellAt: 0,
+  /** When the window emptied, so the next person steps up on their own after a beat. */
+  emptySince: -1,
+  /** Spent on social media today. */
+  adCost: 0,
   /** Business mode: today's plan, ingredient spend and the reviews written so far. */
   plan: null as Plan | null,
   costs: 0,
@@ -166,8 +188,16 @@ function shopStop() {
   return game.plan ? { ...st, menu: menuOf(st, game.plan) } : st;
 }
 
+/** How well known the truck is today: fame plus whatever buzz was bought (see ADS). */
+const todayPop = () => todayPopularity(save.popularity, save.ads);
+
 function plannedCustomers(plan: Plan): number {
-  return Math.max(4, Math.round(stop().customers * trafficMult(plan, save.rep, menuOf(stop(), plan).length, stop().crowd) * popularityTraffic(save.popularity)));
+  return Math.max(4, Math.round(stop().customers * trafficMult(plan, save.rep, menuOf(stop(), plan).length, stop().crowd) * popularityTraffic(todayPop())));
+}
+
+/** Customers expected without a business plan: the town's trade, scaled by crowd and fame. */
+function expectedCustomers(): number {
+  return Math.max(3, Math.round(stop().customers * CROWD[stop().crowd].traffic * popularityTraffic(todayPop())));
 }
 
 // ---------------------------------------------------------------------------
@@ -267,13 +297,13 @@ function ndcIn(r: Rect, x: number, y: number): THREE.Vector2 {
 // ---------------------------------------------------------------------------
 // Orders and customers
 
-function spawnCustomer(slotIdx: number): void {
+function spawnCustomer(slotIdx: number, seed: number): void {
   const s = game.slots[slotIdx];
   const level = game.time / stop().shiftLength;
   let order = makeOrder(game.orderSeq++, game.rng, level, shopStop());
   if (game.plan) order.price = Math.round(order.price * PRICE[game.plan.price].mult);
   // The very first order of the trip is the simplest burger, with no sides.
-  if (game.tutorial && game.spawned === 0) order = orderFromRecipe(order.id, stop().menu[0], "medium", false, null);
+  if (game.tutorial && game.ordered === 0) order = orderFromRecipe(order.id, stop().menu[0], "medium", false, null);
   s.order = order;
   s.plate = emptyPlate();
   s.sentBack = null;
@@ -282,19 +312,61 @@ function spawnCustomer(slotIdx: number): void {
   // Every extra slice of a counted topping is another trip to the bin.
   const slices = order.layers.reduce((n, l) => n + Math.max(0, (l.count ?? 1) - 1), 0);
   s.maxPatience = (50 + order.layers.length * 7 + slices * 2 + order.layers.filter((l) => l.kind === "patty").length * 22 + (order.fries ? 30 : 0) + (order.poutine ? 10 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1) * CROWD[stop().crowd].patience * DIFFICULTY[difficulty].patience;
-  if (game.tutorial && game.spawned === 0) s.maxPatience = 600;
+  if (game.tutorial && game.ordered === 0) s.maxPatience = 600;
   s.patience = s.maxPatience;
   s.leaving = false;
-  if (game.spawned === game.criticAt && !game.tutorial) {
+  if (game.ordered === game.criticAt && !game.tutorial) {
     order.critic = true;
     showHint("A food critic just ordered. Their verdict goes in the papers!", 3.5);
   }
-  s.fig = customersView.arrive(slotIdx, Math.floor(game.rng() * 1000));
-  game.spawned++;
+  s.fig = customersView.arrive(slotIdx, seed);
+  game.ordered++;
   sfx.pop();
   if (!game.slots[game.active].order) setActive(slotIdx);
   syncTray(slotIdx, false);
 }
+
+/** Two taps on the bell within this many seconds call the next person up. */
+const BELL_WINDOW = 1.4;
+
+/** The first in line steps up to a free place at the window, if the difficulty allows another. */
+function callNext(): boolean {
+  const free = game.slots.findIndex((s) => !s.order && !s.fig);
+  const atWindow = game.slots.filter((s) => s.order || s.fig).length;
+  if (free < 0 || !game.line.length || atWindow >= WINDOW[difficulty]) return false;
+  const w = game.line.shift()!;
+  spawnCustomer(free, w.seed);
+  return true;
+}
+
+/** A tap on the bell: the first arms it, the second (soon after) calls the next person in line. */
+function ringBell(): void {
+  if (game.phase !== "playing") return;
+  const atWindow = game.slots.filter((s) => s.order || s.fig).length;
+  ui.bell.classList.remove("ring");
+  void ui.bell.offsetWidth;
+  ui.bell.classList.add("ring");
+  if (!game.line.length) {
+    sfx.ding();
+    hintOnce("bell-empty", "Nobody in line right now. The bell calls up the next person when there is one.", 3);
+    return;
+  }
+  if (atWindow >= WINDOW[difficulty]) {
+    sfx.ding();
+    hintOnce("bell-full", `No room at the window: ${WINDOW[difficulty]} at a time on ${DIFFICULTY[difficulty].label}. Serve someone first.`, 3.5);
+    return;
+  }
+  if (game.bellTaps === 0 || game.time - game.bellAt > BELL_WINDOW) {
+    game.bellTaps = 1;
+    game.bellAt = game.time;
+    sfx.ding();
+    return;
+  }
+  game.bellTaps = 0;
+  sfx.ding();
+  if (callNext()) hintOnce("bell-called", "Next! More people at the window means more money, if you can keep up.", 3.5);
+}
+ui.bell.addEventListener("click", ringBell);
 
 function setActive(i: number): void {
   game.active = i;
@@ -1645,6 +1717,7 @@ function startShift(plan: Plan | null = null): void {
     stars: [],
     best: null,
     spawned: 0,
+    ordered: 0,
     nextSpawn: 1.2,
     active: 0,
     tutorial: !save.tutorialDone,
@@ -1652,9 +1725,22 @@ function startShift(plan: Plan | null = null): void {
     costs: 0,
     reviews: [],
     ratings: [],
-    customers: plan ? plannedCustomers(plan) : Math.round(stop().customers * CROWD[stop().crowd].traffic * popularityTraffic(save.popularity)),
+    line: [],
+    leftLine: 0,
+    walkedPast: 0,
+    bellTaps: 0,
+    bellAt: 0,
+    emptySince: 0,
+    adCost: 0,
     press: null,
   });
+  // Social media bought for today comes out of the tin as the window opens; if the tin can't cover it, no post.
+  if (save.ads && save.bank < ADS[save.ads].cost) save.ads = 0;
+  game.adCost = ADS[save.ads].cost;
+  save.bank -= game.adCost;
+  game.customers = plan ? plannedCustomers(plan) : expectedCustomers();
+  writeSave(save);
+  ui.bell.hidden = false;
   applyStop();
   // Maybe a critic in today's line, never the very first customer.
   game.criticAt = game.rng() < criticChance(stop().crowd, game.event) ? 1 + Math.floor(game.rng() * Math.max(1, game.customers - 2)) : -1;
@@ -1697,7 +1783,7 @@ function showPlan(): void {
     reviews: save.reviews,
     customers: plannedCustomers(plan),
     wtp: willingnessToPay(save.popularity, save.rep),
-    popularity: save.popularity,
+    popularity: todayPop(),
   });
   ui.title.hidden = false;
   ui.summary.hidden = true;
@@ -1742,8 +1828,10 @@ function endShift(): void {
   game.phase = "summary";
   save.day++;
   const popBefore = save.popularity;
-  save.popularity = Math.min(100, fadePopularity(save.popularity) + (game.press?.pop ?? 0));
-  save.popularity = Math.max(10, save.popularity);
+  // Fame: yesterday's fades a touch, then word of mouth, the press and today's posts move it.
+  save.popularity = fadePopularity(save.popularity) + wordOfMouth(game.stars, game.lost, game.leftLine) + (game.press?.pop ?? 0) + ADS[save.ads].lasting;
+  save.popularity = Math.max(10, Math.min(100, save.popularity));
+  customersView.setLine([]);
   if (game.press) save.press = [game.press, ...save.press].slice(0, 10);
   for (const s of game.slots) {
     s.bubble?.remove();
@@ -1756,11 +1844,14 @@ function endShift(): void {
   save.ratingSum += game.stars.reduce((a, b) => a + b, 0);
   // A shift ends the day, so the truck may drive one road overnight again.
   save.overnightUsed = false;
-  const ok = passed(avg, game.served, game.customers);
+  // A pass counts the people who ordered, so a short line isn't a fail, but serving one person out of a town's trade isn't a pass.
+  const ok = passed(avg, game.served, Math.max(game.served + game.lost, Math.ceil(game.customers * 0.4)));
   let lastStop = false;
   const before = [...save.unlocked];
   const profit = game.money + game.tips - spills() - game.costs;
   save.bank += Math.max(0, Math.round(profit));
+  // The tin never goes below zero, even after an unlucky post.
+  save.bank = Math.max(0, save.bank);
   const repBefore = save.rep;
   if (game.plan) {
     const r = nextReputation(save.rep, save.repWeight, game.ratings);
@@ -1785,6 +1876,9 @@ function endShift(): void {
     shiftsHere: save.shiftsIn?.[here.id] ?? 0,
     served: game.served,
     lost: game.lost,
+    leftLine: game.leftLine,
+    walkedPast: game.walkedPast,
+    adCost: game.adCost,
     stars: game.stars,
     earned: game.money,
     tips: game.tips,
@@ -1854,18 +1948,37 @@ window.addEventListener("appinstalled", () => {
 function tick(dt: number): void {
   if (game.phase === "playing") {
     // The shift clock waits while the first customer is talked through their burger.
-    if (!(game.tutorial && game.spawned >= 1)) game.time += dt;
-    // Customers arrive while the window is open.
-    const free = game.slots.findIndex((s) => !s.order && !s.fig);
-    const tutorialHold = game.tutorial && game.spawned >= 1;
-    if (game.time < stop().shiftLength && game.spawned < game.customers && free >= 0 && game.time >= game.nextSpawn && !tutorialHold) {
-      spawnCustomer(free);
+    if (!(game.tutorial && game.ordered >= 1)) game.time += dt;
+    // People arrive while the window is open and join the line, unless it's long and they've never heard of the truck.
+    const tutorialHold = game.tutorial && game.ordered >= 1;
+    if (game.time < stop().shiftLength && game.spawned < game.customers && game.time >= game.nextSpawn && !tutorialHold) {
+      game.spawned++;
+      if (game.rng() < joinChance(game.line.length, todayPop())) {
+        const max = linePatience(difficulty, stop().crowd);
+        game.line.push({ seed: Math.floor(game.rng() * 1000), patience: max, maxPatience: max });
+      } else game.walkedPast++;
       const level = game.time / stop().shiftLength;
       const busy = game.customers / stop().customers;
       game.nextSpawn = game.time + (((17 - 8 * level) * (0.8 + game.rng() * 0.4)) / busy) * DIFFICULTY[difficulty].spawnGap;
     }
-    // If the window is empty, don't make the player wait.
-    if (!game.slots.some((s) => s.order) && game.nextSpawn > game.time + 2 && !game.tutorial) game.nextSpawn = game.time + 2;
+    // If nobody's about, don't make the player wait for the next arrival.
+    if (!game.slots.some((s) => s.order) && !game.line.length && game.nextSpawn > game.time + 2 && !game.tutorial) game.nextSpawn = game.time + 2;
+
+    // The line: patience drains slowest at the front, where they're nearly there.
+    for (let k = game.line.length - 1; k >= 0; k--) {
+      const w = game.line[k];
+      w.patience -= dt * lineDrain(k);
+      if (w.patience <= 0) {
+        game.line.splice(k, 1);
+        game.leftLine++;
+        if (!game.tutorial) hintOnce("left-line", "Someone gave up waiting in line. Ring the bell to call people up sooner.", 4);
+      }
+    }
+    // An empty window calls the first in line up by itself after a beat; otherwise it's the bell.
+    if (game.slots.some((s) => s.order || s.fig)) game.emptySince = game.time;
+    else if (game.line.length && game.time - game.emptySince >= 0.7) callNext();
+    if (game.bellTaps && game.time - game.bellAt > BELL_WINDOW) game.bellTaps = 0;
+    customersView.setLine(game.line.map((w) => ({ seed: w.seed, mood: patienceMood(w.patience / w.maxPatience) })));
 
     game.slots.forEach((s, i) => {
       if (!s.order || s.leaving) return;
@@ -1906,7 +2019,7 @@ function tick(dt: number): void {
     }
 
     const doneSpawning = game.time >= stop().shiftLength || game.spawned >= game.customers;
-    if (doneSpawning && game.slots.every((s) => !s.order && !s.fig)) endShift();
+    if (doneSpawning && !game.line.length && game.slots.every((s) => !s.order && !s.fig)) endShift();
   }
 
   if (game.phase === "playing" || game.phase === "title" || game.phase === "summary") {
@@ -1951,6 +2064,14 @@ function updateUi(): void {
   if (ui.money.textContent !== money) ui.money.textContent = money;
 
   ui.rail.hidden = game.phase === "title";
+  ui.bell.hidden = game.phase === "title" || game.phase === "summary";
+  const inLine = String(game.line.length);
+  if (ui.bellCount.textContent !== inLine) ui.bellCount.textContent = inLine;
+  const bellLabel = game.bellTaps ? "again" : "line";
+  if (ui.bellLabel.textContent !== bellLabel) ui.bellLabel.textContent = bellLabel;
+  ui.bell.classList.toggle("empty", !game.line.length);
+  ui.bell.classList.toggle("armed", game.bellTaps > 0);
+  ui.bell.classList.toggle("full", game.line.length > 0 && game.slots.filter((s) => s.order || s.fig).length >= WINDOW[difficulty]);
   placeTickets();
   game.slots.forEach((s, i) => {
     const t = ui.tickets[i];
@@ -1964,7 +2085,7 @@ function updateUi(): void {
     const order = s.order;
     const focused = i === game.active;
     const pct = s.patience / s.maxPatience;
-    const shownPct = game.tutorial && game.spawned === 1 && i === game.slots.findIndex((x) => x.order) ? 1 : pct;
+    const shownPct = game.tutorial && game.ordered === 1 && i === game.slots.findIndex((x) => x.order) ? 1 : pct;
     const key = `${order.id}|${focused}|${t.style.width}|${s.plate.layers.map((l) => l.piece.kind).join(",")}|${s.plate.fries ? `${s.plate.fries.size}${+!!s.plate.fries.salt}${+!!s.plate.fries.curds}${+!!s.plate.fries.gravy}` : ""}|${s.plate.drink ? `${s.plate.drink.flavor}${s.plate.drink.size}${+!!s.plate.drink.ice}${+!!s.plate.drink.lid}${+!!s.plate.drink.straw}` : ""}`;
     if (key !== s.ticketKey || !t.dataset.fit) {
       t.classList.toggle("active", focused);
@@ -2280,6 +2401,8 @@ window.addEventListener("blur", cancelPointer);
   startShift,
   serve,
   goToPage,
+  ring: ringBell,
+  callNext,
   gesture: () => lastGesture,
   ptr: () => ptr && { mode: ptr.mode, hit: ptr.hit?.type, band: ptr.band },
   mem: () => ({ ...renderer.info.memory }),

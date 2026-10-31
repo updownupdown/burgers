@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { newPiece, type Kind, type Piece } from "../../game/types";
-import { makeFood } from "../food";
+import { makeFood, stackBases } from "../food";
 import { applyKitchenLight, KITCHEN_BG } from "../lighting";
 import { toon } from "../materials";
 import { makeColdRail, makeDrinkTower, makeFountain, makeFryBasket, makeFryer, makeGriddle, makeLidStrawCaddy, makePackPad, makePrepUnit, makeSauceBottle, makeSauceCaddy, makeTrashChute, makeWarmShelf, makeWireRack, FRY_BASKET } from "../machines";
@@ -143,6 +143,52 @@ const SHOWS: Record<string, () => void> = {
     const r = makeWireRack();
     at(r, 0, 0, -2.7 + 0.1 + r.userData.footprint.d / 2);
     r.userData.setBay(2, 1);
+  },
+  food() {
+    // Rows: patties raw to burnt (and smashed), buns, cheese melting, veg, bacon and egg, then stacks.
+    counterPatch(14, 6);
+    const row = (z: number, items: [Piece, ("top" | "bottom")?][]) => items.forEach(([p, role], i) => food(p, (i - (items.length - 1) / 2) * 1.35, 0, z, role));
+    row(-2.3, [[piece("patty", [0, 0])], [piece("patty", [0.3, 0.3])], [piece("patty", [0.55, 0.6])], [piece("patty", [0.85, 0.85])], [piece("patty", [1.2, 1.2])], [piece("patty", [0.6, 0.6], { smashed: true })]]);
+    row(-1.0, [[piece("bun", [0, 0]), "bottom"], [piece("bun", [0.6, 0]), "bottom"], [piece("bun", [0, 0])], [piece("cheese", [0, 0], { melt: 0 })], [piece("cheese", [0, 0], { melt: 0.5 })], [piece("cheese", [0, 0], { melt: 1 })]]);
+    row(0.25, [[piece("lettuce")], [piece("tomato")], [piece("onion")], [piece("pickle")], [piece("jalapeno")], [piece("pineapple", [0.3, 0.3])]]);
+    row(1.45, [[piece("bacon", [0, 0])], [piece("bacon", [0.5, 0.5])], [piece("bacon", [0.9, 0.9])], [piece("egg", [0.1, 0])], [piece("egg", [0.5, 0])], [piece("egg", [1.0, 0])]]);
+  },
+  stack() {
+    counterPatch(14, 6);
+    const kinds: [Kind, [number, number], Partial<Piece>?][][] = [
+      [["bun", [0.5, 0]], ["patty", [0.6, 0.6]], ["cheese", [0, 0], { melt: 0.7 }], ["lettuce", [0, 0]], ["tomato", [0, 0]], ["tomato", [0, 0]], ["bun", [0.4, 0]]],
+      [["bun", [0.5, 0]], ["patty", [0.8, 0.8]], ["bacon", [0.7, 0.7]], ["cheese", [0, 0], { melt: 1 }], ["patty", [0.6, 0.6]], ["onion", [0, 0]], ["pickle", [0, 0]], ["pickle", [0, 0]], ["pickle", [0, 0]], ["bun", [0.4, 0]]],
+      [["bun", [0.5, 0]], ["patty", [0.6, 0.6], { smashed: true }], ["egg", [0.6, 0]], ["jalapeno", [0, 0]], ["jalapeno", [0, 0]], ["jalapeno", [0, 0]], ["jalapeno", [0, 0]], ["bun", [0.4, 0]]],
+    ];
+    kinds.forEach((list, j) => {
+      const pieces = list.map(([k, c, x]) => piece(k, c, x ?? {}));
+      const { bases, yaw, back } = stackBases(pieces);
+      const x0 = (j - 1) * 2.6;
+      let run = 0;
+      pieces.forEach((p, i) => {
+        const o = makeFood(p, i === 0 ? "bottom" : "top");
+        o.scale.setScalar(SCALE.burger);
+        run = i > 0 && pieces[i - 1].kind === p.kind ? run + 1 : 0;
+        const spread = ["tomato", "onion", "pickle", "jalapeno"].includes(p.kind);
+        const sx = spread ? Math.cos(0.6 + run * 2.39996) * 0.42 : 0;
+        const sz = spread ? Math.sin(0.6 + run * 2.39996) * 0.42 : 0;
+        o.position.set(x0 + (sx) * SCALE.burger, bases[i] * SCALE.burger, (sz - back[i]) * SCALE.burger + 0.6);
+        o.rotation.y = yaw[i];
+        scene.add(o);
+      });
+    });
+    (["S", "M", "L"] as const).forEach((sz, i) => {
+      const f = makeFries(true, sz, 1, {});
+      f.userData.setCook(0.72);
+      f.scale.setScalar(SCALE.fries);
+      at(f, -2.6 + i * 1.2, 0, -1.8);
+      const c = makeCup((["cola", "pink", "tea"] as const)[i], i === 2, sz);
+      c.userData.setFill(0.9);
+      c.userData.setIce(true);
+      c.userData.setStraw(i === 2);
+      c.scale.setScalar(SCALE.cup);
+      at(c, 1.2 + i * 1.1, 0, -1.8);
+    });
   },
   rail() {
     counterPatch(14, 6);

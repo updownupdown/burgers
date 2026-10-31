@@ -116,9 +116,9 @@ export const SLEEVE = 10;
  */
 const FOUNTAIN = { x: 2.15, z: -2.1 };
 const ICE = { x: -2.2, z: -2.2 };
-const CUP_STACKS: [Size, number][] = [["S", -3.65], ["M", -2.65], ["L", -1.55]];
-const LID_STACKS: [Size, number][] = [["S", -0.2], ["M", 0.8], ["L", 1.85]];
-const STRAWS = { x: 3.45 };
+const CUP_STACKS: [Size, number][] = [["S", -3.25], ["M", -2.3], ["L", -1.3]];
+const LID_STACKS: [Size, number][] = [["S", -0.15], ["M", 0.8], ["L", 1.8]];
+const STRAWS = { x: 3.15 };
 const FRONT_Z = 1.95;
 const FOUNTAIN_SPOTS = makeFountain().userData.spots;
 /** Cups on the counter and in the hand, against cup units. */

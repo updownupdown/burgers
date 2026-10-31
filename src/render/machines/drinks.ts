@@ -146,8 +146,10 @@ export function makeCupStack(size: Size, count: number): THREE.Group {
         for (let k = 0; k < n; k++) {
           const y = k * CUP_NEST;
           const top = k === n - 1;
-          p.add(lathe([[r * 0.74, 0], [r, h], [r + 0.03, h + 0.01]], 22), k % 2 ? "#f6f3ec" : "#ece8de", { p: [0, y, 0], ink: top ? 0.014 : 0.006 });
-          if (top) p.add(cyl(r * 0.74 - 0.01, r * 0.74 - 0.01, 0.01, 22), "#d9d4c6", { p: [0, y + 0.06, 0], ink: false });
+          // Each cup's outer skin carries the outline; the top one is a whole cup, open to look into
+          // (the shell runs up the outside, over the rolled rim and down the inside to its floor).
+          p.add(lathe([[0, 0], [r * 0.74, 0], [r, h]], 22), k % 2 ? "#f6f3ec" : "#ece8de", { p: [0, y, 0], ink: top ? 0.014 : 0.006 });
+          if (top) p.add(lathe([[r * 0.74, 0], [r, h], [r + 0.025, h + 0.01], [r - 0.012, h + 0.01], [r * 0.74 - 0.012, 0.05], [0, 0.05]], 22), "#e9e4d8", { p: [0, y, 0], ink: false });
         }
         return p;
       }),

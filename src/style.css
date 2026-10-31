@@ -361,9 +361,9 @@ html, body {
   border-bottom-width: 5px;
   border-bottom-color: color-mix(in srgb, var(--c) 70%, var(--bv-ink));
   border-radius: 9px;
-  padding: 0 2px;
-  font: 800 12px/1 var(--bv-font-ui);
-  letter-spacing: 0.01em;
+  padding: 0;
+  font: 800 11px/1 var(--bv-font-ui);
+  letter-spacing: -0.02em;
   text-align: center;
   color: var(--bv-ink);
   pointer-events: none;

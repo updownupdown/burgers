@@ -437,8 +437,8 @@ function serve(i: number): void {
     r.score = Math.max(0, Math.min(100, r.score + ratingBonus(game.plan, stop().crowd, willingnessToPay(save.popularity, save.rep))));
     r.stars = starsFor(r.score);
   }
-  const call = game.tutorial ? "accept" : verdict(r.score, difficulty, !!s.sentBack, r.faulty);
-  if (call === "sendBack") return sendBack(i, r.notes[0] ?? "this isn't quite right");
+  const call = game.tutorial ? "accept" : verdict(r.score, difficulty, !!s.sentBack, r.faulty, !!r.missing);
+  if (call === "sendBack") return sendBack(i, r.missing ?? r.notes[0] ?? "this isn't quite right");
   if (call === "refuse") return refuse(i, r.notes[0] ?? "this isn't what I ordered", r.perks.length > 0);
   if (game.plan) {
     game.ratings.push(r.stars);
@@ -659,11 +659,11 @@ type Payload =
   | { type: "piece"; piece: Piece; fromGrill: { x: number; z: number } | null; fromPlate?: number }
   | { type: "stack"; layers: Layer[]; grill?: { x: number; z: number } }
   | { type: "fries"; cook: number; basket: number | null; amount: number }
-  | { type: "carton"; size: FriesSize; cook: number; fill: number; pack: number; salt: number; curds: boolean; gravy: boolean }
+  | { type: "carton"; size: FriesSize; cook: number; fill: number; pack: number; salt: number; curds: boolean; gravy: boolean; fromPlate?: number }
   | { type: "salt" }
   | { type: "curds" }
   | { type: "gravy" }
-  | { type: "drink"; flavor: DrinkId | null; fill: number; size: Size; ice: boolean; lid: boolean; straw: boolean; from: { x: number; z: number } }
+  | { type: "drink"; flavor: DrinkId | null; fill: number; size: Size; ice: boolean; lid: boolean; straw: boolean; from: { x: number; z: number } | null; fromPlate?: number }
   | { type: "ice" }
   | { type: "lid"; size: Size }
   | { type: "straw" }
@@ -1002,14 +1002,22 @@ function finishHold(pt: Pointer): void {
       Object.assign(b, { loaded: true, cook: payload.cook, amount: payload.amount });
     }
     if (payload.type === "drink") {
-      // Back where it stood (nothing else can have taken the spot meanwhile).
-      const { flavor, fill, size, ice, lid, straw, from } = payload;
-      counter.placeCup({ flavor, fill, size, ice, lid, straw }, new THREE.Vector3(from.x, 0.3, from.z));
+      const { flavor, fill, size, ice, lid, straw, from, fromPlate } = payload;
+      // Lifted off a tray: back on the tray. Otherwise back where it stood (nothing else can have taken the spot meanwhile).
+      if (fromPlate !== undefined && flavor) {
+        game.slots[fromPlate].plate.drink = { flavor, fill, size, ice, lid, straw };
+        syncTray(fromPlate, false);
+      } else if (from) counter.placeCup({ flavor, fill, size, ice, lid, straw }, new THREE.Vector3(from.x, 0.3, from.z));
     }
     if (payload.type === "carton") {
-      const { size, cook, fill, salt, curds, gravy } = payload;
-      Object.assign(counter.packs[payload.pack], { size, cook, fill, salt, curds, gravy });
-      counter.syncPack(payload.pack);
+      const { size, cook, fill, salt, curds, gravy, fromPlate } = payload;
+      if (fromPlate !== undefined) {
+        game.slots[fromPlate].plate.fries = { size, cook, fill, salt, curds, gravy };
+        syncTray(fromPlate, false);
+      } else {
+        Object.assign(counter.packs[payload.pack], { size, cook, fill, salt, curds, gravy });
+        counter.syncPack(payload.pack);
+      }
     }
     if (payload.type === "empty") {
       counter.stacks[payload.stack].count++;
@@ -1559,14 +1567,24 @@ canvas.addEventListener("pointermove", (e) => {
       }
       break;
     case "plate": {
-      // Drag down off a tray to peel the top layer off: drop it in the trash, on the grill or on another tray.
+      // Drag down off a tray to lift the top thing off: the burger's top layer, else the drink,
+      // else the fries. Drop it in the trash, on the grill or another tray; anywhere else it goes back.
       const s = pt.plate >= 0 ? game.slots[pt.plate] : null;
-      if (s && s.plate.layers.length && bandAt(pt.y) === "counter") {
+      if (!s || bandAt(pt.y) !== "counter") break;
+      if (s.plate.layers.length) {
         const top = s.plate.layers.pop()!;
-        syncTray(pt.plate, false);
         startHold(pt, { type: "piece", piece: top.piece, fromGrill: null, fromPlate: pt.plate });
         hintOnce("peel", "Peeled off the top layer. Drop it in the trash slot, on the grill, or on another tray.", 3);
-      }
+      } else if (s.plate.drink) {
+        const d = s.plate.drink;
+        s.plate.drink = null;
+        startHold(pt, { type: "drink", flavor: d.flavor, fill: d.fill, size: d.size, ice: !!d.ice, lid: !!d.lid, straw: !!d.straw, from: null, fromPlate: pt.plate });
+      } else if (s.plate.fries) {
+        const f = s.plate.fries;
+        s.plate.fries = null;
+        startHold(pt, { type: "carton", size: f.size, cook: f.cook, fill: f.fill, pack: -1, salt: f.salt ?? 0, curds: !!f.curds, gravy: !!f.gravy, fromPlate: pt.plate });
+      } else break;
+      syncTray(pt.plate, false);
       break;
     }
     case "basket":
@@ -1639,10 +1657,9 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       break;
     case "plate":
       if (cancelled || pt.plate < 0) break;
-      // Swipe a plate up to hand it to its customer.
+      // Swipe a plate up to hand it to its customer. (Dragging down onto the counter lifts things
+      // off; nothing is ever thrown away except in the trash.)
       if (dy < -40 && -dy > Math.abs(dx)) serve(pt.plate);
-      // Swipe down on a plate with only sides to take them off.
-      else if (dy > 40 && dy > Math.abs(dx)) removeTop(pt.plate);
       else if (!pt.moved && game.slots[pt.plate].order) hintOnce("serve", "Swipe the tray up to hand it over.", 2.5);
       break;
   }
@@ -1654,17 +1671,6 @@ canvas.addEventListener("lostpointercapture", (e) => endPointer(e, true));
 /** Drop whatever the finger was doing, putting held things back (pause, tab switch, new shift). */
 function cancelPointer(): void {
   if (ptr) endPointer(new PointerEvent("pointercancel", { pointerId: ptr.id }), true);
-}
-
-function removeTop(slot: number): void {
-  const plate = game.slots[slot].plate;
-  if (plate.layers.length) plate.layers.pop();
-  else if (plate.drink) plate.drink = null;
-  else if (plate.fries) plate.fries = null;
-  else return;
-  syncTray(slot, false);
-  sfx.whoosh();
-  buzz(10);
 }
 
 function goToPage(p: number): void {

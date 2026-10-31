@@ -18,7 +18,7 @@ export interface DifficultySpec {
 }
 
 export const DIFFICULTY: Record<Difficulty, DifficultySpec> = {
-  chill: { label: "Chill", blurb: "Patient customers, gaps between them, two at the window at most, and only a really wrong order comes back.", patience: 1.75, spawnGap: 1.45, sendBack: 40, refuse: 12 },
+  chill: { label: "Chill", blurb: "Patient customers, gaps between them, two at the window at most, and only a really wrong order, or one missing a whole item, comes back.", patience: 2.4, spawnGap: 1.45, sendBack: 40, refuse: 12 },
   balanced: { label: "Balanced", blurb: "A steady lunch rush. Customers send back what's clearly off.", patience: 1.3, spawnGap: 1.15, sendBack: 55, refuse: 22 },
   stressful: { label: "Stressful", blurb: "Short fuses and a packed line. Picky about every order.", patience: 0.92, spawnGap: 0.9, sendBack: 68, refuse: 32 },
 };
@@ -29,11 +29,13 @@ export const DIFFICULTIES = Object.keys(DIFFICULTY) as Difficulty[];
  * What a customer does with a plate scoring `score` (0..100). The first time, a clearly wrong
  * order goes back for changes and a really wrong one is refused. Once they've sent it back,
  * they take whatever comes unless it's still really wrong. `faulty` (see ScoreResult) sends
- * an otherwise decent plate back the first time.
+ * an otherwise decent plate back the first time, and so does `missing` (a whole ordered item
+ * left off), on every difficulty.
  */
-export function verdict(score: number, d: Difficulty, sentBack: boolean, faulty = false): "accept" | "sendBack" | "refuse" {
+export function verdict(score: number, d: Difficulty, sentBack: boolean, faulty = false, missing = false): "accept" | "sendBack" | "refuse" {
   const spec = DIFFICULTY[d];
   if (score < spec.refuse) return "refuse";
+  if (!sentBack && missing) return "sendBack";
   // A raw patty or a missing layer goes back even when the rest is lovely (Chill lets the small stuff slide).
   if (!sentBack && (score < spec.sendBack || (faulty && (d !== "chill" || score < 75)))) return "sendBack";
   return "accept";

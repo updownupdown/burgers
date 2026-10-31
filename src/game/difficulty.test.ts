@@ -20,4 +20,8 @@ describe("difficulty", () => {
     expect(verdict(80, "balanced", true, true)).toBe("accept");
     expect(verdict(80, "chill", false, true)).toBe("accept");
   });
+  it("sends back a missing drink once, even on Chill", () => {
+    expect(verdict(85, "chill", false, true, true)).toBe("sendBack");
+    expect(verdict(85, "chill", true, true, true)).toBe("accept");
+  });
 });

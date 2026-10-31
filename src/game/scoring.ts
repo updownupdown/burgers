@@ -15,6 +15,8 @@ export interface ScoreResult {
   perks: string[];
   /** Something a customer would hand back whatever the score: a raw or burnt layer, a missing layer, a forgotten or wrong side. */
   faulty: boolean;
+  /** A whole ordered item left off the tray (the burger, the fries or the drink), as its note. Always sent back once, even on Chill. */
+  missing: string | null;
 }
 
 /** Longest common subsequence of layer kinds, returned as index pairs (expected, actual). */
@@ -306,7 +308,8 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
   const score = Math.round(clamp01(total) * 100);
   const sideMissing = (order.fries && (!plate.fries || friesQ < 0.35)) || (!!order.drink && (!plate.drink || drinkQ < 0.35));
   const faulty = (exp.length > 0 && (pairs.length < exp.length || worstLayer < 0.35)) || sideMissing;
-  return { score, stars: starsFor(score), structure, quality, presentation, sides, notes, perks, faulty };
+  const missing = order.drink && !plate.drink ? "forgot the drink" : order.fries && !plate.fries ? (order.poutine ? "forgot the poutine" : "forgot the fries") : exp.length > 0 && plate.layers.length === 0 ? "forgot the burger" : null;
+  return { score, stars: starsFor(score), structure, quality, presentation, sides, notes, perks, faulty, missing };
 }
 
 /** Fries or poutine against the order, 0..1. */

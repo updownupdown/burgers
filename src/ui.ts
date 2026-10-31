@@ -1,6 +1,6 @@
 import type { Order, Plate } from "./game/types";
 import { collapseCounted } from "./game/scoring";
-import { DRINK_COLOR, DRINK_LABEL, DRINKS, KIND_COLOR, KIND_LABEL } from "./game/types";
+import { DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, DRINKS, KIND_COLOR, KIND_LABEL } from "./game/types";
 import { icon } from "./ui/icons";
 
 
@@ -85,7 +85,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   ${[0, 1, 2].map((i) => `<div class="ticket" data-r="ticket" data-slot="${i}" hidden></div>`).join("")}
   ${[0, 1, 2].map(() => `<div class="sentback" data-r="sentback" hidden></div>`).join("")}
   <div class="hint" data-r="hint" role="status" hidden><span data-r="hintText"></span><button class="hint-x" data-r="hintClose" aria-label="Dismiss tip">${icon("close")}</button></div>
-  ${DRINKS.map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_LABEL[d]}</div>`).join("")}
+  ${DRINKS.map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_SHORT[d]}</div>`).join("")}
   <nav class="tabs">
     ${pages.map((p, i) => `<button class="tab" data-r="tab" data-page="${i}" aria-selected="false" aria-label="${p}" title="${p}">${TAB_ART[p] ? tabArt(p) : icon("box")}<span class="dot" hidden></span></button>`).join("")}
   </nav>
@@ -257,6 +257,24 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     parts.forEach(([icon, color, label, state], i) => rows.push({ icon, color, label, tail: "", state, mod: false, next: !wrong && i === next }));
     return rows.reverse();
   }
+  if (!order.layers.length) {
+    // Just a drink and/or fries: they are the whole order, so they get the main list.
+    const f = plate.fries;
+    const d = plate.drink;
+    if (order.fries) {
+      const state: RowState = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy ? "done" : "wrong";
+      rows.push({ icon: "fries", color: "#f3d36b", label: `<i class="sz">${order.friesSize}</i>Fries`, tail: "", state, mod: false, next: false });
+    }
+    if (order.drink) {
+      const iceOk = order.ice == null || !!d?.ice === order.ice;
+      const state: RowState = !d ? "" : d.flavor !== order.drink || d.size !== order.drinkSize || !iceOk ? "wrong" : d.lid && d.straw ? "done" : "";
+      const ice = order.ice === true ? modBox("ice", "Ice") : order.ice === false ? modBox("noice", "No ice") : "";
+      rows.push({ icon: "drink", color: DRINK_COLOR[order.drink], label: `<i class="sz">${order.drinkSize}</i>${DRINK_LABEL[order.drink]}`, tail: ice, state, mod: false, next: false });
+    }
+    const next = rows.find((r) => !r.state);
+    if (next && !rows.some((r) => r.state === "wrong")) next.next = true;
+    return rows;
+  }
   // Runs of counted toppings are one layer; a layer is done once it has its full count.
   const stacked = collapseCounted(plate.layers);
   const modded = new Set(order.mods.filter((m) => m.type !== "no").map((m) => m.kind));
@@ -316,7 +334,9 @@ function removedRow(kind: Order["layers"][number]["kind"], above: RowState): Tic
 function sideRows(order: Order, plate: Plate): string {
   const out: string[] = [];
   const section = (icon: string, color: string) => `<div class="sec">${ticketIcon(icon, color)}<i></i></div>`;
-  if (order.fries && !(order.poutine && !order.layers.length)) {
+  // With no burger, just a drink or fries are the build itself (buildRows), and a poutine's fries are too.
+  if (!order.layers.length && !order.poutine) return "";
+  if (order.fries && order.layers.length) {
     const f = plate.fries;
     const state = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy ? "done" : "wrong";
     out.push(`<div class="sg">${section("fries", "#c8472e")}<div class="sd ${state}"><span class="sl"><i class="sz">${order.friesSize}</i><span class="dn">Fries</span></span></div></div>`);
@@ -344,7 +364,8 @@ function pattyPills(order: Order): string {
 
 /** "+2" for each side ordered with the main (fries, drink), "*" when the order changes the menu recipe. */
 function nameMarks(order: Order): string {
-  const extras = (order.fries && !(order.poutine && !order.layers.length) ? 1 : 0) + (order.drink ? 1 : 0);
+  // Sides with a burger; with no burger they're the order itself.
+  const extras = order.layers.length ? (order.fries ? 1 : 0) + (order.drink ? 1 : 0) : order.poutine && order.drink ? 1 : 0;
   return `${order.mods.length ? `<span class="ast">*</span>` : ""}${extras ? `<span class="plus">+${extras}</span>` : ""}`;
 }
 

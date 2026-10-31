@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { nextReputation, planFor, ratingBonus, trafficMult } from "./business";
 import { pieceFor, popularityChange, willingnessToPay } from "./press";
-import { applyMods, makeOrder, orderFromRecipe, seededRng } from "./menu";
+import { applyMods, makeOrder, orderFromRecipe, seededRng, sidesOrder } from "./menu";
 import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent } from "./stops";
 import { passed, upgradeChoices } from "./progress";
 import { alignLayers, payout, scorePlate } from "./scoring";
@@ -124,7 +124,7 @@ describe("scorePlate", () => {
     const order: Order = { ...classic, fries: true, drink: "cola" };
     const plate = perfectPlate();
     expect(scorePlate(order, plate).notes).toEqual(["forgot the fries", "forgot the drink"]);
-    plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt: true };
+    plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt: 0.6 };
     plate.drink = { flavor: "cola", fill: 0.9, size: "M" };
     expect(scorePlate(order, plate).notes).toContain("no lid");
     plate.drink = { flavor: "cola", fill: 0.9, size: "M", lid: true, straw: true };
@@ -143,7 +143,7 @@ describe("scorePlate", () => {
   it("scores fries by zone and by where in the zone", () => {
     const q = (cook: number) => {
       const plate = perfectPlate();
-      plate.fries = { cook, size: "S", fill: 1, salt: true };
+      plate.fries = { cook, size: "S", fill: 1, salt: 0.6 };
       return scorePlate({ ...classic, fries: true }, plate).sides;
     };
     expect(q(FRIES_PERFECT)).toBe(1);
@@ -156,6 +156,18 @@ describe("scorePlate", () => {
     const r = scorePlate({ ...classic, fries: true }, plate);
     expect(r.notes).toContain("fries needed salt");
     expect(r.sides).toBeCloseTo(0.85);
+  });
+
+  it("scores the salt level: a little short, on the line, too salty", () => {
+    const salted = (salt: number) => {
+      const plate = perfectPlate();
+      plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt };
+      return scorePlate({ ...classic, fries: true }, plate);
+    };
+    expect(salted(0.6).sides).toBe(1);
+    expect(salted(0.2).notes).toContain("fries could use more salt");
+    expect(salted(1.1).notes).toContain("fries too salty");
+    expect(salted(1.1).sides).toBeLessThan(salted(0.2).sides);
   });
 
   it("scores a poutine meal on the poutine", () => {
@@ -172,7 +184,7 @@ describe("scorePlate", () => {
     const plate = perfectPlate();
     plate.layers[1].piece.cook = [0.98, 0.98];
     const before = scorePlate(classic, plate).score;
-    plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt: true };
+    plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt: 0.6 };
     const r = scorePlate(classic, plate);
     expect(r.perks).toEqual(["free fries"]);
     expect(r.score).toBeGreaterThan(before);
@@ -219,6 +231,10 @@ describe("makeOrder", () => {
       if (o.poutine) {
         expect(o.layers).toEqual([]);
         expect(o.fries).toBe(true);
+        continue;
+      }
+      if (!o.layers.length) {
+        expect(o.fries || !!o.drink).toBe(true);
         continue;
       }
       for (const l of o.layers) if (l.kind !== "ketchup" && l.kind !== "mustard") expect(stop.pantry).toContain(l.kind);
@@ -348,7 +364,7 @@ describe("recipe modifiers", () => {
     for (const stop of STOPS) {
       for (let i = 0; i < 200; i++) {
         const o = makeOrder(i, rng, 1, stop);
-        if (o.poutine) continue;
+        if (!o.layers.length) continue;
         for (const m of o.mods) {
           expect(["bun", "patty"]).not.toContain(m.kind);
           if (m.type === "add") expect(stop.pantry).toContain(m.kind);
@@ -437,5 +453,49 @@ describe("critics and popularity", () => {
     const p = pieceFor(3, [], townById("summit"), null, seededRng(1));
     expect(p.headline.length).toBeGreaterThan(5);
     expect(p.pop).toBeGreaterThan(0);
+  });
+});
+
+describe("drinks-only and fries-only customers", () => {
+  const drinkOnly: Order = { ...classic, name: "Road Cola", price: 2, layers: [], fries: false, drink: "cola", drinkSize: "M", ice: null };
+  const goodDrink = { flavor: "cola" as const, fill: 0.9, size: "M" as const, lid: true, straw: true };
+  const friesOnly: Order = { ...classic, name: "Fries", price: 3, layers: [], fries: true, friesSize: "M", drink: null };
+  const goodFries = { cook: FRIES_PERFECT, size: "M" as const, fill: 1, salt: 0.6 };
+
+  it("turn up rarely once the shift is going, never in the first orders", () => {
+    const rng = seededRng(11);
+    const sidesOnly = (o: Order) => !o.layers.length && !o.poutine;
+    const early = Array.from({ length: 200 }, (_, i) => makeOrder(i, rng, 0.1, STOPS[0]));
+    expect(early.some(sidesOnly)).toBe(false);
+    const later = Array.from({ length: 1000 }, (_, i) => makeOrder(i, rng, 0.6, STOPS[0])).filter(sidesOnly);
+    expect(later.length).toBeGreaterThan(20);
+    expect(later.length).toBeLessThan(110);
+    for (const o of later) {
+      expect(o.fries || !!o.drink).toBe(true);
+      expect(o.price).toBeGreaterThan(0);
+    }
+  });
+
+  it("names and prices the order after what's in it", () => {
+    const rng = seededRng(3);
+    const orders = Array.from({ length: 60 }, (_, i) => sidesOrder(i, rng));
+    expect(orders.some((o) => o.drink && !o.fries)).toBe(true);
+    expect(orders.some((o) => o.fries && !o.drink)).toBe(true);
+    for (const o of orders) expect(o.name).toBe(o.fries && o.drink ? "Fries & a drink" : o.fries ? "Fries" : o.name);
+  });
+
+  it("scores the drink or the fries as the whole order", () => {
+    expect(scorePlate(drinkOnly, { layers: [], fries: null, drink: goodDrink }).stars).toBe(3);
+    expect(scorePlate(friesOnly, { layers: [], fries: goodFries, drink: null }).stars).toBe(3);
+    const missing = scorePlate(drinkOnly, { layers: [], fries: goodFries, drink: null });
+    expect(missing.notes).toContain("forgot the drink");
+    expect(missing.faulty).toBe(true);
+  });
+
+  it("calls out a burger nobody ordered", () => {
+    const r = scorePlate(drinkOnly, { ...perfectPlate(), drink: goodDrink });
+    expect(r.notes).toContain("didn't order a burger");
+    expect(r.score).toBeLessThan(90);
+    expect(r.faulty).toBe(false);
   });
 });

@@ -1,114 +1,131 @@
 import * as THREE from "three";
 import { bakedMesh, Parts } from "../bake";
-import { box, C, cached, cyl, glow, glowMat, knob, machine, rbox, sideProfile, studySpace, textDecal } from "./kit";
+import { mesh } from "../materials";
+import { box, C, cached, cyl, glow, glowMat, machine, rbox, sideProfile, studySpace, textDecal } from "./kit";
 import { STUDY } from "../units";
 
 /*
- * The stainless countertop griddle (the study's grill option b): splash guards at the back and
- * sides, a grease trough along the front, a knob per zone with a pilot light, a warm zone on
- * the right behind a raised steel rail, and a red-handled smash press resting at the back left.
- * Study units below; 6.0 x 5.5 x 2.6 (60 x 55 cm).
+ * The wide stainless griddle (after build #36): one long plate in three identical zones, low
+ * splash guards so the pans behind it stay in view, a grease trough, and a control ledge along the
+ * front with a chunky push button per zone. Each zone has its own light strip along the front
+ * edge: blue when it's off, orange on warm, red on hot.
+ * Study units below; 8.2 x 6.0 x 1.9 (82 x 60 cm).
  */
 
-const W = 6.0;
-const D = 5.5;
+const W = 8.2;
+const D = 6.0;
 /** Cook surface height. */
 const TOP = 1.3;
-/** Warm zone: everything right of this x, behind the rail. */
-const WARM_X = 1.1;
-const PRESS_AT: [number, number] = [-2.15, -1.85];
+/** The cook plate: x across, z from back to front. */
+const PX = W / 2 - 0.3;
+const PZ0 = -2.7;
+const PZ1 = 1.45;
+/** The front control ledge, its height and where the buttons sit on it. */
+const LEDGE_Y = TOP - 0.12;
+const BTN_Z = 2.38;
+const LED_Z = 2.86;
+
+export type ZoneHeat = "off" | "warm" | "hot";
+export const ZONE_HEATS: ZoneHeat[] = ["off", "warm", "hot"];
+/** Button cap, light strip and label colours per setting. */
+export const ZONE_COLOR: Record<ZoneHeat, string> = { off: "#5aa3d8", warm: "#f39a2e", hot: "#e0442e" };
+const ZONE_LABEL: Record<ZoneHeat, string> = { off: "OFF", warm: "WARM", hot: "HOT" };
+/** A faint tint over each zone of the plate, so hot reads warm even without the strip. */
+const ZONE_TINT: Record<ZoneHeat, [string, number]> = { off: ["#9cc9ea", 0.06], warm: ["#ffb04a", 0.08], hot: ["#ff5a2a", 0.13] };
+
+const zoneW = (2 * PX) / 3;
+const zoneX = (i: number) => -PX + zoneW * (i + 0.5);
 
 const body = cached(() => {
   const p = new Parts();
-  for (const x of [-2.7, 2.7]) for (const z of [-2.2, 2.0]) p.add(cyl(0.12, 0.14, 0.22, 10), C.rubber, { p: [x, 0.11, z] });
-  p.add(rbox(W, 1.05, D - 0.5, 0.05), C.steel, { p: [0, 0.74, -0.1] });
-  p.add(box(W - 0.3, 0.62, 0.05), "#aeb8b6", { p: [0, 0.68, 2.41], ink: 0.01 });
+  for (const x of [-W / 2 + 0.3, W / 2 - 0.3]) for (const z of [-2.7, 2.6]) p.add(cyl(0.12, 0.14, 0.22, 10), C.rubber, { p: [x, 0.11, z] });
+  p.add(rbox(W, 1.05, D - 0.3, 0.05), C.steel, { p: [0, 0.74, -0.05] });
   // The plate, with faint brushed bands so it reads as steel from above.
-  p.add(box(W - 0.2, 0.12, D - 1.0), "#43484b", { p: [0, TOP - 0.06, -0.3] });
-  for (let i = 0; i < 7; i++) p.add(box(W - 0.5, 0.004, 0.08), "#53595c", { p: [0, TOP + 0.002, -2.3 + i * 0.62], ink: false });
-  // Warm zone: the right 30%, a cooler grey, behind a low steel rail.
-  p.add(box(1.75, 0.006, D - 1.1), "#56636b", { p: [2.0, TOP + 0.003, -0.3], ink: false });
-  p.add(rbox(0.1, 0.1, D - 1.1, 0.03), C.steelL, { p: [WARM_X - 0.02, TOP + 0.05, -0.3] });
-  // Grease trough along the front, and its drawer handle.
-  p.add(box(W - 0.2, 0.1, 0.4), "#2a2e30", { p: [0, TOP - 0.08, 1.98], ink: false });
-  p.add(box(W - 0.1, 0.16, 0.06), C.steelL, { p: [0, TOP - 0.04, 2.2] });
-  p.add(rbox(0.8, 0.1, 0.12, 0.04), "#2b3134", { p: [2.3, 0.3, 2.25] });
-  // Splash guards: the back, and tapered sides.
-  p.add(box(W, 1.2, 0.08), C.steelL, { p: [0, TOP + 0.6, -2.62] });
-  p.add(box(W, 0.06, 0.18), C.steel, { p: [0, TOP + 1.21, -2.58] });
-  for (const x of [-2.96, 2.96]) p.add(sideProfile([[-2.66, 0], [1.7, 0], [1.7, 0.18], [-2.66, 1.2]], 0.07), C.steelL, { p: [x, TOP, 0] });
-  // Knobs and pilot lights: two for the hot zone, one for the warm zone.
-  for (const [x, col] of [[-2.1, "#ff6a2b"], [-0.5, "#ff6a2b"], [2.0, "#6fb7d6"]] as const) {
-    knob(p, x, 0.66, 2.43, 0.2, C.knob, 0.8);
-    p.add(cyl(0.06, 0.06, 0.03, 10), col, { p: [x + 0.42, 0.84, 2.45], r: [Math.PI / 2, 0, 0], ink: false });
-  }
+  const pd = PZ1 - PZ0;
+  p.add(box(2 * PX + 0.1, 0.12, pd + 0.1), "#43484b", { p: [0, TOP - 0.06, (PZ0 + PZ1) / 2] });
+  for (let i = 0; i < 7; i++) p.add(box(2 * PX - 0.2, 0.004, 0.08), "#53595c", { p: [0, TOP + 0.002, PZ0 + 0.35 + (i * (pd - 0.7)) / 6], ink: false });
+  // Two shallow grooves split the plate into three equal zones.
+  for (const k of [1, 2]) p.add(box(0.05, 0.006, pd - 0.1), "#6e777b", { p: [-PX + zoneW * k, TOP + 0.004, (PZ0 + PZ1) / 2], ink: false });
+  // Grease trough along the front of the plate.
+  p.add(box(2 * PX, 0.1, 0.32), "#2a2e30", { p: [0, TOP - 0.08, PZ1 + 0.2], ink: false });
+  // The control ledge: a steel strip a little below the plate, the light rail at its front lip.
+  p.add(rbox(W - 0.1, 0.14, 1.15, 0.04), C.steelL, { p: [0, LEDGE_Y - 0.07, 2.4] });
+  p.add(box(W - 0.2, 0.08, 0.16), "#2b3134", { p: [0, LEDGE_Y + 0.02, LED_Z], ink: false });
+  // Low splash guards: the back, and tapered sides.
+  p.add(box(W, 0.45, 0.08), C.steelL, { p: [0, TOP + 0.22, PZ0 - 0.22] });
+  p.add(box(W, 0.05, 0.16), C.steel, { p: [0, TOP + 0.46, PZ0 - 0.2] });
+  for (const x of [-W / 2 + 0.04, W / 2 - 0.04]) p.add(sideProfile([[PZ0 - 0.26, 0], [PZ1 + 0.3, 0], [PZ1 + 0.3, 0.1], [PZ0 - 0.26, 0.45]], 0.07), C.steelL, { p: [x, TOP, 0] });
+  // A sunk well under each button.
+  for (let i = 0; i < 3; i++) p.add(rbox(1.68, 0.05, 0.82, 0.05), "#3a4043", { p: [zoneX(i), LEDGE_Y + 0.01, BTN_Z], ink: false });
   return p;
 });
 
-const press = cached(() => {
-  const p = new Parts();
-  p.add(cyl(0.62, 0.62, 0.1, 28), "#555b5e", { p: [0, 0.05, 0] });
-  p.add(cyl(0.5, 0.56, 0.06, 28), "#6d7477", { p: [0, 0.13, 0], ink: false });
-  p.add(cyl(0.08, 0.1, 0.32, 10), "#2b3134", { p: [0, 0.3, 0] });
-  p.add(rbox(0.95, 0.16, 0.2, 0.08), "#e5432b", { p: [0, 0.5, 0] });
-  return p;
-});
-
-/** The smash press on its own (origin at its flat base), to carry onto a patty. */
-export function makeSmashPress(): THREE.Mesh {
-  return bakedMesh(press());
+/** A button cap in one colour, with its label on top. Built per setting, so a change is a visibility swap. */
+function cap(heat: ZoneHeat): THREE.Group {
+  const g = new THREE.Group();
+  const top = mesh(rbox(1.5, 0.26, 0.66, 0.09), ZONE_COLOR[heat], { ink: 0.012 });
+  top.position.y = 0.13;
+  const shine = mesh(box(1.2, 0.01, 0.08), "#ffffff", { ink: false, opacity: 0.45, shadow: false });
+  shine.position.set(0, 0.265, -0.2);
+  const lbl = textDecal(ZONE_LABEL[heat], 0.44, { bg: "rgba(0,0,0,0)", color: "#fffdf6", fs: 80, pad: 10, weight: 900 });
+  lbl.position.set(0, 0.268, 0.05);
+  g.add(top, shine, lbl);
+  return g;
 }
-
-const LED_HOT = "#ff6a3a";
-const LED_WARM = "#7cc7e6";
 
 export interface GriddleObject extends THREE.Group {
   userData: {
     footprint: { w: number; d: number };
     h: number;
     spots: {
-      /** Cook surface in local game units; the warm zone is x > warmX. */
-      surface: { y: number; x0: number; x1: number; z0: number; z1: number; warmX: number };
-      /** Where the smash press rests. */
-      press: { x: number; y: number; z: number };
+      /** Cook surface in local game units. */
+      surface: { y: number; x0: number; x1: number; z0: number; z1: number };
+      /** The three zones, left to right: their x extent on the plate. */
+      zones: { x0: number; x1: number }[];
+      /** The top of each zone's push button. */
+      buttons: { x: number; y: number; z: number }[];
     };
-    /** The resting smash press; lift or hide it while it's in use. */
-    press: THREE.Object3D;
-    /** Light the warm zone's LED blue (turned down) or red like the rest of the plate. */
-    setWarm: (on: boolean) => void;
+    /** Show a zone's setting: its button cap, light strip and plate tint. */
+    setZone: (i: number, heat: ZoneHeat) => void;
+    /** Push a zone's button in a little (0 up .. 1 fully in). */
+    pressButton: (i: number, t: number) => void;
   };
 }
 
-/** The stainless griddle, in game units: 4.0 x 3.67, 1.73 tall, cook surface at y 0.87. */
+/** The griddle, in game units: 5.47 x 4.0, cook surface at y 0.87, three zones about 1.7 wide. */
 export function makeGriddle(): GriddleObject {
   const g = new THREE.Group() as GriddleObject;
   g.add(bakedMesh(body()));
   const st = studySpace();
   g.add(st);
-  // Front-lip LED strips: red over the hot zone, the warm zone's strip follows setWarm.
-  const led = (x0: number, x1: number, c: string) => {
-    const m = glow(box(x1 - x0, 0.05, 0.02), c);
-    m.position.set((x0 + x1) / 2, TOP + 0.02, 2.24);
-    st.add(m);
-    return m;
-  };
-  led(-2.8, 1.0, LED_HOT);
-  const warmLed = led(1.15, 2.8, LED_WARM);
-  const lbl = textDecal("WARM", 0.2, { bg: "rgba(0,0,0,0)", color: "#dbe8ee", fs: 64 });
-  lbl.position.set(2.0, TOP + 0.012, 1.55);
-  st.add(lbl);
-  const pr = bakedMesh(press());
-  pr.position.set(PRESS_AT[0] * STUDY, TOP * STUDY, PRESS_AT[1] * STUDY);
-  g.add(pr);
-  machine(g, W, D, 2.6, {
-    surface: { y: TOP * STUDY, x0: -2.8 * STUDY, x1: 2.8 * STUDY, z0: -2.4 * STUDY, z1: 1.6 * STUDY, warmX: WARM_X * STUDY },
-    press: { x: PRESS_AT[0] * STUDY, y: TOP * STUDY, z: PRESS_AT[1] * STUDY },
+  const pd = PZ1 - PZ0;
+  const zones = [0, 1, 2].map((i) => {
+    const x = zoneX(i);
+    const led = glow(box(zoneW - 0.35, 0.05, 0.1), ZONE_COLOR.off);
+    led.position.set(x, LEDGE_Y + 0.07, LED_Z);
+    const tint = glow(box(zoneW - 0.08, 0.004, pd - 0.08), ZONE_TINT.off[0], ZONE_TINT.off[1]);
+    tint.position.set(x, TOP + 0.006, (PZ0 + PZ1) / 2);
+    tint.renderOrder = 1;
+    const btn = new THREE.Group();
+    btn.position.set(x, LEDGE_Y + 0.02, BTN_Z);
+    const caps = Object.fromEntries(ZONE_HEATS.map((h) => [h, cap(h)])) as Record<ZoneHeat, THREE.Group>;
+    for (const h of ZONE_HEATS) btn.add(caps[h]);
+    st.add(led, tint, btn);
+    return { led, tint, btn, caps };
   });
-  g.userData.press = pr;
-  g.userData.setWarm = (on) => {
-    warmLed.material = glowMat(on ? LED_WARM : LED_HOT);
-    lbl.visible = on;
+  machine(g, W, D, TOP + 0.5, {
+    surface: { y: TOP * STUDY, x0: -PX * STUDY, x1: PX * STUDY, z0: PZ0 * STUDY, z1: PZ1 * STUDY },
+    zones: [0, 1, 2].map((i) => ({ x0: (zoneX(i) - zoneW / 2) * STUDY, x1: (zoneX(i) + zoneW / 2) * STUDY })),
+    buttons: [0, 1, 2].map((i) => ({ x: zoneX(i) * STUDY, y: (LEDGE_Y + 0.3) * STUDY, z: BTN_Z * STUDY })),
+  });
+  g.userData.setZone = (i, heat) => {
+    const z = zones[i];
+    for (const h of ZONE_HEATS) z.caps[h].visible = h === heat;
+    z.led.material = glowMat(ZONE_COLOR[heat]);
+    z.tint.material = glowMat(ZONE_TINT[heat][0], ZONE_TINT[heat][1]);
+  };
+  g.userData.pressButton = (i, t) => {
+    zones[i].btn.position.y = LEDGE_Y + 0.02 - 0.14 * Math.max(0, Math.min(1, t));
   };
   return g;
 }
-

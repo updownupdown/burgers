@@ -79,11 +79,11 @@ function sections(): Sec[] {
       chip: "Basics",
       icon: "sparkle",
       title: "The basics",
-      lede: "Customers queue at the window. Cook what's on their receipt, stack it on their plate, swipe it up to them.",
+      lede: "Customers queue at the window. Cook what's on their receipt, stack it on their tray, swipe it up to them.",
       fig: `<ol class="hw-steps">
         <li>${icon("receipt")}<b>Read</b><span>the receipt</span></li>
         <li>${icon("grill")}<b>Cook</b><span>the food</span></li>
-        <li>${icon("burger")}<b>Stack</b><span>on the plate</span></li>
+        <li>${icon("burger")}<b>Stack</b><span>on the tray</span></li>
         <li>${icon("arrow-up")}<b>Swipe up</b><span>to serve</span></li>
       </ol>
       <div class="hw-tabs" aria-hidden="true">
@@ -91,8 +91,8 @@ function sections(): Sec[] {
       </div>
       <p class="hw-cap">${icon("swap")}Tap a counter in the bottom bar, or swipe along the bar to move between them. The fryer is wide: tap its tab again for the other end.</p>`,
       points: [
-        "<b>Customers and plates stay put</b> while you switch counters, so you never lose an order.",
-        "Most things are a <b>drag</b>: from a bin, the grill or a counter up to a plate.",
+        "<b>Customers and trays stay put</b> while you switch counters, so you never lose an order.",
+        "Most things are a <b>drag</b>: from a bin, the grill or a counter up to a tray.",
         "People wait in a <b>line</b> outside. When the window is empty the first steps up by themselves; otherwise <b>ring the bell twice</b> to call the next one. Serving more at once earns more, if you can keep up.",
       ],
     },
@@ -126,9 +126,10 @@ function sections(): Sec[] {
         <span class="mood fuming">${face("fuming")}<b>Fuming</b></span>
       </div>`,
       points: [
-        "<b>Tap a receipt</b> (or its plate) to make that order the active one. Tap it again to see every layer.",
+        "<b>Tap a receipt</b> (or its tray) to make that order the active one. Tap it again to see every layer.",
         "The face is their patience: <b>calm, worried, then fuming</b>. Fuming customers walk off without paying.",
-        "Lines in paprika are changes: <b>No onion</b>, <b>Extra cheese</b>, <b>+ Bacon</b>. Items tick off as they land on the plate.",
+        "Lines in paprika are changes: <b>No onion</b>, <b>Extra cheese</b>, <b>+ Bacon</b>. Items tick off as they land on the tray.",
+        "Now and then someone wants <b>just a drink or just fries</b>. Their tray has no plate: no burger needed.",
       ],
     },
     {
@@ -147,11 +148,12 @@ function sections(): Sec[] {
         <p class="hw-cap">Same colour, same word. The bar fills as the patty moves through a level: take it off around the middle.</p>
       </div>`,
       points: [
-        "Drag a patty onto the grill. <b>Tap it to flip</b>: each side cooks on its own, so cook both.",
+        "Drag a patty onto a hot part of the grill. <b>Swipe up on it to flip</b>: each side cooks on its own, so cook both.",
+        "The grill has <b>three zones</b>, each with a button on the front: tap it to go <b>off, warm, hot</b>. The strip along the front shows it in blue, orange or red. A shift starts hot, hot, off.",
         "<b>Smash:</b> press and hold a fresh patty to flatten it. Smashed patties cook fast and are always well done.",
         "<b>Melt:</b> drop a cheese slice on a patty while it's on the grill. They come off together.",
         "<b>Toast</b> buns face down. Bacon, eggs and pineapple grill too.",
-        "The <b>Warm</b> end of the grill barely cooks: park finished food there.",
+        "A <b>warm</b> zone barely cooks and keeps food hot: park finished food there. Food on an off zone doesn't cook at all.",
       ],
     },
     {
@@ -159,21 +161,21 @@ function sections(): Sec[] {
       chip: "Stacking",
       icon: "burger",
       title: "Stacking",
-      lede: "Build on the customer's plate, from the bottom bun up.",
+      lede: "Build on the customer's tray, from the bottom bun up. A plate on the tray means they ordered a burger.",
       fig: `<div class="hw-stack">
         ${stackArt(EXAMPLE)}
         <ol class="hw-layers" reversed>${[...EXAMPLE.layers].reverse().map((k, i) => `<li><span class="bv-mono">${EXAMPLE.layers.length - i}</span><i class="swc" style="--c:${KIND_COLOR[k]}"></i>${KIND_LABEL[k]}${COUNTED.has(k) ? ` <b class="bv-mono">×${count(k)}</b>` : ""}</li>`).join("")}</ol>
         <span class="hw-up">${icon("arrow-up")}<small>Build up</small></span>
       </div>
       <div class="hw-lamp">
-        <span class="lampic">${icon("warming-lamp")}</span>
-        <div><b>Warm shelf</b><span>Fine for about ${HOLD_GRACE} s, then it slowly dries out: the bar by each plate shows it</span><i class="q" aria-hidden="true"></i></div>
+        <span class="lampic">${icon("clock")}</span>
+        <div><b>Waiting on the tray</b><span>Cooked food keeps for about ${HOLD_GRACE} s, then goes cold: the bar along the tray shows it</span><i class="q" aria-hidden="true"></i></div>
       </div>`,
       points: [
-        "<b>Drag</b> ingredients up onto the active plate, or <b>flick</b> them up to toss them on.",
+        "<b>Drag</b> ingredients up onto the active tray, or <b>flick</b> them up to toss them on.",
         "<b>Sauce:</b> press a bottle in the caddy and drag it up onto a burger on the tray. The view zooms in; keep moving to squeeze and watch the bar on the right for Perfect. Let go and the bottle goes back.",
-        "Wrong layer? <b>Swipe down</b> on the plate to take the top one off. Mistakes go down the garbage chute.",
-        "The <b>warm shelf</b> over the grill lets you build ahead or hold a patty. Food there slowly loses quality.",
+        "Wrong layer? <b>Swipe down</b> on the tray to take the top one off. Mistakes go down the garbage chute.",
+        "Cooking ahead? Leave finished food on a <b>warm</b> grill zone rather than on the tray, where it goes cold.",
       ],
     },
     {
@@ -204,7 +206,7 @@ function sections(): Sec[] {
       chip: "Fryer",
       icon: "fries",
       title: "The fryer",
-      lede: "Scoop, lower, watch the bar, lift, salt, pack.",
+      lede: "Scoop, lower, watch the meter, lift, pack, salt.",
       fig: `<div class="hw-scoops">${(["S", "M", "L"] as Size[])
         .map((s) => `<div><span class="dots">${"<i></i>".repeat(scoops(s))}</span><span class="cap">${scoops(s)} scoop${scoops(s) > 1 ? "s" : ""}</span>${carton(s)}<b><span class="bv-chip size">${s}</span> <span class="bv-mono">${price(FRIES_PRICE[s])}</span></b></div>`)
         .join("")}</div>
@@ -226,9 +228,10 @@ function sections(): Sec[] {
       points: [
         "Drag <b>1, 2 or 3 scoops</b> of frozen fries into a basket for a small, medium or large.",
         "The basket waits for you: <b>tap it to lower</b> it into the oil, and tap again to lift. Fries take <b>about half a minute</b>, so get them going while the patties cook.",
-        "Lift when the marker is on the line. <b>Under</b> is soggy, <b>over</b> is burnt.",
-        "<b>Salt</b> them with the shaker. It's optional, but customers notice when you skip it.",
-        "Put an empty carton on a pad and <b>pack the fries</b> into it, then drag it to the plate.",
+        "Lift when the marker on the fryer's meter is on the line: the fryer <b>beeps</b> from perfect until you lift the basket. <b>Under</b> is soggy, <b>over</b> is burnt.",
+        "Put an empty carton on a pad and <b>pack the fries</b> into it.",
+        "<b>Salt:</b> hold the shaker over the carton and <b>shake it</b>. A bar on the left shows how salty they are: stop at <b>Perfect</b>. None tastes flat, too much is worse.",
+        "Then drag the carton to the tray.",
         "<b>Poutine</b> is a meal of its own: fries in a carton, then cheese curds, then gravy.",
       ],
     },
@@ -246,10 +249,10 @@ function sections(): Sec[] {
         <li>${cupSvg("straw")}<b>Straw</b></li>
       </ol>`,
       points: [
-        `Take a cup of the right size from its stack: <b>S, M or L</b> (${price(DRINK_PRICE.S)} to ${price(DRINK_PRICE.L)}).`,
-        "Add ice unless the receipt says <b>No ice</b>.",
-        "<b>Hold</b> the nozzle to pour and let go at the line. Overflowing wastes soda and leaves a spill: <b>wipe it</b> before that nozzle takes another cup.",
-        "Snap on a <b>lid</b>, add a <b>straw</b>, then drag the drink up to the plate.",
+        `Take a cup of the right size from the front row: <b>S, M or L</b> (${price(DRINK_PRICE.S)} to ${price(DRINK_PRICE.L)}). Stand it anywhere on the counter, or straight under a nozzle; you can move a cup any time.`,
+        "Add ice from the ice bin unless the receipt says <b>No ice</b>.",
+        "<b>Hold</b> the drink's button on top of the fountain to pour. A bar on the left shows the level: let go at <b>Perfect</b>. Overflowing leaves a spill: <b>wipe it</b> before that nozzle takes another cup.",
+        "Snap on a <b>lid of the cup's size</b>, add a <b>straw</b>, then drag the drink up to the tray.",
       ],
     },
     {
@@ -264,7 +267,7 @@ function sections(): Sec[] {
         <span class="stack">${icon("cup-stack")}<b>Stack refilled</b></span>
       </div>`,
       points: [
-        "Turn round to the wire rack, grab a sleeve of cups or cartons and tear it open on the stack of the same size.",
+        "The shelf has cups down the left and paper boats down the right. Grab a sleeve, hold it over the Drinks or Fryer tab, and tear it open on the empty stack of the same size.",
         "Whatever's left <b>carries over</b> to the next day, so restock in a quiet moment, not mid-rush.",
       ],
     },
@@ -273,7 +276,7 @@ function sections(): Sec[] {
       chip: "Serving",
       icon: "arrow-up",
       title: "Serving",
-      lede: "Swipe a plate up to hand it to the customer above it.",
+      lede: "Swipe a tray up to hand it to the customer above it.",
       fig: `<div class="hw-serve">
         <div class="plates"><i></i><i class="on"></i><i></i></div>
         <div class="hw-swipe">${icon("arrow-up")}</div>
@@ -285,7 +288,7 @@ function sections(): Sec[] {
       </ol>`,
       points: [
         "Check the receipt first: a forgotten side or drink costs stars.",
-        "To fix a burger, <b>drag it down</b> off the plate onto a plate on the warm shelf, then <b>swipe down</b> on it to peel layers off one at a time.",
+        "To fix a burger, <b>drag down</b> off its tray to lift the top layer: drop it in the trash slot, back on the grill, or on another tray.",
         "Held items light up the <b>trash slot</b> red when a drop would bin them.",
         "<b>Unordered extras</b>, like fries or a drink they didn't ask for, can soften a bad review, and nobody ever turns down a freebie. They cost you, so save them for rescues.",
         "The bell shows how many are in line. Waiting has its own patience: the back of the line drifts off first, and people nearly at the window almost never leave. An order's patience only starts once they've ordered.",

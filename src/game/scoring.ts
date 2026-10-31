@@ -1,4 +1,4 @@
-import { avgCook, bunToast, friesQuality, friesZone, FRIES_ZONE, isMelted } from "./cooking";
+import { avgCook, bunToast, friesQuality, friesZone, FRIES_ZONE, isMelted, DRINK_FILL, SALT } from "./cooking";
 import type { Drink, ExpectedLayer, Fries, Layer, Order, Piece, Plate } from "./types";
 import { COUNTED, DONENESS_TARGET, KIND_LABEL, SAUCE_RADIUS, SIZE_LABEL } from "./types";
 
@@ -180,9 +180,12 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
   }
 }
 
-/** Food keeps well under the heat lamp for about 25 seconds, then dries out over the next 35. */
-export const HOLD_GRACE = 25;
-export const HOLD_RUIN = 60;
+/**
+ * Cooked food waiting on a tray keeps well for about 40 seconds, then goes cold and dry over the
+ * next minute. (`Piece.held` counts the seconds; the warm grill zone is where to park food instead.)
+ */
+export const HOLD_GRACE = 40;
+export const HOLD_RUIN = 100;
 export function heldPenalty(piece: Piece): number {
   return clamp01(((piece.held ?? 0) - HOLD_GRACE) / (HOLD_RUIN - HOLD_GRACE)) * 0.45;
 }
@@ -274,10 +277,12 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
   const sides = sideParts ? sideScore / sideParts : act.length ? 1 : 0;
 
   let total: number;
-  if (order.poutine && exp.length === 0) {
-    // A poutine meal: the poutine is the meal, a drink is the side.
+  if (exp.length === 0) {
+    // No burger ordered. A poutine is the meal with a drink on the side; otherwise it's just a
+    // drink and/or fries, each counting the same. A burger nobody asked for is a mild surprise.
     if (act.length) notes.push("didn't order a burger");
-    total = (order.drink ? 0.75 * friesQ + 0.25 * drinkQ : friesQ) * (act.length ? 0.8 : 1);
+    const sidesQ = order.poutine ? (order.drink ? 0.75 * friesQ + 0.25 * drinkQ : friesQ) : sideParts ? sideScore / sideParts : 0;
+    total = sidesQ * (act.length ? 0.8 : 1);
   } else {
     const burger = structure * (0.25 + 0.75 * quality) * (0.85 + 0.15 * presentation);
     total = burger * 0.85 + sides * 0.15;
@@ -328,10 +333,17 @@ function friesScore(order: Order, fries: Fries, notes: string[]): number {
       notes.push("no gravy on the poutine");
     }
   } else {
-    // Salt is optional but plain fries without it taste flat; poutine toppings on plain fries are a surprise.
-    if (!fries.salt) {
+    // Salt is optional but plain fries without it taste flat, and too much is worse; poutine toppings on plain fries are a surprise.
+    const salt = fries.salt ?? 0;
+    if (salt <= 0) {
       q *= 0.85;
       notes.push("fries needed salt");
+    } else if (salt < SALT.low) {
+      q *= 0.93;
+      notes.push("fries could use more salt");
+    } else if (salt > SALT.high) {
+      q *= 0.8;
+      notes.push("fries too salty");
     }
     if (fries.curds || fries.gravy) q *= 0.8;
   }
@@ -345,7 +357,7 @@ function drinkScore(order: Order, d: Drink, notes: string[]): number {
     return 0.3;
   }
   const f = d.fill;
-  let q = f < 0.6 ? 0.4 : f < 0.78 ? 0.75 : 1;
+  let q = f < 0.6 ? 0.4 : f < DRINK_FILL.full ? 0.75 : 1;
   if (q < 1) notes.push("drink not full");
   if (d.size !== order.drinkSize) {
     q *= 0.5;

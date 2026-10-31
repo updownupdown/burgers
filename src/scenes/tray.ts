@@ -8,6 +8,12 @@ import { relScale } from "../render/units";
 /** Plain paper plates; only the one being worked on gets a ring, in the accent colour. */
 const PLATE_PAPER = "#f7f4ec";
 const PLATE_RIM = "#e4dccb";
+/**
+ * Sides on a plate draw at this share of their true size next to the burger. The low pass band is
+ * short: a true-size cup's lid sits on the band's top edge and its straw leaves the picture, and
+ * the lid and straw are what you check before serving.
+ */
+const TRAY_SIDES = 0.6;
 const ACTIVE_RING = "#c8472e";
 const TRAY_VIEW_HALF_H = 2.2;
 
@@ -136,8 +142,8 @@ export class PlateView {
       if (p.fries) {
         this.fries = makeFries(true, p.fries.size, p.fries.fill, p.fries);
         this.fries.userData.setCook(p.fries.cook);
-        this.fries.scale.setScalar(relScale("fries") * this.fries.userData.sizeScale);
-        this.fries.position.set(-0.6, 0.1, -0.85);
+        this.fries.scale.setScalar(relScale("fries") * TRAY_SIDES * this.fries.userData.sizeScale);
+        this.fries.position.set(-0.75, 0.1, -0.6);
         this.group.add(this.fries);
       }
       this.friesKey = fk;
@@ -153,8 +159,8 @@ export class PlateView {
         this.cup = makeCup(p.drink.flavor, !!p.drink.lid, p.drink.size);
         this.cup.userData.setFill(p.drink.fill);
         dressCup(this.cup, p.drink);
-        this.cup.scale.setScalar(relScale("cup"));
-        this.cup.position.set(0.75, 0.1, -0.9);
+        this.cup.scale.setScalar(relScale("cup") * TRAY_SIDES);
+        this.cup.position.set(0.85, 0.1, -0.65);
         this.group.add(this.cup);
       }
       this.cupKey = ck;

@@ -44,6 +44,7 @@
 .home-actions .bv-btn { border-color: var(--bv-rule-2); }
 .home-actions .bv-btn .bv-icon { font-size: 18px; }
 .home-actions .bv-btn.sm:not(.icon) { padding: 0 12px 0 10px; }
+.home-brand .bv-eyebrow:empty { display: none; }
 
 /* ---- stats strip (floats over the top of the map) --------------------- */
 .home-stats {
@@ -174,15 +175,6 @@
 .home-zoom button .bv-icon { font-size: 19px; }
 .home-zoom button.locate .bv-icon { color: var(--bv-paprika); }
 
-/* ---- first-time tip ---------------------------------------------------- */
-.home-tip {
-  position: absolute; left: 50%; bottom: calc(var(--safe-b) + 140px); transform: translateX(-50%);
-  display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: var(--bv-r-pill);
-  background: var(--bv-paper-2); color: var(--bv-ink); font-size: var(--bv-fs-sm); font-weight: 700; white-space: nowrap;
-  box-shadow: 0 0 0 1px var(--bv-rule-2), var(--bv-shadow-2); pointer-events: none; animation: home-rise 0.35s var(--bv-ease);
-}
-.home-tip .bv-icon { color: var(--bv-amber); font-size: 16px; }
-.home-tip[hidden] { display: none; }
 
 /* ---- dock (the current town, always one tap from a shift) ------------- */
 .home-dock {
@@ -217,17 +209,18 @@
   animation: home-rise 0.28s var(--bv-ease);
 }
 .home-sheet[hidden] { display: none; }
-.home-sheet .grip { width: 36px; height: 4px; border-radius: 2px; background: var(--bv-rule-2); margin: 0 auto; }
-.home-sheet-head { display: flex; align-items: flex-start; gap: 10px; }
-.home-sheet-head > div { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.home-sheet-head { display: flex; align-items: flex-start; gap: 10px; padding-top: 4px; }
+.home-sheet-head > div { display: grid; gap: 6px; min-width: 0; flex: 1; }
 .home-sheet-head .bv-title { font-size: 30px; }
-.home-sheet-head .bv-eyebrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.home-sheet-head .bv-eyebrow .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25); }
-.home-sheet-head .bv-btn.icon { flex: none; border-color: transparent; color: var(--bv-mute); }
+.home-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.home-tags .bv-chip { font-size: 12px; }
+.home-tags .bv-chip .bv-icon { font-size: 14px; }
+.home-tags .bv-chip.crowd { color: var(--bv-ink); border-color: var(--bv-rule-2); background: var(--bv-paper-2); }
+.home-tags .bv-chip.here { color: var(--bv-paprika); border-color: var(--bv-paprika); background: var(--bv-paprika-soft); }
+/* The close button is the one thing a thumb reaches for on this sheet: a full-size target. */
+.home-sheet-head .bv-btn.icon { flex: none; width: 44px; height: 44px; border-color: var(--bv-rule-2); background: var(--bv-paper-2); color: var(--bv-ink); margin: -4px -4px 0 0; }
+.home-sheet-head .bv-btn.icon .bv-icon { font-size: 22px; }
 .home-blurb { font-size: var(--bv-fs-md); }
-.home-crowd { display: flex; align-items: center; gap: 8px; font-size: var(--bv-fs-sm); color: var(--bv-ink-2); font-weight: 600; }
-.home-crowd .bv-icon { font-size: 16px; color: var(--bv-mute); flex: none; }
-.home-crowd b { color: var(--bv-ink); }
 
 .home-cal-wrap { display: grid; gap: 6px; }
 .home-cal-wrap .bv-eyebrow { display: flex; justify-content: space-between; }
@@ -259,6 +252,14 @@
 .home-action .bv-btn .cost { font-family: var(--bv-font-mono); font-weight: 500; opacity: 0.85; }
 .home-action .bv-caption { text-align: center; }
 .home-action .bv-caption.warn { color: var(--bv-paprika); }
+
+/* A locked town: a box, not a button. Says what opens the road and how far along that is. */
+.home-locked { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--bv-r-md); background: var(--bv-paper-2); color: var(--bv-ink-2); }
+.home-locked > .bv-icon { font-size: 20px; color: var(--bv-mute); flex: none; margin-top: 2px; }
+.home-locked > div { display: grid; gap: 3px; min-width: 0; }
+.home-locked b { color: var(--bv-ink); font-size: var(--bv-fs-md); }
+.home-locked span { font-size: var(--bv-fs-sm); font-weight: 600; line-height: 1.35; }
+.home-locked .prog { display: flex; align-items: center; gap: 6px; font-family: var(--bv-font-mono); font-weight: 500; color: var(--bv-mute); }
 
 /* Disabled actions (locked town, not enough gas, upgrade to pick first) stay legible: the kit's
    40% opacity left cream text on near-black at about 2.5:1. Muted text on the tile colour is 5:1. */

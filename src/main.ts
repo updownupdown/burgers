@@ -45,7 +45,9 @@ import { closeBoxes, closingHtml, nightHtml, prepHtml, reviewsHtml, suppliesHtml
 import { icon } from "./ui/icons";
 import { buildUi, donenessPill, patienceMood, ticketHtml } from "./ui";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
-import { closeAll, initMenu, openHowTo, openMenu, openMenuRef } from "./screens/menu";
+import { closeAll, initMenu, openHowTo, openMenu, openMenuRef, openSettings } from "./screens/menu";
+import { dropBack, pushBack } from "./screens/nav";
+import { complexityOf, setComplexity } from "./game/complexity";
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -1742,11 +1744,6 @@ ui.root.addEventListener("click", (e) => {
         screenShownAt = performance.now();
       } else startShift();
       break;
-    case "biz":
-      save.biz = !save.biz;
-      writeSave(save);
-      showTitle();
-      break;
     case "plan-q":
     case "plan-p":
     case "plan-m": {
@@ -1778,7 +1775,8 @@ ui.root.addEventListener("click", (e) => {
       else showClosing();
       break;
     case "prep-simple":
-      save.simplePlan = !save.simplePlan;
+      // "Keep it simple" is the Balanced complexity; "Show more detail" is Complex (see game/complexity.ts).
+      setComplexity(save, save.simplePlan ? "complex" : "balanced");
       if (save.simplePlan) closeBoxes("prep:");
       writeSave(save);
       showPrep();
@@ -1881,12 +1879,13 @@ initMenu({
       // ignore
     }
   },
-  biz: () => save.biz,
-  setBiz: (on) => {
-    save.biz = on;
+  complexity: () => complexityOf(save),
+  setComplexity: (c) => {
+    setComplexity(save, c);
     writeSave(save);
     if (game.phase === "title") showTitle();
   },
+  progress: () => ({ unlocked: save.unlocked, shiftsIn: save.shiftsIn }),
   canInstall: () => !!installPrompt,
   install: () => void installPrompt?.prompt(),
   checkUpdate: () => checkNow(),
@@ -1923,9 +1922,22 @@ try {
   // ignore
 }
 
+/** Back in a shift pauses and opens the menu instead of leaving the page; the guard re-arms itself. */
+function shiftGuard(): void {
+  pushBack("shift", shiftGuard);
+  if (game.phase === "playing") {
+    cancelPointer();
+    game.phase = "paused";
+    openMenu();
+  }
+}
+
 function startShift(plan: Plan | null = null): void {
   cancelPointer();
   holdSauce(null);
+  for (const k of ["prep", "overlay"]) dropBack(k);
+  prepOpen = false;
+  shiftGuard();
   for (let i = 0; i < 3; i++) {
     const s = game.slots[i];
     if (s.fig) customersView.leave(i, () => {});
@@ -2018,6 +2030,8 @@ function showPrep(): void {
   game.town = save.town;
   game.event = eventOn(save.town, save.day);
   game.overlay = null;
+  if (!prepOpen) pushBack("prep", () => showTitle());
+  prepOpen = true;
   const plan = save.biz ? planFor(stop(), save.plan) : null;
   if (plan) save.plan = plan;
   ui.title.innerHTML = prepHtml({ save, stop: stop(), plan });
@@ -2025,19 +2039,27 @@ function showPrep(): void {
   ui.summary.hidden = true;
 }
 
+/** True while the Prep screen fills the title layer (the home screen is unmounted then). */
+let prepOpen = false;
+
 /** A screen over the map (closing, night, reviews, supplies) lives in the summary layer. */
 function showOverlay(kind: NonNullable<typeof game.overlay>, html: string): void {
   // Redrawing the same screen (a box opened, a filter tapped) must not swallow the next tap.
   if (game.overlay !== kind) screenShownAt = performance.now();
+  // One Back entry for the layer, however many screens replace each other in it.
+  if (!game.overlay) pushBack("overlay", () => closeOverlay(true));
   game.overlay = kind;
   ui.summary.innerHTML = html;
   ui.summary.hidden = false;
 }
 
-function closeOverlay(): void {
+/** Close whatever is over the map: an overlay in the summary layer, or the Prep screen. */
+function closeOverlay(fromBack = false): void {
+  if (!fromBack) dropBack(game.overlay ? "overlay" : "prep");
   game.overlay = null;
   ui.summary.hidden = true;
-  if (game.phase === "summary") showTitle();
+  // After a shift or a night the map isn't mounted yet; nor is it under the Prep screen.
+  if (game.phase === "summary" || prepOpen) showTitle();
   else refreshHome();
 }
 
@@ -2082,6 +2104,9 @@ function showTitle(): void {
   screenShownAt = performance.now();
   ui.title.hidden = false;
   ui.summary.hidden = true;
+  // Whatever Back was pointing at (a shift, Prep, a screen over the map) is gone now.
+  for (const k of ["shift", "prep", "overlay"]) dropBack(k);
+  prepOpen = false;
   game.overlay = null;
   mountHome(ui.title, {
     save,
@@ -2103,7 +2128,7 @@ function showTitle(): void {
       game.event = eventOn(save.town, save.day);
       applyStop();
     },
-    openMenu: () => openMenu({ tab: "general" }),
+    openSettings: () => openSettings(),
     openHowTo: () => openHowTo(),
     sfx: { whoosh: () => sfx.whoosh(), coin: () => sfx.coin(), tap: () => sfx.unlock() },
   });
@@ -2113,6 +2138,7 @@ function showTitle(): void {
 
 function endShift(): void {
   holdSauce(null);
+  dropBack("shift");
   game.phase = "summary";
   // The shift fills the day; the evening follows, and only sleeping turns the day (see game/day.ts).
   save.time = "evening";

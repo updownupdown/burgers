@@ -416,3 +416,14 @@ From the Day Cycle Study (this thread). A day is now two halves on one map, and 
 **Reviews** have their own screen off both docks: reputation and popularity up top, then every review and press clipping with filters (All, Critics, 3★, 1★, this town).
 
 Code: `src/game/day.ts` (time of day, gear, sleep, projection), `src/game/travel.ts` (range legs), `src/screens/day.ts` + `day.css` (the screens), `src/screens/map.ts` (night and lit roads).
+
+## 14. After build #36: settings, the town sheet and the back button
+
+James's playtest of build #36 (2026-10-31), the map and settings part.
+
+- **Two bugs.** Closing any screen over the map (Supplies, Reviews) left the map as open sea: the redrawn SVG had no size until `fitMap` gave it one. Back on Prep did nothing: it tried to close a summary overlay, but Prep lives in the title layer with the map unmounted beneath it.
+- **The phone's back button** (`src/screens/nav.ts`). Every screen over another registers itself with the function that closes it: modal cards, Prep, the screens over the map, the town sheet. Back closes the top one. The history stays one sentinel entry deep, so the order of opens and closes can't lose an entry. In a shift a guard sits at the bottom: Back pauses and opens the menu instead of leaving the game.
+- **Help and Settings** are two labelled buttons on the map; the old Menu button and its tabs are gone. The pause menu (in a shift) has Resume / Restart / Quit, then *Today: Menu* and *Bun Voyage: Settings, How to Play*. Settings is its own card: *The game* (Pacing, Complexity), *Phone* (sound, vibration, graphics), *App*.
+- **Pacing and Complexity.** Difficulty is now called Pacing (Chill, Balanced, Stressful). Business mode is now Complexity (`src/game/complexity.ts`): *Simple* cooks and serves (no menu, prices or ingredients; the truck earns a little less), *Balanced* runs the business with the Prep screen kept to its collapsed lines, *Complex* opens the ledger. It changes at any time; only two save flags move (`biz`, `simplePlan`), so reputation, reviews, upgrades and the plan are kept when a player steps down and back up. Prep's "Keep it simple" / "Show more detail" is the same dial.
+- **Town sheet.** No region line or drag bar; the crowd is a tag beside the name, with Big city and You're here tags; the blurb and the crowd's blurb are one paragraph; a 44 px close button. A locked town shows a box, not a button: what opens the road and the shift pips for it.
+- **Menu** (from the dock or the pause menu) lists this town's burgers, then *Down the road*: every other town's burgers, greyed with the unlock rule when the road is closed. The first-time "Tap a town" tip and the "x of 12 towns" line are gone.

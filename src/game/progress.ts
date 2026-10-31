@@ -34,7 +34,7 @@ export interface Save {
   driven: number;
   /** Parts bought for cash at a supply yard: solar and engine (see GEAR in day.ts). */
   gear: GearId[];
-  /** The Prep screen with every box collapsed and no ledger. */
+  /** The Prep screen with every box collapsed and no ledger (complexity "balanced"; see complexity.ts). */
   simplePlan: boolean;
   /** Today's shift, for the Closing screen, until the truck sleeps. */
   last: Closing | null;
@@ -64,7 +64,7 @@ export interface Save {
   offer: UpgradeId[];
   /** Times each recipe was served well; familiar recipes get compact tickets. */
   known: Record<string, number>;
-  /** Business mode: buy ingredients, set prices and pick the menu before each shift. */
+  /** Run the business: buy ingredients, set prices and pick the menu before each shift (complexity "balanced" or "complex"). */
   biz: boolean;
   /** Last shift's plan, reused as the starting point for the next one. */
   plan: Plan | null;

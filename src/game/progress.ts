@@ -1,5 +1,6 @@
 import type { Plan, Review } from "./business";
 import type { PressPiece } from "./press";
+import type { GearId, TimeOfDay } from "./day";
 import type { AdLevel } from "./line";
 import { REGION_START_IDS, START_TOWN, STOPS, townById } from "./stops";
 import { SHIFTS_TO_UNLOCK, START_BANK } from "./travel";
@@ -25,15 +26,25 @@ export interface Save {
   stop?: number;
   /** Where the truck is parked on the road map. */
   town: string;
-  /** Days on the road: every shift is a day. Events happen on set days. */
+  /** Days on the road. The day turns when the truck sleeps (see day.ts). Events happen on set days. */
   day: number;
+  /** Morning (open or set off) or evening (results, a short hop, sleep). */
+  time: TimeOfDay;
+  /** Map units driven since the last shift or sleep; hops add up against the overnight range. */
+  driven: number;
+  /** Parts bought for cash at a supply yard: solar and engine (see GEAR in day.ts). */
+  gear: GearId[];
+  /** The Prep screen with every box collapsed and no ledger. */
+  simplePlan: boolean;
+  /** Today's shift, for the Closing screen, until the truck sleeps. */
+  last: Closing | null;
   /** Towns the truck can drive to, and towns whose shift has been passed. */
   unlocked: string[];
   passedTowns: string[];
   /** Passed shifts per town; SHIFTS_TO_UNLOCK of them open the town's roads (see travel.ts). */
   shiftsIn: Record<string, number>;
-  /** The truck already drove one road tonight; another drive takes a day. Reset by a shift. */
-  overnightUsed: boolean;
+  /** Old saves: one free hop a night. Replaced by `driven` against the range. */
+  overnightUsed?: boolean;
   upgrades: UpgradeId[];
   /** Gas money and savings. Starts at START_BANK; shifts add their profit, drives cost gas. */
   bank: number;
@@ -72,16 +83,54 @@ export interface Save {
   stock: Record<string, number>;
 }
 
+/** Everything the Closing screen shows about today's shift, kept until the truck sleeps. */
+export interface Closing {
+  town: string;
+  day: number;
+  served: number;
+  lost: number;
+  leftLine: number;
+  walkedPast: number;
+  stars: number[];
+  earned: number;
+  tips: number;
+  spills: number;
+  adCost: number;
+  /** Business mode: ingredient spend; zero otherwise. */
+  costs: number;
+  biz: boolean;
+  /** Takings less spills, ads and ingredients: what went into the tin. */
+  profit: number;
+  /** Tonight's running cost and the solar saving, charged when the truck sleeps. */
+  running: number;
+  solar: number;
+  /** What Prep projected for the net, when the player saw it. */
+  projected: [number, number] | null;
+  reviews: Review[];
+  rep: number;
+  repBefore: number;
+  pop: [number, number];
+  best: string | null;
+  outcome: "passed" | "failed" | "trip";
+  opened: string[];
+  shiftsHere: number;
+  press: PressPiece | null;
+}
+
 const KEY = "bv-save-v1";
 
 export function freshSave(): Save {
   return {
     town: START_TOWN,
     day: 1,
+    time: "morning",
+    driven: 0,
+    gear: [],
+    simplePlan: false,
+    last: null,
     unlocked: [START_TOWN],
     passedTowns: [],
     shiftsIn: {},
-    overnightUsed: false,
     upgrades: [],
     bank: START_BANK,
     ratingCount: 0,
@@ -123,6 +172,10 @@ export function migrateSave(p: Partial<Save>): Save {
     for (const id of s.passedTowns) s.shiftsIn[id] = SHIFTS_TO_UNLOCK;
     s.bank = (p.bank ?? 0) + START_BANK;
   }
+  delete s.overnightUsed;
+  if (s.time !== "morning" && s.time !== "evening") s.time = "morning";
+  if (!Array.isArray(s.gear)) s.gear = [];
+  if (s.last && s.last.town !== s.town) s.last = null;
   return s;
 }
 

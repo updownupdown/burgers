@@ -2,11 +2,12 @@ import * as THREE from "three";
 import { buzz, Sfx } from "./audio";
 import { avgCook, bunToast, FRIES_PERFECT, friesZone, FRIES_ZONE, MELT_RATE, pattyLabel } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
-import { freshSave, loadSave, passed, passTown, upgradeChoices, UPGRADES, writeSave, type UpgradeId } from "./game/progress";
+import { gearBlocker, gearById, projectShift, sleep, solarSaving, RUNNING_COST, type GearId } from "./game/day";
+import { freshSave, loadSave, passed, passTown, upgradeChoices, UPGRADES, writeSave, type Closing, type UpgradeId } from "./game/progress";
 import { eventOn, townById, withEvent, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, popularityTraffic, willingnessToPay, type PressPiece } from "./game/press";
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
-import { ADS, joinChance, lineDrain, linePatience, todayPopularity, WINDOW, wordOfMouth } from "./game/line";
+import { ADS, joinChance, lineDrain, linePatience, todayPopularity, WINDOW, wordOfMouth, type AdLevel } from "./game/line";
 import { HOLD_GRACE, HOLD_RUIN, payout, scorePlate, starsFor } from "./game/scoring";
 import {
   CARTON_COST,
@@ -38,9 +39,10 @@ import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
 import "./ui/components.css";
 import "./style.css";
-import { mountHome } from "./screens/home";
+import { mountHome, refreshHome } from "./screens/home";
+import { closeBoxes, closingHtml, nightHtml, prepHtml, reviewsHtml, suppliesHtml, toggleBox, type ReviewFilter } from "./screens/day";
 import { icon } from "./ui/icons";
-import { buildUi, donenessPill, patienceMood, planHtml, summaryHtml, ticketHtml } from "./ui";
+import { buildUi, donenessPill, patienceMood, ticketHtml } from "./ui";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 import { closeAll, initMenu, openHowTo, openMenu, openMenuRef } from "./screens/menu";
 
@@ -168,6 +170,11 @@ const game = {
   /** Which customer (by arrival order) is a food critic today, or -1; and what they wrote. */
   criticAt: -1,
   press: null as PressPiece | null,
+  /** What Prep projected for today's net, shown again on the Closing screen. */
+  projected: null as [number, number] | null,
+  /** Which screen is up over the map, so its buttons redraw the right one. */
+  overlay: null as null | "closing" | "night" | "reviews" | "supplies",
+  reviewFilter: "all" as ReviewFilter,
 };
 
 /** A critic's verdict counts like this many ordinary reviews. */
@@ -1589,11 +1596,10 @@ ui.root.addEventListener("click", (e) => {
   switch (act) {
     case "start":
     case "restart":
-      if (save.biz && save.tutorialDone) {
-        showPlan();
+      if (save.tutorialDone) {
+        showPrep();
         screenShownAt = performance.now();
-      }
-      else startShift();
+      } else startShift();
       break;
     case "biz":
       save.biz = !save.biz;
@@ -1613,11 +1619,31 @@ ui.root.addEventListener("click", (e) => {
       } else plan.menu = [...plan.menu, v];
       save.plan = plan;
       writeSave(save);
-      showPlan();
+      showPrep();
       break;
     }
+    case "prep-ads": {
+      const lvl = Math.max(0, Math.min(2, Number(btn!.dataset.v))) as AdLevel;
+      if (save.bank < ADS[lvl].cost) break;
+      save.ads = lvl;
+      writeSave(save);
+      showPrep();
+      break;
+    }
+    case "prep-box":
+    case "closing-box":
+      toggleBox(btn!.dataset.v!);
+      if (act === "prep-box") showPrep();
+      else showClosing();
+      break;
+    case "prep-simple":
+      save.simplePlan = !save.simplePlan;
+      if (save.simplePlan) closeBoxes("prep:");
+      writeSave(save);
+      showPrep();
+      break;
     case "open":
-      startShift(planFor(stop(), save.plan));
+      startShift(save.biz ? planFor(stop(), save.plan) : null);
       break;
     case "pick": {
       const id = (e.target as HTMLElement).closest<HTMLElement>("[data-id]")?.dataset.id as UpgradeId | undefined;
@@ -1626,10 +1652,36 @@ ui.root.addEventListener("click", (e) => {
       save.offer = [];
       writeSave(save);
       sfx.coin();
-      showTitle();
+      if (game.overlay === "closing") showClosing();
+      else showTitle();
       break;
     }
+    case "evening":
     case "next":
+      showTitle();
+      break;
+    case "back":
+      closeOverlay();
+      break;
+    case "reviews":
+      showReviews(game.reviewFilter);
+      break;
+    case "rf":
+      showReviews(btn!.dataset.v as ReviewFilter);
+      break;
+    case "buy": {
+      const id = btn!.dataset.id as GearId;
+      const g = gearById(id);
+      if (!g || gearBlocker(g, save.gear, save.town, save.bank)) break;
+      save.bank -= g.cost;
+      save.gear.push(id);
+      writeSave(save);
+      sfx.coin();
+      showSupplies();
+      break;
+    }
+    case "wake":
+      if (game.overlay !== "night") break;
       showTitle();
       break;
     case "new-trip":
@@ -1701,7 +1753,7 @@ initMenu({
     if (game.phase === "paused") game.phase = "playing";
   },
   restart: () => {
-    if (save.biz && save.tutorialDone) showPlan();
+    if (save.tutorialDone) showPrep();
     else startShift();
   },
   quit: () => showTitle(),
@@ -1782,6 +1834,10 @@ function startShift(plan: Plan | null = null): void {
   game.adCost = ADS[save.ads].cost;
   save.bank -= game.adCost;
   game.customers = plan ? plannedCustomers(plan) : expectedCustomers();
+  const proj = projectShift({ stop: stop(), plan, popularity: save.popularity, ads: save.ads, rep: save.rep, upgrades: save.upgrades, gear: save.gear });
+  game.projected = [proj.lo, proj.hi];
+  // A shift starts a fresh block of driving: the evening's hops count against the whole range.
+  save.driven = 0;
   writeSave(save);
   ui.bell.hidden = false;
   applyStop();
@@ -1816,20 +1872,61 @@ function highlights(reviews: Review[]): Review[] {
   return picks.filter((r, i) => picks.findIndex((q) => q.text === r.text) === i);
 }
 
-function showPlan(): void {
+/** Before opening: the day's choices in expand boxes, with the projected receipt. Both modes. */
+function showPrep(): void {
+  game.town = save.town;
   game.event = eventOn(save.town, save.day);
-  const plan = planFor(stop(), save.plan);
-  ui.title.innerHTML = planHtml({
-    stop: stop(),
-    plan,
-    rep: save.rep,
-    reviews: save.reviews,
-    customers: plannedCustomers(plan),
-    wtp: willingnessToPay(save.popularity, save.rep),
-    popularity: todayPop(),
-  });
+  game.overlay = null;
+  const plan = save.biz ? planFor(stop(), save.plan) : null;
+  if (plan) save.plan = plan;
+  ui.title.innerHTML = prepHtml({ save, stop: stop(), plan });
   ui.title.hidden = false;
   ui.summary.hidden = true;
+}
+
+/** A screen over the map (closing, night, reviews, supplies) lives in the summary layer. */
+function showOverlay(kind: NonNullable<typeof game.overlay>, html: string): void {
+  // Redrawing the same screen (a box opened, a filter tapped) must not swallow the next tap.
+  if (game.overlay !== kind) screenShownAt = performance.now();
+  game.overlay = kind;
+  ui.summary.innerHTML = html;
+  ui.summary.hidden = false;
+}
+
+function closeOverlay(): void {
+  game.overlay = null;
+  ui.summary.hidden = true;
+  if (game.phase === "summary") showTitle();
+  else refreshHome();
+}
+
+function showClosing(): void {
+  if (!save.last) {
+    showTitle();
+    return;
+  }
+  showOverlay("closing", closingHtml(save.last, save, offerList()));
+}
+
+function showReviews(filter: ReviewFilter): void {
+  game.reviewFilter = filter;
+  showOverlay("reviews", reviewsHtml(save, filter));
+}
+
+function showSupplies(): void {
+  showOverlay("supplies", suppliesHtml(save));
+}
+
+/** Night falls: charge the running cost, turn the day, and show the card until it's tapped. */
+function sleepNow(): void {
+  if (save.time !== "evening") return;
+  const night = sleep(save);
+  save.last = null;
+  writeSave(save);
+  game.phase = "summary";
+  ui.title.hidden = false;
+  showOverlay("night", nightHtml(night, save));
+  sfx.chime();
 }
 
 /**
@@ -1844,15 +1941,21 @@ function showTitle(): void {
   screenShownAt = performance.now();
   ui.title.hidden = false;
   ui.summary.hidden = true;
+  game.overlay = null;
   mountHome(ui.title, {
     save,
     focus: game.mapSel,
     startShift: () => {
-      if (save.biz && save.tutorialDone) {
-        showPlan();
+      if (save.tutorialDone) {
+        showPrep();
         screenShownAt = performance.now();
       } else startShift();
     },
+    openResults: () => showClosing(),
+    openReviews: () => showReviews(game.reviewFilter),
+    openSupplies: () => showSupplies(),
+    openMenuRef: () => openMenuRef(withEvent(townById(save.town), eventOn(save.town, save.day))),
+    sleep: () => sleepNow(),
     commit: () => {
       writeSave(save);
       game.town = save.town;
@@ -1869,7 +1972,9 @@ function showTitle(): void {
 
 function endShift(): void {
   game.phase = "summary";
-  save.day++;
+  // The shift fills the day; the evening follows, and only sleeping turns the day (see game/day.ts).
+  save.time = "evening";
+  save.driven = 0;
   const popBefore = save.popularity;
   // Fame: yesterday's fades a touch, then word of mouth, the press and today's posts move it.
   save.popularity = fadePopularity(save.popularity) + wordOfMouth(game.stars, game.lost, game.leftLine) + (game.press?.pop ?? 0) + ADS[save.ads].lasting;
@@ -1885,8 +1990,6 @@ function endShift(): void {
   // Lifetime rating for the home screen: every served order's stars, in either mode.
   save.ratingCount += game.stars.length;
   save.ratingSum += game.stars.reduce((a, b) => a + b, 0);
-  // A shift ends the day, so the truck may drive one road overnight again.
-  save.overnightUsed = false;
   // A pass counts the people who ordered, so a short line isn't a fail, but serving one person out of a town's trade isn't a pass.
   const ok = passed(avg, game.served, Math.max(game.served + game.lost, Math.ceil(game.customers * 0.4)));
   let lastStop = false;
@@ -1913,38 +2016,39 @@ function endShift(): void {
   const opened = save.unlocked.filter((id) => !before.includes(id)).map(townById);
   // Point the map at the next new town so "Back to the map" leads somewhere.
   if (opened.length) game.mapSel = opened[0].id;
-  writeSave(save);
-  ui.summary.innerHTML = summaryHtml({
-    stop: here,
-    shiftsHere: save.shiftsIn?.[here.id] ?? 0,
+  const closing: Closing = {
+    town: here.id,
+    day: save.day,
     served: game.served,
     lost: game.lost,
     leftLine: game.leftLine,
     walkedPast: game.walkedPast,
-    adCost: game.adCost,
-    stars: game.stars,
+    stars: game.stars.slice(),
     earned: game.money,
     tips: game.tips,
     spills: spills(),
-    biz: game.plan
-      ? {
-          costs: game.costs,
-          profit,
-          // Show the most telling ones: the best and the worst of the day.
-          reviews: highlights(game.reviews),
-          rep: save.rep,
-          repBefore,
-        }
-      : null,
+    adCost: game.adCost,
+    costs: Math.round(game.costs),
+    biz: !!game.plan,
+    profit: Math.round(profit),
+    running: RUNNING_COST,
+    solar: solarSaving(save.gear),
+    projected: game.projected,
+    // The most telling ones: the best and the worst of the day.
+    reviews: highlights(game.reviews),
+    rep: save.rep,
+    repBefore,
+    pop: [popBefore, save.popularity],
     best: game.best?.name ?? null,
     outcome: !ok ? "failed" : lastStop ? "trip" : "passed",
-    opened,
+    opened: opened.map((t) => t.id),
+    shiftsHere: save.shiftsIn?.[here.id] ?? 0,
     press: game.press,
-    pop: [popBefore, save.popularity],
-    offer: offerList(),
-  });
-  ui.summary.hidden = false;
-  screenShownAt = performance.now();
+  };
+  save.last = closing;
+  writeSave(save);
+  ui.title.hidden = false;
+  showClosing();
   sfx.chime();
   // A pending update waits until the player leaves this screen (see showTitle).
   if (game.pendingUpdate) {

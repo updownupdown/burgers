@@ -1,12 +1,13 @@
+import type { TimeOfDay } from "./day";
 import { STOPS, townById } from "./stops";
 
 /**
  * Driving between towns on the road map.
  *
- * Roads join towns as nodes. Driving one road costs a little gas and happens overnight, so it
- * takes no day; but only one such hop fits in a night. Driving further (two roads or more, or a
- * second drive in the same night) takes a whole day and costs gas in proportion to the distance.
- * Days otherwise only pass with shifts.
+ * Roads join towns as nodes, and every drive costs gas by distance. The truck has an overnight
+ * range (see day.ts): a drive that fits the range left tonight, or this morning, happens at once
+ * and no time passes. In the morning a longer drive takes the whole day and lands on the evening
+ * map, with no shift that day. In the evening a longer drive has to wait for the morning.
  *
  * Unlocking: working three passed shifts in a town opens the roads out of it. A region's big
  * city opens the next region the same way.
@@ -92,6 +93,13 @@ export function shortestPath(from: string, to: string, unlocked: readonly string
   return path;
 }
 
+/**
+ * When a drive happens. `now`: it fits the range, so the truck arrives at once and the time of
+ * day stays the same. `day`: too far for the range, so it takes the whole day (morning only) and
+ * the truck arrives on the evening map. `tomorrow`: too far for tonight; set off in the morning.
+ */
+export type TripWhen = "now" | "day" | "tomorrow";
+
 export interface Trip {
   from: string;
   to: string;
@@ -102,42 +110,52 @@ export interface Trip {
   distance: number;
   /** Gas money. */
   cost: number;
-  /** 0 for an overnight hop, 1 for a day on the road. */
-  days: 0 | 1;
+  when: TripWhen;
 }
 
 /** The part of a save that driving touches. */
 export interface Traveller {
   town: string;
   bank: number;
-  day: number;
-  /** The truck already moved tonight, so another drive takes a day. */
-  overnightUsed: boolean;
+  time: TimeOfDay;
+  /** Map units driven since the last shift or sleep; today's hops add up against the range. */
+  driven: number;
+}
+
+/** What the truck can do right now: the time of day and the range it has left. */
+export interface Legs {
+  time: TimeOfDay;
+  /** Overnight range in map units (see day.ts). */
+  range: number;
+  driven: number;
 }
 
 /** Plan a drive, or null when the town can't be reached (locked, or the truck is already there). */
-export function planTrip(from: string, to: string, unlocked: readonly string[], overnightUsed: boolean): Trip | null {
+export function planTrip(from: string, to: string, unlocked: readonly string[], legs: Legs): Trip | null {
   if (from === to) return null;
   const path = shortestPath(from, to, unlocked);
   if (!path) return null;
   let dist = 0;
   for (let i = 1; i < path.length; i++) dist += distance(path[i - 1], path[i]);
   const hops = path.length - 1;
-  return { from, to, path, hops, distance: dist, cost: gasCost(dist), days: hops === 1 && !overnightUsed ? 0 : 1 };
+  const fits = dist + legs.driven <= legs.range + 1e-6;
+  const when: TripWhen = fits ? "now" : legs.time === "morning" ? "day" : "tomorrow";
+  return { from, to, path, hops, distance: dist, cost: gasCost(dist), when };
 }
 
 export function canAfford(trip: Trip, bank: number): boolean {
   return bank >= trip.cost;
 }
 
-/** Drive: pay the gas, move the truck, and let the day pass for a long trip. False when it can't be paid for. */
+/** Drive: pay the gas and move the truck; a day-long drive lands in the evening. False when it can't happen now. */
 export function applyTrip(s: Traveller, trip: Trip): boolean {
-  if (!canAfford(trip, s.bank)) return false;
+  if (trip.when === "tomorrow" || !canAfford(trip, s.bank)) return false;
   s.bank -= trip.cost;
   s.town = trip.to;
-  s.day += trip.days;
-  // A hop uses up the night; a day's drive ends with a fresh night.
-  s.overnightUsed = trip.days === 0;
+  if (trip.when === "day") {
+    s.time = "evening";
+    s.driven = 0;
+  } else s.driven += trip.distance;
   return true;
 }
 

@@ -521,6 +521,10 @@ export interface MapState {
   shiftsIn: Record<string, number>;
   day: number;
   selected: string | null;
+  /** Evening: the map goes dark and the roads the truck can still drive tonight are lit. */
+  night: boolean;
+  /** Towns a drive can reach right now without the day passing, with the road there. */
+  reach: readonly { id: string; path: readonly string[] }[];
 }
 
 export function townPoint(id: string): Pt {
@@ -549,7 +553,8 @@ export function renderMap(st: MapState): string {
     const here = t.id === st.town;
     const { done, need } = unlockProgress(st.shiftsIn, t.id);
     const r = t.capital ? 3.1 : 2.5;
-    const classes = ["home-town", isOpen ? "open" : "locked", here ? "here" : "", t.id === st.selected ? "sel" : "", t.capital ? "capital" : ""].filter(Boolean).join(" ");
+    const lit = st.night && st.reach.some((r) => r.id === t.id);
+    const classes = ["home-town", isOpen ? "open" : "locked", here ? "here" : "", t.id === st.selected ? "sel" : "", t.capital ? "capital" : "", lit ? "lit" : ""].filter(Boolean).join(" ");
     const ev = eventOn(t.id, st.day);
     const soon = !ev && [1, 2].some((d) => eventOn(t.id, st.day + d));
     // The event flag flies to the upper right, or the upper left where water is in the way.
@@ -576,6 +581,9 @@ export function renderMap(st: MapState): string {
     </g>`;
   }).join("");
 
+  const litRoads = st.night
+    ? `<g class="home-reach">${st.reach.map((r) => `<path class="road reach" d="${r.path.slice(1).map((b, i) => roadPath(r.path[i], b)).join(" ")}"/>`).join("")}</g>`
+    : "";
   const here = townById(st.town);
   const truck = `<g class="home-truck" style="transform:translate(${here.x}px, ${here.y}px)"><g class="mk">${truckSvg()}</g></g>`;
 
@@ -586,6 +594,8 @@ export function renderMap(st: MapState): string {
     </defs>
     <g class="home-static ${lockedRegions.map((r) => `lock-${r}`).join(" ")}">${staticScene}</g>
     <g class="home-roads">${roads}</g>
+    <rect class="home-night" x="${VIEW.x - 50}" y="${VIEW.y - 50}" width="${VIEW.w + 100}" height="${VIEW.h + 100}"/>
+    ${litRoads}
     <path class="home-route" d=""/>
     <g class="home-towns">${townsSvg}</g>
     ${truck}

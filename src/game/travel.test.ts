@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { rangeUnits } from "./day";
 import { freshSave, migrateSave, passTown, type Save } from "./progress";
 import { STOPS } from "./stops";
 import {
@@ -18,6 +19,9 @@ import {
 } from "./travel";
 
 const ALL = STOPS.map((t) => t.id);
+const BASE = rangeUnits([]);
+const morning = { time: "morning" as const, range: BASE, driven: 0 };
+const evening = { time: "evening" as const, range: BASE, driven: 0 };
 
 describe("roads", () => {
   it("run both ways", () => {
@@ -48,9 +52,9 @@ describe("gas", () => {
   });
 
   it("makes a single road an affordable overnight hop", () => {
-    const hop = planTrip("pinecrest", "elkpass", ALL, false)!;
+    const hop = planTrip("pinecrest", "elkpass", ALL, evening)!;
     expect(hop.hops).toBe(1);
-    expect(hop.days).toBe(0);
+    expect(hop.when).toBe("now");
     expect(hop.cost).toBeGreaterThanOrEqual(6);
     expect(hop.cost).toBeLessThanOrEqual(10);
     expect(hop.cost).toBeLessThan(START_BANK / 10);
@@ -59,24 +63,33 @@ describe("gas", () => {
 
 describe("planTrip", () => {
   it("returns null for the current town or a locked one", () => {
-    expect(planTrip("pinecrest", "pinecrest", ALL, false)).toBeNull();
-    expect(planTrip("pinecrest", "summit", ["pinecrest", "elkpass"], false)).toBeNull();
+    expect(planTrip("pinecrest", "pinecrest", ALL, morning)).toBeNull();
+    expect(planTrip("pinecrest", "summit", ["pinecrest", "elkpass"], morning)).toBeNull();
   });
 
-  it("takes a day for two roads or more, costing by distance", () => {
-    const t = planTrip("pinecrest", "summit", ALL, false)!;
-    expect(t.path).toEqual(["pinecrest", "elkpass", "summit"]);
-    expect(t.days).toBe(1);
-    expect(t.distance).toBeCloseTo(distance("pinecrest", "elkpass") + distance("elkpass", "summit"));
-    expect(t.cost).toBe(gasCost(t.distance));
+  it("fits any one town road in the base range, but not two", () => {
+    for (const t of STOPS) for (const r of t.roads) {
+      const hop = planTrip(t.id, r, ALL, evening)!;
+      if (distance(t.id, r) < 40) expect(hop.when).toBe("now");
+    }
+    const two = planTrip("pinecrest", "summit", ALL, morning)!;
+    expect(two.path).toEqual(["pinecrest", "elkpass", "summit"]);
+    expect(two.when).toBe("day");
+    expect(two.distance).toBeCloseTo(distance("pinecrest", "elkpass") + distance("elkpass", "summit"));
+    expect(two.cost).toBe(gasCost(two.distance));
+    expect(planTrip("pinecrest", "summit", ALL, evening)!.when).toBe("tomorrow");
   });
 
-  it("takes a day for a second hop in the same night", () => {
-    expect(planTrip("pinecrest", "elkpass", ALL, true)!.days).toBe(1);
+  it("needs the tune-up for a highway, and counts tonight's hops against the range", () => {
+    expect(planTrip("summit", "saltwater", ALL, evening)!.when).toBe("tomorrow");
+    expect(planTrip("summit", "saltwater", ALL, { ...evening, range: rangeUnits(["range1"]) })!.when).toBe("now");
+    const used = distance("pinecrest", "elkpass");
+    expect(planTrip("elkpass", "summit", ALL, { ...evening, driven: used })!.when).toBe("tomorrow");
+    expect(planTrip("elkpass", "summit", ALL, { ...evening, driven: used, range: rangeUnits(["range1"]) })!.when).toBe("now");
   });
 
   it("crossing the whole map costs real money but less than the starting budget", () => {
-    const t = planTrip("pinecrest", "sunvalley", ALL, false)!;
+    const t = planTrip("pinecrest", "sunvalley", ALL, morning)!;
     expect(t.hops).toBeGreaterThanOrEqual(8);
     expect(t.cost).toBeGreaterThan(50);
     expect(t.cost).toBeLessThan(START_BANK);
@@ -84,24 +97,33 @@ describe("planTrip", () => {
 });
 
 describe("applyTrip", () => {
-  const traveller = () => ({ town: "pinecrest", bank: START_BANK, day: 3, overnightUsed: false });
+  const traveller = () => ({ town: "pinecrest", bank: START_BANK, time: "evening" as const, driven: 0 });
 
-  it("moves the truck overnight, pays gas and uses up the night", () => {
+  it("moves the truck tonight, pays gas and uses up range", () => {
     const s = traveller();
-    const hop = planTrip("pinecrest", "elkpass", ALL, false)!;
+    const hop = planTrip("pinecrest", "elkpass", ALL, evening)!;
     expect(applyTrip(s, hop)).toBe(true);
-    expect(s).toEqual({ town: "elkpass", bank: START_BANK - hop.cost, day: 3, overnightUsed: true });
-    // The next drive, even one road, now takes a day and frees the night after.
-    const next = planTrip("elkpass", "summit", ALL, s.overnightUsed)!;
-    expect(next.days).toBe(1);
-    applyTrip(s, next);
-    expect(s.day).toBe(4);
-    expect(s.overnightUsed).toBe(false);
+    expect(s).toEqual({ town: "elkpass", bank: START_BANK - hop.cost, time: "evening", driven: hop.distance });
+    // The next road doesn't fit what's left of the night, so it waits for the morning.
+    const next = planTrip("elkpass", "summit", ALL, { ...evening, driven: s.driven })!;
+    expect(next.when).toBe("tomorrow");
+    expect(applyTrip(s, next)).toBe(false);
+    expect(s.town).toBe("elkpass");
+  });
+
+  it("spends the day on a long morning drive and lands in the evening", () => {
+    const s = { ...traveller(), time: "morning" as const };
+    const far = planTrip("pinecrest", "summit", ALL, morning)!;
+    expect(far.when).toBe("day");
+    expect(applyTrip(s, far)).toBe(true);
+    expect(s.town).toBe("summit");
+    expect(s.time).toBe("evening");
+    expect(s.driven).toBe(0);
   });
 
   it("refuses a drive the truck can't pay for", () => {
     const s = { ...traveller(), bank: 3 };
-    const hop = planTrip("pinecrest", "elkpass", ALL, false)!;
+    const hop = planTrip("pinecrest", "elkpass", ALL, evening)!;
     expect(canAfford(hop, s.bank)).toBe(false);
     expect(applyTrip(s, hop)).toBe(false);
     expect(s.town).toBe("pinecrest");
@@ -142,7 +164,16 @@ describe("save migration", () => {
     expect(s.shiftsIn).toEqual({});
     expect(s.ratingCount).toBe(0);
     expect(s.ratingSum).toBe(0);
-    expect(s.overnightUsed).toBe(false);
+    expect(s.time).toBe("morning");
+    expect(s.gear).toEqual([]);
+    expect(s.overnightUsed).toBeUndefined();
+  });
+
+  it("wakes an old save in the morning and drops its one-hop flag", () => {
+    const s = migrateSave({ town: "elkpass", overnightUsed: true, day: 4 } as Partial<Save>);
+    expect(s.time).toBe("morning");
+    expect(s.overnightUsed).toBeUndefined();
+    expect(s.day).toBe(4);
   });
 
   it("counts towns already passed as fully worked and grants the starting budget once", () => {

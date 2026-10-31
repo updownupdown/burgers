@@ -47,4 +47,12 @@ const state = (p) => p.evaluate(() => {
     page: c.page, gesture: window.__bv.gesture(),
   };
 });
-module.exports = { open, gesture, line, hold, step, state, out };
+// From the morning map into a shift: Prep & Open, then Open on the Prep screen.
+async function enterShift(p) {
+  await p.click('[data-home=open]');
+  // The Prep screen ignores taps for a moment after it opens.
+  await p.waitForTimeout(700);
+  if (await p.$('[data-act=open]')) await p.click('[data-act=open]');
+  await p.waitForTimeout(200);
+}
+module.exports = { open, gesture, line, hold, step, state, out, enterShift };

@@ -1,5 +1,5 @@
 import type { Doneness, DrinkId, ExpectedLayer, FriesSize, Kind, Modifier, Order, Size } from "./types";
-import { COUNTED, DRINKS, extraCount } from "./types";
+import { COUNTED, DRINK_LABEL, DRINKS, extraCount } from "./types";
 import { recipeCount, type Recipe, type Stop } from "./stops";
 
 export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, M: 3, L: 4 };
@@ -23,6 +23,33 @@ function poutineOrder(id: number, rng: Rng, level: number): Order {
     order.ice = i < 0.45 ? true : i < 0.7 ? false : null;
   }
   return order;
+}
+
+/** Share of orders, once the shift is going, from someone who only wants a drink or fries: rare, but it happens. */
+export const SIDES_ONLY_CHANCE = 0.06;
+
+/** Just a drink (most often), just fries, or both, and no burger. */
+export function sidesOrder(id: number, rng: Rng): Order {
+  const r = rng();
+  const fries = r >= 0.55;
+  const drink = r < 0.55 || r >= 0.85 ? DRINKS[Math.floor(rng() * DRINKS.length)] : null;
+  const f = rng();
+  const friesSize: FriesSize = f < 0.35 ? "S" : f < 0.75 ? "M" : "L";
+  const d = rng();
+  const drinkSize: Size = d < 0.3 ? "S" : d < 0.7 ? "M" : "L";
+  const name = fries && drink ? "Fries & a drink" : fries ? "Fries" : DRINK_LABEL[drink!];
+  const price = (fries ? FRIES_PRICE[friesSize] : 0) + (drink ? DRINK_PRICE[drinkSize] : 0);
+  const order: Order = { id, name, price, mods: [], layers: [], fries, drink, friesSize, drinkSize };
+  if (drink) {
+    const i = rng();
+    order.ice = i < 0.45 ? true : i < 0.7 ? false : null;
+  }
+  return order;
+}
+
+/** No burger on this order: a poutine, or just a drink and/or fries. */
+export function noBurger(order: Order): boolean {
+  return order.layers.length === 0;
 }
 
 export type Rng = () => number;
@@ -119,6 +146,7 @@ export function pickMods(recipe: Recipe, pantry: Kind[], rng: Rng, level: number
  */
 export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Order {
   if (level >= 0.15 && rng() < POUTINE_CHANCE) return poutineOrder(id, rng, level);
+  if (level >= 0.15 && rng() < SIDES_ONLY_CHANCE) return sidesOrder(id, rng);
   let pool = stop.menu.filter((r) => (r.from ?? 0) <= level);
   if (level < 0.25) pool = pool.filter((r) => r.layers.length <= 6);
   if (!pool.length) pool = stop.menu;

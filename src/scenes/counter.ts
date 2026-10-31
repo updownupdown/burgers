@@ -1,22 +1,19 @@
 import * as THREE from "three";
 import { DRINK_FILL, FRIES_PERFECT, FRIES_ZONE, FRY_RATE, GRILL_RATE, MELT_RATE } from "../game/cooking";
-import type { DrinkId, FriesSize, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
-import { CUP_SPEED, DRINKS } from "../game/types";
+import type { DrinkId, FriesSize, Kind, Piece, SauceKind, Size } from "../game/types";
+import { CUP_SPEED, DRINKS, GRILLABLE } from "../game/types";
 import { counterTop, wallPanels } from "../render/wear";
-import { makeUtensilCrock } from "../render/props";
 import { CUP_DIMS, cupSurfaceY, makeCarton, makeCartonStack, makeCup, makeFood, makeBasketFries, makeFries, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { dressCup } from "../render/cup";
 import { makeStrawHolder } from "../render/models/drinks";
 import { FREEZER, makeCurdHandful, makeCurdTub, makeFreezer, makeGravyPot, makeLadle, makeShaker } from "../render/fryer";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
-import { makeGriddle, type GriddleObject } from "../render/machines/griddle";
-import { makePrepUnit } from "../render/machines/coldRail";
+import { makeGriddle, ZONE_HEATS, type GriddleObject, type ZoneHeat } from "../render/machines/griddle";
+import { makeColdRail } from "../render/machines/coldRail";
 import { makeSauceBottle, makeSauceCaddy, type SauceCaddyObject } from "../render/machines/sauces";
-import { makeWarmShelf } from "../render/machines/warmShelf";
 import { DRINK_TINT, makeCupStack, makeFountain, makeFryBasket, makeFryer, makeIceWell, makeLidStackSized, makePackPad, makeSleeve, makeSupplyShelf, makeTrashChute, FRY_BASKET, type FryerObject } from "../render/machines";
 import { applyKitchenLight, KITCHEN_BG, type KitchenLight } from "../render/lighting";
 import { SCALE } from "../render/units";
-import { PlateView } from "./tray";
 
 export const PAGES = ["Drinks", "Grill", "Fryer", "Supplies"] as const;
 export const HOME_PAGE = 1;
@@ -38,45 +35,44 @@ const CAM_BACK = 5.3;
 const LOOK_Z = -0.1;
 
 /**
- * One scale for food on the counter, against ingredient units: on the grill, in the hand and on
- * the warm-shelf plates. Keeping it the same everywhere means nothing grows or shrinks as it
- * moves between them. It's the study's per-category rule (burger parts at 1.5 times life size).
+ * One scale for food on the counter, against ingredient units: on the grill and in the hand.
+ * Keeping it the same everywhere means nothing grows or shrinks as it moves between them. It's
+ * the study's per-category rule (burger parts at 1.5 times life size).
  */
 export const FOOD_SCALE = SCALE.burger;
 /** Grill items are drawn at the counter food scale. */
 export const GRILL_SCALE = FOOD_SCALE;
 
 /**
- * The grill page, "prep unit and lamp shelf": a 3 x 3 cold prep unit against the wall on the
- * left with the sauce caddy in front of it, the griddle front right, and the three hold plates
- * on a warm shelf over the griddle's back edge, in a row like the tray's plates above.
+ * The grill page after build #36: a wide griddle in three identical zones front right, the
+ * grillable pans in a row behind it, the cold toppings (cheese included) in a rail down the left
+ * and the sauce caddy in the front left corner. Burgers are built on the trays above.
  */
-const GRIDDLE = { x: 1.95, z: 0.8 };
-const PREP = { x: -2.05, z: -1.4 };
-const CADDY = { x: -2.05, z: 1.75 };
-/** The warm shelf stands on legs this tall, behind the griddle's splash guard. */
-const SHELF = { x: 1.95, z: -2.35, y: 0.9 };
-/** The griddle's cook surface, griddle-local (read once from the model). */
-const GRIDDLE_SURFACE = makeGriddle().userData.spots.surface;
+const GRIDDLE = { x: 1.12, z: 0.85 };
+/** The row of grillable pans behind the griddle, and the cold rail of everything else. */
+const GRILL_PANS = { x: 1.12, z: -2.45 };
+const SIDE_PANS = { x: -3.0, z: -1.05 };
+const CADDY = { x: -2.9, z: 2.2 };
+/** The griddle's cook surface, zones and buttons, griddle-local (read once from the model). */
+const GRIDDLE_SPOTS = makeGriddle().userData.spots;
+const GRIDDLE_SURFACE = GRIDDLE_SPOTS.surface;
 export const GRILL_TOP = GRIDDLE_SURFACE.y;
-const GRILL_CX = GRIDDLE.x;
 const GRILL_BOUNDS = {
   x0: GRIDDLE.x + GRIDDLE_SURFACE.x0 + 0.4,
   x1: GRIDDLE.x + GRIDDLE_SURFACE.x1 - 0.4,
   z0: GRIDDLE.z + GRIDDLE_SURFACE.z0 + 0.4,
   z1: GRIDDLE.z + GRIDDLE_SURFACE.z1 - 0.35,
 };
-/** The right end of the griddle can be turned down to a warm hold. */
-export const WARM_X0 = GRIDDLE.x + GRIDDLE_SURFACE.warmX;
+/** The three grill zones, page-local x, left to right. */
+export const GRILL_ZONES = GRIDDLE_SPOTS.zones.map((z) => ({ x0: GRIDDLE.x + z.x0, x1: GRIDDLE.x + z.x1 }));
+/** Each zone starts a shift hot, hot, off. */
+export const ZONE_START: ZoneHeat[] = ["hot", "hot", "off"];
+/** How fast each setting cooks, against full heat; warm keeps food hot and barely cooks it. */
+const ZONE_RATE: Record<ZoneHeat, number> = { off: 0, warm: 0.07, hot: 1 };
 /** Trash slot running along the front edge of every counter, page-local z. */
 const TRASH = { z0: 3.05, z1: 3.5 };
 /** The slot runs the full width of every counter (page-local x), and on between them. */
 const TRASH_HALF = 4.4;
-/** Hold plates on the warm shelf, page-local, and the height of their tops. */
-export const HOLD_SPOTS = [-1.3, 0, 1.3].map((dx) => ({ x: SHELF.x + dx, z: SHELF.z }));
-const HOLD_Y = SHELF.y + 0.2;
-/** Plate size on the warm shelf; the food on it is still drawn at FOOD_SCALE. */
-const HOLD_SCALE = 0.6;
 
 /**
  * Fryer page, "front pass", in page-local x and z, on one screen. The big potato freezer is at
@@ -239,21 +235,13 @@ export type Hit =
   | { type: "ice" }
   | { type: "lids"; size: Size }
   | { type: "straws" }
-  | { type: "hold"; idx: number }
+  | { type: "zone"; idx: number }
   | { type: "stack"; idx: number }
   | { type: "supplies"; kind: "cup" | "carton"; size: Size }
   | { type: "pack"; idx: number }
   | { type: "shaker" }
   | { type: "curds" }
   | { type: "gravy" };
-
-/** A burger being put together (or food parked) on the warm shelf. */
-export interface HoldSpot {
-  layers: Layer[];
-  view: PlateView;
-  x: number;
-  z: number;
-}
 
 export interface CounterEvents {
   golden: () => void;
@@ -295,11 +283,12 @@ export class CounterView {
   fryBoost = 1;
   autoStopPour = false;
   grillItems: GrillItem[] = [];
-  holds: HoldSpot[] = [];
-  /** Right end of the grill turned down to keep food warm without cooking it much. */
-  warm = false;
+  /** Each grill zone's setting, left to right; the buttons on the griddle's front ledge cycle them. */
+  zones: ZoneHeat[] = [...ZONE_START];
+  private zonesShown: string = "";
+  /** Seconds since each zone's button was pushed, for its press-in animation. */
+  private zonePush = [9, 9, 9];
   private griddle!: GriddleObject;
-  private warmShown: boolean | null = null;
   private caddy!: SauceCaddyObject;
   private light: KitchenLight;
   baskets: Basket[] = [];
@@ -360,29 +349,15 @@ export class CounterView {
     griddle.position.copy(at(GRIDDLE.x, 0, GRIDDLE.z));
     this.scene.add(griddle);
     this.griddle = griddle;
+    // A push button per zone on the front ledge: tap to cycle off, warm, hot.
+    griddle.userData.spots.buttons.forEach((b, i) => {
+      this.proxy(new THREE.BoxGeometry(1.05, 0.5, 0.75), griddle.position.clone().add(new THREE.Vector3(b.x, b.y - 0.1, b.z)), { type: "zone", idx: i });
+    });
 
-    // The warm shelf over the back of the griddle: heat from underneath, so no bulbs or glow.
-    const shelf = makeWarmShelf({ plates: false, legs: SHELF.y });
-    shelf.position.copy(at(SHELF.x, SHELF.y, SHELF.z));
-    this.scene.add(shelf);
-    for (const h of HOLD_SPOTS) {
-      const view = new PlateView();
-      view.ring.visible = false;
-      view.group.scale.setScalar(HOLD_SCALE);
-      view.s = FOOD_SCALE / HOLD_SCALE;
-      view.group.position.copy(at(h.x, HOLD_Y - 0.1 * HOLD_SCALE, h.z));
-      this.scene.add(view.group);
-      this.holds.push({ layers: [], view, x: h.x, z: h.z });
-    }
-
-    // The sauce caddy in front of the prep unit, bottles upside down and ready to lift.
+    // The sauce caddy in the front left corner, bottles upside down and ready to lift.
     const caddy = makeSauceCaddy();
     caddy.position.copy(at(CADDY.x, 0, CADDY.z));
     this.scene.add(caddy);
-    // Working kit, clear of every target: a utensil crock in the free front corner.
-    const crock = makeUtensilCrock();
-    crock.position.copy(at(-3.3, 0, 2.5));
-    this.scene.add(crock);
     this.caddy = caddy;
     this.bottles = caddy.userData.bottles;
     for (const k of ["ketchup", "mustard"] as SauceKind[]) {
@@ -776,7 +751,10 @@ export class CounterView {
     return this.world(0, FOUNTAIN.x + b.x, b.y, FOUNTAIN.z + b.z);
   }
 
-  /** Fill the prep unit's pans for the current stop: nine kinds, back row first. */
+  /**
+   * Fill the pans for the current stop: the grillables in a row behind the griddle, everything
+   * else (cheese too: it only sometimes goes on the grill) in the cold rail on the left.
+   */
   setPantry(kinds: Kind[]): void {
     if (this.pantry) {
       this.scene.remove(this.pantry);
@@ -790,13 +768,25 @@ export class CounterView {
       }
       return keep;
     });
-    const prep = makePrepUnit({ kinds: kinds.slice(0, 9) });
-    prep.position.copy(this.world(1, PREP.x, 0, PREP.z));
-    const { pans, pan } = prep.userData.spots;
-    this.bins = pans.flatMap((p) => (p.kind ? [{ kind: p.kind, x: PREP.x + p.x, z: PREP.z + p.z, y: p.y }] : []));
-    for (const b of this.bins) this.proxy(new THREE.BoxGeometry(pan.w, 0.9, pan.d), this.world(1, b.x, b.y - 0.2, b.z), { type: "bin", kind: b.kind });
-    this.pantry = prep;
-    this.scene.add(prep);
+    const hot = kinds.filter((k) => GRILLABLE.has(k)).slice(0, 5);
+    const cold = kinds.filter((k) => !GRILLABLE.has(k)).slice(0, 6);
+    const group = new THREE.Group();
+    this.bins = [];
+    const fill = (rail: ReturnType<typeof makeColdRail>, at: { x: number; z: number }) => {
+      rail.position.copy(this.world(1, at.x, 0, at.z));
+      group.add(rail);
+      const { pans, pan } = rail.userData.spots;
+      for (const p of pans) {
+        if (!p.kind) continue;
+        const b = { kind: p.kind, x: at.x + p.x, z: at.z + p.z, y: p.y };
+        this.bins.push(b);
+        this.proxy(new THREE.BoxGeometry(pan.w, 0.9, pan.d), this.world(1, b.x, b.y - 0.2, b.z), { type: "bin", kind: b.kind });
+      }
+    };
+    fill(makeColdRail({ cols: Math.max(3, hot.length), rows: 1, kinds: hot }), GRILL_PANS);
+    fill(makeColdRail({ cols: 2, rows: 3, kinds: cold }), SIDE_PANS);
+    this.pantry = group;
+    this.scene.add(group);
   }
 
   layout(aspect: number): void {
@@ -839,7 +829,7 @@ export class CounterView {
 
   hit(ndc: THREE.Vector2): Hit | null {
     this.raycaster.setFromCamera(ndc, this.camera);
-    // Grill items first: they sit on top of everything else.
+    // Grill items before anything else but the zone buttons: they sit on top of everything.
     const items = this.grillItems.filter((g) => !g.held);
     const p = this.groundPoint(ndc, GRILL_TOP + 0.15);
     let best: GrillItem | null = null;
@@ -851,16 +841,17 @@ export class CounterView {
         best = it;
       }
     }
-    if (best) return { type: "grillItem", item: best };
     // Cups on the drinks counter are picked by where they stand, like grill items.
     if (this.page === 0) {
       const c = this.cupAt(this.groundPoint(ndc, 0.5));
       if (c) return { type: "cup", idx: this.cups.indexOf(c) };
     }
-    const hold = this.page === HOME_PAGE ? this.overHold(ndc) : -1;
-    if (hold >= 0) return { type: "hold", idx: hold };
     const hits = this.raycaster.intersectObjects(this.hitMeshes, false);
-    return hits.length ? (hits[0].object.userData.hit as Hit) : null;
+    const first = hits.length ? (hits[0].object.userData.hit as Hit) : null;
+    // The zone buttons sit right in front of the plate: a tap on one is never a grab.
+    if (first?.type === "zone") return first;
+    if (best) return { type: "grillItem", item: best };
+    return first;
   }
 
   groundPoint(ndc: THREE.Vector2, y = 0): THREE.Vector3 {
@@ -889,19 +880,6 @@ export class CounterView {
     const { x0, x1, z0, z1 } = GRILL_BOUNDS;
     if (x < x0 - 0.3 || x > x1 + 0.3 || world.z < z0 - 0.5 || world.z > z1 + 0.4) return null;
     return { x: THREE.MathUtils.clamp(x, x0, x1), z: THREE.MathUtils.clamp(world.z, z0, z1) };
-  }
-
-  /** Assembly spot under the world point, or -1. */
-  overHold(ndc: THREE.Vector2): number {
-    // The plates sit up on the shelf, so the finger is matched at their height.
-    const p = this.groundPoint(ndc, HOLD_Y);
-    return this.holds.findIndex((h) => Math.hypot(p.x - (pageX(1) + h.x), p.z - h.z) < 0.62);
-  }
-
-
-  /** Redraw an assembly spot after its layers change. */
-  syncHold(i: number, animate: boolean): void {
-    this.holds[i].view.sync({ layers: this.holds[i].layers, fries: null, drink: null }, animate, () => {});
   }
 
   addGrillItem(piece: Piece, x: number, z: number, topping?: Piece): GrillItem {
@@ -990,33 +968,8 @@ export class CounterView {
   liftSauce(kind: SauceKind | null): void {
     this.inHand = kind;
     for (const k of ["ketchup", "mustard"] as SauceKind[]) this.bottles[k].visible = k !== kind;
-    this.pointSauce(null);
   }
   inHand: SauceKind | null = null;
-  private handBottle: THREE.Object3D | null = null;
-
-  /** The bottle in hand over a world point on the counter (squeezing over a hold plate), or out of view. */
-  pointSauce(world: THREE.Vector3 | null): void {
-    if (this.handBottle && (!world || this.handBottle.userData.kind !== this.inHand)) {
-      this.scene.remove(this.handBottle);
-      disposeObject(this.handBottle);
-      this.handBottle = null;
-    }
-    if (!world || !this.inHand) return;
-    if (!this.handBottle) {
-      this.handBottle = this.sauceBottle(this.inHand);
-      this.handBottle.userData.kind = this.inHand;
-      this.scene.add(this.handBottle);
-    }
-    this.handBottle.position.copy(world);
-  }
-
-  /** The bottle in hand over a burger-local point of a hold plate's stack. */
-  pointSauceAt(i: number, q: { x: number; z: number }): void {
-    const v = this.holds[i].view;
-    v.group.updateMatrixWorld(true);
-    this.pointSauce(v.burger.localToWorld(new THREE.Vector3(q.x, v.stackTop(), q.z)));
-  }
 
   /** A sauce bottle hanging nozzle down, its origin at the nozzle tip. */
   sauceBottle(kind: SauceKind): THREE.Object3D {
@@ -1028,31 +981,10 @@ export class CounterView {
     return this.caddy.position.clone().setY(0.8);
   }
 
-  /** Where a hold plate's staleness bar stands: just off the plate's right edge, at its rim. */
-  holdBarPoint(i: number): THREE.Vector3 {
-    return this.holdPoint(i).add(new THREE.Vector3(HOLD_SCALE + 0.12, 0.05, 0.25) /* plate radius is 1 at HOLD_SCALE */);
-  }
-
-  /** Where the warm-zone switch sits: on the griddle's front lip, under the warm zone. */
-  warmSwitchPoint(): THREE.Vector3 {
-    return this.world(1, (WARM_X0 + GRIDDLE.x + GRIDDLE_SURFACE.x1) / 2, GRILL_TOP, GRIDDLE.z + GRIDDLE_SURFACE.z1 + 0.55);
-  }
-
   /** Where a basket's fry meter sits: in its window on the fryer's back panel. */
   fryTagPoint(i: number): THREE.Vector3 {
     const m = this.fryer.userData.spots.meters[i];
     return this.fryer.position.clone().add(new THREE.Vector3(m.x, m.y, m.z));
-  }
-
-  /** A hold plate's centre in world space. */
-  holdPoint(i: number): THREE.Vector3 {
-    return this.holds[i].view.group.position.clone();
-  }
-
-  /** Pointer position over a hold plate's stack, in burger-local units, for drawing sauce there. */
-  holdDrawPoint(ndc: THREE.Vector2, i: number): { x: number; z: number } {
-    this.raycaster.setFromCamera(ndc, this.camera);
-    return this.holds[i].view.drawPoint(this.raycaster.ray);
   }
 
   get pageCount(): number {
@@ -1060,12 +992,39 @@ export class CounterView {
   }
 
   sizzleLevel(): number {
-    return this.grillItems.filter((g) => !g.held && g.flipT < 0 && !this.isWarm(g)).length * 0.35 + this.grillItems.filter((g) => this.isWarm(g)).length * 0.08;
+    const on = this.grillItems.filter((g) => !g.held && g.flipT < 0);
+    return on.filter((g) => this.heatOf(g) === "hot").length * 0.35 + on.filter((g) => this.heatOf(g) === "warm").length * 0.08;
   }
 
-  /** Sitting in the turned-down section of the grill. */
-  isWarm(g: GrillItem): boolean {
-    return this.warm && g.x > WARM_X0;
+  /** Which grill zone a page-local x is over (nearest at the ends). */
+  zoneAt(x: number): number {
+    const i = GRILL_ZONES.findIndex((z) => x < z.x1);
+    return i < 0 ? GRILL_ZONES.length - 1 : i;
+  }
+
+  /** The setting of the zone a grill item sits in. */
+  heatOf(g: GrillItem): ZoneHeat {
+    return this.zones[this.zoneAt(g.x)];
+  }
+
+  /** Push a zone's button: off, warm, hot, then off again. Returns the new setting. */
+  cycleZone(i: number): ZoneHeat {
+    this.zones[i] = ZONE_HEATS[(ZONE_HEATS.indexOf(this.zones[i]) + 1) % ZONE_HEATS.length];
+    this.zonePush[i] = 0;
+    return this.zones[i];
+  }
+
+  /** Places for a patty down the middle of a zone, back to front, page-local (for the playtest bot). */
+  zoneSpots(i: number): { x: number; z: number }[] {
+    const z = GRILL_ZONES[i];
+    const { z0, z1 } = GRILL_BOUNDS;
+    return [0, 1, 2].map((k) => ({ x: (z.x0 + z.x1) / 2, z: z0 + 0.1 + ((z1 - z0 - 0.2) * k) / 2 }));
+  }
+
+  /** The middle of a zone's cook surface, world space, for hints and the playtest bot. */
+  zonePoint(i: number): THREE.Vector3 {
+    const z = GRILL_ZONES[i];
+    return this.world(1, (z.x0 + z.x1) / 2, GRILL_TOP, GRIDDLE.z + (GRIDDLE_SURFACE.z0 + GRIDDLE_SURFACE.z1) / 2);
   }
 
   bubbleLevel(): number {
@@ -1103,14 +1062,13 @@ export class CounterView {
           it.squashV = 6;
         }
       } else {
-        // The middle of the grill runs a little hotter than the edges.
-        // The middle of the grill runs a little hotter than the edges; the warm section barely cooks.
-        const zone = this.isWarm(it) ? 0.07 : 1.12 - 0.25 * Math.abs((it.x - GRILL_CX) / 2.5);
-        const heat = zone * (COOK_SPEED[it.piece.kind] ?? 1) * (it.piece.smashed ? 1.6 : 1);
+        // Each zone cooks at its own setting: hot cooks, warm holds with a trickle of heat, off stops.
+        const zone = this.heatOf(it);
+        const heat = ZONE_RATE[zone] * (COOK_SPEED[it.piece.kind] ?? 1) * (it.piece.smashed ? 1.6 : 1);
         const before = it.piece.cook[0];
         if (it.topping) {
           const c = it.topping.piece;
-          c.melt = Math.min(1, (c.melt ?? 0) + (this.isWarm(it) ? MELT_RATE.warm : MELT_RATE.hot) * dt);
+          c.melt = Math.min(1, (c.melt ?? 0) + (zone === "hot" ? MELT_RATE.hot : zone === "warm" ? MELT_RATE.warm : 0) * dt);
           it.topping.obj.userData.update(c);
         }
         it.piece.cook[0] += GRILL_RATE * heat * dt;
@@ -1127,12 +1085,18 @@ export class CounterView {
     if (anyBurning) this.events.burning();
 
     // Smoke: puffs drift up from cooking items; darker when burning.
-    const active = this.grillItems.filter((g) => !g.held && g.flipT < 0 && !this.isWarm(g));
-    for (const h of this.holds) h.view.update(dt);
-    if (this.warmShown !== this.warm) {
-      this.griddle.userData.setWarm(this.warm);
-      this.warmShown = this.warm;
+    const active = this.grillItems.filter((g) => !g.held && g.flipT < 0 && this.heatOf(g) === "hot");
+    const shown = this.zones.join();
+    if (this.zonesShown !== shown) {
+      this.zones.forEach((z, i) => this.griddle.userData.setZone(i, z));
+      this.zonesShown = shown;
     }
+    // A pushed button dips in and springs back.
+    this.zonePush.forEach((t, i) => {
+      if (t > 0.3) return;
+      this.zonePush[i] = t + dt;
+      this.griddle.userData.pressButton(i, Math.sin(Math.PI * Math.min(1, this.zonePush[i] / 0.22)));
+    });
     this.puffs.forEach((m, i) => {
       const it = active[i % Math.max(1, active.length)];
       m.userData.t += dt * 0.5;

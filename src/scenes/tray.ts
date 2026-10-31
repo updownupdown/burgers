@@ -2,12 +2,26 @@ import * as THREE from "three";
 import type { Piece, Plate } from "../game/types";
 import { dressCup } from "../render/cup";
 import { makeCup, makeFood, makeFries, stackBases, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { relScale } from "../render/units";
 
-/** Plain paper plates; only the one being worked on gets a ring, in the accent colour. */
+/**
+ * One kraft serving tray per customer, lined with paper. A paper plate sits on it only when that
+ * customer ordered a burger; the tray being worked on gets an outline in the accent colour.
+ */
 const PLATE_PAPER = "#f7f4ec";
 const PLATE_RIM = "#e4dccb";
+const TRAY_KRAFT = "#c99a62";
+const TRAY_LINER = "#fbf6ea";
+/** Tray size and where the plate and sides sit on it, in plate radii (tray-local units). */
+const TRAY = { w: 3.15, d: 2.05 };
+const DISH_AT = { x: -0.42, z: 0.08 };
+const DISH_R = 0.86;
+const FRIES_AT = { x: 1.0, z: 0.42 };
+const CUP_AT = { x: 1.02, z: -0.42 };
+/** The burger never draws smaller than this share of its full size to fit under the receipts. */
+const MIN_FIT = 0.55;
 /**
  * Sides on a plate draw at this share of their true size next to the burger. The low pass band is
  * short: a true-size cup's lid sits on the band's top edge and its straw leaves the picture, and
@@ -39,7 +53,10 @@ interface StackEntry {
 export class PlateView {
   group = new THREE.Group();
   burger = new THREE.Group();
+  /** The accent outline round the tray being worked on. */
   ring: THREE.Mesh;
+  /** The paper plate: only there when the customer at this tray ordered a burger. */
+  dish = new THREE.Group();
   entries: StackEntry[] = [];
   fries: FriesObject | null = null;
   friesKey = "";
@@ -50,36 +67,74 @@ export class PlateView {
   /** Whole-stack squish when the top bun is pressed on. */
   private squish = 0;
   private squishV = 0;
-  /** Stack scale relative to ingredient units. */
+  /** Stack scale relative to ingredient units: its full size, and what it's drawn at to fit the band. */
   s = 0.6;
+  full = 0.6;
+  /** Tallest stack (tray-local units above the tray) that stays clear of the receipts. */
+  headroom = Infinity;
 
-  constructor(rimColor = PLATE_RIM) {
-    const plate = mesh(faceted(new THREE.CylinderGeometry(1.0, 0.86, 0.1, 28)), PLATE_PAPER);
-    plate.position.y = 0.05;
-    const rim = mesh(faceted(new THREE.TorusGeometry(0.93, 0.05, 4, 28)), rimColor, { ink: false });
+  constructor() {
+    // The tray: a kraft board with a low rim and a paper liner.
+    const board = mesh(faceted(new RoundedBoxGeometry(TRAY.w, 0.12, TRAY.d, 2, 0.1)), TRAY_KRAFT);
+    board.position.y = 0.06;
+    const longRim = faceted(new RoundedBoxGeometry(TRAY.w, 0.1, 0.1, 2, 0.04));
+    const shortRim = faceted(new RoundedBoxGeometry(0.1, 0.1, TRAY.d, 2, 0.04));
+    const rims = [-1, 1].flatMap((k) => {
+      const a = mesh(longRim, TRAY_KRAFT, { ink: 0.012 });
+      a.position.set(0, 0.16, k * (TRAY.d / 2 - 0.05));
+      const b = mesh(shortRim, TRAY_KRAFT, { ink: 0.012 });
+      b.position.set(k * (TRAY.w / 2 - 0.05), 0.16, 0);
+      return [a, b];
+    });
+    const liner = mesh(faceted(new THREE.BoxGeometry(TRAY.w - 0.36, 0.01, TRAY.d - 0.34)), TRAY_LINER, { ink: false });
+    liner.position.y = 0.125;
+    liner.rotation.y = 0.02;
+    const plate = mesh(faceted(new THREE.CylinderGeometry(DISH_R, DISH_R * 0.86, 0.08, 28)), PLATE_PAPER);
+    plate.position.y = 0.04;
+    const rim = mesh(faceted(new THREE.TorusGeometry(DISH_R * 0.93, 0.045, 4, 28)), PLATE_RIM, { ink: false });
     rim.rotation.x = Math.PI / 2;
-    rim.position.y = 0.1;
-    this.ring = new THREE.Mesh(
-      new THREE.RingGeometry(1.08, 1.22, 40),
-      new THREE.MeshBasicMaterial({ color: ACTIVE_RING, transparent: true, opacity: 0.9 }),
-    );
+    rim.position.y = 0.08;
+    this.dish.add(plate, rim);
+    this.dish.position.set(DISH_AT.x, 0.13, DISH_AT.z);
+    // The active outline: a frame just outside the tray, flat on the shelf.
+    const frame = new THREE.Shape();
+    const [fw, fd] = [TRAY.w / 2 + 0.2, TRAY.d / 2 + 0.2];
+    frame.moveTo(-fw, -fd).lineTo(fw, -fd).lineTo(fw, fd).lineTo(-fw, fd).lineTo(-fw, -fd);
+    const hole = new THREE.Path();
+    const [hw, hd] = [TRAY.w / 2 + 0.06, TRAY.d / 2 + 0.06];
+    hole.moveTo(-hw, -hd).lineTo(-hw, hd).lineTo(hw, hd).lineTo(hw, -hd).lineTo(-hw, -hd);
+    frame.holes.push(hole);
+    this.ring = new THREE.Mesh(new THREE.ShapeGeometry(frame), new THREE.MeshBasicMaterial({ color: ACTIVE_RING, transparent: true, opacity: 0.9 }));
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.position.y = 0.02;
-    this.burger.position.y = 0.1;
-    this.group.add(plate, rim, this.ring, this.burger);
+    this.burger.position.set(DISH_AT.x, 0.21, DISH_AT.z);
+    this.group.add(board, ...rims, liner, this.dish, this.ring, this.burger);
+  }
+
+  /** Show the plate (a burger was ordered) or leave the tray bare (drinks or fries only). */
+  setDish(on: boolean): void {
+    this.dish.visible = on;
+    this.burger.position.y = on ? 0.21 : 0.13;
   }
 
   stackTop(): number {
     return stackBases(this.entries.map((e) => e.piece)).top;
   }
 
+  /** The scale a stack of this height draws at so its top stays under the headroom line. */
+  private fitScale(): number {
+    const top = this.stackTop() + 0.15;
+    const room = this.headroom - this.burger.position.y;
+    return Math.max(this.full * MIN_FIT, Math.min(this.full, room / top));
+  }
+
   /** Where a ray meets the top of the stack, in burger-local units (a bun has radius 1), kept on the bun. */
   drawPoint(ray: THREE.Ray): { x: number; z: number } {
-    this.group.updateWorldMatrix(true, false);
-    const pos = new THREE.Vector3().setFromMatrixPosition(this.group.matrixWorld);
+    this.burger.updateWorldMatrix(true, false);
+    const pos = new THREE.Vector3().setFromMatrixPosition(this.burger.matrixWorld);
     const g = new THREE.Vector3().setFromMatrixScale(this.group.matrixWorld).x;
     const scale = g * this.s;
-    const topY = pos.y + g * 0.1 + this.stackTop() * scale;
+    const topY = pos.y + this.stackTop() * scale;
     const p = new THREE.Vector3();
     ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -topY), p);
     const lx = (p.x - pos.x) / scale;
@@ -143,7 +198,7 @@ export class PlateView {
         this.fries = makeFries(true, p.fries.size, p.fries.fill, p.fries);
         this.fries.userData.setCook(p.fries.cook);
         this.fries.scale.setScalar(relScale("fries") * TRAY_SIDES * this.fries.userData.sizeScale);
-        this.fries.position.set(-0.75, 0.1, -0.6);
+        this.fries.position.set(FRIES_AT.x, 0.13, FRIES_AT.z);
         this.group.add(this.fries);
       }
       this.friesKey = fk;
@@ -160,7 +215,7 @@ export class PlateView {
         this.cup.userData.setFill(p.drink.fill);
         dressCup(this.cup, p.drink);
         this.cup.scale.setScalar(relScale("cup") * TRAY_SIDES);
-        this.cup.position.set(0.85, 0.1, -0.65);
+        this.cup.position.set(CUP_AT.x, 0.13, CUP_AT.z);
         this.group.add(this.cup);
       }
       this.cupKey = ck;
@@ -172,6 +227,8 @@ export class PlateView {
   }
 
   update(dt: number): void {
+    // A tall burger shrinks a little, all at once, so its top stays clear of the receipts.
+    this.s += (this.fitScale() - this.s) * Math.min(1, dt * 8);
     for (const e of this.entries) {
       if (e.piece.kind === "cheese") e.obj.userData.update(e.piece);
       if (!e.landed) {
@@ -206,10 +263,17 @@ export class PlateView {
   }
 }
 
-/** The pass shelf is seen nearly side on, so a burger's layers can be counted from the side. */
-const TRAY_PITCH = THREE.MathUtils.degToRad(24);
+/**
+ * The pass shelf is seen from a little above eye level: high enough that the trays read as trays
+ * (not slivers) and the plate as round, low enough that a burger's layers are counted from the side.
+ */
+const TRAY_PITCH = THREE.MathUtils.degToRad(44);
 /** Height the camera centres on: about the middle of a tall burger. */
 const TRAY_LOOK_Y = 0.85;
+/** The receipts hang over the back of the band down to here (a fraction of its height from the top); burgers fit under it. */
+const RECEIPT_LINE = 0.3;
+/** Where the trays' front edges sit, as a fraction of the band's height from its top. */
+const TRAY_FRONT = 0.94;
 const STEEL = "#c9d0ce";
 
 export class TrayView {
@@ -249,11 +313,11 @@ export class TrayView {
     const splash = mesh(faceted(new THREE.BoxGeometry(40, 0.5, 0.15)), "#b9d6a2", { ink: false });
     splash.position.set(0, 0.2, -3.0);
     // The steel pass shelf, its dark front lip, and the heat-lamp bar along the top of the band.
-    const shelf = mesh(faceted(new THREE.BoxGeometry(30, 0.35, 4.4)), STEEL);
-    shelf.position.set(0, -0.18, -0.6);
+    const shelf = mesh(faceted(new THREE.BoxGeometry(30, 0.35, 9)), STEEL);
+    shelf.position.set(0, -0.18, 1.5);
     shelf.receiveShadow = true;
     const lip = mesh(faceted(new THREE.BoxGeometry(30, 0.1, 0.12)), "#7d8784", { ink: false });
-    lip.position.set(0, -0.03, 1.62);
+    lip.position.set(0, -0.03, 5.9);
     const lamp = mesh(faceted(new THREE.BoxGeometry(30, 0.4, 0.8)), "#6f7775");
     lamp.position.set(0, 3.6, -1.4);
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(30, 0.5), new THREE.MeshBasicMaterial({ color: "#ffcf8a", transparent: true, opacity: 0.7 }));
@@ -284,24 +348,37 @@ export class TrayView {
     Object.assign(this.camera, { left: -hh * aspect, right: hh * aspect, top: hh, bottom: -hh });
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
-    // One plate under each customer; swipe a plate up to hand it over.
-    const pts = [0, 1, 2].map((i) => this.groundAt(new THREE.Vector2(((i + 0.5) / 3) * 2 - 1, -0.25)));
+    // One tray under each customer, nearly edge to edge; swipe a tray up to hand it over.
+    const pts = [0, 1, 2].map((i) => this.groundAt(new THREE.Vector2(((i + 0.5) / 3) * 2 - 1, 0)));
     const spacing = pts[1].x - pts[0].x;
-    const r = Math.min(1.4, spacing * 0.39);
+    const r = Math.min(1.45, (spacing * 0.9) / TRAY.w);
+    // Slide the trays toward the camera until their front edges sit near the bottom of the band.
+    const ndcY = (z: number) => new THREE.Vector3(0, 0.13, z).project(this.camera).y;
+    const front = (r * TRAY.d) / 2;
+    const want = 1 - 2 * TRAY_FRONT;
+    const z = ((ndcY(front) - want) * hh) / Math.sin(TRAY_PITCH);
+    // Burgers fit under the receipts: how tall a stack can stand, in tray-local units.
+    const base = new THREE.Vector3(0, 0, z + DISH_AT.z * r).project(this.camera).y;
+    const headroom = ((1 - 2 * RECEIPT_LINE - base) * hh) / Math.cos(TRAY_PITCH) / r;
     this.plates.forEach((p, i) => {
-      p.group.position.set(pts[i].x, 0, 0);
+      p.group.position.set(pts[i].x, 0, z);
       p.group.scale.setScalar(r);
+      p.headroom = headroom;
       this.flags[i].position.set(pts[i].x, -0.1, 1.68);
     });
+    this.flags.forEach((f) => (f.visible = false));
   }
 
-  /** Where the far edge of the plates' rings sits, as a fraction of the band's height from its top. */
+  /** Where the receipts may hang down to, as a fraction of the band's height from its top. Burgers are fitted under it. */
   rimTop(): number {
-    const pv = this.plates[1];
-    const r = 1.22 * pv.group.scale.x;
-    this.camera.updateMatrixWorld();
-    const v = new THREE.Vector3(pv.group.position.x, 0.02, pv.group.position.z - r).project(this.camera);
-    return (1 - v.y) / 2;
+    return RECEIPT_LINE;
+  }
+
+  /** Where a tray's staleness bar sits: along its front lip, under the plate. */
+  staleBarPoint(i: number): THREE.Vector3 {
+    const pv = this.plates[i];
+    const r = pv.group.scale.x;
+    return pv.group.position.clone().add(new THREE.Vector3(DISH_AT.x * r, 0.2 * r, (TRAY.d / 2) * r));
   }
 
   private groundAt(ndc: THREE.Vector2, y = 0): THREE.Vector3 {
@@ -363,9 +440,10 @@ export class TrayView {
       this.ghostT += dt;
       const pv = this.plates[this.ghostSlot];
       const s = pv.group.scale.x;
-      const top = s * (0.1 + pv.stackTop() * pv.s);
-      if (this.ghostAt) this.ghost.position.set(pv.group.position.x + this.ghostAt.x * s * pv.s, top + 0.12, pv.group.position.z + this.ghostAt.z * s * pv.s);
-      else this.ghost.position.set(pv.group.position.x, top + 0.9 + Math.sin(this.ghostT * 6) * 0.08, pv.group.position.z);
+      const b = pv.group.position.clone().addScaledVector(pv.burger.position, s);
+      const top = b.y + s * pv.stackTop() * pv.s;
+      if (this.ghostAt) this.ghost.position.set(b.x + this.ghostAt.x * s * pv.s, top + 0.12, b.z + this.ghostAt.z * s * pv.s);
+      else this.ghost.position.set(b.x, top + 0.9 + Math.sin(this.ghostT * 6) * 0.08, b.z);
       this.ghost.scale.setScalar(s * pv.s);
     }
   }

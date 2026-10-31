@@ -68,7 +68,7 @@ const SHOWS: Record<string, () => void> = {
     const gr = makeGriddle();
     const gf = gr.userData.footprint;
     at(gr, 4.0 - gf.w / 2 - 0.1, 0, 2.7 - 0.35 - gf.d / 2);
-    gr.userData.setWarm(true);
+    gr.userData.setZone(2, "warm");
     const shelf = makeWarmShelf({ legs: 2.3 });
     at(shelf, gr.position.x, 2.3, -2.7 + 0.75);
     const s = gr.userData.spots.surface;

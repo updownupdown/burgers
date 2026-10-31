@@ -2,7 +2,7 @@
 // targets come from the counter's hit proxies, sauce is lifted / drawn / put back, cartons are
 // carried across the fryer's two stops with the edge carry, sleeves are sized.
 const path = require('path');
-const { open, gesture, line, hold, step, state, out } = require('./lib.cjs');
+const { open, gesture, line, hold, step, state, out, enterShift } = require('./lib.cjs');
 const OUT = out;
 const ACTION = 0.5;
 const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
@@ -13,7 +13,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
   p.on('console', m => { if (m.type() === 'error') errors++; });
   await p.evaluate(([n]) => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: n, tutorialDone: true })), [+(process.env.STOP || 0)]);
   await p.reload(); await p.waitForTimeout(600);
-  await p.click('[data-home=open]');
+  await enterShift(p);
   await p.evaluate(() => window.__bv.manual(true));
   const ev = (f, a) => p.evaluate(f, a);
   // Screen point of a hit proxy's centre: hp('bin', {kind: 'patty'}).
@@ -23,7 +23,6 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
     if (!m) throw new Error('no proxy ' + type + JSON.stringify(f));
     return window.__bv.project('counter', m.position.x, m.position.y, m.position.z);
   }, [type, f]);
-  const holdAt = (i) => ev((i) => { const q = window.__bv.counter.holdPoint(i); return window.__bv.project('counter', q.x, q.y + 0.2, q.z); }, i);
   const plate = (i) => ev((i) => { const g = window.__bv.trayView.plates[i].group.position; return window.__bv.project('tray', g.x, 0.3, g.z); }, i);
   const items = () => ev(() => window.__bv.counter.grillItems.map((it, i) => ({ i, kind: it.piece.kind, cook: it.piece.cook.slice(), flipping: it.flipT >= 0, uid: it.piece.uid, melt: it.topping ? (it.topping.piece.melt ?? 0) : -1, x: it.x, z: it.z, scr: window.__bv.project('counter', it.x, 0.95, it.z) })));
   const stop = async (s) => { await ev((s) => window.__bv.goToStop(s), s); await step(p, 0.6); };
@@ -45,7 +44,17 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
     await step(p, ACTION);
   };
   const W = 412;
-  const spots = [[0.75, -0.3], [1.85, -0.3], [2.95, -0.3], [0.75, 0.6], [1.85, 0.6], [2.95, 0.6], [0.75, 1.45], [1.85, 1.45], [2.95, 1.45]];
+  // Cook on the two hot zones; turn the third (off at the start of a shift) to warm and park
+  // finished food there until its layer comes up.
+  const zoneSpots = (z) => ev((z) => window.__bv.counter.zoneSpots(z).map((q) => [q.x, q.z]), z);
+  const spots = [...(await zoneSpots(0)), ...(await zoneSpots(1))];
+  const warmSpots = await zoneSpots(2);
+  const setZone = async (i, heat) => {
+    for (let n = 0; n < 3 && (await ev((i) => window.__bv.counter.zones[i], i)) !== heat; n++) await tap(await hp('zone', { idx: i }));
+    if ((await ev((i) => window.__bv.counter.zones[i], i)) !== heat) console.log('ZONE BUTTON DID NOT CYCLE');
+  };
+  await page(1);
+  await setZone(2, 'warm');
   const log = [];
   let refills = 0, guard = 0, shots = 0;
   while (guard++ < 400) {
@@ -61,7 +70,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
     const need = order.layers.map((l, idx) => ({ ...l, idx })).filter(l => ['patty', 'bacon', 'egg', 'pineapple'].includes(l.kind) || (l.kind === 'bun' && l.toasted));
     const used = new Set((await items()).map(i => i.uid));
     let si = 0;
-    const assigned = {}; const parked = new Map(); const skip = new Set();
+    const assigned = {}; const skip = new Set();
     for (const n of need) {
       const [bx, by] = await hp('bin', { kind: n.kind });
       const occupied = await items();
@@ -105,12 +114,6 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       const cheeseOn = async (o) => { const [cx, cy] = await hp('bin', { kind: 'cheese' }); await act(line(cx, cy, o.scr[0], o.scr[1], 10)); };
       if (assigned[li]) {
         for (let w = 0; w < 400; w++) {
-          if (parked.has(assigned[li])) {
-            const hi = parked.get(assigned[li]); parked.delete(assigned[li]);
-            const [hx, hy] = await holdAt(hi);
-            await act(line(hx, hy, px, py, 12));
-            break;
-          }
           const it = (await items()).find(i => i.uid === assigned[li]);
           if (!it) break;
           for (const o of await items()) {
@@ -124,12 +127,14 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
             } else if (+ln[0] !== li) {
               const t2 = ex.kind === 'patty' ? TARGET[ex.doneness] : ex.kind === 'bacon' ? 0.6 : 0.5;
               const done2 = ex.kind === 'patty' || ex.kind === 'bacon' ? o.cook[0] >= t2 - 0.02 && o.cook[1] >= t2 - 0.02 : o.cook[0] >= t2;
-              const free = done2 ? await ev(() => window.__bv.counter.holds.findIndex(h => !h.layers.length)) : -1;
-              if (free >= 0 && ![...parked.values()].includes(free)) {
+              const warm = await ev(() => window.__bv.counter.zones[2] === 'warm');
+              const onWarm = o.x > warmSpots[0][0] - 0.8;
+              const all = await items();
+              const free = done2 && warm && !onWarm ? warmSpots.find((q) => !all.some((g) => Math.hypot(g.x - q[0], g.z - q[1]) < 0.9)) : null;
+              if (free) {
                 if (wantsMelt(+ln[0]) && o.melt < 0) { await cheeseOn(o); skip.add(+ln[0] + 1); }
-                const [rx, ry] = await holdAt(free);
+                const [rx, ry] = await ev(([x, z]) => window.__bv.project('counter', x, 0.9, z), free);
                 await act(line(o.scr[0], o.scr[1], rx, ry, 12));
-                if (await ev((u) => !window.__bv.counter.grillItems.some(g => g.piece.uid === u), o.uid)) parked.set(o.uid, free);
               }
             }
           }

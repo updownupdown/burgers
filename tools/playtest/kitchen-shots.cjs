@@ -1,6 +1,6 @@
 // Screenshots of the kitchen with the longest orders the game makes and a burger on every plate.
 // PORT=4175 node tools/playtest/kitchen-shots.cjs [tag]  ->  tools/playtest/out/kitchen-<tag>-<w>x<h>.png
-const { open, step, out } = require('./lib.cjs');
+const { open, step, out, enterShift } = require('./lib.cjs');
 const tag = process.argv[2] || 'after';
 const sizes = (process.env.SIZES || '390x844,360x740,430x932').split(',').map((s) => s.split('x').map(Number));
 (async () => {
@@ -9,7 +9,7 @@ const sizes = (process.env.SIZES || '390x844,360x740,430x932').split(',').map((s
     await p.evaluate(() => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: 2, tutorialDone: true })));
     await p.reload();
     await p.waitForTimeout(600);
-    await p.click('[data-home=open]');
+    await enterShift(p);
     await p.evaluate((a) => (window.__shotActive = a), +(process.env.ACTIVE || 0));
     await p.evaluate(() => window.__bv.manual(true));
     await step(p, 3);
@@ -45,6 +45,7 @@ const sizes = (process.env.SIZES || '390x844,360x740,430x932').split(',').map((s
       plates.forEach((ks, i) => {
         const s = g.slots[i];
         s.plate = { layers: ks.map((k) => pc(k)), fries: i === 1 ? { cook: 0.72, size: 'M', fill: 1, salt: 0.6 } : null, drink: i === 1 ? { flavor: 'pink', fill: 0.9, size: 'M', ice: true, lid: true, straw: true } : null };
+        window.__bv.trayView.plates[i].setDish(s.order.layers.length > 0);
         window.__bv.trayView.plates[i].sync(s.plate, false, () => {});
       });
       g.active = +(window.__shotActive || 0);

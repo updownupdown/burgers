@@ -1,0 +1,38 @@
+/*
+ * The drawn map's own rules: markings, roads and the locked-region veil. Panels, chrome,
+ * town markers and the evening lighting stay in home.css. Selectors start with .home-map so
+ * they win over the older road rules in home.css whatever order the two files load in.
+ */
+
+/* hachures: pencil strokes falling off a ridge, darker on the shadow side */
+.home-map .home-svg .hach { fill: none; stroke: #6b5a4b; stroke-width: 0.2; stroke-linecap: round; }
+.home-map .home-svg .hach.lit { opacity: 0.2; }
+.home-map .home-svg .hach.dark { opacity: 0.4; }
+.home-map .home-svg .stipple { opacity: 0.45; }
+
+/* region names: a cartographer's italic, spaced out, quiet */
+.home-map .home-svg .rname { font-size: 4.6px; letter-spacing: 0.14em; fill: #4a5661; opacity: 0.9; }
+
+/* roads: thin cased lines; highways wider with a centre line; locked roads dotted */
+.home-map .home-svg .road-case { stroke: #8a7557; stroke-width: 1.25; }
+.home-map .home-svg .road:not(.reach):not(.locked) { stroke: #fbf4e4; stroke-width: 0.8; }
+.home-map .home-svg .road-dash { display: none; }
+.home-map .home-svg .road-case.hw { stroke-width: 1.85; }
+.home-map .home-svg .road.hw:not(.reach):not(.locked) { stroke: #f1d79f; stroke-width: 1.3; }
+.home-map .home-svg .road-dash.hw { display: block; stroke: #fff9ea; stroke-width: 0.2; stroke-dasharray: 1.4 1; }
+.home-map .home-svg .road.locked { stroke: #a39a8c; stroke-width: 0.45; stroke-dasharray: 0.6 1.1; stroke-linecap: round; }
+.home-map .home-svg .road.locked.hw { stroke-width: 0.65; }
+
+/* locked regions: the terrain fades under a paper veil, a light survey hatch and a dotted limit */
+.home-map .home-region .wash { transition: opacity 0.3s; }
+.home-map .home-region .veil { fill: #d6d0c4; opacity: 0; transition: opacity 0.3s; }
+.home-map .home-region .bound { fill: none; stroke: #8f8779; stroke-width: 0.35; stroke-dasharray: 0.4 1.1; stroke-linecap: round; opacity: 0; }
+.home-map .home-static.lock-mountains .home-region[data-region="mountains"] .wash,
+.home-map .home-static.lock-coast .home-region[data-region="coast"] .wash,
+.home-map .home-static.lock-desert .home-region[data-region="desert"] .wash { opacity: 0.25; }
+.home-map .home-static.lock-mountains .home-region[data-region="mountains"] .veil,
+.home-map .home-static.lock-coast .home-region[data-region="coast"] .veil,
+.home-map .home-static.lock-desert .home-region[data-region="desert"] .veil { opacity: 0.7; }
+.home-map .home-static.lock-mountains .home-region[data-region="mountains"] .bound,
+.home-map .home-static.lock-coast .home-region[data-region="coast"] .bound,
+.home-map .home-static.lock-desert .home-region[data-region="desert"] .bound { opacity: 0.8; }

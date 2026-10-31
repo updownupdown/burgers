@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { DrinkId, Size } from "../../game/types";
-import { DRINK_COLOR } from "../../game/types";
+import { bakedMesh, bakeShared, Parts, type Baked } from "../bake";
 import { faceted, grade, lineColor, lineMaterial, mesh, shareGeometry, toon } from "../materials";
 
 /*
@@ -21,120 +21,154 @@ export interface CupObject extends THREE.Group {
   };
 }
 
-// A large cup, before CUP_SCALE: 0.88 wide at the rim, 1.05 tall (a patty is ~2 wide).
-const CUP_R_TOP = 0.44;
-const CUP_R_BOT = 0.33;
-const CUP_H = 1.05;
-const FLOOR_Y = 0.07;
-const CUP_WALL = shareGeometry(faceted(new THREE.CylinderGeometry(CUP_R_TOP, CUP_R_BOT, CUP_H, 14, 1, true)));
-const CUP_BASE = shareGeometry(faceted(new THREE.CylinderGeometry(CUP_R_BOT + 0.01, CUP_R_BOT - 0.02, 0.07, 14)));
-const CUP_FLOOR = shareGeometry(new THREE.CircleGeometry(CUP_R_BOT + 0.005, 14));
-const CUP_RIM = shareGeometry(faceted(new THREE.TorusGeometry(CUP_R_TOP, 0.035, 6, 14)));
-const CUP_STRIPE = shareGeometry(faceted(new THREE.CylinderGeometry(0.425, 0.395, 0.26, 14, 1, true)));
-const CUP_LIQUID = shareGeometry(faceted(new THREE.CylinderGeometry(0.42, 0.3, 1, 14)));
-const ICE_CUBE = shareGeometry(faceted(new THREE.BoxGeometry(0.17, 0.15, 0.17)));
+// Cups in cup units: real paper-cup sizes in study units (10 cm). Draw them at SCALE.cup.
+// Straight tapered walls (base 0.74 of the rim), a flavour band from 0.4 to 0.65 of the height.
+/** Rim radius and height of each cup size, in cup units. */
+export const CUP_DIMS: Record<Size, { r: number; h: number }> = { S: { r: 0.36, h: 1.1 }, M: { r: 0.44, h: 1.45 }, L: { r: 0.5, h: 1.75 } };
+const TAPER = 0.74;
+const FLOOR_Y = 0.05;
+const SEG = 28;
+
+/** Cup sizes as width and height factors on the large cup (kept for older call sites). */
+export const CUP_SCALE: Record<Size, [number, number]> = {
+  S: [CUP_DIMS.S.r / CUP_DIMS.L.r, CUP_DIMS.S.h / CUP_DIMS.L.h],
+  M: [CUP_DIMS.M.r / CUP_DIMS.L.r, CUP_DIMS.M.h / CUP_DIMS.L.h],
+  L: [1, 1],
+};
+
+/** Height of the drink's surface above the cup's base at a fill (0..1), in cup units. */
+export function cupSurfaceY(size: Size, fill: number): number {
+  return FLOOR_Y + Math.max(0, Math.min(1, fill)) * (CUP_DIMS[size].h - 0.08);
+}
+
+const ICE_CUBE = shareGeometry(faceted(new THREE.BoxGeometry(0.19, 0.17, 0.19)));
 const LID = shareGeometry(faceted(new THREE.CylinderGeometry(0.47, 0.455, 0.08, 14)));
 const LID_RIDGE = shareGeometry(faceted(new THREE.TorusGeometry(0.29, 0.035, 6, 14)));
-const LID_HOLE = shareGeometry(new THREE.CircleGeometry(0.065, 8));
-const STRAW = shareGeometry(faceted(new THREE.CylinderGeometry(0.042, 0.042, 0.78, 6)));
-const STRAW_TIP = shareGeometry(faceted(new THREE.CylinderGeometry(0.042, 0.042, 0.3, 6)));
-const STRAW_BAND = shareGeometry(faceted(new THREE.CylinderGeometry(0.047, 0.047, 0.07, 6)));
 
-const CUP_PAPER = "#f3f1ea";
+const CUP_PAPER = "#f6f3ec";
 const CUP_INSIDE = "#d9d4c6";
 const ICE = "#e4f5fb";
 const STRAW_RED = "#e5432b";
+/** Drink colours as the study painted them: the band on the cup and the liquid inside. */
+const DRINK_PAINT: Record<DrinkId, string> = { pine: "#7dbd8a", pink: "#f3a3b8", cola: "#3b1d1b", water: "#cfe8f2", tea: "#c3731f" };
 
-/** Cup sizes: width and height factors on the large cup. They read as three different cups, and still nest. */
-export const CUP_SCALE: Record<Size, [number, number]> = { S: [0.72, 0.66], M: [0.86, 0.84], L: [1, 1] };
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const lathe = (pts: [number, number][]) => faceted(new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), SEG));
 
-/** Where the ice cubes sit in a cup, around the centre, jittered so they read as a handful. */
-const CUP_ICE: { x: number; z: number; r: number; dy: number }[] = [
-  { x: 0.12, z: -0.1, r: 0.3, dy: 0 },
-  { x: -0.15, z: 0.12, r: 1.1, dy: -0.03 },
-  { x: -0.05, z: -0.2, r: 2.1, dy: 0.04 },
-  { x: 0.18, z: 0.16, r: 0.7, dy: -0.06 },
-  { x: -0.2, z: -0.06, r: 1.6, dy: 0.02 },
+/** The paper shell of a cup (wall, rolled rim, base, flavour band), baked once per size and band colour. */
+const SHELLS = new Map<string, Baked>();
+function shell(size: Size, flavor: DrinkId | null): Baked {
+  const key = size + (flavor ?? "-");
+  let b = SHELLS.get(key);
+  if (b) return b;
+  const { r: rT, h: H } = CUP_DIMS[size];
+  const rB = rT * TAPER;
+  const p = new Parts();
+  // The thin wall carries no outline of its own (its inner face's hull would show through the
+  // outer face); a bare outer skin with a base carries it instead.
+  p.add(lathe([[rB, 0], [rT, H], [rT + 0.025, H + 0.01], [rT - 0.012, H + 0.01], [rB - 0.012, FLOOR_Y], [0, FLOOR_Y]]), CUP_PAPER, { ink: false });
+  p.add(lathe([[0, 0], [rB, 0], [rT, H]]), CUP_PAPER, { ink: 0.016 });
+  p.add(faceted(new THREE.TorusGeometry(rT + 0.008, 0.022, 4, SEG)), CUP_PAPER, { p: [0, H + 0.005, 0], r: [Math.PI / 2, 0, 0], ink: 0.012 });
+  p.add(lathe([[lerp(rB, rT, 0.4) + 0.006, H * 0.4], [lerp(rB, rT, 0.65) + 0.006, H * 0.65]]), flavor ? DRINK_PAINT[flavor] : "#c9c4b8", { ink: false });
+  p.add(new THREE.CylinderGeometry(rB - 0.012, rB - 0.012, 0.004, SEG), CUP_INSIDE, { p: [0, FLOOR_Y + 0.004, 0], ink: false });
+  SHELLS.set(key, (b = bakeShared(p)));
+  return b;
+}
+
+/** Liquid at each fill step, per size, so pouring reuses geometry. */
+const FILL_STEPS = 40;
+const LIQUID = new Map<string, THREE.BufferGeometry>();
+function liquidGeo(size: Size, fill: number): THREE.BufferGeometry {
+  const step = Math.max(1, Math.round(Math.min(1, fill) * FILL_STEPS));
+  const key = size + step;
+  let g = LIQUID.get(key);
+  if (g) return g;
+  const { r: rT, h: H } = CUP_DIMS[size];
+  const rB = rT * TAPER;
+  const top = cupSurfaceY(size, step / FILL_STEPS);
+  const rr = lerp(rB, rT, top / H) - 0.02;
+  g = shareGeometry(lathe([[0, FLOOR_Y], [rB - 0.02, FLOOR_Y], [rr, top], [0, top]]));
+  LIQUID.set(key, g);
+  return g;
+}
+
+/** Lid and straw for a size, baked once. */
+const TOPS = new Map<Size, { lid: Baked; straw: Baked }>();
+function tops(size: Size): { lid: Baked; straw: Baked } {
+  let t = TOPS.get(size);
+  if (t) return t;
+  const { r: rT, h: H } = CUP_DIMS[size];
+  const lid = new Parts();
+  lid.add(new THREE.CylinderGeometry(rT + 0.03, rT + 0.02, 0.07, SEG), "#f8f8f4", { p: [0, H + 0.04, 0], ink: 0.014 });
+  lid.add(new THREE.TorusGeometry(rT * 0.62, 0.03, 5, SEG), "#f8f8f4", { p: [0, H + 0.08, 0], r: [Math.PI / 2, 0, 0], ink: 0.01 });
+  lid.add(new THREE.CylinderGeometry(0.06, 0.06, 0.01, 10), "#3a3633", { p: [rT * 0.3, H + 0.078, 0.02], ink: false });
+  // The straw leans back from the lid's hole and bends over at the top, so it reads from above.
+  const straw = new Parts();
+  const sp = new Parts();
+  sp.add(new THREE.CylinderGeometry(0.05, 0.05, 0.95, 8), STRAW_RED, { p: [0, 0.475, 0], ink: 0.018 });
+  sp.add(new THREE.CylinderGeometry(0.056, 0.056, 0.07, 8), "#fbe9e4", { p: [0, 0.72, 0], ink: false });
+  sp.add(new THREE.CylinderGeometry(0.05, 0.05, 0.34, 8), STRAW_RED, { p: [0.13, 1.04, 0], r: [0, 0, -0.95], ink: 0.018 });
+  straw.addParts(sp, { p: [rT * 0.3, H - 0.2, 0.02], r: [0.1, 0, -0.14] });
+  TOPS.set(size, (t = { lid: bakeShared(lid), straw: bakeShared(straw) }));
+  return t;
+}
+
+/** Where the ice cubes sit, as fractions of the surface radius, jittered so they read as a handful. */
+const CUP_ICE: { a: number; q: number; r: number; dy: number }[] = [
+  { a: 0.3, q: 0.25, r: 0.3, dy: 0 },
+  { a: 2.7, q: 0.55, r: 1.1, dy: -0.03 },
+  { a: 5.1, q: 0.6, r: 2.1, dy: 0.03 },
+  { a: 1.4, q: 0.6, r: 0.7, dy: -0.05 },
+  { a: 3.9, q: 0.4, r: 1.6, dy: 0.02 },
 ];
 
 /**
- * A cup: paper wall with a visible floor and rim, the drink inside, and optional ice,
- * lid and straw. With no flavour it's a plain empty cup for the stacks. `lid` is only
- * the starting lid state; `setLid` toggles it later.
+ * A paper cup, in cup units (draw at SCALE.cup): the drink inside, and optional ice, lid and
+ * straw. With no flavour it's a plain empty cup for the stacks. `lid` is only the starting lid
+ * state; `setLid` toggles it later.
  */
 export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"): CupObject {
   const g = new THREE.Group() as CupObject;
-  const body = new THREE.Group();
-  const [sw, sh] = CUP_SCALE[size];
-  body.scale.set(sw, sh, sw);
-  g.add(body);
+  const { r: rT, h: H } = CUP_DIMS[size];
+  const rB = rT * TAPER;
+  // The shell casts a shadow but takes none: its own rolled lip would stripe the wall.
+  const paper = bakedMesh(shell(size, flavor));
+  paper.receiveShadow = false;
+  g.add(paper);
 
-  const wall = mesh(CUP_WALL, CUP_PAPER, { side: THREE.DoubleSide });
-  wall.position.y = CUP_H / 2;
-  const base = mesh(CUP_BASE, CUP_PAPER);
-  base.position.y = 0.035;
-  const floor = mesh(CUP_FLOOR, CUP_INSIDE, { ink: false, shadow: false });
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.y = FLOOR_Y;
-  const rim = mesh(CUP_RIM, CUP_PAPER, { ink: 1.12 });
-  rim.rotation.x = Math.PI / 2;
-  rim.position.y = CUP_H;
-  const stripe = mesh(CUP_STRIPE, flavor ? DRINK_COLOR[flavor] : "#c9c4b8", { side: THREE.DoubleSide, ink: false });
-  stripe.position.y = 0.56;
-  body.add(wall, base, floor, rim, stripe);
-
-  const liquidColor = flavor ? DRINK_COLOR[flavor] : "#ffffff";
-  const liquid = mesh(CUP_LIQUID, liquidColor, { ink: false, shadow: false, opacity: flavor === "water" ? 0.62 : 1 });
-  body.add(liquid);
+  const liquid = new THREE.Mesh(liquidGeo(size, 1), toon(flavor ? DRINK_PAINT[flavor] : "#ffffff", { opacity: flavor === "water" ? 0.7 : 1 }));
+  liquid.receiveShadow = true;
+  g.add(liquid);
 
   const ice = new THREE.Group();
   for (const c of CUP_ICE) {
     const cube = mesh(ICE_CUBE, ICE, { ink: 1.12, shadow: false });
-    cube.position.set(c.x, c.dy, c.z);
+    cube.position.set(Math.cos(c.a) * c.q, c.dy, Math.sin(c.a) * c.q);
     cube.rotation.set(c.r * 0.5, c.r, c.r * 0.3);
     ice.add(cube);
   }
   ice.visible = false;
-  body.add(ice);
+  g.add(ice);
 
-  const top = new THREE.Group();
-  const cap = mesh(LID, "#f8f8f4");
-  cap.position.y = CUP_H + 0.04;
-  const ridge = mesh(LID_RIDGE, "#f8f8f4", { ink: 1.1 });
-  ridge.rotation.x = Math.PI / 2;
-  ridge.position.y = CUP_H + 0.085;
-  const hole = mesh(LID_HOLE, "#3a3633", { ink: false, shadow: false });
-  hole.rotation.x = -Math.PI / 2;
-  hole.position.set(0.13, CUP_H + 0.085, 0.02);
-  top.add(cap, ridge, hole);
+  const t = tops(size);
+  const top = bakedMesh(t.lid);
   top.visible = lid;
-  body.add(top);
-
-  // The straw leans back from the hole and bends over at the top, so it reads from above.
-  const straw = new THREE.Group();
-  straw.position.set(0.13, CUP_H - 0.1, 0.02);
-  straw.rotation.z = -0.14;
-  straw.rotation.x = 0.1;
-  const tube = mesh(STRAW, STRAW_RED, { ink: 1.18, shadow: false });
-  tube.position.y = 0.39;
-  const band = mesh(STRAW_BAND, "#fbe9e4", { ink: false, shadow: false });
-  band.position.y = 0.6;
-  const tip = mesh(STRAW_TIP, STRAW_RED, { ink: 1.18, shadow: false });
-  tip.position.set(0.11, 0.86, 0);
-  tip.rotation.z = -0.95;
-  straw.add(tube, band, tip);
+  const straw = bakedMesh(t.straw, { shadow: false });
   straw.visible = false;
-  body.add(straw);
+  g.add(top, straw);
 
   let fill = 0;
+  let iceOn = false;
   const place = () => {
-    const h = Math.max(0.001, Math.min(1, fill)) * (CUP_H - FLOOR_Y - 0.03);
     liquid.visible = fill > 0.01;
-    const r = (CUP_R_BOT + 0.11 * (FLOOR_Y + h) / CUP_H - 0.015) / 0.42;
-    liquid.scale.set(r, h, r);
-    liquid.position.y = FLOOR_Y + h / 2;
+    if (liquid.visible) liquid.geometry = liquidGeo(size, fill);
     // Ice floats at the surface, or sits on the floor of an empty cup.
-    ice.position.y = Math.min(CUP_H - 0.12, FLOOR_Y + h + (fill > 0.01 ? -0.03 : 0.07));
+    const y = fill > 0.01 ? cupSurfaceY(size, fill) - 0.04 : FLOOR_Y + 0.09;
+    const r = lerp(rB, rT, y / H) - 0.1;
+    // ...but never through the lid.
+    ice.position.y = Math.min(H - 0.17, y);
+    ice.scale.set(r, 1, r);
+    for (const c of ice.children) c.scale.set(1 / r, 1, 1 / r);
   };
   g.userData = {
     flavor: flavor ?? "cola",
@@ -142,11 +176,14 @@ export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"):
       fill = f;
       place();
     },
+    // The lid is opaque, so ice under it is hidden rather than left to poke through.
     setIce: (on) => {
-      ice.visible = on;
+      iceOn = on;
+      ice.visible = iceOn && !top.visible;
     },
     setLid: (on) => {
       top.visible = on;
+      ice.visible = iceOn && !on;
     },
     setStraw: (on) => {
       straw.visible = on;

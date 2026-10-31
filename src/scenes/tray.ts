@@ -3,10 +3,17 @@ import type { Piece, Plate } from "../game/types";
 import { dressCup } from "../render/cup";
 import { makeCup, makeFood, makeFries, stackBases, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
+import { relScale } from "../render/units";
 
 /** Plain paper plates; only the one being worked on gets a ring, in the accent colour. */
 const PLATE_PAPER = "#f7f4ec";
 const PLATE_RIM = "#e4dccb";
+/**
+ * Sides on a plate draw at this share of their true size next to the burger. The low pass band is
+ * short: a true-size cup's lid sits on the band's top edge and its straw leaves the picture, and
+ * the lid and straw are what you check before serving.
+ */
+const TRAY_SIDES = 0.6;
 const ACTIVE_RING = "#c8472e";
 const TRAY_VIEW_HALF_H = 2.2;
 
@@ -23,6 +30,9 @@ interface StackEntry {
   squashV: number;
   offX: number;
   offZ: number;
+  /** The readable stack: each layer turned a little and set back so the rims below show. */
+  yaw: number;
+  back: number;
   onLand?: () => void;
 }
 
@@ -63,6 +73,22 @@ export class PlateView {
     return stackBases(this.entries.map((e) => e.piece)).top;
   }
 
+  /** Where a ray meets the top of the stack, in burger-local units (a bun has radius 1), kept on the bun. */
+  drawPoint(ray: THREE.Ray): { x: number; z: number } {
+    this.group.updateWorldMatrix(true, false);
+    const pos = new THREE.Vector3().setFromMatrixPosition(this.group.matrixWorld);
+    const g = new THREE.Vector3().setFromMatrixScale(this.group.matrixWorld).x;
+    const scale = g * this.s;
+    const topY = pos.y + g * 0.1 + this.stackTop() * scale;
+    const p = new THREE.Vector3();
+    ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -topY), p);
+    const lx = (p.x - pos.x) / scale;
+    const lz = (p.z - pos.z) / scale;
+    const r = Math.hypot(lx, lz);
+    const k = r > 1.05 ? 1.05 / r : 1;
+    return { x: lx * k, z: lz * k };
+  }
+
   sync(p: Plate, animate: boolean, onLand: () => void): void {
     const want = p.layers.map((l, i) => ({ l, role: (i === 0 ? "bottom" : "top") as BunRole }));
     let same = 0;
@@ -71,7 +97,7 @@ export class PlateView {
       this.burger.remove(e.obj);
       disposeObject(e.obj);
     }
-    const { bases } = stackBases(want.map((w) => w.l.piece));
+    const { bases, yaw, back } = stackBases(want.map((w) => w.l.piece));
     for (let i = same; i < want.length; i++) {
       const y = bases[i];
       const { l, role } = want[i];
@@ -90,10 +116,17 @@ export class PlateView {
         squashV: 0,
         offX: l.offX,
         offZ: l.offZ,
+        yaw: 0,
+        back: 0,
         onLand,
       };
       this.entries.push(e);
     }
+    this.entries.forEach((e, i) => {
+      e.yaw = yaw[i];
+      e.back = back[i];
+      e.obj.rotation.y = e.yaw;
+    });
     // Sauce layers grow while being drawn.
     p.layers.forEach((l, i) => {
       if (l.piece.stroke) this.entries[i]?.obj.userData.update(l.piece);
@@ -109,8 +142,8 @@ export class PlateView {
       if (p.fries) {
         this.fries = makeFries(true, p.fries.size, p.fries.fill, p.fries);
         this.fries.userData.setCook(p.fries.cook);
-        this.fries.scale.setScalar(0.62 * this.fries.userData.sizeScale);
-        this.fries.position.set(-0.78, 0.1, -0.72);
+        this.fries.scale.setScalar(relScale("fries") * TRAY_SIDES * this.fries.userData.sizeScale);
+        this.fries.position.set(-0.75, 0.1, -0.6);
         this.group.add(this.fries);
       }
       this.friesKey = fk;
@@ -126,8 +159,8 @@ export class PlateView {
         this.cup = makeCup(p.drink.flavor, !!p.drink.lid, p.drink.size);
         this.cup.userData.setFill(p.drink.fill);
         dressCup(this.cup, p.drink);
-        this.cup.scale.setScalar(0.62);
-        this.cup.position.set(0.8, 0.1, -0.72);
+        this.cup.scale.setScalar(relScale("cup") * TRAY_SIDES);
+        this.cup.position.set(0.85, 0.1, -0.65);
         this.group.add(this.cup);
       }
       this.cupKey = ck;
@@ -167,55 +200,80 @@ export class PlateView {
       const h = e.baseY + 0.15;
       const sq = THREE.MathUtils.clamp(e.squash * 0.05, -0.3, 0.3);
       e.obj.scale.set(1 + sq * 0.5, 1 - sq, 1 + sq * 0.5);
-      e.obj.position.set(e.offX + this.wobble * 0.05 * h * h, e.y, e.offZ);
+      e.obj.position.set(e.offX + this.wobble * 0.05 * h * h, e.y, e.offZ - e.back);
       e.obj.rotation.z = -this.wobble * 0.04 * h;
     }
   }
 }
 
+/** The pass shelf is seen nearly side on, so a burger's layers can be counted from the side. */
+const TRAY_PITCH = THREE.MathUtils.degToRad(24);
+/** Height the camera centres on: about the middle of a tall burger. */
+const TRAY_LOOK_Y = 0.85;
+const STEEL = "#c9d0ce";
+
 export class TrayView {
   scene = new THREE.Scene();
   /**
-   * Orthographic, so the three plates look identical. The band is very wide (about 3.4:1), and a
-   * perspective camera wide enough to see all three plates skews the outer two badly.
+   * The tray is the window ledge: a steel pass shelf under a heat lamp, seen almost side on
+   * through a long lens. Orthographic is the long-lens limit, so the three plates look identical
+   * across the very wide band (about 3.4:1).
    */
   camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 60);
   plates: PlateView[] = [];
+  /** A coloured tab on the shelf lip under each plate; the active plate's is lit. */
+  private flags: THREE.Mesh[] = [];
   /** The shadow-casting light, so the graphics setting can soften or disable it. */
   sun: THREE.DirectionalLight;
   private raycaster = new THREE.Raycaster();
   private ghost: THREE.Object3D | null = null;
   private ghostSlot = -1;
   private ghostT = 0;
+  /** While a sauce is being drawn, the held bottle sits over this point instead of bobbing over the stack. */
+  private ghostAt: { x: number; z: number } | null = null;
   constructor() {
-    this.scene.background = new THREE.Color("#efe6d8");
+    this.scene.background = new THREE.Color("#d6cdbf");
     this.scene.add(new THREE.HemisphereLight("#fff4dc", "#7a6a9a", 1.3));
     const sun = new THREE.DirectionalLight("#fff1d6", 1.9);
     this.sun = sun;
-    sun.position.set(2, 8, 5);
+    sun.position.set(3, 9, 9);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 512);
-    Object.assign(sun.shadow.camera, { left: -7, right: 7, top: 4, bottom: -4, near: 1, far: 25 });
+    Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 5, bottom: -5, near: 1, far: 30 });
     sun.shadow.bias = -0.002;
     this.scene.add(sun);
 
-    const counter = new THREE.Mesh(new THREE.BoxGeometry(40, 0.4, 12), toon("#efe6d8"));
-    counter.position.set(0, -0.32, 0);
-    counter.receiveShadow = true;
-    this.scene.add(counter);
-    const tray = mesh(faceted(new THREE.BoxGeometry(30, 0.12, 3.1)), "#ff8a70", { ink: false });
-    tray.position.y = -0.06;
-    tray.receiveShadow = true;
-    this.scene.add(tray);
+    // The window frame behind the ledge, in the truck's wall colour, with the splash line.
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(40, 8, 0.4), toon("#d6cdbf"));
+    wall.position.set(0, 2, -3.2);
+    const splash = mesh(faceted(new THREE.BoxGeometry(40, 0.5, 0.15)), "#b9d6a2", { ink: false });
+    splash.position.set(0, 0.2, -3.0);
+    // The steel pass shelf, its dark front lip, and the heat-lamp bar along the top of the band.
+    const shelf = mesh(faceted(new THREE.BoxGeometry(30, 0.35, 4.4)), STEEL);
+    shelf.position.set(0, -0.18, -0.6);
+    shelf.receiveShadow = true;
+    const lip = mesh(faceted(new THREE.BoxGeometry(30, 0.1, 0.12)), "#7d8784", { ink: false });
+    lip.position.set(0, -0.03, 1.62);
+    const lamp = mesh(faceted(new THREE.BoxGeometry(30, 0.4, 0.8)), "#6f7775");
+    lamp.position.set(0, 3.6, -1.4);
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(30, 0.5), new THREE.MeshBasicMaterial({ color: "#ffcf8a", transparent: true, opacity: 0.7 }));
+    glow.rotation.x = Math.PI / 2;
+    glow.position.set(0, 3.39, -1.4);
+    this.scene.add(wall, splash, shelf, lip, lamp, glow);
 
+    const flagGeo = faceted(new THREE.BoxGeometry(0.9, 0.22, 0.06));
     for (let i = 0; i < 3; i++) {
       const pv = new PlateView();
       this.plates.push(pv);
       this.scene.add(pv.group);
+      const flag = mesh(flagGeo, "#ffffff", { ink: false });
+      (flag.material as THREE.MeshToonMaterial).color.set("#a9b2af");
+      this.flags.push(flag);
+      this.scene.add(flag);
     }
-    this.camera.position.set(0, 7.6, 6.4);
-    this.camera.lookAt(0, 0.5, -0.15);
-
+    const d = 20;
+    this.camera.position.set(0, TRAY_LOOK_Y + d * Math.sin(TRAY_PITCH), d * Math.cos(TRAY_PITCH));
+    this.camera.lookAt(0, TRAY_LOOK_Y, 0);
   }
 
   /** Place plates under the three customer slots for the band's aspect ratio. */
@@ -231,8 +289,9 @@ export class TrayView {
     const spacing = pts[1].x - pts[0].x;
     const r = Math.min(1.4, spacing * 0.39);
     this.plates.forEach((p, i) => {
-      p.group.position.set(pts[i].x, 0, pts[i].z);
+      p.group.position.set(pts[i].x, 0, 0);
       p.group.scale.setScalar(r);
+      this.flags[i].position.set(pts[i].x, -0.1, 1.68);
     });
   }
 
@@ -270,21 +329,21 @@ export class TrayView {
 
   /** Pointer position in a plate's burger-local coordinates, on top of the current stack. */
   drawPoint(ndc: THREE.Vector2, slot: number): { x: number; z: number } {
-    const pv = this.plates[slot];
-    const scale = pv.group.scale.x * pv.s;
-    const topY = pv.group.scale.x * 0.1 + pv.stackTop() * scale;
-    const p = this.groundAt(ndc, topY);
-    const lx = (p.x - pv.group.position.x) / scale;
-    const lz = (p.z - pv.group.position.z) / scale;
-    const r = Math.hypot(lx, lz);
-    const k = r > 1.05 ? 1.05 / r : 1;
-    return { x: lx * k, z: lz * k };
+    this.raycaster.setFromCamera(ndc, this.camera);
+    return this.plates[slot].drawPoint(this.raycaster.ray);
   }
 
   setActive(slot: number, occupied: boolean[]): void {
     this.plates.forEach((p, i) => {
-      p.ring.visible = occupied[i] && i === slot;
+      const on = occupied[i] && i === slot;
+      p.ring.visible = on;
+      (this.flags[i].material as THREE.MeshToonMaterial).color.set(on ? ACTIVE_RING : "#a9b2af");
     });
+  }
+
+  /** Hold the ghost (a sauce bottle) over a burger-local point of its plate, or let it bob over the stack again. */
+  ghostOver(at: { x: number; z: number } | null): void {
+    this.ghostAt = at;
   }
 
   showGhost(slot: number, obj: THREE.Object3D | null): void {
@@ -304,7 +363,9 @@ export class TrayView {
       this.ghostT += dt;
       const pv = this.plates[this.ghostSlot];
       const s = pv.group.scale.x;
-      this.ghost.position.set(pv.group.position.x, s * (0.1 + pv.stackTop() * pv.s) + 0.9 + Math.sin(this.ghostT * 6) * 0.08, pv.group.position.z);
+      const top = s * (0.1 + pv.stackTop() * pv.s);
+      if (this.ghostAt) this.ghost.position.set(pv.group.position.x + this.ghostAt.x * s * pv.s, top + 0.12, pv.group.position.z + this.ghostAt.z * s * pv.s);
+      else this.ghost.position.set(pv.group.position.x, top + 0.9 + Math.sin(this.ghostT * 6) * 0.08, pv.group.position.z);
       this.ghost.scale.setScalar(s * pv.s);
     }
   }

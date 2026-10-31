@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { Kind } from "../game/types";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
+import { vegParts } from "./food";
 import { faceted } from "./materials";
 
 /**
@@ -58,17 +59,12 @@ const G = {
     }
     return faceted(g);
   })(),
-  tomato: cyl(0.44, 0.44, 0.09, 12),
-  tomatoCore: cyl(0.3, 0.3, 0.1, 8),
   ring: (r: number, tube: number, segs: number) => {
     const g = new THREE.TorusGeometry(r, tube, 4, segs);
     g.rotateX(Math.PI / 2);
     return faceted(g);
   },
-  pickle: cyl(0.24, 0.24, 0.06, 9),
-  pickleCore: cyl(0.16, 0.16, 0.07, 7),
   pineapple: lathe([[0.3, 0], [0.88, 0], [0.92, 0.06], [0.88, 0.12], [0.3, 0.12], [0.28, 0.06], [0.3, 0]], 12),
-  jalaCore: cyl(0.12, 0.12, 0.06, 6),
   egg: (() => {
     const g = new THREE.SphereGeometry(1, 8, 6);
     g.scale(1, 1.3, 1);
@@ -86,7 +82,6 @@ function wavy(len: number, h: number, w: number): THREE.BufferGeometry {
 }
 
 const ONION = [G.ring(0.32, 0.05, 12), G.ring(0.44, 0.05, 14)];
-const JALA = G.ring(0.16, 0.055, 8);
 
 /** The steel pan: floor, four walls and a rolled rim. */
 function pan(parts: Parts): void {
@@ -185,8 +180,7 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
         const tilt = -0.6;
         const p: [number, number, number] = [x, PAN.floor + 0.12, z];
         const rot: [number, number, number] = [jitter(r, 0.08), jitter(r, 0.12), tilt];
-        parts.add(G.tomato, "#e5432b", { p, r: rot, s });
-        parts.add(G.tomatoCore, "#f2765d", { p, r: rot, s: [s, s * 1.05, s], ink: false });
+        parts.addParts(vegParts("tomato", false, 0.012), { p, r: rot, s: s * 0.92 });
       }
     }
   },
@@ -211,8 +205,7 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
       const rr = Math.sqrt((i + 0.5) / 34);
       const p: [number, number, number] = [Math.cos(a) * rr * 0.42, PAN.floor + 0.03 + (1 - rr) * 0.2 + r() * 0.025, Math.sin(a) * rr * 0.34];
       const rot: [number, number, number] = [jitter(r, 0.5), r() * 6, jitter(r, 0.5)];
-      parts.add(G.pickle, i % 5 ? "#6f9a3c" : "#5f8a32", { p, r: rot, s, ink: 0.012 });
-      parts.add(G.pickleCore, "#b9d27a", { p, r: rot, s: [s, s * 1.0, s], ink: false });
+      parts.addParts(vegParts("pickle", false, 0.012), { p, r: rot, s: s * 0.73 });
     }
   },
   pineapple: (parts, r) => {
@@ -233,8 +226,7 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
       const rr = Math.sqrt((i + 0.5) / 40);
       const p: [number, number, number] = [Math.cos(a) * rr * 0.42, PAN.floor + 0.03 + (1 - rr) * 0.18 + r() * 0.02, Math.sin(a) * rr * 0.34];
       const rot: [number, number, number] = [jitter(r, 0.5), r() * 6, jitter(r, 0.5)];
-      parts.add(JALA, i % 9 === 4 ? "#d8392b" : i % 3 ? "#2fa83a" : "#278f31", { p, r: rot, s, ink: 0.01 });
-      parts.add(G.jalaCore, "#fff4b8", { p, r: rot, s: [s, 0.6 * s, s], ink: false });
+      parts.addParts(vegParts("jalapeno", i % 9 === 4, 0.01), { p, r: rot, s: s * 0.8 });
     }
   },
   egg: (parts, r) => {
@@ -251,6 +243,13 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
     }
   },
 };
+
+/** The heap for one kind on its own, without the pan, in game units with the pan's base at y = 0. */
+export function heapParts(kind: Kind): Parts {
+  const parts = new Parts();
+  HEAPS[kind]?.(parts, rng(kind.length * 977 + kind.charCodeAt(0)));
+  return parts;
+}
 
 const cache = new Map<Kind, Baked>();
 

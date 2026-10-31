@@ -449,6 +449,10 @@ html, body {
   background: var(--bv-amber);
   box-shadow: 0 0 0 2px var(--bv-paper);
 }
+/* One pip per camera stop on a counter that has two (the fryer). */
+.tab .stops { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; pointer-events: none; }
+.tab .stops i { width: 5px; height: 5px; border-radius: 50%; background: #c9bfae; }
+.tab .stops i.on { background: var(--bv-ink); }
 .tab .dot.hot { background: var(--bv-paprika); animation: blink 0.6s infinite alternate; }
 @keyframes blink { to { opacity: 0.35; } }
 
@@ -720,3 +724,51 @@ html, body {
 .dpill.ok { outline: 2px solid #6fcf6a; outline-offset: 1px; }
 .pind { display: grid; gap: 2px; justify-items: center; }
 .pind .dpill { min-width: 44px; font-size: 10px; box-shadow: 0 1px 3px rgb(0 0 0 / 0.35), inset 0 -1.5px 0 rgb(0 0 0 / 0.18); }
+
+/* Staleness bars beside the warm-shelf plates: drains from full as the food dries out. The notch
+   marks where it stops keeping well. */
+.stale {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  width: 8px;
+  height: 38px;
+  border-radius: 4px;
+  background: rgb(42 38 34 / 0.45);
+  box-shadow: 0 0 0 1.5px var(--bv-paper), var(--bv-shadow-1);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+.stale[hidden] { display: none; }
+.stale > i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--bv-olive); transition: height 0.2s linear; }
+.stale[data-state="drying"] > i { background: var(--bv-amber); }
+.stale[data-state="dry"] > i { background: var(--bv-paprika); }
+.stale::after { content: ""; position: absolute; left: 0; right: 0; bottom: var(--g); height: 1.5px; background: var(--bv-paper); }
+.zone[hidden] { display: none; }
+
+/* A sauce in hand: the kitchen dims around the tray, the caddy and the warm shelf (main.ts cuts the
+   holes as intersecting mask layers), and nothing under it takes a tap. */
+.sauce-mask {
+  position: absolute;
+  inset: 0;
+  background: rgb(42 38 34 / 0.5);
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+  pointer-events: none;
+  z-index: 4;
+}
+.sauce-mask[hidden] { display: none; }
+.sauce-mask > span {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--tabs-h) + var(--safe-b) + 14px);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 7px 14px 8px;
+  border-radius: 999px;
+  background: var(--bv-paper);
+  color: var(--bv-ink);
+  font: 700 13px/1.2 var(--bv-font-ui);
+  box-shadow: var(--bv-shadow-2);
+}

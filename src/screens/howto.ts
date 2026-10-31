@@ -89,7 +89,7 @@ function sections(): Sec[] {
       <div class="hw-tabs" aria-hidden="true">
         <span>${icon("drink")}Drinks</span><span class="on">${icon("grill")}Grill</span><span>${icon("fryer")}Fryer</span><span>${icon("box")}Supplies</span>
       </div>
-      <p class="hw-cap">${icon("swap")}Tap a counter in the bottom bar, or swipe along the bar to move between them.</p>`,
+      <p class="hw-cap">${icon("swap")}Tap a counter in the bottom bar, or swipe along the bar to move between them. The fryer is wide: tap its tab again for the other end.</p>`,
       points: [
         "<b>Customers and plates stay put</b> while you switch counters, so you never lose an order.",
         "Most things are a <b>drag</b>: from a bin, the grill or a counter up to a plate.",
@@ -167,13 +167,13 @@ function sections(): Sec[] {
       </div>
       <div class="hw-lamp">
         <span class="lampic">${icon("warming-lamp")}</span>
-        <div><b>Heat lamp</b><span>Fine for about ${HOLD_GRACE} s, then it slowly dries out</span><i class="q" aria-hidden="true"></i></div>
+        <div><b>Warm shelf</b><span>Fine for about ${HOLD_GRACE} s, then it slowly dries out: the bar by each plate shows it</span><i class="q" aria-hidden="true"></i></div>
       </div>`,
       points: [
         "<b>Drag</b> ingredients up onto the active plate, or <b>flick</b> them up to toss them on.",
-        "<b>Sauce:</b> drag the bottle up and draw on the burger.",
+        "<b>Sauce:</b> tap a bottle in the caddy to pick it up, then draw on a burger to squeeze. Tap the caddy to put it back; the rest of the kitchen waits until you do.",
         "Wrong layer? <b>Swipe down</b> on the plate to take the top one off. Mistakes go down the garbage chute.",
-        "<b>Heat-lamp spots</b> next to the grill let you build ahead or hold a patty. Food there slowly loses quality.",
+        "The <b>warm shelf</b> over the grill lets you build ahead or hold a patty. Food there slowly loses quality.",
       ],
     },
     {
@@ -264,7 +264,7 @@ function sections(): Sec[] {
         <span class="stack">${icon("cup-stack")}<b>Stack refilled</b></span>
       </div>`,
       points: [
-        "Grab a sleeve of cups or cartons and tear it open to refill that stack.",
+        "Turn round to the wire rack, grab a sleeve of cups or cartons and tear it open on the stack of the same size.",
         "Whatever's left <b>carries over</b> to the next day, so restock in a quiet moment, not mid-rush.",
       ],
     },
@@ -285,7 +285,7 @@ function sections(): Sec[] {
       </ol>`,
       points: [
         "Check the receipt first: a forgotten side or drink costs stars.",
-        "To fix a burger, <b>drag it down</b> off the plate onto a prep spot under the heat lamp, then <b>swipe down</b> on it to peel layers off one at a time.",
+        "To fix a burger, <b>drag it down</b> off the plate onto a plate on the warm shelf, then <b>swipe down</b> on it to peel layers off one at a time.",
         "Held items light up the <b>trash slot</b> red when a drop would bin them.",
         "<b>Unordered extras</b>, like fries or a drink they didn't ask for, can soften a bad review, and nobody ever turns down a freebie. They cost you, so save them for rescues.",
         "The bell shows how many are in line. Waiting has its own patience: the back of the line drifts off first, and people nearly at the window almost never leave. An order's patience only starts once they've ordered.",

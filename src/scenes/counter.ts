@@ -2,72 +2,145 @@ import * as THREE from "three";
 import { FRIES_PERFECT, FRY_RATE, GRILL_RATE, MELT_RATE } from "../game/cooking";
 import type { DrinkId, FriesSize, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
 import { CUP_SPEED, DRINKS } from "../game/types";
-import { bottle, CUP_SCALE, makeCarton, makeCartonStack, makeCup, makeFood, makeFries, makeFryPile, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
+import { counterTop, wallPanels } from "../render/wear";
+import { makePaperRoll, makeTowel, makeUtensilCrock } from "../render/props";
+import { cupSurfaceY, makeCarton, makeCartonStack, makeCup, makeFood, makeFries, makeFryPile, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { dressCup } from "../render/cup";
-import { BASKET, BUBBLES_GEO, FREEZER, makeBasket, makeCurdHandful, makeCurdTub, makeFreezer, makeGravyPot, makeLadle, makeOil, makePackStation, makePadMark, makeShaker, makeVat, PAD, VAT, WELL } from "../render/fryer";
+import { FREEZER, makeCurdHandful, makeCurdTub, makeFreezer, makeGravyPot, makeLadle, makeShaker } from "../render/fryer";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
-import { makeBin } from "../render/heaps";
-import { makeIceBin, makeLidStack, makeStrawHolder } from "../render/models/drinks";
+import { makeGriddle, type GriddleObject } from "../render/machines/griddle";
+import { makePrepUnit } from "../render/machines/coldRail";
+import { makeSauceBottle, makeSauceCaddy, type SauceCaddyObject } from "../render/machines/sauces";
+import { makeWarmShelf } from "../render/machines/warmShelf";
+import { makeDrinkTower, makeFountain, makeFryBasket, makeFryer, makeLidStrawCaddy, makePackPad, makeSleeve, makeTrashChute, makeWireRack, FRY_BASKET, type FryerObject } from "../render/machines";
+import { applyKitchenLight, KITCHEN_BG, type KitchenLight } from "../render/lighting";
+import { SCALE } from "../render/units";
 import { PlateView } from "./tray";
 
 export const PAGES = ["Drinks", "Grill", "Fryer", "Supplies"] as const;
 export const HOME_PAGE = 1;
-const PAGE_GAP = 14;
-export const pageX = (i: number) => (i - HOME_PAGE) * PAGE_GAP;
+/**
+ * The window line: drinks, grill and fryer run along the serving window, facing it, so the tray
+ * above the counter really is the window ledge. Supplies sit on the back wall behind the fryer,
+ * and the camera turns round to look at them. Page centres in world x:
+ */
+const PAGE_CX = [-14, 0, 15, 16.5];
+export const pageX = (i: number) => PAGE_CX[i];
+/** One zoom for every page: about 9 units (1.35 m) across the middle, which fits the grill page front to back. */
+const VIEW_W = 9.0;
+/**
+ * Camera stops. Every counter gets one, except the long fryer line, which gets two half a page
+ * apart so its ends aren't cut off (the same zoom everywhere keeps food one size).
+ */
+export const STOPS: readonly { page: number; x: number; turned?: boolean }[] = [
+  { page: 0, x: pageX(0) },
+  { page: 1, x: pageX(1) },
+  { page: 2, x: pageX(2) - 1.5 },
+  { page: 2, x: pageX(2) + 1.5 },
+  { page: 3, x: pageX(3), turned: true },
+];
+/** Camera height and how far behind the look point it hangs. */
+const CAM_H = 12.6;
+const CAM_BACK = 5.3;
+/** Where the camera looks on the window line; the back wall's counter is a turn round from there. */
+const LOOK_Z = -0.1;
+/**
+ * The supplies counter is built facing the other way, centred here, so that turning on the spot
+ * (about the camera) looks straight at it. Page-local z maps to world z as SUPPLY_Z - z.
+ */
+const SUPPLY_Z = 2 * (LOOK_Z + CAM_BACK);
 
 /**
  * One scale for food on the counter, against ingredient units: on the grill, in the hand and on
- * the heat-lamp plates. Keeping it the same everywhere means nothing grows or shrinks as it
- * moves between them (the bins show their heaps a little smaller, and further away).
+ * the warm-shelf plates. Keeping it the same everywhere means nothing grows or shrinks as it
+ * moves between them. It's the study's per-category rule (burger parts at 1.5 times life size).
  */
-export const FOOD_SCALE = 0.6;
+export const FOOD_SCALE = SCALE.burger;
 /** Grill items are drawn at the counter food scale. */
 export const GRILL_SCALE = FOOD_SCALE;
-export const GRILL_TOP = 0.26;
-const GRILL_CX = -0.7;
-const GRILL_W = 5.1;
-const GRILL_BOUNDS = { x0: GRILL_CX - GRILL_W / 2 + 0.45, x1: GRILL_CX + GRILL_W / 2 - 0.45, z0: 0.2, z1: 2.65 };
-/** Trash slot running along the front edge of the grill counter. */
-const TRASH = { z0: 3.05, z1: 3.5 };
-/** Trash slot extent on each counter (page-local x): full width on the grill and fryer, left of the ice bin on drinks. */
-const TRASH_RAIL: Record<number, { x0: number; x1: number }> = { 0: { x0: -3.4, x1: 0.7 }, 1: { x0: -3.4, x1: 3.4 }, 2: { x0: -3.4, x1: 3.4 } };
-/** Assembly spots under the heat lamp, beside the grill. */
-export const HOLD_SPOTS = [-0.15, 1.1, 2.35].map((z) => ({ x: 2.62, z }));
-/** Plate size under the heat lamp; the food on it is still drawn at FOOD_SCALE. */
-const HOLD_SCALE = 0.62;
-/** The right end of the grill can be turned down to a warm hold. */
-export const WARM_X0 = 0.35;
 
-/** Fryer page layout, in page-local x and z. */
-const FRYER = {
-  freezer: { x: -1.55, z: -2.45 },
-  vatX: [-2.35, -0.65],
-  vatZ: 0.0,
-  stacks: [["S", 0.95], ["M", 2.05], ["L", 3.15]] as [FriesSize, number][],
-  stackZ: -2.45,
-  // Pads level with or below the baskets: dragging fries up from a basket is the lift flick.
-  station: { x: 2.25, z: 1.04, w: 2.2, d: 3.04 },
-  packZ: [0.3, 1.78],
-  // Salt, curds and gravy in a column between the vats and the packing pads.
-  shaker: { x: 0.66, z: -1.3 },
-  curds: { x: 0.66, z: -0.15 },
-  gravy: { x: 0.66, z: 1.15 },
+/**
+ * The grill page, "prep unit and lamp shelf": a 3 x 3 cold prep unit against the wall on the
+ * left with the sauce caddy in front of it, the griddle front right, and the three hold plates
+ * on a warm shelf over the griddle's back edge, in a row like the tray's plates above.
+ */
+const GRIDDLE = { x: 1.95, z: 0.8 };
+const PREP = { x: -2.05, z: -1.4 };
+const CADDY = { x: -2.05, z: 1.75 };
+/** The warm shelf stands on legs this tall, behind the griddle's splash guard. */
+const SHELF = { x: 1.95, z: -2.35, y: 0.9 };
+/** The griddle's cook surface, griddle-local (read once from the model). */
+const GRIDDLE_SURFACE = makeGriddle().userData.spots.surface;
+export const GRILL_TOP = GRIDDLE_SURFACE.y;
+const GRILL_CX = GRIDDLE.x;
+const GRILL_BOUNDS = {
+  x0: GRIDDLE.x + GRIDDLE_SURFACE.x0 + 0.4,
+  x1: GRIDDLE.x + GRIDDLE_SURFACE.x1 - 0.4,
+  z0: GRIDDLE.z + GRIDDLE_SURFACE.z0 + 0.4,
+  z1: GRIDDLE.z + GRIDDLE_SURFACE.z1 - 0.35,
 };
+/** The right end of the griddle can be turned down to a warm hold. */
+export const WARM_X0 = GRIDDLE.x + GRIDDLE_SURFACE.warmX;
+/** Trash slot running along the front edge of each counter. */
+const TRASH = { z0: 3.05, z1: 3.5 };
+/** Trash slot extent on each counter (page-local x): full width on the grill and fryer, right of the lid caddy on drinks. */
+const TRASH_RAIL: Record<number, { x0: number; x1: number }> = { 0: { x0: -0.9, x1: 3.8 }, 1: { x0: -3.9, x1: 4.0 }, 2: { x0: -5.4, x1: 5.4 } };
+/** Hold plates on the warm shelf, page-local, and the height of their tops. */
+export const HOLD_SPOTS = [-1.3, 0, 1.3].map((dx) => ({ x: SHELF.x + dx, z: SHELF.z }));
+const HOLD_Y = SHELF.y + 0.2;
+/** Plate size on the warm shelf; the food on it is still drawn at FOOD_SCALE. */
+const HOLD_SCALE = 0.6;
+
+/**
+ * Fryer page, "front pass", in page-local x and z. The fryer stands against the wall with the
+ * freezer to its left and the poutine toppings to its right; the front strip by your thumb is
+ * the pass: carton stacks on the left, packing pads on the right. Cooked fries always travel
+ * down the screen, so lifting a basket (an upward flick) never looks like a carry. The line is
+ * longer than one screen, so it has two camera stops.
+ */
+const FRYER = {
+  fryer: { x: -0.4, z: -1.67 },
+  freezer: { x: -4.1, z: -2.5 },
+  stacks: [["S", -4.75], ["M", -3.6], ["L", -2.45]] as [FriesSize, number][],
+  stackZ: 1.55,
+  pads: { x: 2.1, z: 1.55 },
+  // Salt, curds and gravy in a row along the wall, right of the fryer.
+  shaker: { x: 2.2, z: -2.45 },
+  curds: { x: 3.25, z: -2.45 },
+  gravy: { x: 4.35, z: -2.45 },
+};
+/** One packing pad (the cream square inside its orange outline). */
+const PAD = { w: 1.47, d: 1.07 };
 /** A packing pad with nothing on it. */
 export const EMPTY_PACK = { size: null, cook: 0, fill: 0, salt: false, curds: false, gravy: false } as const;
-/** Fryer basket heights: lifted out and resting in the oil. */
-const BASKET_UP = 1.0;
-const BASKET_DOWN = 0.34;
-/** Cartons waiting on the packing pads, and in their stacks, against carton units. */
-const PACK_SCALE = 1.2;
-const CARTON_STACK_SCALE = 0.7;
+/** Cartons on the pads and in their stacks, against carton units. */
+const PACK_SCALE = SCALE.fries;
+const CARTON_STACK_SCALE = SCALE.fries;
 
-/** Cups and cartons in each stack at the start of a shift, and in a fresh sleeve. */
 /** A full stack of cups or cartons, and what a fresh sleeve from the Supplies counter refills it to. */
 const STACK_START = 10;
-/** Ice bin, lid stack and straw holder on the drinks page, relative to its centre. */
-const DRINK_EXTRAS = { ice: { x: 1.9, z: 3.05 }, lids: { x: 1.15, z: 1.7 }, straws: { x: 2.65, z: 1.75 } };
 export const SLEEVE = 10;
+
+/**
+ * Drinks page, "ice and drink tower": a slim tower at the left holds the cup tubes and the ice
+ * lever, the fountain has the rest of the wall, and lids and straws share a caddy at the front.
+ */
+const TOWER = { x: -2.3, z: -2.35 };
+const FOUNTAIN = { x: 1.95, z: -2.1 };
+const LIDS = { x: -2.6, z: 1.9 };
+const TOWER_SPOTS = makeDrinkTower().userData.spots;
+const FOUNTAIN_SPOTS = makeFountain().userData.spots;
+const LID_SPOTS = makeLidStrawCaddy().userData.spots;
+/** Cups under the nozzles, against cup units. */
+const CUP_AT_TAP = SCALE.cup;
+export const CUP_IN_HAND = SCALE.cup;
+
+/**
+ * Supplies, on the back wall: a two-tier wire rack with a bay per size, cup sleeves on the low
+ * front tier and paper-boat sleeves on the raised back tier. Nothing else, so every target on
+ * the page has a job.
+ */
+const RACK = { x: 0, z: -0.6, w: 7.2 };
 /** Dollars of soda lost per second of overflow. */
 const SPILL_COST = 1.5;
 
@@ -92,9 +165,14 @@ export interface Basket {
   goldenRung: boolean;
   obj: THREE.Group;
   fries: FriesObject;
-  y: number;
+  /** 0 hanging on the rail, 1 down in the oil. */
+  t: number;
   /** Share of a full batch still in the basket. */
   amount: number;
+  /** Where the basket hangs on the rail (tilted to drain), and where it sits in the oil. */
+  up: THREE.Vector3;
+  downAt: THREE.Vector3;
+  tilt: number;
 }
 
 /** A stack of empty cups or fries cartons. Once it runs out, a wrapped sleeve from the Supplies counter refills it. */
@@ -108,6 +186,8 @@ export interface Stack {
   obj: THREE.Group;
   x: number;
   z: number;
+  /** Cups hang mouth down in the drink tower's tubes. */
+  tube: boolean;
 }
 
 /** A spot at the front of the fryer where a carton waits to be filled. */
@@ -121,6 +201,8 @@ export interface Pack {
   obj: THREE.Object3D | null;
   x: number;
   z: number;
+  /** Height of the pad's top. */
+  y: number;
 }
 
 export interface Tap {
@@ -154,13 +236,13 @@ export type Hit =
   | { type: "straws" }
   | { type: "hold"; idx: number }
   | { type: "stack"; idx: number }
-  | { type: "supplies"; kind: "cup" | "carton" }
+  | { type: "supplies"; kind: "cup" | "carton"; size: Size }
   | { type: "pack"; idx: number }
   | { type: "shaker" }
   | { type: "curds" }
   | { type: "gravy" };
 
-/** A burger being put together (or food parked) under the heat lamp. */
+/** A burger being put together (or food parked) on the warm shelf. */
 export interface HoldSpot {
   layers: Layer[];
   view: PlateView;
@@ -174,21 +256,18 @@ export interface CounterEvents {
   burning: () => void;
 }
 
-/** Bin slots on the grill counter: two rows of five, the last slot of row two holds the sauces. */
-const BIN_SLOTS: { x: number; z: number }[] = [
-  ...[-2.6, -1.3, 0, 1.3, 2.6].map((x) => ({ x, z: -2.35 })),
-  ...[-2.6, -1.3, 0, 1.3].map((x) => ({ x, z: -1.15 })),
-];
-
 /** Buns toast and eggs set more slowly than meat, so they're forgiving to leave on. */
 /** Patties are slow on purpose: put them on, go do something else, come back to flip. */
 const COOK_SPEED: Record<string, number> = { patty: 0.34, bacon: 1.1, egg: 0.75, bun: 0.6, pineapple: 0.7 };
 
-/** Nozzle spacing on the soda fountain: five across the ~7-unit page. */
-export const TAP_GAP = 1.4;
-const tapX = (i: number) => pageX(0) + (i - (DRINKS.length - 1) / 2) * TAP_GAP;
-/** Where the pour falls: over the back half of a cup under the nozzle (cups sit at z -0.45). */
-const STREAM_Z = -0.62;
+/** Nozzle spacing on the soda fountain. */
+export const TAP_GAP = FOUNTAIN_SPOTS.cups[1].x - FOUNTAIN_SPOTS.cups[0].x;
+const tapX = (i: number) => pageX(0) + FOUNTAIN.x + FOUNTAIN_SPOTS.cups[i].x;
+/** Cups sit on the drip tray under the nozzles; the pour falls from the spout tip. */
+const CUP_Z = FOUNTAIN.z + FOUNTAIN_SPOTS.cups[0].z;
+const CUP_Y = FOUNTAIN_SPOTS.cups[0].y;
+const STREAM_Z = FOUNTAIN.z + FOUNTAIN_SPOTS.nozzles[0].z;
+const STREAM_TOP = FOUNTAIN_SPOTS.nozzles[0].y;
 /** Button, stream and puddle colours: a shade stronger than the drink itself so they read on the machine. */
 const DRINK_LABEL_COLOR: Record<DrinkId, string> = { pine: "#6aa877", pink: "#ea8ea6", cola: "#4a2522", water: "#8ec6dc", tea: "#b4651e" };
 
@@ -196,13 +275,17 @@ export class CounterView {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(32, 0.9, 0.1, 80);
   page = HOME_PAGE;
+  /** Which camera stop (see STOPS) the counter band is at. */
+  stop = HOME_PAGE;
   /** Camera x offset while the player drags between counters. */
   dragOffset = 0;
   private camX = 0;
+  /** Camera turn about the vertical: 0 faces the window line, PI the back wall. */
+  private camYaw = 0;
   private raycaster = new THREE.Raycaster();
   private hitMeshes: THREE.Mesh[] = [];
   private pantry: THREE.Group | null = null;
-  bins: { kind: Kind; x: number; z: number }[] = [];
+  bins: { kind: Kind; x: number; z: number; y: number }[] = [];
   /** Upgrade multipliers. */
   fryBoost = 1;
   autoStopPour = false;
@@ -210,21 +293,21 @@ export class CounterView {
   holds: HoldSpot[] = [];
   /** Right end of the grill turned down to keep food warm without cooking it much. */
   warm = false;
-  private warmGlow!: THREE.Mesh;
+  private griddle!: GriddleObject;
+  private warmShown: boolean | null = null;
+  private caddy!: SauceCaddyObject;
+  private light: KitchenLight;
   baskets: Basket[] = [];
   /** Where to grab frozen fries from (the middle of the potato freezer), in world units. */
   friesBinAt = new THREE.Vector3();
-  private bubbles: THREE.Mesh[] = [];
-  private padMarks: THREE.Mesh[] = [];
   taps: Tap[] = [];
   stacks: Stack[] = [];
   packs: Pack[] = [];
   /** Running cost of soda poured onto the drip tray this shift. */
   spillCost = 0;
-  bottles: Record<SauceKind, THREE.Group>;
-  private bottleHome: Record<SauceKind, THREE.Vector3>;
+  /** The bottles standing in the caddy (hidden while one is in hand). */
+  bottles!: Record<SauceKind, THREE.Object3D>;
   private puffs: THREE.Mesh[] = [];
-  private grillGlow: THREE.Mesh;
   private held: THREE.Object3D | null = null;
   private time = 0;
   events: CounterEvents = { golden: () => {}, spill: () => {}, burning: () => {} };
@@ -232,41 +315,23 @@ export class CounterView {
   sun: THREE.DirectionalLight;
 
   constructor() {
-    this.scene.background = new THREE.Color("#d9cfc2");
-    // Sky light from warm cream to a cool violet, so shadows tint rather than grey out.
-    this.scene.add(new THREE.HemisphereLight("#fff4dc", "#6e62a0", 1.15));
-    const sun = new THREE.DirectionalLight("#fff1d6", 1.9);
-    this.sun = sun;
-    sun.position.set(3, 10, 5);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 1024);
-    Object.assign(sun.shadow.camera, { left: -24, right: 34, top: 8, bottom: -8, near: 1, far: 40 });
-    sun.shadow.bias = -0.002;
-    this.scene.add(sun);
+    this.scene.background = KITCHEN_BG.clone();
+    this.light = applyKitchenLight(this.scene, { shadowBox: { left: -9, right: 9, top: 7, bottom: -7 } });
+    this.sun = this.light.sun;
 
-    const counter = new THREE.Mesh(new THREE.BoxGeometry(90, 0.4, 10.6), toon("#efe6d8"));
-    counter.position.set(7, -0.2, -0.7);
-    counter.receiveShadow = true;
+    // The window line's counter top and the steel wall panels under the window.
+    const counter = counterTop(90, 10.6);
+    counter.position.set(7, 0, -0.7);
     this.scene.add(counter);
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(90, 6, 0.4), toon("#e9dfcf"));
-    wall.position.set(7, 2.6, -3.6);
+    const wall = wallPanels(90, 6);
+    wall.position.set(7, -0.4, -3.4);
     this.scene.add(wall);
     // A steel backsplash strip where the counter meets the truck wall.
     const splash = new THREE.Mesh(new THREE.BoxGeometry(90, 0.5, 0.1), toon("#b9d6a2"));
     splash.position.set(7, 0.25, -3.35);
     this.scene.add(splash);
 
-    const { glow } = this.buildGrill();
-    this.grillGlow = glow;
-    this.bottles = { ketchup: bottle("#d8261b", "ketchup"), mustard: bottle("#f0c419", "mustard") };
-    this.bottleHome = { ketchup: new THREE.Vector3(2.35, 0, -1.2), mustard: new THREE.Vector3(3.0, 0, -1.2) };
-    for (const s of ["ketchup", "mustard"] as SauceKind[]) {
-      const b = this.bottles[s];
-      b.position.copy(this.bottleHome[s]);
-      b.scale.setScalar(0.85);
-      this.scene.add(b);
-      this.proxy(new THREE.BoxGeometry(0.62, 1.6, 0.9), b.position.clone().add(new THREE.Vector3(0, 0.6, 0)), { type: "bottle", sauce: s });
-    }
+    this.buildGrill();
     this.buildFryer();
     this.buildDrinks();
     this.buildSupplies();
@@ -281,56 +346,43 @@ export class CounterView {
     return m;
   }
 
-  private buildGrill(): { glow: THREE.Mesh } {
-    const x0 = pageX(1);
-    const grill = mesh(faceted(new THREE.BoxGeometry(GRILL_W, GRILL_TOP, 3.05)), "#3d4245", { ink: false });
-    grill.position.set(x0 + GRILL_CX, GRILL_TOP / 2, 1.42);
-    this.scene.add(grill);
-    const plate = mesh(faceted(new THREE.BoxGeometry(GRILL_W - 0.3, 0.02, 2.75)), "#55595b", { ink: false, shadow: false });
-    plate.position.set(x0 + GRILL_CX, GRILL_TOP + 0.005, 1.42);
-    this.scene.add(plate);
-    const glow = new THREE.Mesh(new THREE.PlaneGeometry(GRILL_W - 0.4, 2.6), new THREE.MeshBasicMaterial({ color: "#ff6a2b", transparent: true, opacity: 0.12 }));
-    glow.rotation.x = -Math.PI / 2;
-    glow.position.set(x0 + GRILL_CX, GRILL_TOP + 0.02, 1.42);
-    this.scene.add(glow);
-    const lip = mesh(faceted(new THREE.BoxGeometry(GRILL_W, 0.3, 0.12)), "#2a2e30", { ink: false });
-    lip.position.set(x0 + GRILL_CX, GRILL_TOP + 0.1, 2.92);
-    this.scene.add(lip);
+  private buildGrill(): void {
+    const at = (x: number, y: number, z: number) => this.world(1, x, y, z);
+    const griddle = makeGriddle();
+    griddle.position.copy(at(GRIDDLE.x, 0, GRIDDLE.z));
+    this.scene.add(griddle);
+    this.griddle = griddle;
     // Trash slot along the front edge: drop anything past the grill to throw it away.
-    this.addTrash(x0, TRASH_RAIL[1]);
+    this.addTrash(1, TRASH_RAIL[1]);
 
-    // Assembly spots under a heat lamp: a warm shelf with three small plates.
-    const shelf = mesh(faceted(new THREE.BoxGeometry(1.36, 0.3, 3.9)), "#b8c2c0");
-    shelf.position.set(x0 + HOLD_SPOTS[0].x, 0.15, 1.1);
-    const bed = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 3.75), new THREE.MeshBasicMaterial({ color: "#ffb15c", transparent: true, opacity: 0.45 }));
-    bed.rotation.x = -Math.PI / 2;
-    bed.position.set(x0 + HOLD_SPOTS[0].x, 0.305, 1.1);
-    this.scene.add(shelf, bed);
-    const bulbGeo = new THREE.SphereGeometry(0.1, 8, 6);
-    const bulbMat = new THREE.MeshBasicMaterial({ color: "#ff8a3d" });
+    // The warm shelf over the back of the griddle: heat from underneath, so no bulbs or glow.
+    const shelf = makeWarmShelf({ plates: false, legs: SHELF.y });
+    shelf.position.copy(at(SHELF.x, SHELF.y, SHELF.z));
+    this.scene.add(shelf);
     for (const h of HOLD_SPOTS) {
-      const view = new PlateView("#e0782f");
+      const view = new PlateView();
       view.ring.visible = false;
       view.group.scale.setScalar(HOLD_SCALE);
       view.s = FOOD_SCALE / HOLD_SCALE;
-      view.group.position.set(x0 + h.x, 0.3, h.z);
+      view.group.position.copy(at(h.x, HOLD_Y - 0.1 * HOLD_SCALE, h.z));
       this.scene.add(view.group);
       this.holds.push({ layers: [], view, x: h.x, z: h.z });
-      const bulb = new THREE.Mesh(bulbGeo, bulbMat);
-      bulb.position.set(x0 + h.x + 0.6, 0.42, h.z - 0.38);
-      this.scene.add(bulb);
     }
 
-    // Warm section of the grill: a dimmer glow over the right end when it's turned down.
-    const warmGlow = new THREE.Mesh(new THREE.PlaneGeometry(GRILL_CX + GRILL_W / 2 - WARM_X0 - 0.2, 2.6), new THREE.MeshBasicMaterial({ color: "#6fb7d6", transparent: true, opacity: 0 }));
-    warmGlow.rotation.x = -Math.PI / 2;
-    warmGlow.position.set(x0 + (WARM_X0 + GRILL_CX + GRILL_W / 2 - 0.2) / 2, GRILL_TOP + 0.025, 1.42);
-    this.scene.add(warmGlow);
-    this.warmGlow = warmGlow;
-    const divider = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 2.6), new THREE.MeshBasicMaterial({ color: "#2a2e30" }));
-    divider.rotation.x = -Math.PI / 2;
-    divider.position.set(x0 + WARM_X0, GRILL_TOP + 0.03, 1.42);
-    this.scene.add(divider);
+    // The sauce caddy in front of the prep unit, bottles upside down and ready to lift.
+    const caddy = makeSauceCaddy();
+    caddy.position.copy(at(CADDY.x, 0, CADDY.z));
+    this.scene.add(caddy);
+    // Working kit, clear of every target: a utensil crock in the free front corner.
+    const crock = makeUtensilCrock();
+    crock.position.copy(at(-3.3, 0, 2.5));
+    this.scene.add(crock);
+    this.caddy = caddy;
+    this.bottles = caddy.userData.bottles;
+    for (const k of ["ketchup", "mustard"] as SauceKind[]) {
+      const b = caddy.userData.spots.bottles[k];
+      this.proxy(new THREE.BoxGeometry(0.55, 1.6, 0.85), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k });
+    }
 
     const puffMat = new THREE.MeshBasicMaterial({ color: "#f2f2f2", transparent: true, opacity: 0.3, depthWrite: false });
     for (let i = 0; i < 24; i++) {
@@ -340,232 +392,168 @@ export class CounterView {
       this.scene.add(m);
       this.puffs.push(m);
     }
-    return { glow };
   }
 
-  /**
-   * Fryer page, laid out like the grill page: the potato freezer at the back, two narrow vats
-   * on the left, and the staging area on the right (carton stacks along the back, two big
-   * packing pads under a heat lamp). Carton sleeves are on the Supplies counter.
-   */
+  /** Fryer page: see FRYER. Carton sleeves come from the Supplies counter. */
   private buildFryer(): void {
-    const x0 = pageX(2);
     const F = FRYER;
+    const at = (x: number, y: number, z: number) => this.world(2, x, y, z);
     // Potato freezer, heaped with frozen fries.
     const freezer = makeFreezer();
-    freezer.position.set(x0 + F.freezer.x, 0, F.freezer.z);
+    freezer.position.copy(at(F.freezer.x, 0, F.freezer.z));
     this.scene.add(freezer);
-    this.friesBinAt.set(x0 + F.freezer.x, 0.6, F.freezer.z);
+    this.friesBinAt.copy(at(F.freezer.x, 0.6, F.freezer.z));
     this.proxy(new THREE.BoxGeometry(FREEZER.w + 0.1, 1.4, FREEZER.d + 0.2), this.friesBinAt.clone(), { type: "friesBin" });
 
-    // Carton stacks along the back on the right, small to large.
-    F.stacks.forEach(([size, x]) => this.addStack("carton", size, x0 + x, F.stackZ));
+    // Carton stacks along the front on the left, small to large.
+    F.stacks.forEach(([size, x]) => this.addStack("carton", size, at(x, 0, F.stackZ)));
 
-    // Packing station: a heat-lamp shelf with a big pad per carton.
-    const st = F.station;
-    const station = makePackStation(st.w, st.d, F.packZ.map((z) => z - st.z));
-    station.position.set(x0 + st.x, 0, st.z);
-    this.scene.add(station);
-    const bed = new THREE.Mesh(new THREE.PlaneGeometry(st.w - 0.16, st.d - 0.16), new THREE.MeshBasicMaterial({ color: "#ffb15c", transparent: true, opacity: 0.22, depthWrite: false }));
-    bed.rotation.x = -Math.PI / 2;
-    bed.position.set(x0 + st.x, 0.16, st.z);
-    this.scene.add(bed);
-    const bulbGeo = new THREE.SphereGeometry(0.1, 8, 6);
-    const bulbMat = new THREE.MeshBasicMaterial({ color: "#ff8a3d" });
-    for (const z of F.packZ) {
-      this.packs.push({ ...EMPTY_PACK, obj: null, x: x0 + st.x, z });
-      this.proxy(new THREE.BoxGeometry(PAD.w + 0.1, 1.6, PAD.d + 0.1), new THREE.Vector3(x0 + st.x, 0.6, z), { type: "pack", idx: this.packs.length - 1 });
-      const mark = makePadMark();
-      mark.position.x = x0 + st.x;
-      mark.position.z = z + 0.05;
-      this.scene.add(mark);
-      this.padMarks.push(mark);
-      const bulb = new THREE.Mesh(bulbGeo, bulbMat);
-      bulb.position.set(x0 + st.x + st.w / 2 - 0.12, 0.3, z - PAD.d / 2 + 0.1);
-      this.scene.add(bulb);
+    // The packing pads at the front on the right.
+    const pads = makePackPad();
+    pads.position.copy(at(F.pads.x, 0, F.pads.z));
+    this.scene.add(pads);
+    for (const sp of pads.userData.spots.pads) {
+      const c = pads.position.clone().add(new THREE.Vector3(sp.x, sp.y, sp.z));
+      this.packs.push({ ...EMPTY_PACK, obj: null, x: c.x, z: c.z, y: c.y });
+      this.proxy(new THREE.BoxGeometry(PAD.w + 0.1, 1.6, PAD.d + 0.3), c.clone().setY(0.6), { type: "pack", idx: this.packs.length - 1 });
     }
     const shaker = makeShaker();
-    shaker.position.set(x0 + F.shaker.x, 0, F.shaker.z);
+    shaker.position.copy(at(F.shaker.x, 0, F.shaker.z));
     this.scene.add(shaker);
-    this.proxy(new THREE.BoxGeometry(0.8, 1.2, 0.8), new THREE.Vector3(x0 + F.shaker.x, 0.4, F.shaker.z), { type: "shaker" });
+    this.proxy(new THREE.BoxGeometry(0.9, 1.2, 0.9), at(F.shaker.x, 0.4, F.shaker.z), { type: "shaker" });
     const tub = makeCurdTub();
-    tub.position.set(x0 + F.curds.x, 0, F.curds.z);
+    tub.position.copy(at(F.curds.x, 0, F.curds.z));
     this.scene.add(tub);
-    this.proxy(new THREE.BoxGeometry(0.95, 1.2, 1.0), new THREE.Vector3(x0 + F.curds.x, 0.4, F.curds.z), { type: "curds" });
+    this.proxy(new THREE.BoxGeometry(1.0, 1.2, 1.0), at(F.curds.x, 0.4, F.curds.z), { type: "curds" });
     const pot = makeGravyPot();
-    pot.position.set(x0 + F.gravy.x, 0, F.gravy.z);
+    pot.position.copy(at(F.gravy.x, 0, F.gravy.z));
     this.scene.add(pot);
-    this.proxy(new THREE.BoxGeometry(0.95, 1.4, 1.1), new THREE.Vector3(x0 + F.gravy.x, 0.5, F.gravy.z), { type: "gravy" });
-    this.addTrash(x0, TRASH_RAIL[2]);
+    this.proxy(new THREE.BoxGeometry(1.0, 1.4, 1.1), at(F.gravy.x, 0.5, F.gravy.z), { type: "gravy" });
+    this.addTrash(2, TRASH_RAIL[2]);
 
-    // The vats, each with a wire basket and a pile of fries that empties from the top.
-    F.vatX.forEach((x, i) => {
-      const vx = x0 + x;
-      const vat = makeVat();
-      vat.position.set(vx, 0, F.vatZ);
-      this.scene.add(vat);
-      const oil = makeOil();
-      oil.position.set(vx, WELL.oilY, F.vatZ + WELL.z);
-      this.scene.add(oil);
-      const bubbles = new THREE.Mesh(BUBBLES_GEO.geo, toon("#fff1c4"));
-      bubbles.position.set(vx, WELL.oilY + 0.01, F.vatZ + WELL.z);
-      bubbles.visible = false;
-      this.scene.add(bubbles);
-      this.bubbles.push(bubbles);
-      const basket = makeBasket();
-      const fries = makeFryPile(BASKET.w - 0.1, BASKET.d - 0.1, 4, 21 + i, true);
+    // The hang-rail fryer: a basket per well, hanging tilted on the rail until it's lowered.
+    const fryer = makeFryer();
+    fryer.position.copy(at(F.fryer.x, 0, F.fryer.z));
+    this.scene.add(fryer);
+    // A paper towel roll on the wall over the toppings, out of the way of the baskets.
+    const roll = makePaperRoll();
+    roll.position.copy(at(3.3, 2.6, -3.4));
+    this.scene.add(roll);
+    this.fryer = fryer;
+    const sp = fryer.userData.spots;
+    sp.wells.forEach((w, i) => {
+      const basket = makeFryBasket();
+      const fries = makeFryPile(FRY_BASKET.w - 0.1, FRY_BASKET.d - 0.1, 4, 21 + i, true);
       fries.position.y = 0.02;
       fries.visible = false;
       basket.add(fries);
-      basket.position.set(vx, BASKET_UP, F.vatZ + WELL.z);
       this.scene.add(basket);
-      this.baskets.push({ loaded: false, cook: 0, down: false, goldenRung: false, obj: basket, fries, y: BASKET_UP, amount: 0 });
-      this.proxy(new THREE.BoxGeometry(VAT.w, 1.6, VAT.d + 0.9), new THREE.Vector3(vx, 1.0, F.vatZ + 0.45), { type: "basket", idx: i });
+      const hang = sp.hang[i];
+      const up = fryer.position.clone().add(new THREE.Vector3(hang.x, hang.y, hang.z));
+      const down = fryer.position.clone().add(new THREE.Vector3(w.x, sp.down.y, w.z));
+      this.baskets.push({ loaded: false, cook: 0, down: false, goldenRung: false, obj: basket, fries, t: 0, amount: 0, up, downAt: down, tilt: hang.tilt });
+      this.proxy(new THREE.BoxGeometry(1.5, 1.8, 2.4), fryer.position.clone().add(new THREE.Vector3(w.x, 1.6, w.z + 0.6)), { type: "basket", idx: i });
     });
   }
 
   private buildDrinks(): void {
-    const x0 = pageX(0);
-    // A low soda fountain seen from above: big buttons on top, nozzles over the cups.
-    const machine = mesh(faceted(new THREE.BoxGeometry(6.4, 1.1, 2.0)), "#d24c3f");
-    machine.position.set(x0, 0.55, -2.35);
-    this.scene.add(machine);
-    const lid = mesh(faceted(new THREE.BoxGeometry(6.5, 0.12, 2.1)), "#f3efe4");
-    lid.position.set(x0, 1.16, -2.35);
-    this.scene.add(lid);
-    const drip = mesh(faceted(new THREE.BoxGeometry(6.2, 0.1, 1.5)), "#3a3f41", { ink: false });
-    drip.position.set(x0, 0.05, -0.5);
-    this.scene.add(drip);
-    const plateGeo = faceted(new THREE.BoxGeometry(TAP_GAP - 0.2, 0.06, 1.5));
-    const buttonGeo = faceted(new THREE.CylinderGeometry(0.46, 0.5, 0.2, 20));
-    const shineGeo = faceted(new THREE.CylinderGeometry(0.26, 0.26, 0.02, 14));
-    // Nozzles reach out over the back half of the cup, so the pour falls where it can be seen.
-    const nozzleGeo = faceted(new THREE.BoxGeometry(0.34, 0.2, 1.0));
-    const spoutGeo = faceted(new THREE.CylinderGeometry(0.09, 0.07, 0.14, 8));
+    const at = (x: number, y: number, z: number) => this.world(0, x, y, z);
+    const fountain = makeFountain();
+    fountain.position.copy(at(FOUNTAIN.x, 0, FOUNTAIN.z));
+    this.scene.add(fountain);
+    const sp = fountain.userData.spots;
     DRINKS.forEach((flavor, i) => {
       const x = tapX(i);
-      const plate = mesh(plateGeo, "#f8f6ef", { ink: false });
-      plate.position.set(x, 1.24, -2.4);
-      this.scene.add(plate);
-      const button = mesh(buttonGeo, DRINK_LABEL_COLOR[flavor]);
-      button.position.set(x, 1.36, -2.5);
-      this.scene.add(button);
-      const shine = mesh(shineGeo, "#ffffff", { opacity: 0.35, ink: false });
-      shine.position.set(x - 0.1, 1.47, -2.62);
-      this.scene.add(shine);
-      const nozzle = mesh(nozzleGeo, "#8c9496");
-      nozzle.position.set(x, 1.0, -1.15);
-      this.scene.add(nozzle);
-      const spout = mesh(spoutGeo, "#6f7779");
-      spout.position.set(x, 0.85, STREAM_Z);
-      this.scene.add(spout);
-      const stream = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 1, 8), toon(DRINK_LABEL_COLOR[flavor]));
+      const stream = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1, 8), toon(DRINK_LABEL_COLOR[flavor]));
       // Drawn after the cup so the see-through cup wall never hides it.
       stream.renderOrder = 2;
       stream.visible = false;
       this.scene.add(stream);
-      const puddleObj = new THREE.Mesh(new THREE.CircleGeometry(0.62, 18), new THREE.MeshBasicMaterial({ color: DRINK_LABEL_COLOR[flavor], transparent: true, opacity: 0.7 }));
+      const puddleObj = new THREE.Mesh(new THREE.CircleGeometry(0.42, 18), new THREE.MeshBasicMaterial({ color: DRINK_LABEL_COLOR[flavor], transparent: true, opacity: 0.7 }));
       puddleObj.rotation.x = -Math.PI / 2;
-      puddleObj.position.set(x, 0.11, -0.4);
+      puddleObj.position.set(x, CUP_Y + 0.02, CUP_Z + 0.1);
       puddleObj.visible = false;
       this.scene.add(puddleObj);
       this.taps.push({ flavor, fill: 0, pouring: false, cup: null, size: null, stream, spill: 0, puddle: 0, puddleObj, x, ice: false, lid: false, straw: false });
-      this.proxy(new THREE.BoxGeometry(TAP_GAP - 0.05, 1.0, 1.7), new THREE.Vector3(x, 1.2, -2.4), { type: "tap", idx: i });
-      this.proxy(new THREE.BoxGeometry(TAP_GAP - 0.05, 1.2, 1.6), new THREE.Vector3(x, 0.5, -0.3), { type: "cup", idx: i });
+      // The big button on top pours; the cup on the drip tray is picked up.
+      const b = sp.buttons[i];
+      this.proxy(new THREE.BoxGeometry(TAP_GAP - 0.04, 1.0, 1.5), at(FOUNTAIN.x + b.x, b.y, FOUNTAIN.z + b.z + 0.3), { type: "tap", idx: i });
+      this.proxy(new THREE.BoxGeometry(TAP_GAP - 0.04, 1.4, 1.3), new THREE.Vector3(x, 0.6, CUP_Z + 0.15), { type: "cup", idx: i });
     });
-    (["S", "M", "L"] as Size[]).forEach((size, i) => this.addStack("cup", size, x0 - 2.6 + i * 1.15, 1.7));
-    // Lids and straws beside the cup stacks; the ice bin in front of them.
-    const at = DRINK_EXTRAS;
-    const ice = makeIceBin();
-    ice.position.set(x0 + at.ice.x, 0, at.ice.z);
-    const lids = makeLidStack(10);
-    lids.position.set(x0 + at.lids.x, 0, at.lids.z);
-    const straws = makeStrawHolder();
-    straws.position.set(x0 + at.straws.x, 0, at.straws.z);
-    this.scene.add(ice, lids, straws);
-    this.proxy(new THREE.BoxGeometry(2.0, 1.0, 1.5), new THREE.Vector3(x0 + at.ice.x, 0.4, at.ice.z), { type: "ice" });
-    this.proxy(new THREE.BoxGeometry(1.3, 1.2, 1.3), new THREE.Vector3(x0 + at.lids.x, 0.4, at.lids.z), { type: "lids" });
-    this.proxy(new THREE.BoxGeometry(1.1, 1.6, 1.3), new THREE.Vector3(x0 + at.straws.x, 0.6, at.straws.z), { type: "straws" });
-    this.addTrash(x0, TRASH_RAIL[0]);
+
+    // The tower: cup tubes on top (pull a cup down), the ice lever on its front.
+    const tower = makeDrinkTower();
+    tower.position.copy(at(TOWER.x, 0, TOWER.z));
+    this.scene.add(tower);
+    (["S", "M", "L"] as Size[]).forEach((size) => {
+      const t = TOWER_SPOTS.tubes[size];
+      this.addStack("cup", size, at(TOWER.x + t.x, t.y, TOWER.z + t.z), true);
+    });
+    const lv = TOWER_SPOTS.lever;
+    this.proxy(new THREE.BoxGeometry(1.4, 1.6, 1.4), at(TOWER.x + lv.x, 0.9, TOWER.z + lv.z + 0.2), { type: "ice" });
+
+    // Lids and straws in one caddy at the front left.
+    const caddy = makeLidStrawCaddy();
+    caddy.position.copy(at(LIDS.x, 0, LIDS.z));
+    this.scene.add(caddy);
+    this.proxy(new THREE.BoxGeometry(1.0, 1.2, 1.1), at(LIDS.x + LID_SPOTS.lids.x, 0.5, LIDS.z), { type: "lids" });
+    this.proxy(new THREE.BoxGeometry(0.9, 1.6, 1.1), at(LIDS.x + LID_SPOTS.straws.x, 0.7, LIDS.z), { type: "straws" });
+    this.addTrash(0, TRASH_RAIL[0]);
   }
 
   /**
-   * The Supplies counter: open boxes of wrapped sleeves of cups and fries cartons. Drag a sleeve
-   * onto a tab to carry it to another counter, then drop it on an empty stack.
+   * The Supplies counter on the back wall: the wire rack, a bay of wrapped sleeves per size. Tap
+   * a bay for a sleeve and carry it to that stack over its counter's tab.
    */
   private buildSupplies(): void {
-    const x0 = pageX(3);
-    const crate = (kind: Stack["kind"], x: number, z: number) => {
-      const g = new THREE.Group();
-      const card = "#c9a06a";
-      const floor = mesh(faceted(new THREE.BoxGeometry(2.7, 0.08, 2.2)), "#b48a55", { ink: false });
-      floor.position.y = 0.04;
-      g.add(floor);
-      for (const [w, d, px, pz] of [[2.8, 0.1, 0, -1.1], [2.8, 0.1, 0, 1.1], [0.1, 2.3, -1.4, 0], [0.1, 2.3, 1.4, 0]] as const) {
-        const wall = mesh(faceted(new THREE.BoxGeometry(w, 0.7, d)), card);
-        wall.position.set(px, 0.35, pz);
-        g.add(wall);
-      }
-      // Flaps folded open at the front and back.
-      for (const pz of [-1.3, 1.3]) {
-        const flap = mesh(faceted(new THREE.BoxGeometry(2.6, 0.04, 0.5)), "#d8b47e");
-        flap.position.set(0, 0.7, pz);
-        flap.rotation.x = pz < 0 ? 0.5 : -0.5;
-        g.add(flap);
-      }
-      for (let i = 0; i < 6; i++) {
-        const sl = this.sleeveMesh(kind);
-        sl.rotation.set(0, (i % 2 ? 0.25 : -0.2) + Math.PI / 2, Math.PI / 2);
-        sl.position.set(-0.85 + (i % 3) * 0.85, 0.4 + Math.floor(i / 3) * 0.25, -0.45 + Math.floor(i / 3) * 0.85 + (i % 2) * 0.08);
-        g.add(sl);
-      }
-      g.position.set(x0 + x, 0, z);
-      this.scene.add(g);
-      this.proxy(new THREE.BoxGeometry(2.9, 1.4, 2.5), new THREE.Vector3(x0 + x, 0.5, z), { type: "supplies", kind });
-      this.supplyAt[kind].set(x0 + x, 0.6, z);
-    };
-    crate("cup", -1.65, -1.4);
-    crate("carton", 1.65, -1.4);
-    // A low shelf of other stock along the front, for the look of a well-kept truck.
-    const shelf = mesh(faceted(new THREE.BoxGeometry(6.6, 0.2, 1.3)), "#b8c2c0");
-    shelf.position.set(x0, 0.1, 2.2);
-    this.scene.add(shelf);
-    const boxes: [string, number, number][] = [["#e9e2d2", -2.6, 0.7], ["#d24c3f", -1.5, 0.5], ["#f3c642", -0.5, 0.6], ["#e9e2d2", 0.6, 0.55], ["#9cc49a", 1.6, 0.65], ["#e9e2d2", 2.6, 0.5]];
-    for (const [c, bx, h] of boxes) {
-      const b = mesh(faceted(new THREE.BoxGeometry(0.9, h, 0.8)), c);
-      b.position.set(x0 + bx, 0.2 + h / 2, 2.2);
-      this.scene.add(b);
-    }
+    // Its own counter top and wall, facing the window line across the aisle.
+    const top = counterTop(20, 7.6);
+    top.position.copy(this.world(3, 0, 0, 0));
+    top.rotation.y = Math.PI;
+    const wall = wallPanels(20, 6);
+    wall.position.copy(this.world(3, 0, -0.4, -3.6));
+    wall.rotation.y = Math.PI;
+    const splash = new THREE.Mesh(new THREE.BoxGeometry(20, 0.5, 0.1), toon("#b9d6a2"));
+    splash.position.copy(this.world(3, 0, 0.25, -3.55));
+    this.scene.add(top, wall, splash);
+
+    const rack = makeWireRack({ w: RACK.w });
+    rack.position.copy(this.world(3, RACK.x, 0, RACK.z));
+    rack.rotation.y = Math.PI;
+    this.scene.add(rack);
+    // A towel over the front edge of the supplies counter.
+    const towel = makeTowel();
+    towel.position.copy(this.world(3, 2.6, 0, 3.8));
+    towel.rotation.y = Math.PI;
+    this.scene.add(towel);
+    const { bays, bayW } = rack.userData.spots;
+    bays.forEach((b, i) => {
+      rack.userData.setBay(i, 2);
+      const c = this.world(3, RACK.x + b.x, b.y, RACK.z + b.z);
+      this.supplyAt.push({ kind: b.kind, size: b.size, at: c });
+      this.proxy(new THREE.BoxGeometry(bayW - 0.1, 0.9, 1.25), c.clone().setY(b.y + 0.35), { type: "supplies", kind: b.kind, size: b.size });
+    });
   }
 
-  /** Where the Supplies counter's crates are, for labels and the playtest bot. */
-  supplyAt = { cup: new THREE.Vector3(), carton: new THREE.Vector3() };
+  /** Where each bay of the wire rack is, for labels and the playtest bot. */
+  supplyAt: { kind: Stack["kind"]; size: Size; at: THREE.Vector3 }[] = [];
+  private fryer!: FryerObject;
 
-  /** A trash slot along a counter's front edge, between page-local x0 and x1. */
-  private addTrash(pageX0: number, r: { x0: number; x1: number }): void {
+  /** A trash chute along a counter's front edge, between page-local x0 and x1. */
+  private addTrash(page: number, r: { x0: number; x1: number }): void {
     const w = r.x1 - r.x0;
-    const cx = pageX0 + (r.x0 + r.x1) / 2;
-    const slot = mesh(faceted(new THREE.BoxGeometry(w, 0.06, TRASH.z1 - TRASH.z0)), "#1e2422", { ink: false, shadow: false });
-    slot.position.set(cx, 0.02, (TRASH.z0 + TRASH.z1) / 2);
-    slot.receiveShadow = false;
-    const lip = mesh(faceted(new THREE.BoxGeometry(w + 0.1, 0.08, 0.08)), "#8d9a97", { ink: false });
-    lip.position.set(cx, 0.05, TRASH.z0 - 0.02);
-    this.scene.add(slot, lip);
+    const c = this.world(page, (r.x0 + r.x1) / 2, 0, (TRASH.z0 + TRASH.z1) / 2);
+    const chute = makeTrashChute(w);
+    chute.position.copy(c);
+    this.scene.add(chute);
     // Lights up while something held is over it, so you know a drop will bin it.
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.2, TRASH.z1 - TRASH.z0 + 0.25), new THREE.MeshBasicMaterial({ color: "#e0523f", transparent: true, opacity: 0.55, depthWrite: false }));
     glow.rotation.x = -Math.PI / 2;
-    glow.position.set(cx, 0.1, (TRASH.z0 + TRASH.z1) / 2);
+    glow.position.copy(c).setY(0.1);
     glow.visible = false;
     glow.renderOrder = 3;
     this.scene.add(glow);
-    this.trashGlow[Math.round(pageX0 / PAGE_GAP) + HOME_PAGE] = glow;
-    // A few thin steel bars across the opening, like a real chute grate.
-    const n = Math.max(2, Math.round(w / 1.6));
-    for (let i = 1; i < n; i++) {
-      const bar = mesh(faceted(new THREE.BoxGeometry(0.06, 0.05, TRASH.z1 - TRASH.z0 - 0.04)), "#9aa3a6", { ink: false, shadow: false });
-      bar.position.set(pageX0 + r.x0 + (w * i) / n, 0.07, (TRASH.z0 + TRASH.z1) / 2);
-      this.scene.add(bar);
-    }
+    this.trashGlow[page] = glow;
   }
 
   /** What you carry from the fryer's topping column. */
@@ -604,27 +592,25 @@ export class CounterView {
     return mesh(faceted(new THREE.CylinderGeometry(0.04, 0.04, 1.3, 6)), "#d24c3f");
   }
 
-  private addStack(kind: Stack["kind"], size: Size, x: number, z: number): void {
-    const base = mesh(faceted(new THREE.CylinderGeometry(0.55, 0.55, 0.04, 16)), "#e9e2d2", { ink: false });
-    base.position.set(x, 0.02, z);
-    this.scene.add(base);
+  /** A stack of cups or cartons standing at a world point; cups in the tower hang mouth down in a tube. */
+  private addStack(kind: Stack["kind"], size: Size, at: THREE.Vector3, tube = false): void {
+    if (!tube) {
+      const base = mesh(faceted(new THREE.CylinderGeometry(0.55, 0.55, 0.04, 16)), "#e9e2d2", { ink: false });
+      base.position.set(at.x, 0.02, at.z);
+      this.scene.add(base);
+    }
     const obj = new THREE.Group();
-    obj.position.set(x, 0.04, z);
+    obj.position.copy(at).setY(at.y + (tube ? 0 : 0.04));
     this.scene.add(obj);
-    const s: Stack = { kind, size, count: STACK_START, sleeve: false, tear: 0, obj, x, z };
+    const s: Stack = { kind, size, count: STACK_START, sleeve: false, tear: 0, obj, x: at.x, z: at.z, tube };
     this.stacks.push(s);
     this.syncStack(s);
-    this.proxy(new THREE.BoxGeometry(1.2, 1.6, 1.2), new THREE.Vector3(x, 0.6, z), { type: "stack", idx: this.stacks.length - 1 });
+    this.proxy(new THREE.BoxGeometry(tube ? 0.75 : 1.1, 1.6, tube ? 1.0 : 1.2), at.clone().setY(at.y + (tube ? 0.5 : 0.6)), { type: "stack", idx: this.stacks.length - 1 });
   }
 
-  /** A plastic-wrapped tube of cups or cartons. */
-  sleeveMesh(kind: Stack["kind"]): THREE.Object3D {
-    const g = new THREE.Group();
-    const inner = mesh(faceted(new THREE.CylinderGeometry(0.34, 0.3, 0.9, 12)), kind === "cup" ? "#f3f1ea" : "#d8473a");
-    const wrap = mesh(faceted(new THREE.CylinderGeometry(0.38, 0.38, 0.95, 12)), "#bfe3f2", { opacity: 0.55, ink: false });
-    g.add(inner, wrap);
-    g.scale.setScalar(0.85);
-    return g;
+  /** A plastic-wrapped sleeve of cups or paper boats of one size. */
+  sleeveMesh(kind: Stack["kind"], size: Size): THREE.Object3D {
+    return makeSleeve(kind, size);
   }
 
   /** Redraw a cup or carton stack after its count changes. */
@@ -634,26 +620,20 @@ export class CounterView {
       disposeObject(c);
     }
     if (s.sleeve) {
-      const sleeve = this.sleeveMesh(s.kind);
-      sleeve.position.y = 0.45;
-      // A torn sleeve sags open a little.
-      sleeve.children[1].scale.set(1 + s.tear * 0.3, 1 - s.tear * 0.4, 1 + s.tear * 0.3);
+      const sleeve = this.sleeveMesh(s.kind, s.size);
+      // Under a tube the sleeve is held up to its mouth; a torn one sags open a little.
+      sleeve.position.y = s.tube ? -0.35 : 0.05;
+      sleeve.rotation.y = 0.3;
+      sleeve.scale.set(1 + s.tear * 0.15, 1 - s.tear * 0.25, 1 + s.tear * 0.15);
       s.obj.add(sleeve);
       return;
     }
-    if (s.kind === "carton") {
-      // Nested cartons are baked into one mesh per size and count.
-      const o = makeCartonStack(s.size as FriesSize, s.count);
-      o.scale.setScalar(CARTON_STACK_SCALE);
-      s.obj.add(o);
-      return;
-    }
-    for (let i = 0; i < s.count; i++) {
-      const o = makeCup(null, false, s.size);
-      o.scale.multiplyScalar(0.7);
-      o.position.y = i * 0.09;
-      s.obj.add(o);
-    }
+    // The tower draws the cups in its tubes; its labels say how many are left.
+    if (s.tube) return;
+    // Nested cartons are baked into one mesh per size and count.
+    const o = makeCartonStack(s.size as FriesSize, s.count);
+    o.scale.setScalar(CARTON_STACK_SCALE);
+    s.obj.add(o);
   }
 
   /** Put an empty cup under a nozzle. */
@@ -661,8 +641,8 @@ export class CounterView {
     const t = this.taps[i];
     this.removeCup(i);
     const cup = makeCup(t.flavor, false, size);
-    cup.scale.setScalar(0.8);
-    cup.position.set(t.x, 0.1, -0.45);
+    cup.scale.setScalar(CUP_AT_TAP);
+    cup.position.set(t.x, CUP_Y, CUP_Z);
     this.scene.add(cup);
     t.cup = cup;
     t.size = size;
@@ -699,7 +679,6 @@ export class CounterView {
       disposeObject(p.obj);
       p.obj = null;
     }
-    this.padMarks[i].visible = !p.size;
     if (!p.size) return;
     let o: THREE.Object3D;
     if (p.fill > 0) {
@@ -711,8 +690,7 @@ export class CounterView {
       o = makeCarton(p.size);
       o.scale.multiplyScalar(PACK_SCALE);
     }
-    // On the pad, a little forward of centre so the carton's silhouette sits on the outline.
-    o.position.set(p.x, 0.15, p.z + 0.05);
+    o.position.set(p.x, p.y, p.z);
     this.scene.add(o);
     p.obj = o;
   }
@@ -740,26 +718,28 @@ export class CounterView {
   /** Packing spot under a world point, or -1. */
   overPack(world: THREE.Vector3): number {
     // The pads are big on purpose: anywhere over one counts.
-    return this.packs.findIndex((p) => Math.abs(world.x - p.x) < PAD.w / 2 + 0.15 && Math.abs(world.z - p.z) < PAD.d / 2 + 0.05);
+    return this.packs.findIndex((p) => Math.abs(world.x - p.x) < PAD.w / 2 + 0.12 && Math.abs(world.z - p.z) < PAD.d / 2 + 0.3);
   }
 
   /** Nozzle slot under a world point, or -1. */
   overTap(world: THREE.Vector3): number {
-    return this.taps.findIndex((t) => Math.abs(world.x - t.x) < TAP_GAP / 2 && world.z > -1.3 && world.z < 0.5);
+    return this.taps.findIndex((t) => Math.abs(world.x - t.x) < TAP_GAP / 2 && world.z > CUP_Z - 0.6 && world.z < CUP_Z + 1.4);
   }
 
-  /** Stack under a world point, or -1. */
-  overStack(world: THREE.Vector3): number {
-    return this.stacks.findIndex((s) => Math.hypot(world.x - s.x, world.z - s.z) < 0.7);
+  /** Stack under the pointer, or -1. Picked by its hit box, since the tower's tubes stand well above the counter. */
+  overStack(ndc: THREE.Vector2): number {
+    const h = this.hit(ndc);
+    return h?.type === "stack" ? h.idx : -1;
   }
 
   /** World position under each drink cup, for the HTML flavour labels; alternate rows so five fit. */
   /** Each drink's label sits in a row along the front lip of the machine, over its nozzle. */
   drinkLabelPoint(i: number): THREE.Vector3 {
-    return new THREE.Vector3(tapX(i), 1.18, -1.32);
+    const l = FOUNTAIN_SPOTS.labels[i];
+    return this.world(0, FOUNTAIN.x + l.x, l.y, FOUNTAIN.z + l.z);
   }
 
-  /** Fill the grill counter's bins for the current stop. */
+  /** Fill the prep unit's pans for the current stop: nine kinds, back row first. */
   setPantry(kinds: Kind[]): void {
     if (this.pantry) {
       this.scene.remove(this.pantry);
@@ -773,33 +753,54 @@ export class CounterView {
       }
       return keep;
     });
-    const g = new THREE.Group();
-    const x0 = pageX(1);
-    this.bins = kinds.slice(0, BIN_SLOTS.length).map((kind, i) => ({ kind, ...BIN_SLOTS[i] }));
-    for (const b of this.bins) {
-      const bin = makeBin(b.kind);
-      bin.position.set(x0 + b.x, 0, b.z);
-      g.add(bin);
-      this.proxy(new THREE.BoxGeometry(1.25, 0.9, 1.15), new THREE.Vector3(x0 + b.x, 0.3, b.z), { type: "bin", kind: b.kind });
-    }
-    this.pantry = g;
-    this.scene.add(g);
+    const prep = makePrepUnit({ kinds: kinds.slice(0, 9) });
+    prep.position.copy(this.world(1, PREP.x, 0, PREP.z));
+    const { pans, pan } = prep.userData.spots;
+    this.bins = pans.flatMap((p) => (p.kind ? [{ kind: p.kind, x: PREP.x + p.x, z: PREP.z + p.z, y: p.y }] : []));
+    for (const b of this.bins) this.proxy(new THREE.BoxGeometry(pan.w, 0.9, pan.d), this.world(1, b.x, b.y - 0.2, b.z), { type: "bin", kind: b.kind });
+    this.pantry = prep;
+    this.scene.add(prep);
   }
 
   layout(aspect: number): void {
     this.camera.aspect = aspect;
-    // Fit about 7.2 world units across, and on short, wide bands enough depth to reach the
-    // trash slot along the front edge.
-    const dist = 13.1;
-    const hfov = 2 * Math.atan(3.65 / dist);
+    // Fit VIEW_W across, and on short, wide bands enough depth to reach the trash slot along the
+    // front edge.
+    const dist = Math.hypot(CAM_H, CAM_BACK);
+    const hfov = 2 * Math.atan(VIEW_W / 2 / dist);
     const fitWidth = 2 * Math.atan(Math.tan(hfov / 2) / aspect);
-    const fitDepth = 2 * Math.atan(3.55 / dist);
+    const fitDepth = 2 * Math.atan(3.75 / dist);
     this.camera.fov = THREE.MathUtils.radToDeg(Math.max(fitWidth, fitDepth));
     this.camera.updateProjectionMatrix();
   }
 
+  /** Go to a counter. On the counter you're already at, a second tap moves to its other stop. */
   setPage(i: number): void {
-    this.page = THREE.MathUtils.clamp(i, 0, PAGES.length - 1);
+    const page = THREE.MathUtils.clamp(i, 0, PAGES.length - 1);
+    const stops = this.stopsOf(page);
+    this.setStop(page === this.page && stops.length > 1 ? stops[(stops.indexOf(this.stop) + 1) % stops.length] : stops[0]);
+  }
+
+  /** Move to a camera stop. Swipes along the tab bar step one stop at a time. */
+  setStop(s: number): void {
+    this.stop = THREE.MathUtils.clamp(s, 0, STOPS.length - 1);
+    this.page = STOPS[this.stop].page;
+  }
+
+  /** The camera stops on a counter, left to right. */
+  stopsOf(page: number): number[] {
+    return STOPS.flatMap((s, i) => (s.page === page ? [i] : []));
+  }
+
+  /** The camera has arrived at its stop (labels over the counter wait for it). */
+  get settled(): boolean {
+    const s = STOPS[this.stop];
+    return Math.abs(this.camX - s.x) < 0.05 && Math.abs(this.camYaw - (s.turned ? Math.PI : 0)) < 0.02 && this.dragOffset === 0;
+  }
+
+  /** A counter-local point (as the build code lays pages out) in world space. Supplies faces the other way. */
+  world(page: number, x: number, y: number, z: number): THREE.Vector3 {
+    return page === 3 ? new THREE.Vector3(pageX(3) - x, y, SUPPLY_Z - z) : new THREE.Vector3(pageX(page) + x, y, z);
   }
 
   hit(ndc: THREE.Vector2): Hit | null {
@@ -817,8 +818,7 @@ export class CounterView {
       }
     }
     if (best) return { type: "grillItem", item: best };
-    const hp = this.groundPoint(ndc, 0.35);
-    const hold = this.holds.findIndex((h) => Math.hypot(hp.x - (pageX(1) + h.x), hp.z - h.z) < 0.6);
+    const hold = this.page === HOME_PAGE ? this.overHold(ndc) : -1;
     if (hold >= 0) return { type: "hold", idx: hold };
     const hits = this.raycaster.intersectObjects(this.hitMeshes, false);
     return hits.length ? (hits[0].object.userData.hit as Hit) : null;
@@ -856,9 +856,12 @@ export class CounterView {
   }
 
   /** Assembly spot under the world point, or -1. */
-  overHold(world: THREE.Vector3): number {
-    return this.holds.findIndex((h) => Math.hypot(world.x - (pageX(1) + h.x), world.z - h.z) < 0.62);
+  overHold(ndc: THREE.Vector2): number {
+    // The plates sit up on the shelf, so the finger is matched at their height.
+    const p = this.groundPoint(ndc, HOLD_Y);
+    return this.holds.findIndex((h) => Math.hypot(p.x - (pageX(1) + h.x), p.z - h.z) < 0.62);
   }
+
 
   /** Redraw an assembly spot after its layers change. */
   syncHold(i: number, animate: boolean): void {
@@ -944,15 +947,79 @@ export class CounterView {
     this.held.position.set(world.x, world.y + 0.7, world.z);
   }
 
-  liftBottle(s: SauceKind, world: THREE.Vector3 | null): void {
-    const b = this.bottles[s];
-    if (world) {
-      b.position.set(world.x, 0.9, world.z - 0.3);
-      b.rotation.x = -0.6;
-    } else {
-      b.position.copy(this.bottleHome[s]);
-      b.rotation.x = 0;
+  /**
+   * Lift a sauce out of the caddy (or put it back with null). Only one is in hand at a time; it
+   * stays out until it's put back, so the bottle can be squeezed over any burger.
+   */
+  liftSauce(kind: SauceKind | null): void {
+    this.inHand = kind;
+    for (const k of ["ketchup", "mustard"] as SauceKind[]) this.bottles[k].visible = k !== kind;
+    this.pointSauce(null);
+  }
+  inHand: SauceKind | null = null;
+  private handBottle: THREE.Object3D | null = null;
+
+  /** The bottle in hand over a world point on the counter (squeezing over a hold plate), or out of view. */
+  pointSauce(world: THREE.Vector3 | null): void {
+    if (this.handBottle && (!world || this.handBottle.userData.kind !== this.inHand)) {
+      this.scene.remove(this.handBottle);
+      disposeObject(this.handBottle);
+      this.handBottle = null;
     }
+    if (!world || !this.inHand) return;
+    if (!this.handBottle) {
+      this.handBottle = this.sauceBottle(this.inHand);
+      this.handBottle.userData.kind = this.inHand;
+      this.scene.add(this.handBottle);
+    }
+    this.handBottle.position.copy(world);
+  }
+
+  /** The bottle in hand over a burger-local point of a hold plate's stack. */
+  pointSauceAt(i: number, q: { x: number; z: number }): void {
+    const v = this.holds[i].view;
+    v.group.updateMatrixWorld(true);
+    this.pointSauce(v.burger.localToWorld(new THREE.Vector3(q.x, v.stackTop(), q.z)));
+  }
+
+  /** A sauce bottle hanging nozzle down, its origin at the nozzle tip. */
+  sauceBottle(kind: SauceKind): THREE.Object3D {
+    return makeSauceBottle(kind);
+  }
+
+  /** Where the sauce caddy stands, for the in-hand mask. */
+  caddyPoint(): THREE.Vector3 {
+    return this.caddy.position.clone().setY(0.8);
+  }
+
+  /** Where a hold plate's staleness bar stands: just off the plate's right edge, at its rim. */
+  holdBarPoint(i: number): THREE.Vector3 {
+    return this.holdPoint(i).add(new THREE.Vector3(HOLD_SCALE + 0.12, 0.05, 0.25) /* plate radius is 1 at HOLD_SCALE */);
+  }
+
+  /** Where the warm-zone switch sits: on the griddle's front lip, under the warm zone. */
+  warmSwitchPoint(): THREE.Vector3 {
+    return this.world(1, (WARM_X0 + GRIDDLE.x + GRIDDLE_SURFACE.x1) / 2, GRILL_TOP, GRIDDLE.z + GRIDDLE_SURFACE.z1 + 0.55);
+  }
+
+  /**
+   * Where a basket's fry meter sits: on the counter just in front of the fryer, under its well, so
+   * it never covers the basket (the panel meters on the fryer read too small at phone width).
+   */
+  fryTagPoint(i: number): THREE.Vector3 {
+    const f = this.fryer;
+    return new THREE.Vector3(this.baskets[i].obj.position.x, 0.1, f.position.z + f.userData.footprint.d / 2 + 0.45);
+  }
+
+  /** A hold plate's centre in world space. */
+  holdPoint(i: number): THREE.Vector3 {
+    return this.holds[i].view.group.position.clone();
+  }
+
+  /** Pointer position over a hold plate's stack, in burger-local units, for drawing sauce there. */
+  holdDrawPoint(ndc: THREE.Vector2, i: number): { x: number; z: number } {
+    this.raycaster.setFromCamera(ndc, this.camera);
+    return this.holds[i].view.drawPoint(this.raycaster.ray);
   }
 
   get pageCount(): number {
@@ -978,11 +1045,18 @@ export class CounterView {
 
   update(dt: number): void {
     this.time += dt;
-    // Camera glides between counters and follows the swipe.
-    const target = pageX(this.page) + this.dragOffset;
-    this.camX += (target - this.camX) * Math.min(1, dt * 10);
-    this.camera.position.set(this.camX, 12.6, 5.2);
-    this.camera.lookAt(this.camX, 0, -0.1);
+    // Camera glides between stops; for the back wall it turns round on the spot.
+    const stop = STOPS[this.stop];
+    const k = Math.min(1, dt * 10);
+    this.camX += (stop.x + this.dragOffset - this.camX) * k;
+    this.camYaw += ((stop.turned ? Math.PI : 0) - this.camYaw) * k;
+    const camZ = LOOK_Z + CAM_BACK;
+    this.camera.position.set(this.camX, CAM_H, camZ);
+    const lookX = this.camX + Math.sin(this.camYaw) * CAM_BACK;
+    const lookZ = camZ - Math.cos(this.camYaw) * CAM_BACK;
+    this.camera.lookAt(lookX, 0, lookZ);
+    // The sun follows the camera so shadows stay sharp on whichever counter is in view.
+    this.light.aim(lookX, lookZ);
 
     // Grill
     const gx = pageX(1);
@@ -1023,12 +1097,14 @@ export class CounterView {
       it.obj.userData.update(it.piece);
     }
     if (anyBurning) this.events.burning();
-    this.grillGlow.material instanceof THREE.MeshBasicMaterial && (this.grillGlow.material.opacity = 0.1 + 0.04 * Math.sin(this.time * 3));
 
     // Smoke: puffs drift up from cooking items; darker when burning.
     const active = this.grillItems.filter((g) => !g.held && g.flipT < 0 && !this.isWarm(g));
     for (const h of this.holds) h.view.update(dt);
-    (this.warmGlow.material as THREE.MeshBasicMaterial).opacity += ((this.warm ? 0.22 : 0) - (this.warmGlow.material as THREE.MeshBasicMaterial).opacity) * Math.min(1, dt * 8);
+    if (this.warmShown !== this.warm) {
+      this.griddle.userData.setWarm(this.warm);
+      this.warmShown = this.warm;
+    }
     this.puffs.forEach((m, i) => {
       const it = active[i % Math.max(1, active.length)];
       m.userData.t += dt * 0.5;
@@ -1055,12 +1131,15 @@ export class CounterView {
     for (let i = 0; i < this.baskets.length; i++) {
       const b = this.baskets[i];
       const inOil = b.down && b.loaded;
-      const targetY = inOil ? BASKET_DOWN : BASKET_UP;
-      b.y += (targetY - b.y) * Math.min(1, dt * 8);
-      b.obj.position.y = b.y + (inOil ? Math.sin(this.time * 18) * 0.015 : 0);
+      // Lowered baskets sit level in the oil; lifted ones hang tilted on the rail to drain.
+      b.t += ((inOil ? 1 : 0) - b.t) * Math.min(1, dt * 8);
+      b.obj.position.lerpVectors(b.up, b.downAt, b.t);
+      b.obj.position.y += inOil ? Math.sin(this.time * 18) * 0.015 : 0;
+      b.obj.rotation.x = b.tilt * (1 - b.t);
       b.fries.visible = b.loaded;
-      const bub = this.bubbles[i];
-      bub.visible = inOil && b.y < BASKET_DOWN + 0.2;
+      if (b.loaded) this.fryer.userData.setMeter(i, b.cook);
+      const bub = this.fryer.userData.bubbles[i];
+      bub.visible = inOil && b.t > 0.85;
       if (bub.visible) {
         bub.scale.set(1, 0.6 + 0.4 * Math.abs(Math.sin(this.time * 9 + i)), 1);
         bub.rotation.y = Math.sin(this.time * 2.3 + i) * 0.12;
@@ -1095,8 +1174,8 @@ export class CounterView {
       t.cup?.userData.setFill(t.fill);
       t.stream.visible = t.pouring && !!t.cup;
       if (t.stream.visible) {
-        const topY = 0.1 + 0.8 * CUP_SCALE[t.size ?? "M"][1] * (0.07 + Math.min(1, t.fill) * 0.95);
-        const h = Math.max(0.05, 0.8 - topY);
+        const topY = CUP_Y + cupSurfaceY(t.size ?? "L", Math.min(1, t.fill)) * CUP_AT_TAP;
+        const h = Math.max(0.05, STREAM_TOP - topY);
         t.stream.scale.set(1, h, 1);
         t.stream.position.set(t.x, topY + h / 2, STREAM_Z);
       }

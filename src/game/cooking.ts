@@ -2,7 +2,11 @@ import type { Doneness, Piece } from "./types";
 
 /** Seconds of grill time per unit of cook on one face. A side goes raw to medium in about 7s; patties cook at a third of that pace. */
 export const GRILL_RATE = 0.08;
-export const FRY_RATE = 0.075;
+/**
+ * Cook per second for fries in the oil. At this pace a basket turns golden after about 20s,
+ * hits perfect at about 29s and goes over at about 38s: long enough to build a burger meanwhile.
+ */
+export const FRY_RATE = 0.025;
 
 export function pattyLabel(t: number): string {
   if (t < 0.18) return "Raw";

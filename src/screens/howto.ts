@@ -225,7 +225,7 @@ function sections(): Sec[] {
       </div>`,
       points: [
         "Drag <b>1, 2 or 3 scoops</b> of frozen fries into a basket for a small, medium or large.",
-        "The basket waits for you: <b>tap it to lower</b> it into the oil, and tap again to lift.",
+        "The basket waits for you: <b>tap it to lower</b> it into the oil, and tap again to lift. Fries take <b>about half a minute</b>, so get them going while the patties cook.",
         "Lift when the marker is on the line. <b>Under</b> is soggy, <b>over</b> is burnt.",
         "<b>Salt</b> them with the shaker. It's optional, but customers notice when you skip it.",
         "Put an empty carton on a pad and <b>pack the fries</b> into it, then drag it to the plate.",

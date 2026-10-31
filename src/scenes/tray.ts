@@ -5,6 +5,7 @@ import { makeCup, makeFood, makeFries, stackBases, type BunRole, type CupObject,
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 
 export const SLOT_COLORS = ["#6a8fd8", "#9ccf8a", "#b48ad8"];
+const TRAY_VIEW_HALF_H = 2.2;
 
 interface StackEntry {
   uid: number;
@@ -171,7 +172,11 @@ export class PlateView {
 
 export class TrayView {
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(26, 2.4, 0.1, 60);
+  /**
+   * Orthographic, so the three plates look identical. The band is very wide (about 3.4:1), and a
+   * perspective camera wide enough to see all three plates skews the outer two badly.
+   */
+  camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 60);
   plates: PlateView[] = [];
   /** The shadow-casting light, so the graphics setting can soften or disable it. */
   sun: THREE.DirectionalLight;
@@ -212,7 +217,10 @@ export class TrayView {
 
   /** Place plates under the three customer slots for the band's aspect ratio. */
   layout(aspect: number): void {
-    this.camera.aspect = aspect;
+    // Half the visible height at the look-at point, in world units: the same framing the old
+    // 26° perspective camera had down the middle.
+    const hh = TRAY_VIEW_HALF_H;
+    Object.assign(this.camera, { left: -hh * aspect, right: hh * aspect, top: hh, bottom: -hh });
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
     // One plate under each customer; swipe a plate up to hand it over.
@@ -223,6 +231,15 @@ export class TrayView {
       p.group.position.set(pts[i].x, 0, pts[i].z);
       p.group.scale.setScalar(r);
     });
+  }
+
+  /** Where the far edge of the plates' rings sits, as a fraction of the band's height from its top. */
+  rimTop(): number {
+    const pv = this.plates[1];
+    const r = 1.22 * pv.group.scale.x;
+    this.camera.updateMatrixWorld();
+    const v = new THREE.Vector3(pv.group.position.x, 0.02, pv.group.position.z - r).project(this.camera);
+    return (1 - v.y) / 2;
   }
 
   private groundAt(ndc: THREE.Vector2, y = 0): THREE.Vector3 {

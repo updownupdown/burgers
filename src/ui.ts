@@ -181,7 +181,7 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, expande
     // A poutine meal: the carton, then curds and gravy on top.
     const f = plate.fries;
     const line = (ok: boolean, color: string, label: string) => `<li class="${ok ? "ok" : ""}"><b style="background:${color}"></b><span class="l">${label}</span></li>`;
-    body = `<ol>${line(!!f && f.size === order.friesSize, "#f3d36b", `<i class="sz">${order.friesSize}</i> Fries`)}${line(!!f?.curds, "#f5edcf", "Cheese curds")}${line(!!f?.gravy, "#6e4020", "Gravy")}</ol>`;
+    body = `<ol>${line(!!f && f.size === order.friesSize, "#f3d36b", `<i class="sz">${order.friesSize}</i>Fries`)}${line(!!f?.curds, "#f5edcf", "Cheese curds")}${line(!!f?.gravy, "#6e4020", "Gravy")}</ol>`;
   } else if (expanded) {
     const lines: string[] = [];
     for (let i = order.layers.length - 1; i >= 0; i--) {
@@ -196,7 +196,7 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, expande
         extra = ` <span class="n">${got && got < exp.count ? `${got}/` : ""}×${exp.count}</span>`;
       }
       const cls = [okFlags[i] ? "ok" : "", modded.has(exp.kind) ? "mod" : ""].join(" ").trim();
-      lines.push(`<li class="${cls}"><b style="background:${KIND_COLOR[exp.kind]}"></b><span class="l">${KIND_LABEL[exp.kind]}</span>${extra}</li>`);
+      lines.push(`<li class="${cls}" data-l><b style="background:${KIND_COLOR[exp.kind]}"></b><span class="l">${KIND_LABEL[exp.kind]}</span>${extra}</li>`);
     }
     const nos = order.mods.filter((m) => m.type === "no").map((m) => `<li class="no"><span class="l">No ${KIND_LABEL[m.kind].toLowerCase()}</span></li>`);
     body = `<ol>${lines.join("")}${nos.join("")}</ol>`;
@@ -218,21 +218,23 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, expande
   const sides: string[] = [];
   // Sizes lead so they're the first thing read: "L Fries", "S Pine Fizz".
   if (order.fries && !(order.poutine && !order.layers.length))
-    sides.push(`<span class="${plate.fries?.size === order.friesSize ? "ok" : ""}"><b style="background:#f3d36b"></b><i class="sz">${order.friesSize}</i>Fries</span>`);
+    sides.push(`<span class="${plate.fries?.size === order.friesSize ? "ok" : ""}"><b style="background:#f3d36b"></b><i class="sz">${order.friesSize}</i><span class="sl">Fries</span></span>`);
   if (order.drink) {
     const d = plate.drink;
     const iceOk = order.ice == null || !!d?.ice === order.ice;
     const ok = d?.flavor === order.drink && d.size === order.drinkSize && iceOk && d.lid && d.straw;
     // Ice only shows when the customer cares: "Ice" or a red "No ice".
     const ice = order.ice === true ? `<em class="ice">Ice</em>` : order.ice === false ? `<em class="ice no">No ice</em>` : "";
-    sides.push(`<span class="${ok ? "ok" : ""}"><b style="background:${DRINK_COLOR[order.drink]}"></b><i class="sz">${order.drinkSize}</i>${DRINK_LABEL[order.drink]}${ice}</span>`);
+    sides.push(`<span class="${ok ? "ok" : ""}"><b style="background:${DRINK_COLOR[order.drink]}"></b><i class="sz">${order.drinkSize}</i><span class="sl">${DRINK_LABEL[order.drink]}${ice}</span></span>`);
   }
   const pct = Math.max(0, Math.min(1, patience));
   const mood = patienceMood(pct);
-  return `<div class="pat ${mood}">${moodFace(mood)}<span><i style="width:${(pct * 100).toFixed(0)}%"></i></span></div>
-    ${order.critic ? `<div class="critic" title="Food critic">Critic</div>` : ""}<div class="name"><span class="l">#${order.id} ${esc(order.name)}</span><span class="exp">${expanded ? "▴" : "▾"}</span></div>
-    ${sentBack ? `<div class="back">Sent back: ${esc(sentBack)}</div>` : ""}
-    ${body}
+  // The layer list sits in its own scroller between the header and the sides, so a long order
+  // never pushes the name, a send-back note or the fries and drink out of sight.
+  return `<div class="pat ${mood}">${moodFace(mood)}<span><i style="width:${(pct * 100).toFixed(0)}%"></i></span>${order.critic ? `<em class="critic" title="Food critic">Critic</em>` : ""}</div>
+    <div class="name"><span class="l"><span class="id">#${order.id} </span>${esc(order.name)}</span><span class="exp">${expanded ? "▴" : "▾"}</span></div>
+    ${sentBack ? `<div class="back"><span class="bl">Sent back: </span>${esc(sentBack)}</div>` : ""}
+    <div class="tb"><i class="tmore up" aria-hidden="true">▴</i>${body}<i class="tmore" aria-hidden="true">▾</i></div>
     ${sides.length ? `<div class="sides">${sides.join("")}</div>` : ""}`;
 }
 

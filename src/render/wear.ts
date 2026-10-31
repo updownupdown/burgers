@@ -125,26 +125,26 @@ export function wallPanels(w: number, h: number, color: THREE.ColorRepresentatio
   return m;
 }
 
-/** Counter speckle tiles every this many game units. */
-const COUNTER_TILE = 3.5;
+/** The counter's brushed-steel texture tiles every this many game units across, and half that deep. */
+const COUNTER_TILE = 2.5;
 
 /**
- * A counter top `w` x `d` game units and 0.3 thick with a faint speckle, and a thin bright strip
- * along its front edge that reads as a steel bevel. Origin at the centre of the top surface.
+ * A stainless counter top `w` x `d` game units and 0.3 thick: brushed steel, a thin bright strip
+ * along its front edge for the rolled lip,
+ * and a brushed kick strip under it. Origin at the centre of the top surface.
  */
-export function counterTop(w: number, d: number, color: THREE.ColorRepresentation = "#efe6d8"): THREE.Group {
+export function counterTop(w: number, d: number, color: THREE.ColorRepresentation = "#c4cccc"): THREE.Group {
   const g = new THREE.Group();
   const geo = new THREE.BoxGeometry(w, 0.3, d);
   geo.translate(0, -0.15, 0);
-  tileUV(geo, w, d, COUNTER_TILE, COUNTER_TILE);
-  const top = new THREE.Mesh(geo, texturedToon(speckleTex(color)));
+  tileUV(geo, w, d, COUNTER_TILE, COUNTER_TILE / 2);
+  const top = new THREE.Mesh(geo, brushedSteel(color, { n: 1600, seed: 9 }));
   top.receiveShadow = true;
   top.name = "counterTop";
   outline(top, 1.004, lineColor(grade(color)));
   const bevel = new THREE.Mesh(new THREE.BoxGeometry(w, 0.025, 0.035), toon("#ffffff"));
   bevel.position.set(0, -0.005, d / 2 + 0.005);
   bevel.name = "bevel";
-  // A brushed kick strip below the bevel, the other cheap tell that the edge is metal.
   const edge = new THREE.Mesh(new THREE.BoxGeometry(w, 0.26, 0.03), brushedSteel("#c9d1cf", { seed: 2 }));
   edge.position.set(0, -0.16, d / 2 + 0.012);
   edge.name = "edge";

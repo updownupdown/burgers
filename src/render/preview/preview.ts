@@ -3,7 +3,7 @@ import { newPiece, type Kind, type Piece } from "../../game/types";
 import { makeFood, stackBases } from "../food";
 import { applyKitchenLight, KITCHEN_BG } from "../lighting";
 import { toon } from "../materials";
-import { makeColdRail, makeDrinkTower, makeFountain, makeFryBasket, makeFryer, makeGriddle, makeLidStrawCaddy, makePackPad, makePrepUnit, makeSauceBottle, makeSauceCaddy, makeTrashChute, makeWarmShelf, makeWireRack, FRY_BASKET } from "../machines";
+import { makeColdRail, makeDrinkTower, makeFountain, makeFryBasket, makeFryer, makeGriddle, makeLidStrawCaddy, makePackPad, makePrepUnit, makeSauceBottle, makeSauceCaddy, makeTrashChute, makeWarmShelf, makeSupplyShelf, FRY_BASKET } from "../machines";
 import { makeCup, makeFries, makeFryPile, makeCartonStack } from "../food";
 import { SCALE } from "../units";
 import { counterTop, wallPanels } from "../wear";
@@ -142,8 +142,8 @@ const SHOWS: Record<string, () => void> = {
   },
   supplies() {
     counterPatch(14, 5.4);
-    const r = makeWireRack();
-    at(r, 0, 0, -2.7 + 0.1 + r.userData.footprint.d / 2);
+    const r = makeSupplyShelf();
+    at(r, 0, 0, 0);
     r.userData.setBay(2, 1);
   },
   food() {

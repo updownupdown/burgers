@@ -3,7 +3,7 @@ import { FRIES_PERFECT, FRY_RATE, GRILL_RATE, MELT_RATE } from "../game/cooking"
 import type { DrinkId, FriesSize, Kind, Piece, SauceKind, Size } from "../game/types";
 import { CUP_SPEED, DRINKS, GRILLABLE } from "../game/types";
 import { counterTop, wallPanels } from "../render/wear";
-import { makePaperRoll, makeTowel } from "../render/props";
+import { makePaperRoll } from "../render/props";
 import { cupSurfaceY, makeCarton, makeCartonStack, makeCup, makeFood, makeFries, makeFryPile, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { dressCup } from "../render/cup";
 import { FREEZER, makeCurdHandful, makeCurdTub, makeFreezer, makeGravyPot, makeLadle, makeShaker } from "../render/fryer";
@@ -11,42 +11,28 @@ import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { makeGriddle, ZONE_HEATS, type GriddleObject, type ZoneHeat } from "../render/machines/griddle";
 import { makeColdRail } from "../render/machines/coldRail";
 import { makeSauceBottle, makeSauceCaddy, type SauceCaddyObject } from "../render/machines/sauces";
-import { makeDrinkTower, makeFountain, makeFryBasket, makeFryer, makeLidStrawCaddy, makePackPad, makeSleeve, makeTrashChute, makeWireRack, FRY_BASKET, type FryerObject } from "../render/machines";
+import { makeDrinkTower, makeFountain, makeFryBasket, makeFryer, makeLidStrawCaddy, makePackPad, makeSleeve, makeSupplyShelf, makeTrashChute, FRY_BASKET, type FryerObject } from "../render/machines";
 import { applyKitchenLight, KITCHEN_BG, type KitchenLight } from "../render/lighting";
 import { SCALE } from "../render/units";
 
 export const PAGES = ["Drinks", "Grill", "Fryer", "Supplies"] as const;
 export const HOME_PAGE = 1;
 /**
- * The window line: drinks, grill and fryer run along the serving window, facing it, so the tray
- * above the counter really is the window ledge. Supplies sit on the back wall behind the fryer,
- * and the camera turns round to look at them. Page centres in world x:
+ * The window line: drinks, grill, fryer and supplies run along the serving window, facing it, so
+ * the tray above the counter really is the window ledge. (The truck is drawn wider than it could
+ * be so every counter gets the window.) Page centres in world x:
  */
-const PAGE_CX = [-14, 0, 15, 16.5];
+const PAGE_CX = [-14, 0, 15, 30];
 export const pageX = (i: number) => PAGE_CX[i];
 /** One zoom for every page: about 9 units (1.35 m) across the middle, which fits the grill page front to back. */
 const VIEW_W = 9.0;
-/**
- * Camera stops. Every counter gets one, except the long fryer line, which gets two half a page
- * apart so its ends aren't cut off (the same zoom everywhere keeps food one size).
- */
-export const STOPS: readonly { page: number; x: number; turned?: boolean }[] = [
-  { page: 0, x: pageX(0) },
-  { page: 1, x: pageX(1) },
-  { page: 2, x: pageX(2) - 1.5 },
-  { page: 2, x: pageX(2) + 1.5 },
-  { page: 3, x: pageX(3), turned: true },
-];
+/** Camera stops: one per counter, at the same zoom everywhere so food stays one size. */
+export const STOPS: readonly { page: number; x: number }[] = PAGE_CX.map((x, page) => ({ page, x }));
 /** Camera height and how far behind the look point it hangs. */
 const CAM_H = 12.6;
 const CAM_BACK = 5.3;
-/** Where the camera looks on the window line; the back wall's counter is a turn round from there. */
+/** Where the camera looks on the window line. */
 const LOOK_Z = -0.1;
-/**
- * The supplies counter is built facing the other way, centred here, so that turning on the spot
- * (about the camera) looks straight at it. Page-local z maps to world z as SUPPLY_Z - z.
- */
-const SUPPLY_Z = 2 * (LOOK_Z + CAM_BACK);
 
 /**
  * One scale for food on the counter, against ingredient units: on the grill and in the hand.
@@ -83,10 +69,10 @@ export const GRILL_ZONES = GRIDDLE_SPOTS.zones.map((z) => ({ x0: GRIDDLE.x + z.x
 export const ZONE_START: ZoneHeat[] = ["hot", "hot", "off"];
 /** How fast each setting cooks, against full heat; warm keeps food hot and barely cooks it. */
 const ZONE_RATE: Record<ZoneHeat, number> = { off: 0, warm: 0.07, hot: 1 };
-/** Trash slot running along the front edge of each counter. */
+/** Trash slot running along the front edge of every counter, page-local z. */
 const TRASH = { z0: 3.05, z1: 3.5 };
-/** Trash slot extent on each counter (page-local x): full width on the grill and fryer, right of the lid caddy on drinks. */
-const TRASH_RAIL: Record<number, { x0: number; x1: number }> = { 0: { x0: -0.9, x1: 3.8 }, 1: { x0: -3.9, x1: 4.0 }, 2: { x0: -5.4, x1: 5.4 } };
+/** The slot runs the full width of every counter (page-local x), and on between them. */
+const TRASH_HALF = 4.4;
 
 /**
  * Fryer page, "front pass", in page-local x and z. The fryer stands against the wall with the
@@ -133,11 +119,10 @@ const CUP_AT_TAP = SCALE.cup;
 export const CUP_IN_HAND = SCALE.cup;
 
 /**
- * Supplies, on the back wall: a two-tier wire rack with a bay per size, cup sleeves on the low
- * front tier and paper-boat sleeves on the raised back tier. Nothing else, so every target on
- * the page has a job.
+ * Supplies: one shelf of steel bins, cups on the left and paper boats on the right, a bin per
+ * size. Nothing else, so every target on the page has a job.
  */
-const RACK = { x: 0, z: -0.6, w: 7.2 };
+const SHELF_AT = { x: 0, z: 0 };
 /** Dollars of soda lost per second of overflow. */
 const SPILL_COST = 1.5;
 
@@ -269,8 +254,6 @@ export class CounterView {
   /** Camera x offset while the player drags between counters. */
   dragOffset = 0;
   private camX = 0;
-  /** Camera turn about the vertical: 0 faces the window line, PI the back wall. */
-  private camYaw = 0;
   private raycaster = new THREE.Raycaster();
   private hitMeshes: THREE.Mesh[] = [];
   private pantry: THREE.Group | null = null;
@@ -325,6 +308,7 @@ export class CounterView {
     this.buildFryer();
     this.buildDrinks();
     this.buildSupplies();
+    this.buildTrash();
   }
 
   private proxy(geo: THREE.BufferGeometry, pos: THREE.Vector3, hit: Hit): THREE.Mesh {
@@ -346,8 +330,6 @@ export class CounterView {
     griddle.userData.spots.buttons.forEach((b, i) => {
       this.proxy(new THREE.BoxGeometry(1.05, 0.5, 0.75), griddle.position.clone().add(new THREE.Vector3(b.x, b.y - 0.1, b.z)), { type: "zone", idx: i });
     });
-    // Trash slot along the front edge: drop anything past the grill to throw it away.
-    this.addTrash(1, TRASH_RAIL[1]);
 
     // The sauce caddy in the front left corner, bottles upside down and ready to lift.
     const caddy = makeSauceCaddy();
@@ -405,7 +387,6 @@ export class CounterView {
     pot.position.copy(at(F.gravy.x, 0, F.gravy.z));
     this.scene.add(pot);
     this.proxy(new THREE.BoxGeometry(1.0, 1.4, 1.1), at(F.gravy.x, 0.5, F.gravy.z), { type: "gravy" });
-    this.addTrash(2, TRASH_RAIL[2]);
 
     // The hang-rail fryer: a basket per well, hanging tilted on the rail until it's lowered.
     const fryer = makeFryer();
@@ -474,62 +455,50 @@ export class CounterView {
     this.scene.add(caddy);
     this.proxy(new THREE.BoxGeometry(1.0, 1.2, 1.1), at(LIDS.x + LID_SPOTS.lids.x, 0.5, LIDS.z), { type: "lids" });
     this.proxy(new THREE.BoxGeometry(0.9, 1.6, 1.1), at(LIDS.x + LID_SPOTS.straws.x, 0.7, LIDS.z), { type: "straws" });
-    this.addTrash(0, TRASH_RAIL[0]);
   }
 
   /**
-   * The Supplies counter on the back wall: the wire rack, a bay of wrapped sleeves per size. Tap
-   * a bay for a sleeve and carry it to that stack over its counter's tab.
+   * The Supplies counter, on the window line past the fryer: a shelf of steel bins, cup sleeves
+   * down the left and paper-boat sleeves down the right. Tap a bin for a sleeve and carry it to
+   * that stack over its counter's tab.
    */
   private buildSupplies(): void {
-    // Its own counter top and wall, facing the window line across the aisle.
-    const top = counterTop(20, 7.6);
-    top.position.copy(this.world(3, 0, 0, 0));
-    top.rotation.y = Math.PI;
-    const wall = wallPanels(20, 6);
-    wall.position.copy(this.world(3, 0, -0.4, -3.6));
-    wall.rotation.y = Math.PI;
-    const splash = new THREE.Mesh(new THREE.BoxGeometry(20, 0.5, 0.1), toon("#b9d6a2"));
-    splash.position.copy(this.world(3, 0, 0.25, -3.55));
-    this.scene.add(top, wall, splash);
-
-    const rack = makeWireRack({ w: RACK.w });
-    rack.position.copy(this.world(3, RACK.x, 0, RACK.z));
-    rack.rotation.y = Math.PI;
-    this.scene.add(rack);
-    // A towel over the front edge of the supplies counter.
-    const towel = makeTowel();
-    towel.position.copy(this.world(3, 2.6, 0, 3.8));
-    towel.rotation.y = Math.PI;
-    this.scene.add(towel);
-    const { bays, bayW } = rack.userData.spots;
+    const shelf = makeSupplyShelf();
+    shelf.position.copy(this.world(3, SHELF_AT.x, 0, SHELF_AT.z));
+    this.scene.add(shelf);
+    const { bays, bayW, bayD } = shelf.userData.spots;
     bays.forEach((b, i) => {
-      rack.userData.setBay(i, 2);
-      const c = this.world(3, RACK.x + b.x, b.y, RACK.z + b.z);
+      shelf.userData.setBay(i, 2);
+      const c = shelf.position.clone().add(new THREE.Vector3(b.x, b.y, b.z));
       this.supplyAt.push({ kind: b.kind, size: b.size, at: c });
-      this.proxy(new THREE.BoxGeometry(bayW - 0.1, 0.9, 1.25), c.clone().setY(b.y + 0.35), { type: "supplies", kind: b.kind, size: b.size });
+      this.proxy(new THREE.BoxGeometry(bayW - 0.1, 0.9, bayD - 0.05), c.clone().setY(0.4), { type: "supplies", kind: b.kind, size: b.size });
     });
   }
 
-  /** Where each bay of the wire rack is, for labels and the playtest bot. */
+  /** Where each bin of the supply shelf is, for labels and the playtest bot. */
   supplyAt: { kind: Stack["kind"]; size: Size; at: THREE.Vector3 }[] = [];
   private fryer!: FryerObject;
 
-  /** A trash chute along a counter's front edge, between page-local x0 and x1. */
-  private addTrash(page: number, r: { x0: number; x1: number }): void {
-    const w = r.x1 - r.x0;
-    const c = this.world(page, (r.x0 + r.x1) / 2, 0, (TRASH.z0 + TRASH.z1) / 2);
-    const chute = makeTrashChute(w);
-    chute.position.copy(c);
+  /**
+   * The trash chute along the front edge: one slot the whole length of the window line, so every
+   * counter has it in the same place. Each counter's stretch lights up on its own.
+   */
+  private buildTrash(): void {
+    const x0 = pageX(0) - TRASH_HALF - 4;
+    const x1 = pageX(PAGES.length - 1) + TRASH_HALF + 4;
+    const chute = makeTrashChute(x1 - x0);
+    chute.position.set((x0 + x1) / 2, 0, (TRASH.z0 + TRASH.z1) / 2);
     this.scene.add(chute);
-    // Lights up while something held is over it, so you know a drop will bin it.
-    const glow = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.2, TRASH.z1 - TRASH.z0 + 0.25), new THREE.MeshBasicMaterial({ color: "#e0523f", transparent: true, opacity: 0.55, depthWrite: false }));
-    glow.rotation.x = -Math.PI / 2;
-    glow.position.copy(c).setY(0.1);
-    glow.visible = false;
-    glow.renderOrder = 3;
-    this.scene.add(glow);
-    this.trashGlow[page] = glow;
+    PAGES.forEach((_, page) => {
+      // Lights up while something held is over it, so you know a drop will bin it.
+      const glow = new THREE.Mesh(new THREE.PlaneGeometry(2 * TRASH_HALF + 0.2, TRASH.z1 - TRASH.z0 + 0.25), new THREE.MeshBasicMaterial({ color: "#e0523f", transparent: true, opacity: 0.55, depthWrite: false }));
+      glow.rotation.x = -Math.PI / 2;
+      glow.position.copy(this.world(page, 0, 0.1, (TRASH.z0 + TRASH.z1) / 2));
+      glow.visible = false;
+      glow.renderOrder = 3;
+      this.scene.add(glow);
+      this.trashGlow[page] = glow;
+    });
   }
 
   /** What you carry from the fryer's topping column. */
@@ -765,11 +734,9 @@ export class CounterView {
     this.camera.updateProjectionMatrix();
   }
 
-  /** Go to a counter. On the counter you're already at, a second tap moves to its other stop. */
+  /** Go to a counter. */
   setPage(i: number): void {
-    const page = THREE.MathUtils.clamp(i, 0, PAGES.length - 1);
-    const stops = this.stopsOf(page);
-    this.setStop(page === this.page && stops.length > 1 ? stops[(stops.indexOf(this.stop) + 1) % stops.length] : stops[0]);
+    this.setStop(this.stopsOf(THREE.MathUtils.clamp(i, 0, PAGES.length - 1))[0]);
   }
 
   /** Move to a camera stop. Swipes along the tab bar step one stop at a time. */
@@ -785,13 +752,12 @@ export class CounterView {
 
   /** The camera has arrived at its stop (labels over the counter wait for it). */
   get settled(): boolean {
-    const s = STOPS[this.stop];
-    return Math.abs(this.camX - s.x) < 0.05 && Math.abs(this.camYaw - (s.turned ? Math.PI : 0)) < 0.02 && this.dragOffset === 0;
+    return Math.abs(this.camX - STOPS[this.stop].x) < 0.05 && this.dragOffset === 0;
   }
 
-  /** A counter-local point (as the build code lays pages out) in world space. Supplies faces the other way. */
+  /** A counter-local point (as the build code lays pages out) in world space. */
   world(page: number, x: number, y: number, z: number): THREE.Vector3 {
-    return page === 3 ? new THREE.Vector3(pageX(3) - x, y, SUPPLY_Z - z) : new THREE.Vector3(pageX(page) + x, y, z);
+    return new THREE.Vector3(pageX(page) + x, y, z);
   }
 
   hit(ndc: THREE.Vector2): Hit | null {
@@ -831,12 +797,9 @@ export class CounterView {
   }
   private trashGlow: (THREE.Mesh | undefined)[] = [];
 
-  /** True when a dropped item at this world point lands in the trash can. */
+  /** True when a dropped item at this world point lands in the trash slot. */
   overTrash(world: THREE.Vector3): boolean {
-    const r = TRASH_RAIL[this.page];
-    if (!r) return false;
-    const x = world.x - pageX(this.page);
-    return world.z > TRASH.z0 - 0.05 && x > r.x0 - 0.3 && x < r.x1 + 0.3;
+    return world.z > TRASH.z0 - 0.05 && Math.abs(world.x - pageX(this.page)) < TRASH_HALF + 0.6;
   }
 
   /** Grill-local position if the world point is over the grill plate. */
@@ -1005,18 +968,13 @@ export class CounterView {
 
   update(dt: number): void {
     this.time += dt;
-    // Camera glides between stops; for the back wall it turns round on the spot.
+    // Camera glides between stops along the window line.
     const stop = STOPS[this.stop];
-    const k = Math.min(1, dt * 10);
-    this.camX += (stop.x + this.dragOffset - this.camX) * k;
-    this.camYaw += ((stop.turned ? Math.PI : 0) - this.camYaw) * k;
-    const camZ = LOOK_Z + CAM_BACK;
-    this.camera.position.set(this.camX, CAM_H, camZ);
-    const lookX = this.camX + Math.sin(this.camYaw) * CAM_BACK;
-    const lookZ = camZ - Math.cos(this.camYaw) * CAM_BACK;
-    this.camera.lookAt(lookX, 0, lookZ);
+    this.camX += (stop.x + this.dragOffset - this.camX) * Math.min(1, dt * 10);
+    this.camera.position.set(this.camX, CAM_H, LOOK_Z + CAM_BACK);
+    this.camera.lookAt(this.camX, 0, LOOK_Z);
     // The sun follows the camera so shadows stay sharp on whichever counter is in view.
-    this.light.aim(lookX, lookZ);
+    this.light.aim(this.camX, LOOK_Z);
 
     // Grill
     const gx = pageX(1);

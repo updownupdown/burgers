@@ -155,6 +155,15 @@ export class Sfx {
   whoosh(): void {
     this.burst(300, 0.3, 0.15, "bandpass", 1500);
   }
+  /** The fryer's timer: a short double beep, repeated while a basket sits at perfect. */
+  beep(): void {
+    this.tone(1760, 0.07, "square", 0.06);
+    this.tone(1760, 0.07, "square", 0.06, undefined, 0.12);
+  }
+  /** One shake of the salt shaker. */
+  shake(): void {
+    this.burst(6000 + Math.random() * 1500, 0.07, 0.08, "highpass");
+  }
 }
 
 /** Vibration on/off, from the game menu. Remembered on this device. */

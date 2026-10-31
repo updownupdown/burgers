@@ -167,7 +167,7 @@ function moodFace(mood: "neutral" | "sad" | "angry"): string {
  * it, the modifiers, and a strip of pips showing stacking progress. Expanded: every layer,
  * top to bottom, ticked off as it's stacked in order.
  */
-export function ticketHtml(order: Order, plate: Plate, patience: number, expanded: boolean): string {
+export function ticketHtml(order: Order, plate: Plate, patience: number, expanded: boolean, sentBack: string | null = null): string {
   // Runs of counted toppings are one layer; a layer is done once it has its full count.
   const stacked = collapseCounted(plate.layers);
   let prefixOk = true;
@@ -232,6 +232,7 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, expande
   const mood = patienceMood(pct);
   return `<div class="pat ${mood}">${moodFace(mood)}<span><i style="width:${(pct * 100).toFixed(0)}%"></i></span></div>
     ${order.critic ? `<div class="critic" title="Food critic">Critic</div>` : ""}<div class="name"><span class="l">#${order.id} ${esc(order.name)}</span><span class="exp">${expanded ? "▴" : "▾"}</span></div>
+    ${sentBack ? `<div class="back">Sent back: ${esc(sentBack)}</div>` : ""}
     ${body}
     ${sides.length ? `<div class="sides">${sides.join("")}</div>` : ""}`;
 }

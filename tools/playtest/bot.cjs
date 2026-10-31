@@ -225,9 +225,11 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       await page(1);
     }
     const before = await state(p);
-    // Ring the bell on the tray twice.
-    const [bx3, by3] = await ev(() => { const b = window.__bv.trayView.bell.position; return window.__bv.project('tray', b.x, 0.4, b.z); });
-    for (let k = 0; k < 2; k++) await gesture(p, [[bx3, by3], [bx3, by3]], 20);
+    // Swipe the plate up to the customer; if they send it back, it's served again as is.
+    const servePlate = async () => { const [sx3, sy3] = await plate(slot); await gesture(p, line(sx3, sy3, sx3, sy3 - 120, 8), 16); await step(p, 0.3); };
+    await servePlate();
+    const back = await ev((i) => window.__bv.game.slots[i].sentBack, slot);
+    if (back) { console.log('SENT BACK', back); await servePlate(); }
     await step(p, 0.3);
     const afterServe = await ev(() => ({ stars: window.__bv.game.stars.slice(-1)[0], served: window.__bv.game.served, bubble: [...document.querySelectorAll('.bubble')].map(b => b.textContent).join(' | ') }));
     log.push({ order: order.name, plate: before.slots[slot] && before.slots[slot].plate.join(' '), want: before.slots[slot] && before.slots[slot].want, fries: before.slots[slot] && before.slots[slot].pf, drink: before.slots[slot] && before.slots[slot].pd, took: +(before.t - t0).toFixed(1), patienceLeft: before.slots[slot] && before.slots[slot].patience, ...afterServe });

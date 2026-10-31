@@ -19,6 +19,8 @@ export type { GfxLevel, MenuDeps } from "./modal";
 export { openHowTo } from "./howto";
 export { openMenuRef } from "./menuref";
 
+import { DIFFICULTIES, DIFFICULTY, type Difficulty } from "../game/difficulty";
+
 export type MenuTab = "general" | "howto";
 
 const GFX: { id: GfxLevel; label: string; blurb: string }[] = [
@@ -65,6 +67,11 @@ function generalHtml(d: MenuDeps, inShift: boolean): string {
   return `${shift}
     ${row("menuref", "menu-book", "Today's menu", `${esc(town.name)} · ${town.menu.length} burgers, sides and drinks`)}
     <h3 class="menu-h">${icon("settings")}Settings</h3>
+    <div class="menu-field">
+      <span class="lead">${icon("clock")}</span>
+      <div class="lbl"><b>Difficulty</b><small data-r="diff-note">${DIFFICULTY[d.difficulty()].blurb}${inShift ? " New customers feel it straight away." : ""}</small></div>
+      <div class="bv-seg compact" role="radiogroup" aria-label="Difficulty">${DIFFICULTIES.map((k) => `<button role="radio" aria-pressed="${k === d.difficulty()}" aria-checked="${k === d.difficulty()}" data-m="difficulty" data-v="${k}">${DIFFICULTY[k].label}</button>`).join("")}</div>
+    </div>
     ${toggle("sound", d.sound() ? "sound-on" : "sound-off", "Sound", d.sound())}
     ${hapticsSupported() ? toggle("haptics", "vibrate", "Vibration", hapticsOn(), "A buzz on flips, dings and burns") : ""}
     <div class="menu-field">
@@ -187,6 +194,16 @@ export function openMenu(over: Partial<MenuDeps> & { tab?: MenuTab } = {}): void
         const on = !d.biz();
         d.setBiz(on);
         setToggle(btn, on);
+        break;
+      }
+      case "difficulty": {
+        const v = btn.dataset.v as Difficulty;
+        d.setDifficulty(v);
+        btn.parentElement!.querySelectorAll<HTMLElement>("button").forEach((b) => {
+          b.setAttribute("aria-pressed", String(b === btn));
+          b.setAttribute("aria-checked", String(b === btn));
+        });
+        card.querySelector('[data-r="diff-note"]')!.textContent = DIFFICULTY[v].blurb;
         break;
       }
       case "gfx": {

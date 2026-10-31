@@ -79,12 +79,12 @@ function sections(): Sec[] {
       chip: "Basics",
       icon: "sparkle",
       title: "The basics",
-      lede: "Customers queue at the window. Cook what's on their receipt, stack it on their plate, ring the bell.",
+      lede: "Customers queue at the window. Cook what's on their receipt, stack it on their plate, swipe it up to them.",
       fig: `<ol class="hw-steps">
         <li>${icon("receipt")}<b>Read</b><span>the receipt</span></li>
         <li>${icon("grill")}<b>Cook</b><span>the food</span></li>
         <li>${icon("burger")}<b>Stack</b><span>on the plate</span></li>
-        <li>${icon("bell")}<b>Ring</b><span>twice to serve</span></li>
+        <li>${icon("arrow-up")}<b>Swipe up</b><span>to serve</span></li>
       </ol>
       <div class="hw-tabs" aria-hidden="true">
         <span>${icon("drink")}Drinks</span><span class="on">${icon("grill")}Grill</span><span>${icon("fryer")}Fryer</span><span>${icon("box")}Supplies</span>
@@ -271,17 +271,24 @@ function sections(): Sec[] {
     {
       id: "serve",
       chip: "Serving",
-      icon: "bell",
+      icon: "arrow-up",
       title: "Serving",
-      lede: "The bell sits up top with the plates.",
+      lede: "Swipe a plate up to hand it to the customer above it.",
       fig: `<div class="hw-serve">
         <div class="plates"><i></i><i class="on"></i><i></i></div>
-        <div class="hw-bell">${icon("bell")}<span class="ding">ding</span><span class="ding two">ding</span></div>
-      </div>`,
+        <div class="hw-swipe">${icon("arrow-up")}</div>
+      </div>
+      <ol class="hw-verdicts">
+        <li><b>Looks good</b><span>They take it and pay. The better it is, the more they pay and tip.</span></li>
+        <li><b>Sent back</b><span>Clearly off: they hand it back with what's wrong. Fix it and swipe it up again; this time they take it, and review what they got.</span></li>
+        <li><b>Refused</b><span>Really wrong: no sale, and they leave.</span></li>
+      </ol>`,
       points: [
-        "<b>Ring twice</b> to serve the active plate. One ring is just a ding.",
         "Check the receipt first: a forgotten side or drink costs stars.",
-        "<b>Unordered extras</b>, like fries or a drink they didn't ask for, can soften a bad review. They cost you, so save them for rescues.",
+        "To fix a burger, <b>drag it down</b> off the plate onto a prep spot under the heat lamp, then <b>swipe down</b> on it to peel layers off one at a time.",
+        "Held items light up the <b>trash slot</b> red when a drop would bin them.",
+        "<b>Unordered extras</b>, like fries or a drink they didn't ask for, can soften a bad review, and nobody ever turns down a freebie. They cost you, so save them for rescues.",
+        "How picky customers are, how patient, and how busy the line gets depends on the <b>Difficulty</b> setting in the menu.",
       ],
     },
     {

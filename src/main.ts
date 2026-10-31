@@ -5,6 +5,7 @@ import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { freshSave, loadSave, passed, passTown, upgradeChoices, UPGRADES, writeSave, type UpgradeId } from "./game/progress";
 import { eventOn, townById, withEvent, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, popularityTraffic, willingnessToPay, type PressPiece } from "./game/press";
+import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
 import { HOLD_GRACE, HOLD_RUIN, payout, scorePlate, starsFor } from "./game/scoring";
 import {
   CARTON_COST,
@@ -67,6 +68,14 @@ try {
 } catch {
   // ignore
 }
+/** Chill, Balanced or Stressful (src/game/difficulty.ts); takes effect for new customers. */
+let difficulty: Difficulty = "balanced";
+try {
+  const saved = localStorage.getItem("bv-difficulty");
+  if (saved && saved in DIFFICULTY) difficulty = saved as Difficulty;
+} catch {
+  // ignore
+}
 function applyGfx(level: Gfx): void {
   gfx = level;
   renderer.shadowMap.enabled = level !== "low";
@@ -94,6 +103,10 @@ interface Slot {
   bubble: HTMLElement | null;
   /** Ticket shows every layer rather than recipe + modifiers. */
   expanded: boolean;
+  /** The order came back once, with this complaint; next time they take it unless it's really wrong. */
+  sentBack: string | null;
+  /** Free sides they kept when they sent the order back: a customer never turns down free food. */
+  kept: Pick<Plate, "fries" | "drink">;
 }
 
 const emptyPlate = (): Plate => ({ layers: [], fries: null, drink: null });
@@ -119,7 +132,7 @@ const game = {
   event: null as TownEvent | null,
   rng: seededRng(Date.now() % 100000) as Rng,
   slots: [0, 1, 2].map(
-    (): Slot => ({ order: null, plate: emptyPlate(), patience: 0, maxPatience: 1, leaving: false, fig: null, ticketKey: "", bubble: null, expanded: false }),
+    (): Slot => ({ order: null, plate: emptyPlate(), patience: 0, maxPatience: 1, leaving: false, fig: null, ticketKey: "", bubble: null, expanded: false, sentBack: null, kept: { fries: null, drink: null } }),
   ),
   hintsShown: new Set<string>(),
   pendingUpdate: null as VersionInfo | null,
@@ -170,6 +183,8 @@ interface Rect {
 }
 const bands = { customers: { x: 0, y: 0, w: 0, h: 0 } as Rect, tray: {} as Rect, counter: {} as Rect, tabs: {} as Rect };
 let colX = 0;
+/** Where the order rail sits in the customers band (CSS px from the top). */
+let railTop = 100;
 let viewH = 0;
 
 function layout(): void {
@@ -210,6 +225,7 @@ function layout(): void {
   // Receipts hang from the rail, one under each customer.
   const slotW = w / 3;
   ui.rail.style.top = `${railY - 4}px`;
+  railTop = railY;
   ui.tickets.forEach((t, i) => {
     const tw = Math.min(slotW * 0.88, 170);
     t.style.left = `${slotW * i + (slotW - tw) / 2}px`;
@@ -252,11 +268,13 @@ function spawnCustomer(slotIdx: number): void {
   if (game.tutorial && game.spawned === 0) order = orderFromRecipe(order.id, stop().menu[0], "medium", false, null);
   s.order = order;
   s.plate = emptyPlate();
+  s.sentBack = null;
+  s.kept = { fries: null, drink: null };
   // Recipes you haven't made a couple of times yet start with the full layer list showing.
   s.expanded = game.tutorial || (save.known[order.name] ?? 0) < 2;
   // Every extra slice of a counted topping is another trip to the bin.
   const slices = order.layers.reduce((n, l) => n + Math.max(0, (l.count ?? 1) - 1), 0);
-  s.maxPatience = (50 + order.layers.length * 7 + slices * 2 + order.layers.filter((l) => l.kind === "patty").length * 22 + (order.fries ? 12 : 0) + (order.poutine ? 10 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1) * CROWD[stop().crowd].patience;
+  s.maxPatience = (50 + order.layers.length * 7 + slices * 2 + order.layers.filter((l) => l.kind === "patty").length * 22 + (order.fries ? 12 : 0) + (order.poutine ? 10 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1) * CROWD[stop().crowd].patience * DIFFICULTY[difficulty].patience;
   if (game.tutorial && game.spawned === 0) s.maxPatience = 600;
   s.patience = s.maxPatience;
   s.leaving = false;
@@ -301,24 +319,37 @@ function customerLeaves(i: number, mood: "happy" | "sad" | "angry", say: string,
   setTimeout(() => customersView.leave(i, () => clearSlot(i)), 1100);
 }
 
+/**
+ * Hand a plate to its customer (swipe it up). They look it over: a good plate is taken and
+ * paid for; a clearly wrong one comes back once for changes; a really wrong one is refused.
+ * Free sides they didn't order are always kept.
+ */
 function serve(i: number): void {
   const s = game.slots[i];
   if (!s.order || s.leaving) {
-    showHint("Pick an order first: tap a ticket or plate.", 2);
+    showHint("No one's waiting for that plate yet.", 1.5);
     return;
   }
-  if (s.plate.layers.length === 0 && !(s.order.poutine && s.plate.fries)) {
-    showHint("That plate is empty!", 2);
+  if (s.plate.layers.length === 0 && !s.plate.fries && !s.plate.drink) {
+    showHint("That plate is empty!", 1.5);
     return;
   }
-  const r = scorePlate(s.order, s.plate);
+  // Freebies kept from an earlier send-back count towards this verdict too.
+  const plate: Plate = { ...s.plate, fries: s.plate.fries ?? s.kept.fries, drink: s.plate.drink ?? s.kept.drink };
+  const r = scorePlate(s.order, plate);
   if (game.plan) {
     // Ingredient quality and prices tilt every rating.
     r.score = Math.max(0, Math.min(100, r.score + ratingBonus(game.plan, stop().crowd, willingnessToPay(save.popularity, save.rep))));
     r.stars = starsFor(r.score);
+  }
+  const call = game.tutorial ? "accept" : verdict(r.score, difficulty, !!s.sentBack, r.faulty);
+  if (call === "sendBack") return sendBack(i, r.notes[0] ?? "this isn't quite right");
+  if (call === "refuse") return refuse(i, r.notes[0] ?? "this isn't what I ordered", r.perks.length > 0);
+  if (game.plan) {
     game.ratings.push(r.stars);
     const perk = r.perks.length && r.stars < 3 ? ` Loved the ${r.perks[0]}.` : "";
-    game.reviews.push({ stars: r.stars, text: reviewFor(r.stars, r.notes, game.plan, game.rng) + perk, stop: stop().name });
+    const back = s.sentBack ? " Had to send it back once." : "";
+    game.reviews.push({ stars: r.stars, text: reviewFor(r.stars, r.notes, game.plan, game.rng) + perk + back, stop: stop().name });
   }
   if (s.order.critic) criticVerdict(r.stars, r.notes);
   const { pay, tip: baseTip } = payout(s.order, r.score, s.patience / s.maxPatience);
@@ -339,10 +370,10 @@ function serve(i: number): void {
       : r.perks.length
         ? `Thanks for the ${r.perks[0]}!`
         : r.notes.length
-        ? capitalise(r.notes[0]) + (r.stars >= 2 ? ", but tasty!" : "…")
-        : r.stars === 2
-          ? "Pretty good!"
-          : "Hmm, okay.";
+          ? capitalise(r.notes[0]) + (r.stars >= 2 ? ", but tasty!" : "…")
+          : r.stars === 2
+            ? "Pretty good!"
+            : "Hmm, okay.";
   customerLeaves(i, r.stars >= 2 ? "happy" : r.stars === 1 ? "sad" : "angry", `${"★".repeat(r.stars)}${"☆".repeat(3 - r.stars)} ${say}`, r.stars >= 2);
   // The food is handed over right away so the plate is free for the next order.
   s.plate = emptyPlate();
@@ -359,6 +390,58 @@ function serve(i: number): void {
   }
 }
 
+/** Unordered sides on the plate: the customer keeps them whatever happens to the order. */
+function takeFreebies(s: Slot): string | null {
+  const o = s.order!;
+  let took: string | null = null;
+  if (s.plate.fries && !o.fries) {
+    s.kept.fries = s.plate.fries;
+    s.plate.fries = null;
+    took = s.kept.fries.curds ? "poutine" : "fries";
+  }
+  if (s.plate.drink && !o.drink) {
+    s.kept.drink = s.plate.drink;
+    s.plate.drink = null;
+    took = took ? "extras" : "drink";
+  }
+  return took;
+}
+
+/** The order comes back with a request; the plate stays as it is for you to fix. */
+function sendBack(i: number, note: string): void {
+  const s = game.slots[i];
+  s.sentBack = note;
+  const took = takeFreebies(s);
+  // Asking for a fix buys a little time.
+  s.patience = Math.min(s.maxPatience, s.patience + s.maxPatience * 0.2);
+  s.ticketKey = "";
+  syncTray(i, true);
+  trayView.plates[i].kick(0.5);
+  s.fig?.setMood("sad");
+  showBubble(i, `Can you fix it? ${capitalise(note)}.${took ? ` I'll keep the ${took}!` : ""}`, false);
+  sfx.grumble();
+  buzz([30, 40, 30]);
+  hintOnce("sent-back", "Sent back: fix the plate and swipe it up again. Drag the burger down to a prep spot to take layers off.", 4);
+}
+
+/** Really wrong: they won't take it and leave without paying (but keep any freebies). */
+function refuse(i: number, note: string, perk: boolean): void {
+  const s = game.slots[i];
+  const took = takeFreebies(s) ?? (s.kept.fries || s.kept.drink ? "freebie" : null);
+  const stars = took || perk ? 1 : 0;
+  game.lost++;
+  if (s.order!.critic) criticVerdict(0, [note]);
+  if (game.plan) {
+    game.ratings.push(stars);
+    game.reviews.push({ stars, text: `Refused it: ${note}.${took ? ` At least the ${took === "freebie" ? "free side" : took} was nice.` : ""}`, stop: stop().name });
+  }
+  sfx.grumble();
+  buzz(80);
+  customerLeaves(i, "angry", `No thanks. ${capitalise(note)}.${took ? ` I'll take the ${took === "freebie" ? "free side" : took} though.` : ""}`, false);
+  s.plate = emptyPlate();
+  syncTray(i, false);
+}
+
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function showBubble(i: number, text: string, good: boolean): void {
@@ -368,8 +451,9 @@ function showBubble(i: number, text: string, good: boolean): void {
   b.className = `bubble ${good ? "good" : "bad"}`;
   b.textContent = text;
   const slotW = bands.customers.w / 3;
-  b.style.left = `${Math.max(70, Math.min(bands.customers.w - 70, i * slotW + slotW * 0.4))}px`;
-  b.style.top = `${bands.customers.h * 0.62}px`;
+  b.style.left = `${Math.max(70, Math.min(bands.customers.w - 70, i * slotW + slotW * 0.5))}px`;
+  // Above the customer's head, clear of the receipts on the rail.
+  b.style.top = `${railTop * 0.55}px`;
   ui.root.appendChild(b);
   s.bubble = b;
   setTimeout(() => {
@@ -426,15 +510,15 @@ function tutorialHint(): string | null {
     return "Medium! Drag the patty up onto the bun.";
   }
   if (layers[layers.length - 1].piece.kind !== "bun" || layers.length < 3) return "Add the top bun.";
-  return "Ring the bell twice to serve!";
+  return "Swipe the plate up to hand it to the customer!";
 }
 
 // ---------------------------------------------------------------------------
 // Input
 
 type Payload =
-  | { type: "piece"; piece: Piece; fromGrill: { x: number; z: number } | null }
-  | { type: "stack"; layers: Layer[]; from: number; grill?: { x: number; z: number } }
+  | { type: "piece"; piece: Piece; fromGrill: { x: number; z: number } | null; fromHold?: number }
+  | { type: "stack"; layers: Layer[]; from: number; grill?: { x: number; z: number }; fromPlate?: number }
   | { type: "fries"; cook: number; basket: number | null; amount: number }
   | { type: "carton"; size: FriesSize; cook: number; fill: number; pack: number; salt: boolean; curds: boolean; gravy: boolean }
   | { type: "salt" }
@@ -544,12 +628,14 @@ function moveHold(pt: Pointer): void {
   const band = bandAt(pt.y);
   if (band === "tray" || band === "customers") {
     counter.moveHeld(new THREE.Vector3(), false);
+    counter.highlightTrash(false);
     const slot = band === "tray" ? trayView.pick(ndcIn(bands.tray, pt.x, pt.y)) : game.active;
     trayView.showGhost(slot >= 0 ? slot : game.active, pt.held.trayObj);
   } else {
     trayView.showGhost(-1, null);
     const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3);
     counter.moveHeld(g, true);
+    counter.highlightTrash(band === "counter" && counter.overTrash(g));
   }
 }
 
@@ -665,6 +751,7 @@ function finishHold(pt: Pointer): void {
   const held = pt.held!;
   const payload = held.payload;
   counter.setHeld(null);
+  counter.highlightTrash(false);
   trayView.showGhost(-1, null);
   disposeObject(held.trayObj);
   const band = bandAt(pt.y);
@@ -758,10 +845,17 @@ function finishHold(pt: Pointer): void {
   if (!done) {
     // Put things back where they came from.
     if (payload.type === "piece" && payload.fromGrill) counter.addGrillItem(payload.piece, payload.fromGrill.x, payload.fromGrill.z);
+    if (payload.type === "piece" && payload.fromHold !== undefined) {
+      counter.holds[payload.fromHold].layers.push({ piece: payload.piece, offX: 0, offZ: 0 });
+      counter.syncHold(payload.fromHold, false);
+    }
     if (payload.type === "stack" && payload.grill) {
       const [base, top] = payload.layers.map((l) => l.piece);
       counter.addGrillItem(base, payload.grill.x, payload.grill.z, top);
-    } else if (payload.type === "stack") {
+    } else if (payload.type === "stack" && payload.fromPlate !== undefined) {
+      game.slots[payload.fromPlate].plate.layers.push(...payload.layers);
+      syncTray(payload.fromPlate, false);
+    } else if (payload.type === "stack" && payload.from >= 0) {
       counter.holds[payload.from].layers.push(...payload.layers);
       counter.syncHold(payload.from, false);
     }
@@ -1046,8 +1140,6 @@ canvas.addEventListener("pointerdown", (e) => {
       pt.mode = "sauce";
       pt.sauce = armedSauce;
       sauceAt(pt, armedSauce);
-    } else if (trayView.bellHit(ndcIn(bands.tray, x, y))) {
-      ringBell();
     } else {
       pt.mode = "plate";
       pt.plate = trayView.pick(ndcIn(bands.tray, x, y));
@@ -1106,11 +1198,28 @@ canvas.addEventListener("pointermove", (e) => {
         }
       }
       break;
+    case "plate": {
+      // Drag a burger down off its plate to a prep spot under the heat lamp, to fix it there.
+      const s = pt.plate >= 0 ? game.slots[pt.plate] : null;
+      if (s && s.plate.layers.length && bandAt(pt.y) === "counter") {
+        const layers = s.plate.layers.splice(0);
+        syncTray(pt.plate, false);
+        if (counter.page !== HOME_PAGE) goToPage(HOME_PAGE);
+        startHold(pt, { type: "stack", layers, from: -1, fromPlate: pt.plate });
+        hintOnce("to-prep", "Drop it on a prep spot, then swipe down on it to take layers off.", 3);
+      }
+      break;
+    }
     case "hold":
-      // Drag a whole assembly-spot stack: to a plate, another spot, back to the grill, or the trash.
+      // Swipe down on a prep spot to peel the top layer off; drag any other way to move the whole stack.
       if (pt.moved && pt.hit?.type === "hold") {
         const spot = counter.holds[pt.hit.idx];
-        if (spot.layers.length) {
+        if (spot.layers.length && dy > 0 && dy > Math.abs(dx) * 1.2) {
+          const top = spot.layers.pop()!;
+          counter.syncHold(pt.hit.idx, false);
+          startHold(pt, { type: "piece", piece: top.piece, fromGrill: null, fromHold: pt.hit.idx });
+          hintOnce("peel", "Peeled off. Drop it in the trash slot, back on a stack, or on the grill.", 3);
+        } else if (spot.layers.length) {
           const layers = spot.layers.splice(0);
           counter.syncHold(pt.hit.idx, false);
           startHold(pt, { type: "stack", layers, from: pt.hit.idx });
@@ -1210,7 +1319,12 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       }
       break;
     case "plate":
-      if (!cancelled && pt.plate >= 0 && dy > 40 && Math.abs(dy) > Math.abs(dx)) removeTop(pt.plate);
+      if (cancelled || pt.plate < 0) break;
+      // Swipe a plate up to hand it to its customer.
+      if (dy < -40 && -dy > Math.abs(dx)) serve(pt.plate);
+      // Swipe down on a plate with only sides to take them off.
+      else if (dy > 40 && dy > Math.abs(dx)) removeTop(pt.plate);
+      else if (!pt.moved && game.slots[pt.plate].order) hintOnce("serve", "Swipe the plate up to hand it over.", 2.5);
       break;
   }
 }
@@ -1286,26 +1400,6 @@ ui.tickets.forEach((t, i) =>
     setActive(i);
   }),
 );
-
-let lastDing = 0;
-let singleDingTimer = 0;
-/** The service bell on the tray: one ding is just a ding, two quick ones serve the active plate. */
-function ringBell(): void {
-  if (game.phase !== "playing") return;
-  sfx.ding();
-  buzz(10);
-  trayView.ring();
-  const now = performance.now();
-  if (now - lastDing < 550) {
-    clearTimeout(singleDingTimer);
-    lastDing = 0;
-    serve(game.active);
-  } else {
-    lastDing = now;
-    clearTimeout(singleDingTimer);
-    singleDingTimer = window.setTimeout(() => showHint("Ding ding! Ring twice to serve.", 1.6), 600);
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Screens
@@ -1399,6 +1493,15 @@ initMenu({
       localStorage.setItem("bv-muted", on ? "0" : "1");
     } catch {
       // Storage can be unavailable (private mode); the setting just won't stick.
+    }
+  },
+  difficulty: () => difficulty,
+  setDifficulty: (d) => {
+    difficulty = d;
+    try {
+      localStorage.setItem("bv-difficulty", d);
+    } catch {
+      // ignore
     }
   },
   gfx: () => gfx,
@@ -1700,7 +1803,7 @@ function tick(dt: number): void {
       spawnCustomer(free);
       const level = game.time / stop().shiftLength;
       const busy = game.customers / stop().customers;
-      game.nextSpawn = game.time + ((17 - 8 * level) * (0.8 + game.rng() * 0.4)) / busy;
+      game.nextSpawn = game.time + (((17 - 8 * level) * (0.8 + game.rng() * 0.4)) / busy) * DIFFICULTY[difficulty].spawnGap;
     }
     // If the window is empty, don't make the player wait.
     if (!game.slots.some((s) => s.order) && game.nextSpawn > game.time + 2 && !game.tutorial) game.nextSpawn = game.time + 2;
@@ -1798,7 +1901,7 @@ function updateUi(): void {
     const key = `${s.order.id}|${s.expanded}|${s.plate.layers.map((l) => l.piece.kind).join(",")}|${s.plate.fries ? `${+!!s.plate.fries.salt}${+!!s.plate.fries.curds}${+!!s.plate.fries.gravy}` : ""}|${s.plate.drink?.flavor}|${Math.round(pct * 50)}`;
     if (key !== s.ticketKey) {
       const fresh = !s.ticketKey.startsWith(`${s.order.id}|${s.expanded}|`);
-      t.innerHTML = ticketHtml(s.order, s.plate, game.tutorial && game.spawned === 1 && i === game.slots.findIndex((x) => x.order) ? 1 : pct, s.expanded);
+      t.innerHTML = ticketHtml(s.order, s.plate, game.tutorial && game.spawned === 1 && i === game.slots.findIndex((x) => x.order) ? 1 : pct, s.expanded, s.sentBack);
       s.ticketKey = key;
       // Long orders on short screens get a denser ticket rather than being cut off.
       if (fresh) {

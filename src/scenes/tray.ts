@@ -179,12 +179,6 @@ export class TrayView {
   private ghost: THREE.Object3D | null = null;
   private ghostSlot = -1;
   private ghostT = 0;
-  /** The service bell at the back of the tray: tap it, twice to serve. */
-  bell = new THREE.Group();
-  private bellButton: THREE.Object3D;
-  private bellDome: THREE.Object3D;
-  private bellRing = 0;
-
   constructor() {
     this.scene.background = new THREE.Color("#efe6d8");
     this.scene.add(new THREE.HemisphereLight("#fff4dc", "#7a6a9a", 1.3));
@@ -214,32 +208,6 @@ export class TrayView {
     this.camera.position.set(0, 7.6, 6.4);
     this.camera.lookAt(0, 0.5, -0.15);
 
-    const base = mesh(faceted(new THREE.CylinderGeometry(0.62, 0.68, 0.16, 20)), "#3b3434");
-    base.position.y = 0.08;
-    const dome = mesh(faceted(new THREE.SphereGeometry(0.52, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2)), "#d9dde0");
-    dome.position.y = 0.16;
-    const shine = mesh(faceted(new THREE.SphereGeometry(0.12, 8, 6)), "#ffffff", { ink: false, opacity: 0.7 });
-    shine.position.set(-0.2, 0.52, 0.18);
-    shine.scale.set(1, 0.5, 1);
-    const stem = mesh(faceted(new THREE.CylinderGeometry(0.05, 0.05, 0.16, 8)), "#9aa3a6", { ink: false });
-    stem.position.y = 0.72;
-    const button = mesh(faceted(new THREE.CylinderGeometry(0.1, 0.12, 0.08, 12)), "#3b3434");
-    button.position.y = 0.82;
-    this.bellDome = new THREE.Group();
-    this.bellDome.add(dome, shine, stem, button);
-    this.bellButton = button;
-    this.bell.add(base, this.bellDome);
-    this.scene.add(this.bell);
-  }
-
-  /** Whether a pointer is on the bell (generous, it's a small target). */
-  bellHit(ndc: THREE.Vector2): boolean {
-    const p = this.groundAt(ndc, 0.4);
-    return Math.hypot(p.x - this.bell.position.x, p.z - this.bell.position.z) < 0.95 * this.bell.scale.x;
-  }
-
-  ring(): void {
-    this.bellRing = 1;
   }
 
   /** Place plates under the three customer slots for the band's aspect ratio. */
@@ -247,17 +215,14 @@ export class TrayView {
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
-    // Plates sit a little left of centre so the bell fits at the back right.
-    const pts = [0, 1, 2].map((i) => this.groundAt(new THREE.Vector2(((i + 0.47) / 3) * 2 - 1, -0.25)));
+    // One plate under each customer; swipe a plate up to hand it over.
+    const pts = [0, 1, 2].map((i) => this.groundAt(new THREE.Vector2(((i + 0.5) / 3) * 2 - 1, -0.25)));
     const spacing = pts[1].x - pts[0].x;
     const r = Math.min(1.4, spacing * 0.39);
     this.plates.forEach((p, i) => {
       p.group.position.set(pts[i].x, 0, pts[i].z);
       p.group.scale.setScalar(r);
     });
-    const b = this.groundAt(new THREE.Vector2(0.86, 0.5));
-    this.bell.position.set(b.x, 0, b.z);
-    this.bell.scale.setScalar(Math.min(1, spacing * 0.3));
   }
 
   private groundAt(ndc: THREE.Vector2, y = 0): THREE.Vector3 {
@@ -317,11 +282,6 @@ export class TrayView {
 
   update(dt: number): void {
     for (const p of this.plates) p.update(dt);
-    // Ding: the button dips and the dome shivers.
-    this.bellRing = Math.max(0, this.bellRing - dt * 3);
-    const r = this.bellRing;
-    this.bellButton.position.y = 0.82 - 0.06 * Math.sin(Math.min(1, (1 - r) * 4) * Math.PI) * (r > 0 ? 1 : 0);
-    this.bellDome.rotation.z = Math.sin(r * 40) * 0.05 * r;
     if (this.ghost) {
       this.ghostT += dt;
       const pv = this.plates[this.ghostSlot];

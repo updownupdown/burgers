@@ -1,3 +1,4 @@
+import type { Difficulty } from "../game/difficulty";
 /**
  * A small stack of modal layers for the game menu, How to Play and the menu reference.
  *
@@ -29,6 +30,8 @@ export interface MenuDeps {
   subtitle?(): string;
   sound(): boolean;
   setSound(on: boolean): void;
+  difficulty(): Difficulty;
+  setDifficulty(d: Difficulty): void;
   gfx(): GfxLevel;
   setGfx(level: GfxLevel): void;
   biz(): boolean;

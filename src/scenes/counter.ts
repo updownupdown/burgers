@@ -551,6 +551,14 @@ export class CounterView {
     const lip = mesh(faceted(new THREE.BoxGeometry(w + 0.1, 0.08, 0.08)), "#8d9a97", { ink: false });
     lip.position.set(cx, 0.05, TRASH.z0 - 0.02);
     this.scene.add(slot, lip);
+    // Lights up while something held is over it, so you know a drop will bin it.
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.2, TRASH.z1 - TRASH.z0 + 0.25), new THREE.MeshBasicMaterial({ color: "#e0523f", transparent: true, opacity: 0.55, depthWrite: false }));
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.set(cx, 0.1, (TRASH.z0 + TRASH.z1) / 2);
+    glow.visible = false;
+    glow.renderOrder = 3;
+    this.scene.add(glow);
+    this.trashGlow[Math.round(pageX0 / PAGE_GAP) + HOME_PAGE] = glow;
     // A few thin steel bars across the opening, like a real chute grate.
     const n = Math.max(2, Math.round(w / 1.6));
     for (let i = 1; i < n; i++) {
@@ -560,7 +568,6 @@ export class CounterView {
     }
   }
 
-  /** A scoop of ice, one lid or one straw: on the counter and in hand. */
   /** What you carry from the fryer's topping column. */
   fryTopMesh(what: "salt" | "curds" | "gravy"): THREE.Object3D {
     if (what === "salt") {
@@ -581,6 +588,7 @@ export class CounterView {
     return i >= 0 && this.packs[i].size && this.packs[i].fill > 0 ? i : -1;
   }
 
+  /** A scoop of ice, one lid or one straw: on the counter and in hand. */
   extraMesh(what: "ice" | "lid" | "straw"): THREE.Object3D {
     if (what === "ice") {
       const g = new THREE.Group();
@@ -822,6 +830,14 @@ export class CounterView {
     this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -y), out);
     return out;
   }
+
+  /** Light up this counter's trash slot (or turn every slot's light off). */
+  highlightTrash(on: boolean): void {
+    this.trashGlow.forEach((g, i) => {
+      if (g) g.visible = on && i === this.page;
+    });
+  }
+  private trashGlow: (THREE.Mesh | undefined)[] = [];
 
   /** True when a dropped item at this world point lands in the trash can. */
   overTrash(world: THREE.Vector3): boolean {

@@ -129,6 +129,7 @@ html, body {
 .ticket .name .l { min-width: 0; overflow: hidden; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.02; font: 400 16px/1.02 var(--bv-font-serif); color: var(--bv-ink); letter-spacing: -0.01em; }
 .ticket .name .l small { font: 500 10px var(--bv-font-mono); color: var(--bv-mute); margin-right: 3px; letter-spacing: 0; }
 .ticket .name .exp { margin-left: auto; flex: none; font-size: 9px; opacity: 0.55; }
+.ticket .back { margin-top: 3px; padding: 2px 4px; border-radius: 3px; background: var(--bv-paprika); color: #fff; font: 800 10.5px/1.15 var(--bv-font-ui); }
 .ticket .how { display: flex; gap: 3px; flex-wrap: wrap; align-items: center; margin-top: 3px; }
 .ticket .how em { font-style: normal; font-weight: 800; color: var(--bv-paprika); font-size: 11.5px; }
 .ticket li.m.no { color: var(--bv-paprika); }
@@ -181,10 +182,11 @@ html, body {
   font-weight: 700;
   box-shadow: 0 2px 0 rgb(0 0 0 / 0.2);
   transform: translate(-50%, -100%);
-  white-space: nowrap;
-  max-width: 46vw;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: max-content;
+  max-width: min(60vw, 230px);
+  text-align: center;
+  line-height: 1.25;
+  z-index: 4;
   pointer-events: none;
   animation: pop 0.25s ease-out;
 }

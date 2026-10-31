@@ -13,6 +13,8 @@ export interface ScoreResult {
   notes: string[];
   /** Nice things that softened the review: a free side they didn't order. */
   perks: string[];
+  /** Something a customer would hand back whatever the score: a raw or burnt layer, a missing layer, a forgotten or wrong side. */
+  faulty: boolean;
 }
 
 /** Longest common subsequence of layer kinds, returned as index pairs (expected, actual). */
@@ -173,6 +175,7 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
   // average with the worst layer.
   let quality = 0;
   let generous = 0;
+  let worstLayer = 1;
   if (pairs.length) {
     let sum = 0;
     let weights = 0;
@@ -192,6 +195,7 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
       sum += q * w;
       weights += w;
       worst = Math.min(worst, q);
+      worstLayer = Math.min(worstLayer, q);
       if (note && !notes.includes(note)) notes.push(note);
     }
     quality = 0.5 * (sum / weights) + 0.5 * worst;
@@ -250,7 +254,9 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
   if (!order.drink && plate.drink && plate.drink.fill > 0.6) freebie(Math.min(1, plate.drink.fill), "free drink");
 
   const score = Math.round(clamp01(total) * 100);
-  return { score, stars: starsFor(score), structure, quality, presentation, sides, notes, perks };
+  const sideMissing = (order.fries && (!plate.fries || friesQ < 0.35)) || (!!order.drink && (!plate.drink || drinkQ < 0.35));
+  const faulty = (exp.length > 0 && (pairs.length < exp.length || worstLayer < 0.35)) || sideMissing;
+  return { score, stars: starsFor(score), structure, quality, presentation, sides, notes, perks, faulty };
 }
 
 /** Fries or poutine against the order, 0..1. */

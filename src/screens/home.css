@@ -38,9 +38,9 @@
   padding: calc(var(--safe-t) + 8px) 14px 8px;
 }
 .home-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-/* The wordmark: the logo mark (icons.ts "logo"), then two stacked lines of the serif, "Voyage" in butter. */
+/* The wordmark: the coloured logo mark (public/logo.svg), then two stacked lines of the serif, "Voyage" in butter. */
 .home-logo { display: grid; grid-template-columns: auto auto; column-gap: 8px; align-items: center; font-family: var(--bv-font-serif); font-weight: 400; font-size: 19px; line-height: 0.92; letter-spacing: 0; white-space: nowrap; }
-.home-logo .mark { grid-row: 1 / 3; font-size: 30px; color: var(--bv-ink); }
+.home-logo .mark { grid-row: 1 / 3; width: 30px; height: 30px; display: block; }
 .home-logo .w2 { color: var(--bv-amber); }
 .home-brand .bv-eyebrow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-actions { margin-left: auto; display: flex; gap: 8px; }

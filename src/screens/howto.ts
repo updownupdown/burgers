@@ -337,15 +337,15 @@ function sections(): Sec[] {
         <path d="M248.5 57v-2.2a3.5 3.5 0 0 1 7 0V57M247 57h10v6h-10z" class="lock"/>
       </svg>
       <div class="hw-drive">
-        <span>${icon("moon")}<b>Next town</b><small>Overnight, a little gas</small></span>
+        <span>${icon("moon")}<b>Within range</b><small>Tonight, a little gas</small></span>
         <span>${icon("sun")}<b>Further away</b><small>A whole day, gas by distance</small></span>
       </div>
       <div class="hw-cal" aria-label="A town's calendar">${[1, 2, 3, 4, 5, 6, 7].map((d) => `<span class="${d === 2 ? "today" : ""} ${d === 5 ? "ev" : ""}"><b class="bv-mono">${d}</b>${d === 5 ? "<i>Fair</i>" : ""}</span>`).join("")}</div>
       <p class="hw-cap">${icon("calendar")}A town's week ahead: today is day 2, and there's a fair on day 5.</p>`,
       points: [
         "Towns are dots joined by roads. Work <b>3 shifts</b> in a town to open the roads to its neighbours.",
-        `${icon("moon")} A drive to the <b>next town</b> happens overnight for a little gas money.`,
-        `${icon("sun")} Going <b>further</b> takes a whole day on the road, and gas costs more the further you drive. Your budget is on the home screen.`,
+        `${icon("moon")} After a shift the map goes dark. Roads <b>within tonight's range</b> (100 miles to start) glow, and you can hop along them before you sleep. An engine tune-up from a city's supply yard stretches the range.`,
+        `${icon("sun")} Going <b>further</b> takes a whole day on the road, and gas costs more the further you drive. Sleeping costs <b>$10</b> a night for the generator; a roof solar panel trims it.`,
         `${icon("calendar")} <b>Tap a town</b> to see its crowd and calendar. Events (markets, fairs, rodeos) bring bigger crowds and sometimes a special recipe.`,
         `${icon("critic")} A <b>critic</b> may order; their receipt is marked. A great review lands in the paper or on TV and raises your <b>popularity</b>, which brings customers and lets you charge more.`,
       ],

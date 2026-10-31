@@ -65,6 +65,9 @@
 .home-stat b .bv-icon { align-self: center; font-size: 13px; color: var(--bv-amber); }
 .home-stat small { font-family: var(--bv-font-ui); font-size: 10px; font-weight: 600; color: var(--bv-mute); }
 .home-stat.low b { color: var(--bv-paprika); }
+.home-stat.time b { font-family: var(--bv-font-ui); font-weight: 700; font-size: 13px; }
+.home-stat.time b .bv-icon { color: var(--bv-amber); }
+.home.evening .home-stat.time b .bv-icon { color: #b9c6e8; }
 
 /* ---- map -------------------------------------------------------------- */
 .home-map {
@@ -142,6 +145,19 @@
   .home-town:hover .node { stroke-width: 1; }
 }
 
+/* ---- evening: the map goes dark, the roads within tonight's range stay lit -------------- */
+.home-svg .home-night { fill: #2a3356; mix-blend-mode: multiply; opacity: 0; pointer-events: none; transition: opacity 0.5s; }
+.home.evening .home-svg .home-night { opacity: 0.78; }
+.home.evening .home-map { background: #16192a; }
+.home-svg .road.reach { stroke: #a9ba88; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 1.2px rgb(169 186 136 / 0.9)); }
+.home.evening .home-town.lit .node { fill: #ffe6a8; stroke: #e1b55c; stroke-width: 0.8; }
+.home.evening .home-town.lit .tname { fill: #fff3d6; stroke: #2a2622; }
+.home.evening .home-town:not(.lit):not(.here) .tname { fill: #e9e1d2; stroke: #1f1c19; }
+.home.evening .home-town.locked .tname { fill: #a59d91; }
+.home.evening .home-svg .rname { fill: #c9d2e6; }
+.home.evening .home-svg .scale, .home.evening .home-svg .compass { fill: #c9d2e6; }
+.home.evening .home-truck .shadow { opacity: 0.5; }
+
 /* the truck */
 .home-truck { pointer-events: none; }
 .home-truck .shadow { fill: var(--home-ink); opacity: 0.18; }
@@ -160,7 +176,7 @@
 
 /* ---- first-time tip ---------------------------------------------------- */
 .home-tip {
-  position: absolute; left: 50%; bottom: calc(var(--safe-b) + 96px); transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: calc(var(--safe-b) + 140px); transform: translateX(-50%);
   display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: var(--bv-r-pill);
   background: var(--bv-paper-2); color: var(--bv-ink); font-size: var(--bv-fs-sm); font-weight: 700; white-space: nowrap;
   box-shadow: 0 0 0 1px var(--bv-rule-2), var(--bv-shadow-2); pointer-events: none; animation: home-rise 0.35s var(--bv-ease);
@@ -171,10 +187,15 @@
 /* ---- dock (the current town, always one tap from a shift) ------------- */
 .home-dock {
   position: absolute; left: 10px; right: 10px; bottom: calc(var(--safe-b) + 10px);
-  display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px;
+  display: grid; gap: 8px; padding: 10px 10px 10px 14px;
   background: var(--bv-paper); border-radius: var(--bv-r-lg); box-shadow: 0 0 0 1px var(--bv-rule), var(--bv-shadow-3);
   animation: home-rise 0.3s var(--bv-ease);
 }
+.home-dock-row { display: flex; align-items: center; gap: 10px; }
+.home-dock-row2 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-left: -4px; }
+.home-dock-row2 .bv-btn { padding: 0 6px; font-size: 13px; border-color: var(--bv-rule-2); }
+.home-dock-row2 .bv-btn .bv-icon { font-size: 15px; }
+.home-dock .bv-btn .cost { font-family: var(--bv-font-mono); font-weight: 500; font-size: 13px; opacity: 0.8; }
 .home-dock-info { display: grid; gap: 2px; min-width: 0; flex: 1; text-align: left; }
 .home-dock-info b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 24px; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-dock-info .bv-caption { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; }
@@ -266,7 +287,7 @@
 
 /* ---- toast ------------------------------------------------------------- */
 .home-toast {
-  position: absolute; left: 50%; bottom: calc(var(--safe-b) + 92px); transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: calc(var(--safe-b) + 136px); transform: translateX(-50%);
   display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: var(--bv-r-md);
   background: var(--bv-paprika-2); color: #fff; font-weight: 700; font-size: var(--bv-fs-md); box-shadow: var(--bv-shadow-2);
   white-space: nowrap; max-width: calc(100% - 24px); pointer-events: none; animation: home-rise 0.25s var(--bv-ease);
@@ -281,6 +302,7 @@
   .home-top { padding-left: 20px; padding-right: 20px; }
   .home-stats { left: 50%; right: auto; transform: translateX(-50%); width: min(560px, calc(100% - 24px)); }
   .home-dock { left: 50%; right: auto; transform: translateX(-50%); width: min(480px, calc(100% - 24px)); bottom: 16px; }
+  .home-dock-row2 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .home-sheet { left: 50%; right: auto; transform: translateX(-50%); width: min(480px, calc(100% - 24px)); bottom: 16px; border-radius: 14px; max-height: calc(100% - 90px); }
   .home-sheet .grip { display: none; }
   .home-zoom { right: 16px; top: auto; bottom: 16px; }
@@ -302,10 +324,3 @@
 @media (prefers-reduced-motion: reduce) {
   .home *, .home *::before, .home *::after { animation: none !important; transition: none !important; }
 }
-
-/* Social media for the day, above the Open button on the town sheet. */
-.home-ads { display: grid; gap: 6px; margin-bottom: 10px; }
-.home-ads .bv-eyebrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.home-ads .bv-eyebrow .bv-icon { width: 14px; height: 14px; margin-right: 4px; vertical-align: -2px; }
-.home-ads .bv-seg button { border: 0; background: transparent; }
-.home-ads .bv-seg button[aria-pressed="true"] { background: var(--bv-ink); }

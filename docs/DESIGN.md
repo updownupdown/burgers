@@ -397,3 +397,22 @@ James's picks from the Kitchen Bench study (`/mnt/project-files/kitchen-study/`)
 - **Warm shelf.** No bulbs or orange glow; each plate gets a slim vertical bar that drains as the food dries out (green while it keeps, amber once it starts drying after `HOLD_GRACE`, red near `HOLD_RUIN`).
 - **Sized sleeves.** A sleeve carries a size and only opens on the stack of that size.
 - **Not built:** the study's fryer dump pan (it would add a step between basket and carton); the smash press on the griddle is decor, smashing is still press and hold.
+
+The social media control moved to the Prep screen's *Who's coming* box in §13.
+
+## 13. The day cycle: one map, two lights
+
+From the Day Cycle Study (this thread). A day is now two halves on one map, and every screen the player sees in a day is listed here in order.
+
+1. **Morning map.** Daylight. Dock: *Prep & Open* (primary), plus Menu, Reviews, Supplies. Tapping a town shows the trip: *Drive now* when it fits the range, *Drive · a whole day* otherwise.
+2. **Prep.** The pre-open base (`src/screens/day.ts`). Expand boxes, not tabs: *Who's coming* (crowd, expected customers, social media level), *Menu*, *Prices*, *Ingredients* (business mode), *Running costs*, *Ledger* (a receipt projecting the day's net as a range). Collapsed lines always show the choice and its effect, so the collapsed screen already answers "what will today make?". *Keep it simple* hides everything but the essentials and is remembered (`simplePlan`). The bottom bar shows the projected net and *Open*. Nothing about reviews lives here.
+3. **Shift.** Unchanged.
+4. **Closing.** Dusk header with the town, stars and a verdict line; three KPIs; expand boxes for *Takings* (a receipt with the projection and whether it was beaten), *Today's reviews* and *Press*. The free kitchen-upgrade pick lives here when a shift earns one. One button: *Evening map*. It's saved as `last` so Results reopens it from the evening dock.
+5. **Evening map.** Night palette; only roads within tonight's range glow and towns at their end light up. Dock: *Sleep −$5* (the running cost after solar), Results, Reviews, Supplies. Hops within range happen now and add up (`driven`); a town beyond the range is tomorrow's drive.
+6. **Night card.** Charges the running cost, applies solar, turns the day. Tap to wake on the morning map.
+
+**Money.** Running cost **$10 a night** (generator and propane), waived when the tin can't cover it. Supply yard at Summit City and Harbor City sells parts for cash: roof solar panel $60 (saves $5), full solar roof $60 (saves $8 in all), engine tune-up $150 (range 175 mi), long-haul kit $250 (range 250 mi). Base range 100 mi covers any town road; highways need the tune-up. Kitchen upgrades stay the free pick after a good shift.
+
+**Reviews** have their own screen off both docks: reputation and popularity up top, then every review and press clipping with filters (All, Critics, 3★, 1★, this town).
+
+Code: `src/game/day.ts` (time of day, gear, sleep, projection), `src/game/travel.ts` (range legs), `src/screens/day.ts` + `day.css` (the screens), `src/screens/map.ts` (night and lit roads).

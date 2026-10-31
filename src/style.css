@@ -449,6 +449,10 @@ html, body {
   background: var(--bv-amber);
   box-shadow: 0 0 0 2px var(--bv-paper);
 }
+/* One pip per camera stop on a counter that has two (the fryer). */
+.tab .stops { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; pointer-events: none; }
+.tab .stops i { width: 5px; height: 5px; border-radius: 50%; background: #c9bfae; }
+.tab .stops i.on { background: var(--bv-ink); }
 .tab .dot.hot { background: var(--bv-paprika); animation: blink 0.6s infinite alternate; }
 @keyframes blink { to { opacity: 0.35; } }
 

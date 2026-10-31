@@ -768,7 +768,9 @@ function moveHold(pt: Pointer): void {
 
 /** Carrying something over a tab for a moment switches to that counter, so items can move between counters. */
 let hover = { tab: -1, since: 0 };
+let edge = { side: 0, since: 0 };
 function hoverTab(pt: Pointer, now: number): void {
+  hoverEdge(pt, now);
   if (bandAt(pt.y) !== "tabs") {
     hover.tab = -1;
     return;
@@ -780,6 +782,22 @@ function hoverTab(pt: Pointer, now: number): void {
   });
   if (tab !== hover.tab) hover = { tab, since: now };
   else if (tab >= 0 && tab !== counter.page && now - hover.since > 280) goToPage(tab);
+}
+
+/**
+ * On a counter with two camera stops (the fryer), carrying something to the screen's edge and
+ * resting there a moment slides over to the other stop, so a carton can go from the stacks to the
+ * far pad in one carry.
+ */
+function hoverEdge(pt: Pointer, now: number): void {
+  const side = bandAt(pt.y) !== "counter" ? 0 : pt.x < 28 ? -1 : pt.x > bands.counter.w - 28 ? 1 : 0;
+  if (side !== edge.side) edge = { side, since: now };
+  else if (side && now - edge.since > 350 && counter.settled) {
+    const stops = counter.stopsOf(counter.page);
+    const next = counter.stop + side;
+    if (stops.includes(next)) goToStop(next);
+    edge.since = now;
+  }
 }
 
 function velocity(pt: Pointer): { vx: number; vy: number } {
@@ -1598,6 +1616,17 @@ function goToStop(s: number): void {
   }, true);
 }
 
+// A counter with more than one camera stop shows a pip per stop on its tab; the lit one is where you are.
+const stopPips = ui.tabs.map((t, i) => {
+  const n = counter.stopsOf(i).length;
+  if (n < 2) return [];
+  const row = document.createElement("span");
+  row.className = "stops";
+  row.innerHTML = "<i></i>".repeat(n);
+  t.appendChild(row);
+  return [...row.children] as HTMLElement[];
+});
+
 ui.tabs.forEach((t, i) =>
   t.addEventListener("click", () => {
     sfx.unlock();
@@ -2248,6 +2277,7 @@ function updateUi(): void {
   );
 
   ui.tabs.forEach((t, i) => t.setAttribute("aria-selected", String(i === counter.page)));
+  stopPips.forEach((pips, page) => pips.forEach((el, k) => el.classList.toggle("on", page === counter.page && counter.stopsOf(page)[k] === counter.stop)));
   updateGrillTags();
   updateFryTags();
   updateHoldUi();

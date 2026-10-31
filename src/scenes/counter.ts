@@ -242,7 +242,7 @@ export type Hit =
   | { type: "curds" }
   | { type: "gravy" };
 
-/** A burger being put together (or food parked) under the heat lamp. */
+/** A burger being put together (or food parked) on the warm shelf. */
 export interface HoldSpot {
   layers: Layer[];
   view: PlateView;

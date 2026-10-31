@@ -20,6 +20,9 @@ const DISH_AT = { x: -0.42, z: 0.08 };
 const DISH_R = 0.86;
 const FRIES_AT = { x: 1.0, z: 0.42 };
 const CUP_AT = { x: 1.02, z: -0.42 };
+/** With no burger ordered the sides move to the middle of the tray. */
+const FRIES_SOLO = { x: -0.45, z: 0.3 };
+const CUP_SOLO = { x: 0.45, z: -0.25 };
 /** The burger never draws smaller than this share of its full size to fit under the receipts. */
 const MIN_FIT = 0.55;
 /**
@@ -115,6 +118,16 @@ export class PlateView {
   setDish(on: boolean): void {
     this.dish.visible = on;
     this.burger.position.y = on ? 0.21 : 0.13;
+    this.placeSides();
+  }
+
+  /** Fries and cup beside the plate, or in the middle of a tray with no burger on it. */
+  private placeSides(): void {
+    const solo = !this.dish.visible && !this.entries.length;
+    const f = solo ? FRIES_SOLO : FRIES_AT;
+    const c = solo ? CUP_SOLO : CUP_AT;
+    this.fries?.position.set(f.x, 0.13, f.z);
+    this.cup?.position.set(c.x, 0.13, c.z);
   }
 
   stackTop(): number {
@@ -198,7 +211,7 @@ export class PlateView {
         this.fries = makeFries(true, p.fries.size, p.fries.fill, p.fries);
         this.fries.userData.setCook(p.fries.cook);
         this.fries.scale.setScalar(relScale("fries") * TRAY_SIDES * this.fries.userData.sizeScale);
-        this.fries.position.set(FRIES_AT.x, 0.13, FRIES_AT.z);
+
         this.group.add(this.fries);
       }
       this.friesKey = fk;
@@ -215,11 +228,11 @@ export class PlateView {
         this.cup.userData.setFill(p.drink.fill);
         dressCup(this.cup, p.drink);
         this.cup.scale.setScalar(relScale("cup") * TRAY_SIDES);
-        this.cup.position.set(CUP_AT.x, 0.13, CUP_AT.z);
         this.group.add(this.cup);
       }
       this.cupKey = ck;
     }
+    this.placeSides();
   }
 
   kick(strength: number): void {
@@ -357,16 +370,27 @@ export class TrayView {
     const front = (r * TRAY.d) / 2;
     const want = 1 - 2 * TRAY_FRONT;
     const z = ((ndcY(front) - want) * hh) / Math.sin(TRAY_PITCH);
-    // Burgers fit under the receipts: how tall a stack can stand, in tray-local units.
-    const base = new THREE.Vector3(0, 0, z + DISH_AT.z * r).project(this.camera).y;
-    const headroom = ((1 - 2 * RECEIPT_LINE - base) * hh) / Math.cos(TRAY_PITCH) / r;
+    // Burgers fit under the receipts (see fitUnder).
+    this.fitBase = new THREE.Vector3(0, 0, z + DISH_AT.z * r).project(this.camera).y;
+    this.fitPerUnit = (Math.cos(TRAY_PITCH) * r) / hh;
     this.plates.forEach((p, i) => {
       p.group.position.set(pts[i].x, 0, z);
       p.group.scale.setScalar(r);
-      p.headroom = headroom;
+      this.fitUnder(i, RECEIPT_LINE);
       this.flags[i].position.set(pts[i].x, -0.1, 1.68);
     });
     this.flags.forEach((f) => (f.visible = false));
+  }
+
+  private fitBase = 0;
+  private fitPerUnit = 1;
+  /**
+   * Fit a tray's burger under a line `frac` of the band's height from its top (the bottom of the
+   * receipt hanging over it, or 0 when none does): a tall stack shrinks so every layer shows.
+   */
+  fitUnder(i: number, frac: number): void {
+    const line = 1 - 2 * Math.min(RECEIPT_LINE, Math.max(0.04, frac));
+    this.plates[i].headroom = (line - this.fitBase) / this.fitPerUnit;
   }
 
   /** Where the receipts may hang down to, as a fraction of the band's height from its top. Burgers are fitted under it. */

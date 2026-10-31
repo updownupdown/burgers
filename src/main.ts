@@ -2309,6 +2309,18 @@ function updateUi(): void {
     game.active,
     game.slots.map((s) => !!s.order),
   );
+  // Each tray's burger fits under whatever receipt hangs over it, so tall stacks stay readable.
+  trayView.plates.forEach((pv, i) => {
+    const v = pv.burger.getWorldPosition(new THREE.Vector3()).project(trayView.camera);
+    const x = colX + ((v.x + 1) / 2) * bands.tray.w;
+    let bottom = bands.tray.y;
+    for (const t of ui.tickets) {
+      if (t.hidden || !t.offsetHeight) continue;
+      const r = t.getBoundingClientRect();
+      if (x > r.left - 24 && x < r.right + 24) bottom = Math.max(bottom, r.bottom);
+    }
+    trayView.fitUnder(i, (bottom - bands.tray.y) / bands.tray.h);
+  });
 
   ui.tabs.forEach((t, i) => t.setAttribute("aria-selected", String(i === counter.page)));
   updateGrillTags();
@@ -2525,7 +2537,8 @@ function updateGrillTags(): void {
       el.hidden = true;
       return;
     }
-    const v = it.obj.position.clone().add(new THREE.Vector3(0, 0.2, 0.66)).project(counter.camera);
+    // Under the item, or over its front edge on the front row, clear of the zone buttons.
+    const v = it.obj.position.clone().add(new THREE.Vector3(0, 0.2, Math.min(0.66, counter.grillTagZ - it.z))).project(counter.camera);
     const x = ((v.x + 1) / 2) * bands.counter.w;
     const patty = it.piece.kind === "patty";
     el.hidden = x < 0 || x > bands.counter.w || (it.flipT >= 0 && !patty);

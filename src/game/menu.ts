@@ -64,7 +64,15 @@ export function orderFromRecipe(
 ): Order {
   // "Extra pickles" means more pickles in the same layer, not a second layer of them.
   const more = new Set(mods.filter((m) => m.type === "extra" && COUNTED.has(m.kind)).map((m) => m.kind));
-  const kinds = applyMods(recipe.layers, mods.filter((m) => !(m.type === "extra" && COUNTED.has(m.kind))));
+  // Leave-offs come out last, so the ticket can show "- Ketchup" where the ketchup would have gone.
+  const full = applyMods(recipe.layers, mods.filter((m) => m.type !== "no" && !(m.type === "extra" && COUNTED.has(m.kind))));
+  const nos = new Set(mods.filter((m) => m.type === "no").map((m) => m.kind));
+  const removed: { kind: Kind; at: number }[] = [];
+  const kinds: Kind[] = [];
+  for (const k of full) {
+    if (!nos.has(k)) kinds.push(k);
+    else if (!removed.some((r) => r.kind === k && r.at === kinds.length)) removed.push({ kind: k, at: kinds.length });
+  }
   const layers: ExpectedLayer[] = kinds.map((kind, i) => {
     if (kind === "patty") return recipe.smash ? { kind, doneness, smashed: true } : { kind, doneness };
     if (kind === "bun") return { kind, toasted: recipe.toasted };
@@ -74,7 +82,7 @@ export function orderFromRecipe(
   });
   const extras = mods.filter((m) => m.type !== "no").reduce((n, m) => n + (m.type === "extra" && COUNTED.has(m.kind) ? EXTRA_PRICE : ADD_PRICE), 0);
   const price = recipe.price + extras + (fries ? FRIES_PRICE[friesSize] : 0) + (drink ? DRINK_PRICE[drinkSize] : 0);
-  return { id, name: recipe.name, price, mods, layers, fries, drink, friesSize, drinkSize };
+  return { id, name: recipe.name, price, mods, ...(removed.length ? { removed } : {}), layers, fries, drink, friesSize, drinkSize };
 }
 
 /** Toppings a customer may ask to leave off or double up. Buns and patties are never optional. */

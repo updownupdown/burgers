@@ -70,6 +70,8 @@ export interface Ui {
   stop: HTMLElement;
   rail: HTMLElement;
   tickets: HTMLElement[];
+  /** "Sent back" notes, one over each customer. */
+  sentBack: HTMLElement[];
   drinkLabels: HTMLElement[];
   hint: HTMLElement;
   tabs: HTMLButtonElement[];
@@ -95,6 +97,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   </div>
   <div class="rail" data-r="rail"></div>
   ${[0, 1, 2].map((i) => `<div class="ticket" data-r="ticket" data-slot="${i}" style="--slot:${SLOT_COLORS[i]}" hidden></div>`).join("")}
+  ${[0, 1, 2].map(() => `<div class="sentback" data-r="sentback" hidden></div>`).join("")}
   <div class="hint" data-r="hint" hidden></div>
   ${DRINKS.map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_LABEL[d]}</div>`).join("")}
   <nav class="tabs">
@@ -118,6 +121,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     stop: q("stop"),
     rail: q("rail"),
     tickets: [...root.querySelectorAll<HTMLElement>('[data-r="ticket"]')],
+    sentBack: [...root.querySelectorAll<HTMLElement>('[data-r="sentback"]')],
     drinkLabels: [...root.querySelectorAll<HTMLElement>('[data-r="dlabel"]')],
     hint: q("hint"),
     tabs,
@@ -132,7 +136,6 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
-const MOD_LABEL = { no: "No", extra: "Extra", add: "+" } as const;
 
 /** Doneness pills: the same colour and word on the ticket and under the patty on the grill. */
 export const DONENESS_PILL: Record<string, { label: string; color: string }> = {
@@ -155,87 +158,238 @@ export function patienceMood(pct: number): "neutral" | "sad" | "angry" {
   return pct >= 0.5 ? "neutral" : pct >= 0.2 ? "sad" : "angry";
 }
 
-function moodFace(mood: "neutral" | "sad" | "angry"): string {
+function moodFace(mood: "neutral" | "sad" | "angry", critic = false): string {
   const mouth = mood === "neutral" ? "M5.5 11.2h5" : "M5.3 12c1.6-1.6 3.8-1.6 5.4 0";
   const brows = mood === "angry" ? `<path d="M4.4 5.2l2.6 1.2M11.6 5.2l-2.6 1.2"/>` : mood === "sad" ? `<path d="M4.6 6.2l2.4-1M11.4 6.2l-2.4-1"/>` : "";
-  return `<svg class="face" viewBox="0 0 16 16" aria-label="${mood}"><circle cx="8" cy="8" r="7.2"/><g><circle cx="5.9" cy="7.6" r="1"/><circle cx="10.1" cy="7.6" r="1"/>${brows}<path d="${mouth}"/></g></svg>`;
+  return `<svg class="face" viewBox="0 0 16 16" aria-label="${mood}"><circle cx="8" cy="8" r="7.2"/><g><circle cx="5.9" cy="7.6" r="1"/><circle cx="10.1" cy="7.6" r="1"/>${brows}<path d="${mouth}"/></g>${critic ? `<circle class="cdot" cx="13.6" cy="2.6" r="2.6"><title>Food critic</title></circle>` : ""}</svg>`;
 }
 
-/**
- * Ticket HTML. Compact (default once a recipe is familiar): the recipe name, how to cook
- * it, the modifiers, and a strip of pips showing stacking progress. Expanded: every layer,
- * top to bottom, ticked off as it's stacked in order.
+/** Kitchen shorthand for a collapsed ticket, the way a cook calls it across the line. */
+const SHORT_NAME: Record<string, string> = {
+  "Plain Jane": "Plain J",
+  "Trailhead Classic": "Trail C",
+  "Cheesy Switchback": "Chz Sw",
+  "Sunrise Summit": "Sunrise",
+  "Lumberjack Stack": "Lumber",
+  "Boardwalk Basic": "Brdwlk",
+  "Luau Stack": "Luau",
+  "Low Tide": "Lo Tide",
+  "Big Kahuna": "Kahuna",
+  "Sandy Pickle": "Sandy P",
+  Tumbleweed: "Tumble",
+  "Mesa Smash": "Mesa Sm",
+  Rattlesnake: "Rattler",
+  "Sunset Double": "Sun Dbl",
+  "Ranch Breakfast": "Ranch B",
+  "Campfire Melt": "Camp M",
+  "Harbor Classic": "Harb C",
+  "Sun Valley Supreme": "SV Sup",
+  "Rodeo Double": "Rodeo D",
+  Wipeout: "Wipeout",
+  Poutine: "Poutine",
+};
+
+/** A short name for a recipe: the shorthand above, else initials or a clipped first word. */
+export function shortName(name: string): string {
+  if (SHORT_NAME[name]) return SHORT_NAME[name];
+  const w = name.split(/\s+/);
+  if (w.length >= 3) return w.map((x) => x[0]).join("").toUpperCase();
+  if (w.length === 2) return `${w[0].slice(0, 5)} ${w[1][0]}`;
+  return name.slice(0, 7);
+}
+
+/*
+ * Ticket icons: one small, simple shape per ingredient (not a drawing), filled with --c so a row
+ * can grey them out when stacked or turn them red when stacked wrong. 16x12, outlined lightly so
+ * pale ones (egg, onion) still read on the paper.
  */
-export function ticketHtml(order: Order, plate: Plate, patience: number, expanded: boolean, sentBack: string | null = null): string {
+const ICON_PATH: Record<string, string> = {
+  bunTop: `<path d="M1.5 10.5C1.5 4.8 4.6 1.5 8 1.5s6.5 3.3 6.5 9z"/>`,
+  bunBottom: `<path d="M1.5 3.5h13v2.2c0 2.9-2.2 4.8-5 4.8H6.5c-2.8 0-5-1.9-5-4.8z"/>`,
+  patty: `<rect x="1.2" y="3" width="13.6" height="7" rx="3.5"/>`,
+  smashed: `<rect x="0.6" y="4.5" width="14.8" height="4.2" rx="2.1"/>`,
+  cheese: `<path d="M1 3.5h14v3.6h-3.2v2.6a1.2 1.2 0 0 1-2.4 0V7.1H1z"/>`,
+  lettuce: `<path d="M1 8.5c1-3.5 2.4-3.5 3.5-1.2C5.6 4.6 7 4.6 8 7.3c1-2.7 2.4-2.7 3.5 0 1.1-2.3 2.5-2.3 3.5 1.2v1.5H1z"/>`,
+  tomato: `<ellipse cx="8" cy="6.5" rx="6.8" ry="4.3"/><g class="hi"><circle cx="5.5" cy="6.5" r="1"/><circle cx="8" cy="6.5" r="1"/><circle cx="10.5" cy="6.5" r="1"/></g>`,
+  onion: `<path fill-rule="evenodd" d="M8 2a6.5 4.5 0 1 0 0 9A6.5 4.5 0 1 0 8 2zm0 2.4a3.6 2.1 0 1 1 0 4.2 3.6 2.1 0 1 1 0-4.2z"/>`,
+  pickle: `<ellipse cx="8" cy="6.5" rx="6.5" ry="3.8"/><g class="hi"><circle cx="5.6" cy="6.5" r=".8"/><circle cx="8" cy="5.5" r=".8"/><circle cx="10.4" cy="6.5" r=".8"/><circle cx="8" cy="7.6" r=".8"/></g>`,
+  bacon: `<path d="M1 5.2c2.3-2.2 4.7-2.2 7 0s4.7 2.2 7 0v3c-2.3 2.2-4.7 2.2-7 0s-4.7-2.2-7 0z"/>`,
+  egg: `<path d="M2 7c0-3 2.6-4.6 5.4-4.6 3.4 0 6.6 1.2 6.6 4.2 0 2.7-2.8 3.9-6 3.9C4.6 10.5 2 9.6 2 7z"/><circle class="yolk" cx="7.6" cy="6.6" r="2.3"/>`,
+  ketchup: `<path d="M8 1.2c1.6 2.4 4.2 4.9 4.2 7.1a4.2 4.2 0 0 1-8.4 0c0-2.2 2.6-4.7 4.2-7.1z"/>`,
+  pineapple: `<path fill-rule="evenodd" d="M8 2a6.8 4.6 0 1 0 0 9.2A6.8 4.6 0 1 0 8 2zm0 3.5a1.6 1.1 0 1 1 0 2.2 1.6 1.1 0 1 1 0-2.2z"/>`,
+  jalapeno: `<path fill-rule="evenodd" d="M8 2a4.6 4.6 0 1 0 0 9.2A4.6 4.6 0 1 0 8 2zm0 2.4a2.2 2.2 0 1 1 0 4.4 2.2 2.2 0 1 1 0-4.4z"/><g class="hi"><circle cx="8" cy="5.6" r=".7"/><circle cx="6.8" cy="7.4" r=".7"/><circle cx="9.2" cy="7.4" r=".7"/></g>`,
+  fries: `<path class="st" d="M4 5.5 3.4 1.6h1.2L5.4 5zM6.4 5 6.2.8h1.2L7.6 5zM9 5l.5-3.9h1.2L10.2 5.4zM11.4 5.5l1-3.2h1.1l-.9 3.6z"/><path d="M2.6 4.6h10.8l-1.3 6.6H3.9z"/>`,
+  drink: `<path d="M3.2 2.6h9.6l-1.2 8.9H4.4z"/><rect class="lid" x="2.4" y="1" width="11.2" height="1.8" rx=".9"/>`,
+  curds: `<rect x="2" y="5" width="4.6" height="4.6" rx="1"/><rect x="7.2" y="3" width="4.6" height="4.6" rx="1"/><rect x="9" y="7" width="4.6" height="4.2" rx="1"/>`,
+  gravy: `<path d="M1.5 6.5c2-1.4 3.6-.4 5-1.6 1.6-1.4 3.6-1 5.2.2 1.3 1 2.3.8 2.8.6v2.6c-1.6 1.6-4.6 2.3-7.5 2.3-2.8 0-4.6-.8-5.5-1.8z"/>`,
+};
+
+const ticketIcon = (name: string, color: string) =>
+  `<svg class="ic" viewBox="0 0 16 12" style="--c:${color}" aria-hidden="true">${ICON_PATH[name] ?? ICON_PATH.patty}</svg>`;
+
+/** A press coming down on a patty: the "smash" modifier, as a box. */
+const SMASH_SVG = `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.2h6v2.4H7v2.2h1.8L6 8.4 3.2 5.8H5V3.6H3z"/><rect x="1" y="9.4" width="10" height="1.8" rx=".9"/></svg>`;
+const modBox = (cls: string, text: string, title = text) => `<span class="mb ${cls}" title="${title}">${text}</span>`;
+
+type RowState = "" | "done" | "wrong";
+interface TicketRow {
+  icon: string;
+  color: string;
+  label: string;
+  /** Pills, modifier boxes and counts after the label. */
+  tail: string;
+  state: RowState;
+  /** Changed from the menu: an extra, an add-on or a leave-off. */
+  mod: boolean;
+  /** The next thing to put on the plate. */
+  next: boolean;
+}
+
+function rowHtml(r: TicketRow): string {
+  const cls = [r.state, r.mod ? "mod" : "", r.next ? "next" : ""].filter(Boolean).join(" ");
+  return `<li class="${cls}" data-l style="--k:${r.color}">${ticketIcon(r.icon, r.color)}<span class="l">${r.label}</span>${r.tail}</li>`;
+}
+
+/** The build, top of the burger first, compared against what's on the plate so far. */
+function buildRows(order: Order, plate: Plate): TicketRow[] {
+  const rows: TicketRow[] = [];
+  if (order.poutine && !order.layers.length) {
+    const f = plate.fries;
+    const fryState: RowState = !f ? "" : f.size === order.friesSize ? "done" : "wrong";
+    const parts: [string, string, string, RowState][] = [
+      ["fries", "#f3d36b", `<i class="sz">${order.friesSize}</i>Fries`, fryState],
+      ["curds", "#f5edcf", "Cheese curds", f?.curds ? (fryState === "wrong" ? "wrong" : "done") : ""],
+      ["gravy", "#6e4020", "Gravy", f?.gravy ? (f.curds && fryState !== "wrong" ? "done" : "wrong") : ""],
+    ];
+    const next = parts.findIndex((p) => !p[3]);
+    const wrong = parts.some((p) => p[3] === "wrong");
+    parts.forEach(([icon, color, label, state], i) => rows.push({ icon, color, label, tail: "", state, mod: false, next: !wrong && i === next }));
+    return rows.reverse();
+  }
   // Runs of counted toppings are one layer; a layer is done once it has its full count.
   const stacked = collapseCounted(plate.layers);
-  let prefixOk = true;
-  const okFlags = order.layers.map((exp, i) => {
-    const got = stacked[i];
-    prefixOk = prefixOk && !!got && got.piece.kind === exp.kind && got.count >= (exp.count ?? 1);
-    return prefixOk;
-  });
   const modded = new Set(order.mods.filter((m) => m.type !== "no").map((m) => m.kind));
-  let body: string;
-  if (order.poutine && !order.layers.length) {
-    // A poutine meal: the carton, then curds and gravy on top.
-    const f = plate.fries;
-    const line = (ok: boolean, color: string, label: string) => `<li class="${ok ? "ok" : ""}"><b style="background:${color}"></b><span class="l">${label}</span></li>`;
-    body = `<ol>${line(!!f && f.size === order.friesSize, "#f3d36b", `<i class="sz">${order.friesSize}</i>Fries`)}${line(!!f?.curds, "#f5edcf", "Cheese curds")}${line(!!f?.gravy, "#6e4020", "Gravy")}</ol>`;
-  } else if (expanded) {
-    const lines: string[] = [];
-    for (let i = order.layers.length - 1; i >= 0; i--) {
-      const exp = order.layers[i];
-      let extra = "";
-      if (exp.kind === "patty") extra = ` ${donenessPill(exp.doneness ?? "medium")}${exp.smashed ? ` <em>Smash</em>` : ""}`;
-      if (exp.kind === "pineapple") extra = ` <em>Grilled</em>`;
-      if (exp.kind === "bun" && exp.toasted) extra = ` <em>Toast</em>`;
-      if (exp.melted) extra = ` <em>Melted</em>`;
-      if (exp.count) {
-        const got = stacked[i]?.piece.kind === exp.kind && okFlags[i - 1] !== false ? stacked[i].count : 0;
-        extra = ` <span class="n">${got && got < exp.count ? `${got}/` : ""}×${exp.count}</span>`;
-      }
-      const cls = [okFlags[i] ? "ok" : "", modded.has(exp.kind) ? "mod" : ""].join(" ").trim();
-      lines.push(`<li class="${cls}" data-l><b style="background:${KIND_COLOR[exp.kind]}"></b><span class="l">${KIND_LABEL[exp.kind]}</span>${extra}</li>`);
-    }
-    const nos = order.mods.filter((m) => m.type === "no").map((m) => `<li class="no"><span class="l">No ${KIND_LABEL[m.kind].toLowerCase()}</span></li>`);
-    body = `<ol>${lines.join("")}${nos.join("")}</ol>`;
-  } else {
-    const patty = order.layers.find((l) => l.kind === "patty");
-    const bun = order.layers.find((l) => l.kind === "bun");
-    const how: string[] = [];
-    if (patty?.smashed) how.push("Smash");
-    if (bun?.toasted) how.push("Toast");
-    if (order.layers.some((l) => l.melted)) how.push("Melt");
-    const mods = order.mods.map(
-      (m) => `<li class="m ${m.type}"><b style="background:${KIND_COLOR[m.kind]}"></b><span class="l">${MOD_LABEL[m.type]} ${KIND_LABEL[m.kind].toLowerCase()}</span></li>`,
-    );
-    const pips = order.layers.map((l, i) => `<i class="${okFlags[i] ? "ok" : ""}" style="background:${KIND_COLOR[l.kind]}"></i>`).join("");
-    body = `<div class="how">${patty ? donenessPill(patty.doneness ?? "medium") : ""}${how.map((h) => `<em>${h}</em>`).join(" ")}</div>
-      ${mods.length ? `<ol>${mods.join("")}</ol>` : ""}
-      <div class="pips" aria-label="${okFlags.filter(Boolean).length} of ${order.layers.length} layers">${pips}</div>`;
+  // The plate matches the order up to `good` layers. Everything stacked above that has to come
+  // off: those pieces are listed in red, crossed out, where they sit, above the layer that should
+  // go there instead. A short count still on top is just unfinished.
+  let good = 0;
+  while (good < order.layers.length && stacked[good] && stacked[good].piece.kind === order.layers[good].kind && stacked[good].count >= (order.layers[good].count ?? 1)) good++;
+  const partial = stacked.length === good + 1 && good < order.layers.length && stacked[good].piece.kind === order.layers[good].kind;
+  const wrongFrom = partial ? stacked.length : good;
+  const states: RowState[] = order.layers.map((_, i) => (i < good ? "done" : ""));
+  const nextIdx = stacked.length > wrongFrom ? -1 : good;
+  const removed = order.removed ?? order.mods.filter((m) => m.type === "no").map((m) => ({ kind: m.kind, at: order.layers.length - 1 }));
+  const wrongRows: TicketRow[] = [];
+  for (let i = stacked.length - 1; i >= wrongFrom; i--) {
+    const k = stacked[i].piece.kind;
+    const icon = k === "bun" ? (i === 0 ? "bunBottom" : "bunTop") : k;
+    wrongRows.push({ icon, color: KIND_COLOR[k], label: KIND_LABEL[k], tail: stacked[i].count > 1 ? `<span class="n">×${stacked[i].count}</span>` : "", state: "wrong", mod: false, next: false });
   }
-  const sides: string[] = [];
-  // Sizes lead so they're the first thing read: "L Fries", "S Pine Fizz".
-  if (order.fries && !(order.poutine && !order.layers.length))
-    sides.push(`<span class="${plate.fries?.size === order.friesSize ? "ok" : ""}"><b style="background:#f3d36b"></b><i class="sz">${order.friesSize}</i><span class="sl">Fries</span></span>`);
+  // Wrong pieces past the top of the build go first in the list.
+  if (wrongFrom >= order.layers.length) rows.push(...wrongRows);
+  for (let i = order.layers.length - 1; i >= 0; i--) {
+    const exp = order.layers[i];
+    let icon: string = exp.kind;
+    let label = KIND_LABEL[exp.kind];
+    let tail = "";
+    if (exp.kind === "bun") {
+      icon = i === 0 ? "bunBottom" : "bunTop";
+      if (exp.toasted) tail = modBox("toast", "Toast");
+    } else if (exp.kind === "patty") {
+      if (exp.smashed) icon = "smashed";
+      tail = `${donenessPill(exp.doneness ?? "medium")}${exp.smashed ? `<span class="mb smash" title="Smash">${SMASH_SVG}</span>` : ""}`;
+    } else if (exp.kind === "pineapple") tail = modBox("grill", "Grill");
+    else if (exp.melted) tail = modBox("melt", "Melt");
+    if (exp.count) {
+      const got = partial && i === good ? stacked[i].count : 0;
+      tail += `<span class="n">${got ? `${got}/` : "×"}${exp.count}</span>`;
+    }
+    for (const r of removed.filter((r) => r.at === i + 1)) rows.push(removedRow(r.kind, states[i + 1] ?? ""));
+    if (i === wrongFrom && wrongFrom < order.layers.length) rows.push(...wrongRows);
+    rows.push({ icon, color: KIND_COLOR[exp.kind], label, tail, state: states[i], mod: modded.has(exp.kind), next: i === nextIdx });
+  }
+  for (const r of removed.filter((r) => r.at === 0)) rows.push(removedRow(r.kind, states[0] ?? ""));
+  return rows;
+}
+
+/** "- Ketchup": a leave-off, where it would have gone. Crossed off once the layer above it is on. */
+function removedRow(kind: Order["layers"][number]["kind"], above: RowState): TicketRow {
+  const icon = kind === "bun" ? "bunTop" : kind;
+  return { icon, color: KIND_COLOR[kind], label: `− ${KIND_LABEL[kind]}`, tail: "", state: above === "done" ? "done" : "", mod: true, next: false };
+}
+
+/** Fries and drink beside the build: icon, then the item and its own modifiers stacked under it. */
+function sideRows(order: Order, plate: Plate): string {
+  const out: string[] = [];
+  if (order.fries && !(order.poutine && !order.layers.length)) {
+    const f = plate.fries;
+    const state = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy ? "done" : "wrong";
+    out.push(`<div class="sd ${state}">${ticketIcon("fries", "#c8472e")}<div><span class="sl"><i class="sz">${order.friesSize}</i>Fries</span></div></div>`);
+  }
   if (order.drink) {
     const d = plate.drink;
     const iceOk = order.ice == null || !!d?.ice === order.ice;
-    const ok = d?.flavor === order.drink && d.size === order.drinkSize && iceOk && d.lid && d.straw;
-    // Ice only shows when the customer cares: "Ice" or a red "No ice".
-    const ice = order.ice === true ? `<em class="ice">Ice</em>` : order.ice === false ? `<em class="ice no">No ice</em>` : "";
-    sides.push(`<span class="${ok ? "ok" : ""}"><b style="background:${DRINK_COLOR[order.drink]}"></b><i class="sz">${order.drinkSize}</i><span class="sl">${DRINK_LABEL[order.drink]}${ice}</span></span>`);
+    const wrong = !!d && (d.flavor !== order.drink || d.size !== order.drinkSize || !iceOk);
+    const state = !d ? "" : wrong ? "wrong" : d.lid && d.straw ? "done" : "";
+    const ice = order.ice === true ? modBox("ice", "Ice") : order.ice === false ? modBox("noice", "No ice") : "";
+    out.push(
+      `<div class="sd ${state}">${ticketIcon("drink", DRINK_COLOR[order.drink])}<div><span class="sl"><i class="sz">${order.drinkSize}</i><span class="dn">${DRINK_LABEL[order.drink]}</span></span>${ice ? `<span class="sm">${ice}</span>` : ""}</div></div>`,
+    );
   }
+  return out.join("");
+}
+
+/** Doneness for an order's patties, for a collapsed ticket: one pill with "×2" when they match. */
+function pattyPills(order: Order): string {
+  const pats = order.layers.filter((l) => l.kind === "patty").map((l) => l.doneness ?? "medium");
+  if (!pats.length) return "";
+  if (pats.every((d) => d === pats[0])) return `<div class="pp">${donenessPill(pats[0])}${pats.length > 1 ? `<span class="x">×${pats.length}</span>` : ""}</div>`;
+  return `<div class="pp">${pats.map((d) => donenessPill(d)).join("")}</div>`;
+}
+
+/** "+2" for each side ordered with the main (fries, drink), "*" when the order changes the menu recipe. */
+function nameMarks(order: Order): string {
+  const extras = (order.fries && !(order.poutine && !order.layers.length) ? 1 : 0) + (order.drink ? 1 : 0);
+  return `${order.mods.length ? `<span class="ast">*</span>` : ""}${extras ? `<span class="plus">+${extras}</span>` : ""}`;
+}
+
+/**
+ * Ticket HTML for the focus rail. The order being worked on (`focused`) is a full receipt: patience,
+ * the name, then the whole build top to bottom with the fries and drink beside it. The others are
+ * stubs: patience, a short name, doneness and how much is left. `fold` squeezes a long build by
+ * folding the layers already stacked into one line.
+ */
+export function ticketHtml(order: Order, plate: Plate, patience: number, focused: boolean, fold = false): string {
   const pct = Math.max(0, Math.min(1, patience));
   const mood = patienceMood(pct);
-  // The layer list sits in its own scroller between the header and the sides, so a long order
-  // never pushes the name, a send-back note or the fries and drink out of sight.
-  return `<div class="pat ${mood}">${moodFace(mood)}<span><i style="width:${(pct * 100).toFixed(0)}%"></i></span>${order.critic ? `<em class="critic" title="Food critic">Critic</em>` : ""}</div>
-    <div class="name"><span class="l"><span class="id">#${order.id} </span>${esc(order.name)}</span><span class="exp">${expanded ? "▴" : "▾"}</span></div>
-    ${sentBack ? `<div class="back"><span class="bl">Sent back: </span>${esc(sentBack)}</div>` : ""}
-    <div class="tb"><i class="tmore up" aria-hidden="true">▴</i>${body}<i class="tmore" aria-hidden="true">▾</i></div>
-    ${sides.length ? `<div class="sides">${sides.join("")}</div>` : ""}`;
+  const bar = `<span class="bar"><i style="width:${(pct * 100).toFixed(0)}%"></i></span>`;
+  const rows = buildRows(order, plate);
+  if (!focused) {
+    const build = rows.filter((r) => r.state !== "wrong" && !r.label.startsWith("−"));
+    const left = build.filter((r) => r.state !== "done").length;
+    const fix = rows.some((r) => r.state === "wrong");
+    const pips = build
+      .reverse()
+      .map((r) => `<i class="${r.state}" style="--k:${r.color}"></i>`)
+      .join("");
+    return `<div class="pat ${mood}">${moodFace(mood, !!order.critic)}${bar}</div>
+      <div class="name"><span class="l">${esc(shortName(order.name))}</span>${nameMarks(order)}</div>
+      ${pattyPills(order)}
+      <div class="left${fix ? " fix" : ""}">${fix ? "Fix plate" : left ? `<b>${left}</b> left` : "Ready"}</div><div class="pips">${pips}</div>`;
+  }
+  let list = rows;
+  let folded = "";
+  if (fold) {
+    const done = rows.filter((r) => r.state === "done");
+    if (done.length > 1) {
+      list = rows.filter((r) => r.state !== "done");
+      folded = `<li class="done fold"><span class="l">${done.length} stacked</span></li>`;
+    }
+  }
+  const sides = sideRows(order, plate);
+  return `<div class="pat ${mood}">${moodFace(mood)}${bar}${order.critic ? `<em class="critic" title="Food critic">Critic</em>` : ""}</div>
+    <div class="name"><span class="l">${esc(order.name)}</span>${nameMarks(order)}</div>
+    <div class="cols${sides ? "" : " solo"}"><div class="tb"><ol>${list.map(rowHtml).join("")}${folded}</ol></div>${sides ? `<div class="sides">${sides}</div>` : ""}</div>`;
 }
 
 function offerHtml(offer: Upgrade[]): string {

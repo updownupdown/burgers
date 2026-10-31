@@ -10,6 +10,7 @@ const sizes = (process.env.SIZES || '390x844,360x740,430x932').split(',').map((s
     await p.reload();
     await p.waitForTimeout(600);
     await p.click('[data-home=open]');
+    await p.evaluate((a) => (window.__shotActive = a), +(process.env.ACTIVE || 0));
     await p.evaluate(() => window.__bv.manual(true));
     await step(p, 3);
     await p.evaluate(() => {
@@ -19,7 +20,7 @@ const sizes = (process.env.SIZES || '390x844,360x740,430x932').split(',').map((s
       // 9 layers: Sun Valley Supreme with extra pickles and an added onion, plus fries, a drink and a send-back.
       const big = {
         id: 41, name: 'Sun Valley Supreme', price: 18, critic: true,
-        mods: [{ type: 'add', kind: 'pickle' }, { type: 'add', kind: 'onion' }, { type: 'no', kind: 'jalapeno' }],
+        mods: [{ type: 'add', kind: 'pickle' }, { type: 'add', kind: 'onion' }, { type: 'no', kind: 'jalapeno' }], removed: [{ kind: 'jalapeno', at: 6 }],
         layers: [{ kind: 'bun', toasted: true }, { kind: 'patty', doneness: 'rare' }, { kind: 'cheese', melted: true }, { kind: 'bacon' }, { kind: 'pickle', count: 5 }, { kind: 'onion', count: 3 }, { kind: 'egg' }, { kind: 'tomato', count: 2 }, { kind: 'bun', toasted: true }],
         fries: true, friesSize: 'L', drink: 'pine', drinkSize: 'L', ice: false,
       };
@@ -32,7 +33,7 @@ const sizes = (process.env.SIZES || '390x844,360x740,430x932').split(',').map((s
       const pout = { id: 43, name: 'Poutine', price: 9, mods: [], layers: [], fries: true, friesSize: 'L', drink: 'tea', drinkSize: 'S', ice: null, poutine: true };
       [big, dbl, pout].forEach((o, i) => {
         const s = g.slots[i];
-        s.order = o; s.leaving = false; s.maxPatience = 200; s.patience = 150 - i * 50; s.expanded = true; s.ticketKey = '';
+        s.order = o; s.leaving = false; s.maxPatience = 200; s.patience = 150 - i * 50; s.ticketKey = '';
         s.sentBack = i === 0 ? 'patty undercooked' : null;
       });
       // Burgers on all three plates, part-built so ticks show.
@@ -46,9 +47,10 @@ const sizes = (process.env.SIZES || '390x844,360x740,430x932').split(',').map((s
         s.plate = { layers: ks.map((k) => pc(k)), fries: i === 1 ? { cook: 0.72, size: 'M', fill: 1, salt: true } : null, drink: i === 1 ? { flavor: 'pink', fill: 0.9, size: 'M', ice: true, lid: true, straw: true } : null };
         window.__bv.trayView.plates[i].sync(s.plate, false, () => {});
       });
-      g.active = 0;
+      g.active = +(window.__shotActive || 0);
     });
     await step(p, 0.5);
+    await p.waitForTimeout(400);
     const file = `${out}kitchen-${tag}-${w}x${h}.png`;
     await p.screenshot({ path: file });
     // How each receipt fits: content height vs. box height.

@@ -109,7 +109,15 @@ html, body {
   pointer-events: none;
 }
 .rail[hidden] { display: none; }
+/*
+ * The focus rail: the order being worked on hangs as a wide receipt with its whole build; the
+ * other orders are stubs beside it (see placeTickets in main.ts). Each receipt reads top down:
+ * patience, the name, then the build, top bun first.
+ */
 .ticket {
+  --t-done: #a59d92;
+  --t-wrong: #c62f2f;
+  --t-mod: #cf6416;
   position: absolute;
   z-index: 2;
   pointer-events: auto;
@@ -117,25 +125,17 @@ html, body {
      the drop shadow follows the paper's outline, tear included. */
   background: linear-gradient(#fffdf7, #fffdf7) top / 100% calc(100% - 6px) no-repeat;
   color: var(--bv-ink);
-  padding: 9px 7px 13px;
+  padding: 9px 7px 12px;
   font: 600 12.5px/1.2 var(--bv-font-ui);
   filter: drop-shadow(0 2px 3px rgb(42 38 34 / 0.28));
-  transform-origin: 50% 0;
-  transition: transform 0.15s var(--bv-ease), filter 0.15s;
+  transition: filter 0.15s;
   overflow: hidden;
-  /* Header, layer list, sides: only the list (.tb) gives way when the order is long. */
   display: flex;
   flex-direction: column;
+  gap: 3px;
 }
 .ticket > * { flex: none; }
-/* The layer list scrolls on its own when even the densest type can't fit it. Panning here never
-   reaches the canvas: the receipt sits above it and takes its own pointer events. */
-.ticket .tb { position: relative; flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; }
-.ticket .tb::-webkit-scrollbar { display: none; }
-/* Thin fades with a chevron where the list runs on past the top or bottom edge. */
-.ticket .tmore { display: none; position: sticky; z-index: 1; bottom: 0; height: 9px; margin-top: -9px; background: linear-gradient(rgb(255 253 247 / 0), #fffdf7 70%); text-align: center; font: 800 9px/11px var(--bv-font-ui); font-style: normal; color: var(--bv-paprika); pointer-events: none; }
-.ticket .tmore.up { top: 0; bottom: auto; margin: 0 0 -9px; line-height: 7px; background: linear-gradient(#fffdf7 30%, rgb(255 253 247 / 0)); }
-.ticket.more .tmore:not(.up), .ticket.more-up .tmore.up { display: block; }
+.ticket[hidden] { display: none; }
 .ticket::after {
   content: "";
   position: absolute;
@@ -145,81 +145,118 @@ html, body {
   height: 6px;
   background: linear-gradient(135deg, #fffdf7 4px, transparent 0) 0 0 / 8px 6px repeat-x, linear-gradient(-135deg, #fffdf7 4px, transparent 0) 0 0 / 8px 6px repeat-x;
 }
-/* The clip that holds it on the rail, in the plate's colour. */
+/* The clip that holds it on the rail, in the plate's colour; the focused one has a full-width band. */
 .ticket::before { content: ""; position: absolute; left: 50%; top: 0; width: 34px; height: 5px; margin-left: -17px; border-radius: 0 0 3px 3px; background: var(--slot, #888); }
-.ticket .name { display: flex; gap: 3px; align-items: baseline; margin-top: 1px; }
-.ticket .name .l { min-width: 0; overflow: hidden; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.02; font: 400 16px/1.02 var(--bv-font-serif); color: var(--bv-ink); letter-spacing: -0.01em; }
-.ticket .name .l small { font: 500 10px var(--bv-font-mono); color: var(--bv-mute); margin-right: 3px; letter-spacing: 0; }
-.ticket .name .exp { margin-left: auto; flex: none; font-size: 9px; opacity: 0.55; }
-.ticket .back { margin-top: 3px; padding: 2px 4px; border-radius: 3px; background: var(--bv-paprika); color: #fff; font: 800 10.5px/1.15 var(--bv-font-ui); }
-.ticket .how { display: flex; gap: 3px; flex-wrap: wrap; align-items: center; margin-top: 3px; }
-.ticket .how em { font-style: normal; font-weight: 800; color: var(--bv-paprika); font-size: 11.5px; }
-.ticket li.m.no { color: var(--bv-paprika); }
-.ticket li.m.no > b { opacity: 0.45; }
-.ticket li.no { color: var(--bv-paprika); font-weight: 700; }
-.ticket li.mod .l { font-weight: 800; color: var(--bv-paprika); }
-.ticket .pips { display: flex; gap: 1px; margin-top: 4px; height: 6px; }
-.ticket .pips i { flex: 1; border-radius: 2px; opacity: 0.28; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25); }
-.ticket .pips i.ok { opacity: 1; }
-/* Long orders step down through denser type (see fitTicket in main.ts) before the list scrolls. */
-.ticket.tight { font-size: 11px; line-height: 1.05; padding-top: 7px; }
-.ticket.tight .name .l { font-size: 14px; }
-.ticket.tight .pat { margin-bottom: 1px; }
-.ticket.tight ol { gap: 0; margin-top: 0; }
-.ticket.tight li > b { width: 7px; height: 7px; }
-.ticket.tight li .l { line-height: 1.2; }
-.ticket.tight .sides { margin-top: 1px; padding-top: 1px; }
-.ticket.dense { font-size: 10.5px; line-height: 1; padding: 11px 5px 11px; }
-/* Densest: the patience bar becomes a strip along the top (its colour still shows the mood), and
-   the critic badge moves up beside the name. */
-.ticket.dense .pat { position: absolute; top: 6px; left: 5px; right: 5px; height: 3px; margin: 0; }
-.ticket.dense .pat .face { display: none; }
-.ticket.dense .pat > span { height: 3px; }
-.ticket.dense .pat .critic { position: absolute; right: 0; top: 5px; }
-.ticket.dense:has(.critic) .name { padding-right: 40px; }
-/* The full layer list is showing, so the recipe name can give up its second line. */
-.ticket.dense .name .l { font-size: 12.5px; line-height: 1.05; -webkit-line-clamp: 1; }
-.ticket.dense .back .bl, .ticket.dense .name .id { display: none; }
-.ticket.dense .back::before { content: "\21A9  "; }
-.ticket.dense .back { margin-top: 2px; padding: 1px 3px; font-size: 9.5px; line-height: 1.1; letter-spacing: -0.01em; }
-.ticket.dense ol { padding-top: 2px; margin-top: 2px; }
-.ticket.dense li { gap: 3px; min-height: 12px; }
-.ticket.dense li .dpill { font-size: 9px; min-width: 28px; padding: 0 4px; }
-.ticket.dense li .n { font-size: 9.5px; }
-.ticket.dense .sides { gap: 1px 5px; font-size: 10px; letter-spacing: -0.01em; }
-.ticket.dense .sides > span { gap: 0 2px; }
-.ticket.dense .sides > span > b { width: 7px; height: 7px; }
-.ticket.dense .sides .sz { font-size: 9px; padding: 0 2px; }
-.ticket.dense .sides .ice { margin-left: 3px; }
-.ticket.active { transform: translateY(2px) scale(1.05); filter: drop-shadow(0 6px 7px rgb(42 38 34 / 0.35)); z-index: 3; }
+.ticket.active { filter: drop-shadow(0 5px 7px rgb(42 38 34 / 0.34)); z-index: 3; }
 .ticket.active::before { left: 0; width: 100%; margin-left: 0; height: 4px; border-radius: 0; }
-.ticket[hidden] { display: none; }
-.ticket .pat { display: flex; align-items: center; gap: 4px; margin-bottom: 2px; --mood: #6f9a4f; }
+
+/* Row 1: face, patience, critic. */
+.ticket .pat { display: flex; align-items: center; gap: 5px; --mood: #6f9a4f; min-height: 18px; }
 .ticket .pat.sad { --mood: var(--bv-amber); }
 .ticket .pat.angry { --mood: var(--bv-paprika); }
-.ticket .pat > span { flex: 1; height: 6px; background: var(--bv-rule); border-radius: 3px; overflow: hidden; }
-.ticket .pat i { display: block; height: 100%; background: var(--mood); border-radius: 3px; transition: width 0.5s linear, background 0.3s; }
-.ticket .pat .face { width: 18px; height: 18px; flex: none; }
-.ticket .pat .face > circle { fill: var(--mood); stroke: var(--bv-ink); stroke-width: 1.2; }
-.ticket .pat .face g { fill: var(--bv-ink); stroke: var(--bv-ink); stroke-width: 1.3; stroke-linecap: round; }
-.ticket .pat .face g path { fill: none; }
+.ticket .pat .bar { flex: 1; height: 6px; background: var(--bv-rule); border-radius: 3px; overflow: hidden; min-width: 20px; }
+.ticket .pat .bar i { display: block; height: 100%; background: var(--mood); border-radius: 3px; transition: width 0.5s linear, background 0.3s; }
+.ticket .face { width: 18px; height: 18px; flex: none; overflow: visible; }
+.ticket .face > circle { fill: var(--mood); stroke: var(--bv-ink); stroke-width: 1.2; }
+.ticket .face g { fill: var(--bv-ink); stroke: var(--bv-ink); stroke-width: 1.3; stroke-linecap: round; }
+.ticket .face g path { fill: none; }
+/* On a stub the critic is a dot on the face. */
+.ticket .face .cdot { fill: var(--bv-amber); stroke: var(--bv-ink); stroke-width: 1.1; }
 .ticket .pat.angry .face { animation: fume 0.5s ease-in-out infinite alternate; }
 @keyframes fume { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
-.ticket ol { list-style: none; margin: 3px 0 0; padding: 3px 0 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; border-top: 1px dashed var(--bv-rule-2); }
-.ticket li { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-.ticket li > b { width: 9px; height: 9px; border-radius: 2px; flex: none; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25); }
-.ticket li.ok { color: var(--bv-olive); }
-.ticket li.ok::after { content: "✓"; margin-left: auto; font-weight: 800; }
+.ticket .critic { flex: none; font: 800 12px/1 var(--bv-font-ui); font-style: normal; background: var(--bv-ink); color: var(--bv-amber); border-radius: 4px; padding: 2px 5px 3px; }
+
+/* Row 2: the name, the thing read first. "*" = changed from the menu, "+2" = sides with it. */
+.ticket .name { display: flex; align-items: baseline; gap: 2px; min-width: 0; }
+.ticket .name .l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 20px/1.05 var(--bv-font-serif); letter-spacing: -0.005em; -webkit-text-stroke: 0.45px currentColor; }
+.ticket .name .ast { font: 800 16px/1 var(--bv-font-ui); color: var(--t-mod); flex: none; }
+.ticket .name .plus { margin-left: auto; padding-left: 4px; font: 700 12px/1 var(--bv-font-mono); color: var(--bv-ink-2); flex: none; }
+
+/* The build beside the sides. */
+.ticket .cols { flex: 0 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 80px; grid-template-rows: minmax(0, 1fr); gap: 6px; border-top: 1px dashed var(--bv-rule-2); padding-top: 4px; }
+.ticket .cols.solo { grid-template-columns: minmax(0, 1fr); }
+.ticket .tb { position: relative; min-height: 0; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; }
+.ticket .tb::-webkit-scrollbar { display: none; }
+.ticket ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.ticket li { display: flex; align-items: center; gap: 4px; min-height: 16px; padding: 0 3px; margin: 0 -3px; border-radius: 4px; white-space: nowrap; }
 .ticket li .l { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ticket li .n { font: 600 10.5px var(--bv-font-mono); color: var(--bv-mute); flex: none; margin-left: auto; }
-.ticket li.ok .n { color: inherit; }
-.ticket li em { font-style: normal; font-weight: 800; color: var(--bv-paprika); flex: none; }
-.ticket .sides { display: flex; gap: 2px 6px; margin-top: 4px; border-top: 1px dashed var(--bv-rule-2); padding-top: 3px; flex-wrap: wrap; }
-.ticket .sides > span { display: inline-flex; align-items: center; gap: 0 3px; white-space: nowrap; max-width: 100%; }
-/* A long drink name wraps beside its size chip rather than dropping under it. */
-.ticket .sides .sl { white-space: normal; min-width: 0; }
-.ticket .sides span.ok { color: var(--bv-olive); }
-.ticket .sides > span > b { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.ticket .ic { width: 16px; height: 12px; flex: none; fill: var(--c); stroke: rgb(42 38 34 / 0.45); stroke-width: 0.7; }
+.ticket .ic .hi { fill: rgb(255 255 255 / 0.55); stroke: none; }
+.ticket .ic .yolk { fill: #f1ae2a; }
+.ticket .ic .st { fill: #f3d36b; }
+.ticket .ic .lid { fill: #f4f1ea; }
+.ticket li .n { font: 700 12px var(--bv-font-mono); flex: none; margin-left: auto; }
+.ticket li .dpill { flex: none; min-width: 0; font-size: 11.5px; line-height: 1.15; padding: 0 6px 1px; vertical-align: 0; }
+/* Modifiers in small coloured boxes: Toast, Melt, Grill, Smash (an icon), Ice / No ice. */
+.ticket .mb { flex: none; display: inline-grid; place-items: center; font: 800 11.5px/1.15 var(--bv-font-ui); font-style: normal; border-radius: 4px; padding: 0 4px 1px; background: var(--mb-bg); color: var(--mb-fg); }
+.ticket .mb.toast { --mb-bg: #f3dcb2; --mb-fg: #774611; }
+.ticket .mb.melt { --mb-bg: #f9e7a1; --mb-fg: #6b5200; }
+.ticket .mb.grill { --mb-bg: #ead2c1; --mb-fg: #5c3420; }
+.ticket .mb.smash { --mb-bg: #4b4640; --mb-fg: #fff; padding: 1px 3px; height: 15px; }
+.ticket .mb.smash svg { width: 11px; height: 11px; fill: currentColor; }
+.ticket .mb.ice { --mb-bg: #d9e9f4; --mb-fg: #2f5f86; }
+.ticket .mb.noice { --mb-bg: #f8dfcb; --mb-fg: #a24c12; }
+/* Changed from the menu (extra, add-on, "− Ketchup"): orange. */
+.ticket li.mod { color: var(--t-mod); font-weight: 800; }
+/* The next thing to stack: a wash of its own colour. */
+.ticket li.next { background: color-mix(in srgb, var(--k) 26%, #fffdf7); font-weight: 800; }
+/* Stacked right: grey and struck through. Stacked wrong: red and struck through. */
+.ticket li.done, .ticket li.wrong { text-decoration: line-through; text-decoration-thickness: 1.5px; font-weight: 600; }
+.ticket li.done { color: var(--t-done); }
+.ticket li.wrong { color: var(--t-wrong); font-weight: 800; }
+.ticket li.done .ic { --c: #cfc8bd !important; stroke: rgb(42 38 34 / 0.25); }
+.ticket li.wrong .ic { --c: var(--t-wrong) !important; }
+.ticket li.done .ic .yolk, .ticket li.done .ic .st { fill: #bdb5a9; }
+.ticket li.wrong .ic .yolk, .ticket li.wrong .ic .st { fill: #e88; }
+.ticket li.done .mb, .ticket li.done .dpill { filter: grayscale(1); opacity: 0.45; }
+.ticket li.wrong .mb, .ticket li.wrong .dpill { opacity: 0.6; }
+.ticket li.fold { text-decoration: none; padding-left: 23px; font-style: italic; }
+
+/* Sides: an icon, then the item with its own modifiers stacked under it. */
+.ticket .sides { display: flex; flex-direction: column; gap: 7px; border-left: 1px dashed var(--bv-rule-2); padding-left: 6px; }
+.ticket .sd { display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
+.ticket .sd .ic { margin-top: 1px; }
+.ticket .sd > div { display: grid; gap: 2px; min-width: 0; justify-items: start; }
+.ticket .sd .sm { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
+.ticket .sd .sl { display: flex; align-items: center; gap: 3px; min-width: 0; max-width: 100%; }
+.ticket .sd .dn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ticket .sz { font: 700 11px/1.2 var(--bv-font-mono); font-style: normal; border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; flex: none; }
+.ticket .sd.done > div, .ticket .sd.wrong > div { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.ticket .sd.done { color: var(--t-done); }
+.ticket .sd.done .ic { --c: #cfc8bd !important; }
+.ticket .sd.done .mb { filter: grayscale(1); opacity: 0.45; }
+.ticket .sd.wrong { color: var(--t-wrong); }
+.ticket .sd.wrong .ic { --c: var(--t-wrong) !important; }
+
+/* Rows tighten for a long build before anything folds or scrolls (see fitTicket in main.ts). */
+.ticket.dense { gap: 2px; padding-top: 8px; padding-bottom: 10px; }
+.ticket.dense .name .l { font-size: 18px; }
+.ticket.dense li { min-height: 13.5px; line-height: 1.08; }
+.ticket.dense ol { gap: 0; }
+
+/* Stubs: patience, short name, doneness, how much is left. */
+.ticket.stub { padding: 9px 5px 12px; gap: 4px; cursor: pointer; }
+.ticket.stub .bar { min-width: 0; }
+.ticket.stub .name { flex-wrap: wrap; }
+.ticket.stub .name .l { font-size: 17px; line-height: 1; white-space: normal; overflow-wrap: anywhere; }
+.ticket.stub .name .plus { margin-left: 2px; padding-left: 0; }
+.ticket .pp { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 3px; }
+.ticket .pp .dpill { min-width: 0; font-size: 12px; padding: 0 6px 1px; }
+.ticket .pp .x { font: 700 12px var(--bv-font-mono); }
+.ticket .left { margin-top: 2px; font: 600 12px/1 var(--bv-font-mono); color: var(--bv-ink-2); }
+.ticket .left b { color: var(--bv-ink); }
+.ticket .left.fix { color: var(--t-wrong); font: 800 12px/1 var(--bv-font-ui); }
+/* A list that still has to scroll fades out at the top, where the finished end of the burger is. */
+.ticket .tb.up { -webkit-mask-image: linear-gradient(transparent, #000 14px); mask-image: linear-gradient(transparent, #000 14px); }
+.ticket .pips { display: flex; gap: 1px; height: 5px; }
+.ticket .pips i { flex: 1; border-radius: 1px; background: var(--k); opacity: 0.3; }
+.ticket .pips i.done { background: #b9b1a5; opacity: 1; }
+.ticket .pips i.wrong { background: var(--t-wrong); opacity: 1; }
+
+/* "Sent back", over the customer who sent it. */
+.sentback { position: absolute; z-index: 4; transform: translate(-50%, -100%); width: max-content; padding: 4px 8px 5px; border-radius: 9px; background: var(--t-wrong, #c62f2f); color: #fff; font: 800 12px/1.2 var(--bv-font-ui); text-align: center; box-shadow: 0 2px 5px rgb(42 38 34 / 0.3); pointer-events: none; animation: pop 0.25s ease-out; }
+.sentback::after { content: ""; position: absolute; left: 50%; bottom: -5px; margin-left: -6px; border: 6px solid transparent; border-top-color: var(--t-wrong, #c62f2f); border-bottom: 0; }
+.sentback[hidden] { display: none; }
 
 .bubble {
   position: absolute;
@@ -494,8 +531,6 @@ html, body {
 .ftag .scoops b.on { background: #e7b43c; }
 .ftag .tops { display: flex; gap: 2px; }
 .ftag .tops em { font: 800 9.5px var(--bv-font-ui); font-style: normal; color: #fff; background: rgb(42 38 34 / 0.8); border-radius: 4px; padding: 0 4px; }
-.ticket .sides .sz, .ticket li .sz { font: 700 10px var(--bv-font-mono); font-style: normal; border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; flex: none; }
-.ticket li .sz { margin-right: 3px; }
 
 /* Landscape phones: the kitchen only fits upright. */
 .rotate { display: none; }
@@ -600,7 +635,6 @@ html, body {
 .press .phead { font: 400 20px/1.1 var(--bv-font-serif); }
 .press .pquote { font: italic 400 14px/1.3 var(--bv-font-serif); }
 .press .rs { color: var(--bv-amber); font-style: normal; font-size: 12px; }
-.ticket .critic { flex: none; font: 800 8.5px/1.2 var(--bv-font-ui); font-style: normal; background: var(--bv-ink); color: var(--bv-amber); border-radius: 4px; padding: 1px 3px; text-transform: uppercase; letter-spacing: 0.04em; }
 /* Patty doneness: two colour halves, top face over bottom face. */
 .gtag.pt { background: transparent; padding: 0; box-shadow: none; }
 /* Doneness pill: the patty's colour with white text, and (on the grill) a bar for progress through that level. */
@@ -611,7 +645,3 @@ html, body {
 .dpill.ok { outline: 2px solid #6fcf6a; outline-offset: 1px; }
 .pind { display: grid; gap: 2px; justify-items: center; }
 .pind .dpill { min-width: 44px; font-size: 10px; box-shadow: 0 1px 3px rgb(0 0 0 / 0.35), inset 0 -1.5px 0 rgb(0 0 0 / 0.18); }
-.ticket .how .dpill { margin-right: 2px; }
-.ticket li .dpill { flex: none; margin-left: auto; font-size: 10px; padding: 0 6px 1px; }
-.ticket .sides .ice { font-style: normal; font-weight: 800; margin-left: 4px; color: #3d6f99; white-space: nowrap; }
-.ticket .sides .ice.no { color: var(--bv-paprika); }

@@ -101,8 +101,6 @@ interface Slot {
   fig: CustomerFigure | null;
   ticketKey: string;
   bubble: HTMLElement | null;
-  /** Ticket shows every layer rather than recipe + modifiers. */
-  expanded: boolean;
   /** The order came back once, with this complaint; next time they take it unless it's really wrong. */
   sentBack: string | null;
   /** Free sides they kept when they sent the order back: a customer never turns down free food. */
@@ -132,7 +130,7 @@ const game = {
   event: null as TownEvent | null,
   rng: seededRng(Date.now() % 100000) as Rng,
   slots: [0, 1, 2].map(
-    (): Slot => ({ order: null, plate: emptyPlate(), patience: 0, maxPatience: 1, leaving: false, fig: null, ticketKey: "", bubble: null, expanded: false, sentBack: null, kept: { fries: null, drink: null } }),
+    (): Slot => ({ order: null, plate: emptyPlate(), patience: 0, maxPatience: 1, leaving: false, fig: null, ticketKey: "", bubble: null, sentBack: null, kept: { fries: null, drink: null } }),
   ),
   hintsShown: new Set<string>(),
   pendingUpdate: null as VersionInfo | null,
@@ -185,6 +183,8 @@ const bands = { customers: { x: 0, y: 0, w: 0, h: 0 } as Rect, tray: {} as Rect,
 let colX = 0;
 /** Where the order rail sits in the customers band (CSS px from the top). */
 let railTop = 100;
+/** Where the receipts were last placed, so they're only moved when focus or the orders change. */
+let ticketsAt = "";
 let viewH = 0;
 
 function layout(): void {
@@ -226,17 +226,21 @@ function layout(): void {
   const slotW = w / 3;
   ui.rail.style.top = `${railY - 4}px`;
   railTop = railY;
-  ui.tickets.forEach((t, i) => {
-    const tw = Math.min(slotW * 0.88, 170);
-    t.style.left = `${slotW * i + (slotW - tw) / 2}px`;
-    t.style.width = `${tw}px`;
+  // Long receipts may hang over the back of the tray, down to just above the plates' rims, so the
+  // plates stay clear to tap and swipe. Across, they're placed by placeTickets as focus moves.
+  const rimY = bands.tray.y + trayView.rimTop() * trayH;
+  const maxH = Math.max(custH - railY + trayH * 0.1, rimY - 6 - railY);
+  ui.tickets.forEach((t) => {
     t.style.top = `${railY}px`;
-    // Long receipts may hang over the back of the tray, down to just above the plates' rims
-    // (allowing for the active receipt's 5% lift), so the plates stay clear to tap and swipe.
-    const rimY = bands.tray.y + trayView.rimTop() * trayH;
-    t.style.maxHeight = `${Math.max(custH - railY + trayH * 0.1, (rimY - 6 - railY) / 1.05)}px`;
+    t.style.maxHeight = `${maxH}px`;
+    t.dataset.fit = "";
   });
-  ui.tickets.forEach((t) => (t.dataset.fit = ""));
+  ui.sentBack.forEach((b, i) => {
+    b.style.left = `${Math.max(slotW * 0.5, Math.min(w - slotW * 0.5, slotW * (i + 0.5)))}px`;
+    b.style.top = `${railY - 6}px`;
+    b.style.maxWidth = `${slotW - 8}px`;
+  });
+  ticketsAt = "";
   ui.hint.style.top = `${bands.counter.y + 8}px`;
   // Turned sideways mid-shift: pause behind the "turn your phone" overlay.
   if (W > H && H < 500 && game.phase === "playing") {
@@ -275,7 +279,6 @@ function spawnCustomer(slotIdx: number): void {
   s.sentBack = null;
   s.kept = { fries: null, drink: null };
   // Recipes you haven't made a couple of times yet start with the full layer list showing.
-  s.expanded = game.tutorial || (save.known[order.name] ?? 0) < 2;
   // Every extra slice of a counted topping is another trip to the bin.
   const slices = order.layers.reduce((n, l) => n + Math.max(0, (l.count ?? 1) - 1), 0);
   s.maxPatience = (50 + order.layers.length * 7 + slices * 2 + order.layers.filter((l) => l.kind === "patty").length * 22 + (order.fries ? 30 : 0) + (order.poutine ? 10 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1) * CROWD[stop().crowd].patience * DIFFICULTY[difficulty].patience;
@@ -1396,73 +1399,65 @@ ui.tabs.forEach((t, i) =>
     goToPage(i);
   }),
 );
-/** When each receipt's list was last scrolled by the player, and when we last scrolled it ourselves. */
-const ticketScroll = ui.tickets.map(() => ({ user: -Infinity, auto: -Infinity }));
+// Touching a stub brings that order into focus, as touching its plate does.
 ui.tickets.forEach((t, i) => {
-  let wasActive = false;
   t.addEventListener("pointerdown", () => {
     sfx.unlock();
-    wasActive = game.active === i;
     setActive(i);
   });
-  // Tapping the ticket you're already on flips between recipe view and the full list. This waits
-  // for the click, which the browser drops when the touch turns into scrolling a long list.
-  t.addEventListener("click", () => {
-    if (wasActive && game.active === i) game.slots[i].expanded = !game.slots[i].expanded;
-    wasActive = false;
-  });
   // Scroll events don't bubble; listen in the capture phase for the list inside.
-  t.addEventListener(
-    "scroll",
-    () => {
-      const now = performance.now();
-      if (now - ticketScroll[i].auto > 150) ticketScroll[i].user = now;
-      updateTicketMore(t);
-    },
-    true,
-  );
+  t.addEventListener("scroll", (e) => (e.target as HTMLElement).classList?.toggle("up", (e.target as HTMLElement).scrollTop > 0), true);
 });
 
-/** Shows the "more" fades while the receipt's layer list has lines scrolled out of view above or below. */
-function updateTicketMore(t: HTMLElement): void {
-  const tb = t.querySelector<HTMLElement>(".tb");
-  t.classList.toggle("more", !!tb && tb.scrollTop + tb.clientHeight < tb.scrollHeight - 2);
-  t.classList.toggle("more-up", !!tb && tb.scrollTop > 2);
+/**
+ * The focus rail: the order being worked on gets a wide receipt with its whole build; the others
+ * shrink to stubs beside it, in their customers' order along the rail.
+ */
+function placeTickets(): void {
+  const shown = game.slots.map((s) => !!s.order && !s.leaving && game.phase !== "title");
+  const key = `${shown.join()}|${game.active}`;
+  if (key === ticketsAt) return;
+  ticketsAt = key;
+  const w = bands.customers.w;
+  const n = shown.filter(Boolean).length;
+  const m = 5;
+  const gap = 5;
+  const stub = Math.round(THREE.MathUtils.clamp(w * 0.18, 64, 78));
+  const focus = shown[game.active] ? game.active : shown.indexOf(true);
+  const slotW = w / 3;
+  const bigW = n <= 1 ? Math.min(w - 2 * m, 260) : w - 2 * m - (n - 1) * (stub + gap);
+  // A lone order sits under its own customer, as far as the screen allows.
+  let x = n <= 1 ? THREE.MathUtils.clamp(slotW * (focus + 0.5) - bigW / 2, m, w - m - bigW) : m;
+  ui.tickets.forEach((t, i) => {
+    if (!shown[i]) return;
+    const big = i === focus;
+    const tw = big ? bigW : stub;
+    t.style.left = `${Math.round(x)}px`;
+    t.style.width = `${Math.round(tw)}px`;
+    x += tw + gap;
+  });
 }
 
 /**
- * A long list that has to scroll follows the build: burgers go together bottom up, so it keeps
- * the next layer to stack in view (starting at the bottom bun), unless the player has just
- * scrolled it themselves.
+ * Fits the focused receipt to the room under the rail: rows tighten first, then the layers already
+ * stacked fold into one line; whatever still doesn't fit scrolls inside the list.
  */
-function followTicket(i: number): void {
-  const t = ui.tickets[i];
-  const tb = t.querySelector<HTMLElement>(".tb");
-  if (!tb || tb.scrollHeight <= tb.clientHeight + 1) return;
-  if (performance.now() - ticketScroll[i].user < 4000) return;
-  const rows = [...tb.querySelectorAll<HTMLElement>("li[data-l]")];
-  const next = rows.filter((r) => !r.classList.contains("ok")).pop();
-  if (!next) return;
-  // Sit the next layer a little below the middle, so the one just stacked shows beneath it.
-  const top = Math.max(0, Math.min(tb.scrollHeight - tb.clientHeight, Math.round(next.offsetTop - (tb.clientHeight - next.offsetHeight) * 0.6)));
-  if (Math.abs(tb.scrollTop - top) < 1) return;
-  ticketScroll[i].auto = performance.now();
-  tb.scrollTop = top;
-}
-
-/**
- * Fits a receipt to the room under the rail: long orders step down to tighter, then denser type,
- * and whatever still doesn't fit scrolls inside the receipt, with a "more" cue, rather than being cut off.
- */
-function fitTicket(t: HTMLElement): void {
-  t.classList.remove("tight", "dense", "more");
+function fitTicket(t: HTMLElement, render: (fold: boolean) => string): void {
+  t.classList.remove("dense");
+  t.innerHTML = render(false);
   const tb = t.querySelector<HTMLElement>(".tb");
   if (!tb) return;
-  // Too tall for the room, or a line cut short with an ellipsis.
-  const over = () => tb.scrollHeight > tb.clientHeight + 1 || [...t.querySelectorAll<HTMLElement>("li .l")].some((l) => l.scrollWidth > l.clientWidth + 1);
-  if (over()) t.classList.add("tight");
-  if (over()) t.classList.add("dense");
-  updateTicketMore(t);
+  const over = () => tb.scrollHeight > tb.clientHeight + 1 || t.scrollHeight > t.clientHeight + 1;
+  if (!over()) return;
+  t.classList.add("dense");
+  if (!over()) return;
+  t.innerHTML = render(true);
+  // Still too long: keep the next layer to stack in view, near the bottom of the list.
+  const list = t.querySelector<HTMLElement>(".tb");
+  const next = list?.querySelector<HTMLElement>("li.next, li.wrong");
+  if (!list || !next) return;
+  list.scrollTop = Math.max(0, next.offsetTop + next.offsetHeight * 2.5 - list.clientHeight);
+  list.classList.toggle("up", list.scrollTop > 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1956,30 +1951,39 @@ function updateUi(): void {
   if (ui.money.textContent !== money) ui.money.textContent = money;
 
   ui.rail.hidden = game.phase === "title";
+  placeTickets();
   game.slots.forEach((s, i) => {
     const t = ui.tickets[i];
     const show = !!s.order && !s.leaving && game.phase !== "title";
     t.hidden = !show;
+    const back = ui.sentBack[i];
+    const note = show && s.sentBack ? `Sent back: ${capitalise(s.sentBack)}` : "";
+    back.hidden = !note;
+    if (back.textContent !== note) back.textContent = note;
     if (!show || !s.order) return;
+    const order = s.order;
+    const focused = i === game.active;
     const pct = s.patience / s.maxPatience;
-    const key = `${s.order.id}|${s.expanded}|${s.plate.layers.map((l) => l.piece.kind).join(",")}|${s.plate.fries ? `${+!!s.plate.fries.salt}${+!!s.plate.fries.curds}${+!!s.plate.fries.gravy}` : ""}|${s.plate.drink?.flavor}|${Math.round(pct * 50)}`;
+    const shownPct = game.tutorial && game.spawned === 1 && i === game.slots.findIndex((x) => x.order) ? 1 : pct;
+    const key = `${order.id}|${focused}|${t.style.width}|${s.plate.layers.map((l) => l.piece.kind).join(",")}|${s.plate.fries ? `${s.plate.fries.size}${+!!s.plate.fries.salt}${+!!s.plate.fries.curds}${+!!s.plate.fries.gravy}` : ""}|${s.plate.drink ? `${s.plate.drink.flavor}${s.plate.drink.size}${+!!s.plate.drink.ice}${+!!s.plate.drink.lid}${+!!s.plate.drink.straw}` : ""}`;
     if (key !== s.ticketKey || !t.dataset.fit) {
-      const fresh = !s.ticketKey.startsWith(`${s.order.id}|${s.expanded}|`) || !t.dataset.fit;
-      // Redrawing replaces the list, so carry over how far it was scrolled.
-      const scrolled = fresh ? 0 : (t.querySelector<HTMLElement>(".tb")?.scrollTop ?? 0);
-      t.innerHTML = ticketHtml(s.order, s.plate, game.tutorial && game.spawned === 1 && i === game.slots.findIndex((x) => x.order) ? 1 : pct, s.expanded, s.sentBack);
-      s.ticketKey = key;
-      if (fresh) {
-        fitTicket(t);
-        t.dataset.fit = "1";
-      } else {
-        const tb = t.querySelector<HTMLElement>(".tb");
-        if (tb) tb.scrollTop = scrolled;
+      t.classList.toggle("active", focused);
+      t.classList.toggle("stub", !focused);
+      if (focused) fitTicket(t, (fold) => ticketHtml(order, s.plate, shownPct, true, fold));
+      else {
+        t.classList.remove("dense");
+        t.innerHTML = ticketHtml(order, s.plate, shownPct, false);
       }
-      followTicket(i);
-      updateTicketMore(t);
+      s.ticketKey = key;
+      t.dataset.fit = "1";
+    } else {
+      // Patience runs on between redraws: just move the bar and the face's mood.
+      const bar = t.querySelector<HTMLElement>(".bar > i");
+      if (bar) bar.style.width = `${(Math.max(0, Math.min(1, shownPct)) * 100).toFixed(0)}%`;
+      const mood = patienceMood(shownPct);
+      const pat = t.querySelector<HTMLElement>(".pat");
+      if (pat && !pat.classList.contains(mood)) t.dataset.fit = "";
     }
-    t.classList.toggle("active", i === game.active);
   });
   trayView.setActive(
     game.active,

@@ -100,6 +100,8 @@ export interface Order {
   price: number;
   /** Changes from the menu recipe; `layers` already includes them. */
   mods: Modifier[];
+  /** Toppings asked to leave off, and where they would have gone: under `layers[at]`. */
+  removed?: { kind: Kind; at: number }[];
   /** Bottom to top. */
   layers: ExpectedLayer[];
   fries: boolean;

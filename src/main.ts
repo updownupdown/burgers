@@ -1415,20 +1415,17 @@ function sauceLayer(slot: number, kind: SauceKind): Piece | null {
 const sauceUi = document.createElement("div");
 sauceUi.className = "sauce-ui";
 sauceUi.hidden = true;
-sauceUi.innerHTML = `<div class="sauce-score"><b></b><span></span></div><div class="sauce-meter"><i class="band"></i><i class="fill"></i><i class="line"></i><em>Perfect</em></div>`;
+sauceUi.innerHTML = `<div class="sauce-score"><b></b><span></span></div>`;
 ui.root.appendChild(sauceUi);
 const sauceScore = sauceUi.querySelector(".sauce-score") as HTMLElement;
-const sauceFill = sauceUi.querySelector(".fill") as HTMLElement;
-/** The meter's full height, as coverage. */
+/** The level bar's full height, as coverage. */
 const METER_TOP = 0.8;
-{
-  const band = sauceUi.querySelector(".band") as HTMLElement;
-  band.style.bottom = `${(SAUCE_BAND.lo / METER_TOP) * 100}%`;
-  band.style.height = `${((SAUCE_BAND.hi - SAUCE_BAND.lo) / METER_TOP) * 100}%`;
-  const line = `${(((SAUCE_BAND.lo + SAUCE_BAND.hi) / 2) / METER_TOP) * 100}%`;
-  (sauceUi.querySelector(".line") as HTMLElement).style.bottom = line;
-  (sauceUi.querySelector("em") as HTMLElement).style.bottom = line;
-}
+const SAUCE_TINT: Record<SauceKind, string> = { ketchup: "#d8261b", mustard: "#e9b80f" };
+/**
+ * The sauce on the zoomed burger, for the shared level bar down the left (the same bar the drink
+ * pour and the salt shaker use), or null when the close-up is closed.
+ */
+let sauceLevel: null | { v: number; kind: SauceKind; rect: Rect; over: boolean } = null;
 const SAUCE_WORDS: Record<SauceWord, string> = { stingy: "Keep going", light: "A bit more", perfect: "Perfect", heavy: "That's plenty", drowning: "Too much" };
 
 function updateSauce(dt: number): void {
@@ -1443,6 +1440,7 @@ function updateSauce(dt: number): void {
   const slot = sauceZoom.slot;
   sauceUi.hidden = !(k > 0.05 && slot >= 0 && game.phase === "playing");
   ui.root.classList.toggle("saucing", !sauceUi.hidden && k > 0.25);
+  sauceLevel = null;
   if (sauceUi.hidden) return;
   const r = sauceZoom.rect;
   sauceUi.style.left = `${r.x}px`;
@@ -1456,7 +1454,7 @@ function updateSauce(dt: number): void {
   const cov = sauceCoverage(sauceLayer(slot, kind)?.stroke);
   const { word } = sauceVerdict(cov);
   const wanted = !!game.slots[slot].order?.layers.some((l) => l.kind === kind);
-  sauceFill.style.height = `${Math.min(100, (cov / METER_TOP) * 100).toFixed(1)}%`;
+  if (k > 0.5) sauceLevel = { v: cov, kind, rect: { ...r }, over: cov > SAUCE_BAND.drown };
   const label = cov === 0 ? "Squeeze on" : wanted ? SAUCE_WORDS[word] : "Not on this order";
   sauceScore.dataset.word = wanted ? (cov === 0 ? "" : word) : "wrong";
   const b = sauceScore.firstElementChild as HTMLElement;
@@ -2929,8 +2927,9 @@ const levelBar = (() => {
 function updateLevelBar(): void {
   const t = game.phase === "playing" ? counter.taps.find((x) => x.pouring && x.cup) : undefined;
   const salting = game.phase === "playing" && ptr?.held?.payload.type === "salt" && shaker.target;
-  let show: null | { v: number; max: number; lo: number; hi: number; perfect: number; color: string; name: string } = null;
-  if (t?.cup) show = { v: t.cup.fill, max: 1, lo: DRINK_FILL.full, hi: 1, perfect: DRINK_FILL.perfect, color: DRINK_TINT[t.cup.flavor ?? t.flavor], name: SIZE_LABEL[t.cup.size] };
+  let show: null | { v: number; max: number; lo: number; hi: number; perfect: number; color: string; name: string; over?: boolean } = null;
+  if (sauceLevel) show = { v: sauceLevel.v, max: METER_TOP, lo: SAUCE_BAND.lo, hi: SAUCE_BAND.hi, perfect: (SAUCE_BAND.lo + SAUCE_BAND.hi) / 2, color: SAUCE_TINT[sauceLevel.kind], name: capitalise(sauceLevel.kind), over: sauceLevel.over };
+  else if (t?.cup) show = { v: t.cup.fill, max: 1, lo: DRINK_FILL.full, hi: 1, perfect: DRINK_FILL.perfect, color: DRINK_TINT[t.cup.flavor ?? t.flavor], name: SIZE_LABEL[t.cup.size] };
   else if (salting) show = { v: shaker.target!.f.salt ?? 0, max: SALT.max, lo: SALT.low, hi: SALT.high, perfect: SALT.perfect, color: "#fbfaf6", name: "Salt" };
   else if (game.phase === "playing" && ptr?.mode === "swirl" && swirl.spot >= 0) {
     const v = counter.coldSpots[swirl.spot].held;
@@ -2943,21 +2942,24 @@ function updateLevelBar(): void {
     show = { v: v.blend, max: BLEND.max, lo: BLEND.lo, hi: BLEND.hi, perfect: BLEND.perfect, color: FLAVOR_COLOR[v.flavor ?? "vanilla"], name: "Blend" };
   }
   levelBar.el.classList.toggle("on", !!show);
+  levelBar.el.classList.toggle("sauce", !!sauceLevel);
   // Shake the shaker in hand a little with each shake.
   shaker.wiggle = Math.max(0, shaker.wiggle - 0.12);
   const held = ptr?.held;
   if (held?.payload.type === "salt") held.counterObj.rotation.z = held.trayObj.rotation.z = Math.sin(performance.now() / 30) * 0.35 * shaker.wiggle;
   if (!show) return;
-  const r = bands.counter;
-  levelBar.el.style.top = `${r.y + r.h * 0.1}px`;
-  levelBar.el.style.height = `${r.h * 0.62}px`;
+  // Over the sauce close-up it runs down the left of the zoomed square; otherwise down the counter.
+  const r = sauceLevel ? sauceLevel.rect : bands.counter;
+  levelBar.el.style.left = sauceLevel ? `${r.x + 12}px` : "";
+  levelBar.el.style.top = `${r.y + r.h * (sauceLevel ? 0.16 : 0.1)}px`;
+  levelBar.el.style.height = `${r.h * (sauceLevel ? 0.7 : 0.62)}px`;
   const pct = (x: number) => `${(Math.min(1, Math.max(0, x / show!.max)) * 100).toFixed(1)}%`;
   levelBar.fill.style.height = pct(show.v);
   levelBar.fill.style.background = show.color;
   levelBar.ok.style.bottom = pct(show.lo);
   levelBar.ok.style.height = `calc(${pct(show.hi)} - ${pct(show.lo)})`;
   levelBar.perfect.style.bottom = pct(show.perfect);
-  levelBar.el.classList.toggle("over", show.v > show.hi + 0.001);
+  levelBar.el.classList.toggle("over", show.over ?? show.v > show.hi + 0.001);
   if (levelBar.name.textContent !== show.name) levelBar.name.textContent = show.name;
 }
 

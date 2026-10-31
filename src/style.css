@@ -777,17 +777,5 @@ html, body {
 .sauce-score[data-word="perfect"] span { color: var(--bv-olive); font-weight: 800; }
 .sauce-score[data-word="heavy"] span, .sauce-score[data-word="light"] span { color: var(--bv-amber); }
 .sauce-score[data-word="drowning"] span, .sauce-score[data-word="wrong"] span { color: var(--bv-paprika); font-weight: 800; }
-.sauce-meter {
-  position: absolute; right: 12px; top: 18%; bottom: 10%; width: 16px;
-  border-radius: 8px; background: var(--bv-paper-3); box-shadow: 0 0 0 3px var(--bv-paper), var(--bv-shadow-2);
-  overflow: visible;
-}
-.sauce-meter .band { position: absolute; left: 0; right: 0; background: color-mix(in srgb, var(--bv-olive) 35%, transparent); }
-.sauce-meter .fill { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 8px; background: #d8261b; transition: height 0.08s linear; }
-.sauce-ui[data-kind="mustard"] .fill { background: #e9b80f; }
-.sauce-meter .line { position: absolute; left: -6px; right: -6px; height: 2px; background: var(--bv-olive); }
-.sauce-meter em {
-  position: absolute; right: 24px; transform: translateY(50%);
-  font: 800 11px/1 var(--bv-font-ui); font-style: normal; letter-spacing: 0.04em; text-transform: uppercase;
-  color: var(--bv-paper); text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
-}
+/* The sauce fill bar is the shared level bar (.lvl), raised over the close-up and its dim. */
+.lvl.sauce { z-index: 6; }

@@ -2788,7 +2788,7 @@ function updateGrillTags(): void {
   });
 }
 
-const clearColor = new THREE.Color("#16231f");
+const clearColor = new THREE.Color("#2a3340");
 function render(): void {
   const H = viewH;
   renderer.setScissorTest(false);

@@ -8,7 +8,7 @@ import { eventOn, townById, withEvent, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, popularityTraffic, willingnessToPay, type PressPiece } from "./game/press";
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
 import { ADS, joinChance, lineDrain, linePatience, todayPopularity, WINDOW, wordOfMouth, type AdLevel } from "./game/line";
-import { HOLD_GRACE, HOLD_RUIN, payout, scorePlate, starsFor } from "./game/scoring";
+import { HOLD_GRACE, HOLD_RUIN, payout, SAUCE_BAND, sauceCoverage, sauceVerdict, scorePlate, starsFor, type SauceWord } from "./game/scoring";
 import {
   CARTON_COST,
   CROWD,
@@ -38,6 +38,7 @@ import { disposeObject } from "./render/materials";
 import { CounterView, CUP_IN_HAND, EMPTY_PACK, STOPS, GRILL_SCALE, HOME_PAGE, PAGES, GRILL_TOP, SLEEVE, type GrillItem, type Hit } from "./scenes/counter";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
+import { SauceZoom } from "./scenes/saucezoom";
 import "./ui/components.css";
 import "./style.css";
 import { mountHome, refreshHome } from "./screens/home";
@@ -698,8 +699,6 @@ interface Pointer {
 let ptr: Pointer | null = null;
 let lastGesture: unknown = null;
 let lastSquirt = 0;
-/** The sauce in hand, drawn over the tray: it bobs over the active plate, or sits where it squeezes. */
-let trayBottle: THREE.Object3D | null = null;
 
 /** A burger (or part of one) as a single object to carry around. */
 function stackVisual(layers: Layer[]): THREE.Object3D {
@@ -1165,128 +1164,190 @@ function dropAtStation(payload: Payload, g: THREE.Vector3, ndc: THREE.Vector2): 
 }
 
 /**
- * Lift a sauce from the caddy, or put the one in hand back (null). While a sauce is out, the rest
- * of the kitchen is masked off and counters and tabs stay put until it goes back.
+ * Drag to sauce. Press a bottle in the caddy and the plates that can take sauce light up; drag
+ * toward one and the camera eases in on it; once you're over it the burger fills the screen and
+ * moving the finger squeezes a line. Let go and the bottle goes back in the caddy. One gesture.
  */
-function holdSauce(kind: SauceKind | null): void {
-  if (counter.inHand === kind) return;
-  counter.liftSauce(kind);
-  trayView.showGhost(-1, null);
-  trayView.ghostOver(null);
-  disposeObject(trayBottle);
-  trayBottle = kind ? counter.sauceBottle(kind) : null;
-  ui.root.classList.toggle("sauce-in-hand", !!kind);
-  if (!kind && hintText === SAUCE_BLOCKED) hintUntil = 0;
-  sfx.pop();
-  if (kind) hintOnce("sauce-hand", `${capitalise(kind)} in hand. Draw on a burger to squeeze, then tap the caddy to put it back.`, 4);
+interface SauceDrag {
+  kind: SauceKind;
+  /** Plates with a burger started on them. */
+  ok: boolean[];
+  slot: number;
+  /** 0..1: how far the finger has come from the caddy toward the burger. */
+  aim: number;
+  locked: boolean;
+  bottle: THREE.Object3D;
+  lastPaint: number;
+  /** The live score last shown, to buzz once on reaching the perfect band. */
+  word: SauceWord | "";
+}
+let sauceDrag: SauceDrag | null = null;
+const sauceZoom = new SauceZoom(trayView);
+/** The sauce lands this far above the fingertip (CSS px), so the finger never hides the line. */
+const NOZZLE_UP = 34;
+
+/** The square the burger fills when fully zoomed, in column coordinates: centred on the tray band. */
+function sauceFinal(): Rect {
+  const w = bands.tray.w;
+  const side = Math.min(w, Math.round(viewH * 0.5));
+  const cy = bands.tray.y + bands.tray.h / 2;
+  const y = Math.max(bands.customers.y + 44, cy - side / 2);
+  return { x: (w - side) / 2, y, w: side, h: side };
 }
 
-/**
- * The mask over the kitchen while a sauce is in hand: everything dims except the tray, the caddy
- * (to put it back) and any burger on the warm shelf. Each hole is its own mask layer, and the
- * layers intersect, so the dim shows only where every layer agrees.
- */
-const sauceMask = document.createElement("div");
-sauceMask.className = "sauce-mask";
-sauceMask.hidden = true;
-sauceMask.innerHTML = "<span></span>";
-ui.root.appendChild(sauceMask);
-let lastMask = "";
-
-function updateSauceMask(): void {
-  const kind = game.phase === "playing" ? counter.inHand : null;
-  sauceMask.hidden = !kind;
-  if (!kind) return;
-  // The tray's plates have sauce drawn straight on them; float the bottle over the one in focus.
-  if (trayBottle && ptr?.mode !== "sauce") {
-    const ok = game.active >= 0 && game.slots[game.active].plate.layers.length > 0;
-    trayView.showGhost(ok ? game.active : -1, ok ? trayBottle : null);
-    trayView.ghostOver(null);
-  }
-  const c = bands.counter;
-  const layers: string[] = [];
-  const hole = (p: THREE.Vector3, r: number): void => {
-    const v = p.project(counter.camera);
-    const x = Math.round(((v.x + 1) / 2) * c.w);
-    const y = Math.round(c.y + ((1 - v.y) / 2) * c.h);
-    layers.push(`radial-gradient(circle at ${x}px ${y}px, transparent ${r}px, #000 ${r + 10}px)`);
-  };
-  hole(counter.caddyPoint(), 48);
-  counter.holds.forEach((h, i) => h.layers.length && hole(counter.holdPoint(i), 40));
-  const t = bands.tray;
-  layers.push(`linear-gradient(#000 ${t.y}px, transparent ${t.y}px, transparent ${t.y + t.h}px, #000 ${t.y + t.h}px)`);
-  const mask = layers.join(", ");
-  if (mask !== lastMask) {
-    sauceMask.style.setProperty("mask-image", mask);
-    sauceMask.style.setProperty("-webkit-mask-image", mask);
-    lastMask = mask;
-  }
-  const note = `${capitalise(kind)} in hand · tap the caddy to put it back`;
-  const span = sauceMask.firstElementChild as HTMLElement;
-  if (span.textContent !== note) span.textContent = note;
-}
-
-/** Something else was touched with a sauce in hand. */
-const SAUCE_BLOCKED = "Put the sauce back in the caddy first.";
-function sauceBlocked(): void {
-  showHint(SAUCE_BLOCKED, 1.6);
-  buzz(10);
-}
-
-/** Start squeezing over whatever is under the finger: a plate on the tray or a burger on a hold plate. */
-function startSqueeze(pt: Pointer): void {
-  if (pt.band === "tray") {
-    const slot = trayView.pick(ndcIn(bands.tray, pt.x, pt.y));
-    if (slot < 0) return;
-    if (!game.slots[slot].plate.layers.length) return void showHint("Start with a bun before adding sauce.", 2);
-    pt.drawSlot = slot;
-    setActive(slot);
-  } else {
-    const hit = counter.hit(ndcIn(bands.counter, pt.x, pt.y));
-    if (hit?.type === "bottle") {
-      holdSauce(null);
-      return;
-    }
-    if (hit?.type !== "hold") return sauceBlocked();
-    if (!counter.holds[hit.idx].layers.length) return void showHint("Start that burger with a bun first.", 1.5);
-    pt.drawHold = hit.idx;
+function startSauce(pt: Pointer, kind: SauceKind): void {
+  const ok = game.slots.map((s) => s.plate.layers.length > 0);
+  if (!ok.some(Boolean)) {
+    showHint("Start a burger on a tray first, then drag the sauce onto it.", 2.5);
+    buzz(10);
+    return;
   }
   pt.mode = "sauce";
-  pt.sauce = counter.inHand;
-  squeeze(pt);
+  pt.sauce = kind;
+  counter.liftSauce(kind);
+  const slot = ok[game.active] ? game.active : ok.findIndex(Boolean);
+  sauceDrag = { kind, ok, slot, aim: 0, locked: false, bottle: counter.sauceBottle(kind), lastPaint: 0, word: "" };
+  sauceMove(pt);
+  sfx.pop();
 }
 
-/** Squeeze a line of sauce where the finger is, over the burger the squeeze started on. */
-function squeeze(pt: Pointer): void {
-  const kind = pt.sauce!;
-  const onHold = pt.drawHold >= 0;
-  if (bandAt(pt.y) !== (onHold ? "counter" : "tray")) return;
-  const layers = onHold ? counter.holds[pt.drawHold].layers : game.slots[pt.drawSlot].plate.layers;
+function sauceMove(pt: Pointer): void {
+  const s = sauceDrag;
+  if (!s) return;
+  if (!s.locked) {
+    // Aim at the plate in the finger's third of the screen, or the nearest one that can take sauce.
+    const third = THREE.MathUtils.clamp(Math.floor(pt.x / (bands.tray.w / 3)), 0, 2);
+    let best = -1;
+    for (let i = 0; i < 3; i++) if (s.ok[i] && (best < 0 || Math.abs(i - third) < Math.abs(best - third))) best = i;
+    s.slot = best;
+    const fin = sauceFinal();
+    const cy = fin.y + fin.h / 2;
+    s.aim = THREE.MathUtils.clamp((pt.y0 - pt.y) / Math.max(60, pt.y0 - cy), 0, 1);
+    if (s.aim >= 0.8) {
+      s.locked = true;
+      setActive(s.slot);
+      counter.pointSauce(null);
+      buzz(8);
+    } else if (bandAt(pt.y) === "counter" && s.aim < 0.5) {
+      counter.pointSauce(counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3).add(new THREE.Vector3(0, 1.4, 0)));
+    } else counter.pointSauce(null);
+    trayView.showGhost(s.aim >= 0.4 ? s.slot : -1, s.aim >= 0.4 ? s.bottle : null);
+    trayView.ghostOver(null);
+  }
+  if (s.locked) paintSauce(pt);
+}
+
+/** Squeeze a line where the nozzle is, if it's over the burger. */
+function paintSauce(pt: Pointer): void {
+  const s = sauceDrag!;
+  const slot = s.slot;
+  const pv = trayView.plates[slot];
+  const raw = pv.drawPoint(sauceZoom.ray(pt.x, pt.y - NOZZLE_UP), Infinity);
+  trayView.showGhost(slot, s.bottle);
+  trayView.ghostOver(raw);
+  const r = Math.hypot(raw.x, raw.z);
+  if (r > 1.12) return;
+  const q = r > 1 ? { x: raw.x / r, z: raw.z / r } : raw;
+  const layers = game.slots[slot].plate.layers;
   let top = layers[layers.length - 1];
-  // Lifting the finger and carrying on keeps drawing the same squiggle rather than adding a layer.
-  if (top.piece.kind !== kind || !top.piece.stroke) {
-    const p = newPiece(kind);
+  // Carrying on with the same sauce keeps drawing the same squiggle rather than adding a layer.
+  if (top.piece.kind !== s.kind || !top.piece.stroke) {
+    const p = newPiece(s.kind);
     p.stroke = [];
     layers.push({ piece: p, offX: top.offX * 0.5, offZ: top.offZ * 0.5 });
     top = layers[layers.length - 1];
   }
-  const q = onHold ? counter.holdDrawPoint(ndcIn(bands.counter, pt.x, pt.y), pt.drawHold) : trayView.drawPoint(ndcIn(bands.tray, pt.x, pt.y), pt.drawSlot);
-  if (onHold) counter.pointSauceAt(pt.drawHold, q);
-  else {
-    trayView.showGhost(pt.drawSlot, trayBottle);
-    trayView.ghostOver(q);
-  }
   const stroke = top.piece.stroke!;
   const last = stroke[stroke.length - 1];
-  if (!last || Math.hypot(q.x - top.offX - last.x, q.z - top.offZ - last.z) > 0.07) {
+  if (!last || Math.hypot(q.x - top.offX - last.x, q.z - top.offZ - last.z) > 0.06) {
     stroke.push({ x: q.x - top.offX, z: q.z - top.offZ });
-    if (onHold) counter.syncHold(pt.drawHold, false);
-    else syncTray(pt.drawSlot, false);
-    const now = performance.now();
-    if (now - lastSquirt > 70) {
+    syncTray(slot, false);
+    s.lastPaint = performance.now();
+    if (s.lastPaint - lastSquirt > 70) {
       sfx.squirt();
-      lastSquirt = now;
+      lastSquirt = s.lastPaint;
     }
+  }
+}
+
+/** Let go: the bottle goes back in the caddy and the camera eases back out. */
+function endSauce(pt: Pointer, cancelled: boolean): void {
+  const s = sauceDrag;
+  if (!s) return;
+  if (!cancelled && !s.locked && Math.hypot(pt.x - pt.x0, pt.y - pt.y0) < 24)
+    showHint("Hold the bottle and drag it onto a burger. Keep moving to squeeze; let go to put it back.", 3);
+  counter.liftSauce(null);
+  trayView.showGhost(-1, null);
+  trayView.ghostOver(null);
+  disposeObject(s.bottle);
+  sauceDrag = null;
+  sfx.pop();
+}
+
+/** The sauce in that plate's newest layer of this kind, if any. */
+function sauceLayer(slot: number, kind: SauceKind): Piece | null {
+  const layers = game.slots[slot].plate.layers;
+  for (let i = layers.length - 1; i >= 0; i--) if (layers[i].piece.kind === kind && layers[i].piece.stroke) return layers[i].piece;
+  return null;
+}
+
+const sauceUi = document.createElement("div");
+sauceUi.className = "sauce-ui";
+sauceUi.hidden = true;
+sauceUi.innerHTML = `<div class="sauce-score"><b></b><span></span></div><div class="sauce-meter"><i class="band"></i><i class="fill"></i><i class="line"></i><em>Perfect</em></div>`;
+ui.root.appendChild(sauceUi);
+const sauceScore = sauceUi.querySelector(".sauce-score") as HTMLElement;
+const sauceFill = sauceUi.querySelector(".fill") as HTMLElement;
+/** The meter's full height, as coverage. */
+const METER_TOP = 0.8;
+{
+  const band = sauceUi.querySelector(".band") as HTMLElement;
+  band.style.bottom = `${(SAUCE_BAND.lo / METER_TOP) * 100}%`;
+  band.style.height = `${((SAUCE_BAND.hi - SAUCE_BAND.lo) / METER_TOP) * 100}%`;
+  const line = `${(((SAUCE_BAND.lo + SAUCE_BAND.hi) / 2) / METER_TOP) * 100}%`;
+  (sauceUi.querySelector(".line") as HTMLElement).style.bottom = line;
+  (sauceUi.querySelector("em") as HTMLElement).style.bottom = line;
+}
+const SAUCE_WORDS: Record<SauceWord, string> = { stingy: "Keep going", light: "A bit more", perfect: "Perfect", heavy: "That's plenty", drowning: "Too much" };
+
+function updateSauce(dt: number): void {
+  const s = sauceDrag;
+  const target = s ? (s.locked ? 1 : s.aim * 0.75) : 0;
+  sauceZoom.update(dt, target, s ? s.slot : -1, { x: 0, y: bands.tray.y, w: bands.tray.w, h: bands.tray.h }, sauceFinal());
+  if (s) {
+    trayView.aim(s.locked ? null : s.ok, s.slot, game.time);
+    (s.bottle.userData as { squeeze?: (t: number) => void }).squeeze?.(performance.now() - s.lastPaint < 140 ? 1 : 0);
+  }
+  const k = sauceZoom.eased;
+  const slot = sauceZoom.slot;
+  sauceUi.hidden = !(k > 0.05 && slot >= 0 && game.phase === "playing");
+  ui.root.classList.toggle("saucing", !sauceUi.hidden && k > 0.25);
+  if (sauceUi.hidden) return;
+  const r = sauceZoom.rect;
+  sauceUi.style.left = `${r.x}px`;
+  sauceUi.style.top = `${r.y}px`;
+  sauceUi.style.width = `${r.w}px`;
+  sauceUi.style.height = `${r.h}px`;
+  sauceUi.style.setProperty("--dim", (0.6 * k).toFixed(3));
+  sauceUi.style.setProperty("--ui", Math.max(0, (k - 0.5) * 2).toFixed(3));
+  const kind = s?.kind ?? (sauceUi.dataset.kind as SauceKind | undefined) ?? "ketchup";
+  sauceUi.dataset.kind = kind;
+  const cov = sauceCoverage(sauceLayer(slot, kind)?.stroke);
+  const { word } = sauceVerdict(cov);
+  const wanted = !!game.slots[slot].order?.layers.some((l) => l.kind === kind);
+  sauceFill.style.height = `${Math.min(100, (cov / METER_TOP) * 100).toFixed(1)}%`;
+  const label = cov === 0 ? "Squeeze on" : wanted ? SAUCE_WORDS[word] : "Not on this order";
+  sauceScore.dataset.word = wanted ? (cov === 0 ? "" : word) : "wrong";
+  const b = sauceScore.firstElementChild as HTMLElement;
+  const sp = sauceScore.lastElementChild as HTMLElement;
+  if (b.textContent !== capitalise(kind)) b.textContent = capitalise(kind);
+  if (sp.textContent !== label) sp.textContent = label;
+  if (s && s.locked && wanted && word !== s.word) {
+    if (word === "perfect") {
+      buzz(12);
+      sfx.plop();
+    }
+    s.word = word;
   }
 }
 
@@ -1322,13 +1383,6 @@ canvas.addEventListener("pointerdown", (e) => {
   };
   ptr = pt;
   if (x < 0 || x > bands.counter.w) return;
-  // With a sauce in hand, only burgers (to squeeze on) and the caddy (to put it back) respond.
-  if (counter.inHand) {
-    if (pt.band === "customers") sauceBlocked();
-    else startSqueeze(pt);
-    return;
-  }
-
   if (pt.band === "counter") {
     const hit = counter.hit(ndcIn(bands.counter, x, y));
     pt.hit = hit;
@@ -1339,7 +1393,8 @@ canvas.addEventListener("pointerdown", (e) => {
     }
     else if (hit.type === "grillItem") pt.mode = "grill";
     else if (hit.type === "hold") pt.mode = "hold";
-    else if (hit.type === "bottle") holdSauce(hit.sauce); else if (hit.type === "friesBin") startHold(pt, { type: "fries", cook: 0, basket: null, amount: FRIES_SCOOP });
+    else if (hit.type === "bottle") startSauce(pt, hit.sauce);
+    else if (hit.type === "friesBin") startHold(pt, { type: "fries", cook: 0, basket: null, amount: FRIES_SCOOP });
     else if (hit.type === "stack") {
       const s = counter.stacks[hit.idx];
       const what = s.kind === "cup" ? "cups" : "cartons";
@@ -1488,7 +1543,7 @@ canvas.addEventListener("pointermove", (e) => {
       }
       break;
     case "sauce":
-      squeeze(pt);
+      sauceMove(pt);
       break;
   }
 });
@@ -1543,9 +1598,7 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       for (const t of counter.taps) t.pouring = false;
       break;
     case "sauce":
-      // Done squeezing: the bottle stays in hand, back over the active plate.
-      counter.pointSauce(null);
-      trayView.ghostOver(null);
+      endSauce(pt, cancelled);
       break;
     case "hold":
       if (!cancelled && !pt.moved && pt.hit?.type === "hold") {
@@ -1611,8 +1664,7 @@ function goToStop(s: number): void {
     if (Math.abs(dx) > 36) {
       swiped = true;
       sfx.unlock();
-      if (counter.inHand) sauceBlocked();
-      else goToStop(counter.stop + (dx < 0 ? 1 : -1));
+      if (!counter.inHand) goToStop(counter.stop + (dx < 0 ? 1 : -1));
     }
   });
   const end = () => (sx = -1);
@@ -1642,8 +1694,7 @@ const stopPips = ui.tabs.map((t, i) => {
 ui.tabs.forEach((t, i) =>
   t.addEventListener("click", () => {
     sfx.unlock();
-    if (counter.inHand) sauceBlocked();
-    else goToPage(i);
+    if (!counter.inHand) goToPage(i);
   }),
 );
 // Touching a stub brings that order into focus and opens it; tapping the open ticket folds it back
@@ -1653,8 +1704,7 @@ ui.tickets.forEach((t, i) => {
   t.addEventListener("pointerdown", () => {
     sfx.unlock();
     wasOpen = t.dataset.mode === "big";
-    if (counter.inHand) sauceBlocked();
-    else if (!wasOpen) {
+    if (!counter.inHand && !wasOpen) {
       setActive(i);
       ticketOpen = true;
     }
@@ -1934,7 +1984,6 @@ function shiftGuard(): void {
 
 function startShift(plan: Plan | null = null): void {
   cancelPointer();
-  holdSauce(null);
   for (const k of ["prep", "overlay"]) dropBack(k);
   prepOpen = false;
   shiftGuard();
@@ -2137,7 +2186,7 @@ function showTitle(): void {
 }
 
 function endShift(): void {
-  holdSauce(null);
+  cancelPointer();
   dropBack("shift");
   game.phase = "summary";
   // The shift fills the day; the evening follows, and only sleeping turns the day (see game/day.ts).
@@ -2343,7 +2392,7 @@ function tick(dt: number): void {
     customersView.update(dt, game.active);
   }
   sfx.setLoops(game.phase === "playing" ? counter.sizzleLevel() : 0, game.phase === "playing" ? counter.bubbleLevel() : 0, counter.pouring());
-  updateUi();
+  updateUi(dt);
 }
 
 counter.events.golden = () => {
@@ -2366,7 +2415,7 @@ function spills(): number {
 }
 
 let lastTimerText = "";
-function updateUi(): void {
+function updateUi(dt = 0): void {
   const left = Math.max(0, stop().shiftLength - game.time);
   const tText = left > 0 ? `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, "0")}` : "Closing";
   if (tText !== lastTimerText) {
@@ -2427,6 +2476,7 @@ function updateUi(): void {
     game.active,
     game.slots.map((s) => !!s.order),
   );
+  updateSauce(dt);
 
   ui.tabs.forEach((t, i) => t.setAttribute("aria-selected", String(i === counter.page)));
   stopPips.forEach((pips, page) => pips.forEach((el, k) => el.classList.toggle("on", page === counter.page && counter.stopsOf(page)[k] === counter.stop)));
@@ -2434,7 +2484,6 @@ function updateUi(): void {
   updateFryTags();
   updateHoldUi();
   updateStationUi();
-  updateSauceMask();
   // Labels are as wide as one tap, so they line up edge to edge along the machine.
   const tapPx = ((counter.drinkLabelPoint(1).project(counter.camera).x - counter.drinkLabelPoint(0).project(counter.camera).x) / 2) * bands.counter.w;
   ui.drinkLabels.forEach((el, i) => {
@@ -2701,6 +2750,10 @@ function render(): void {
   draw(bands.customers, customersView.scene, customersView.camera);
   draw(bands.tray, trayView.scene, trayView.camera);
   draw(bands.counter, counter.scene, counter.camera);
+  if (sauceZoom.visible) {
+    const r = sauceZoom.rect;
+    draw({ x: colX + r.x, y: r.y, w: r.w, h: r.h }, trayView.scene, sauceZoom.camera);
+  }
 }
 
 let last = performance.now();
@@ -2745,6 +2798,11 @@ window.addEventListener("blur", cancelPointer);
   ring: ringBell,
   callNext,
   gesture: () => lastGesture,
+  /** Screen point (CSS px) of the fully zoomed sauce view's middle, and its side. */
+  sauceCentre: () => {
+    const f = sauceFinal();
+    return [colX + f.x + f.w / 2, f.y + f.h / 2, f.w];
+  },
   ptr: () => ptr && { mode: ptr.mode, hit: ptr.hit?.type, band: ptr.band },
   mem: () => ({ ...renderer.info.memory }),
   step: (seconds: number) => {

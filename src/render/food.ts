@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { avgCook, bunToast, isMelted } from "../game/cooking";
 import type { Kind, Piece } from "../game/types";
-import { COUNTED } from "../game/types";
+import { COUNTED, SAUCE_RADIUS } from "../game/types";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
 import { faceted, grade, lineColor, lineMaterial, mesh, outline, ramp, shareGeometry, toon } from "./materials";
 import { TOPPING_BOOST } from "./units";
@@ -619,7 +619,7 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
         holder.clear();
         if (pts.length < 2) {
           if (pts.length === 1) {
-            const blob = mesh(new THREE.SphereGeometry(0.08, 8, 5), color, { ink: false });
+            const blob = mesh(new THREE.SphereGeometry(SAUCE_RADIUS * 1.3, 8, 5), color, { ink: false });
             blob.position.set(pts[0].x, 0.03, pts[0].z);
             blob.scale.y = 0.5;
             holder.add(blob);
@@ -627,7 +627,7 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
           return;
         }
         const curve = new THREE.CatmullRomCurve3(pts.map((q) => new THREE.Vector3(q.x, 0.035, q.z)));
-        const tube = new THREE.TubeGeometry(curve, Math.min(200, pts.length * 3), 0.065, 6, false);
+        const tube = new THREE.TubeGeometry(curve, Math.min(240, pts.length * 3), SAUCE_RADIUS, 6, false);
         const m = new THREE.Mesh(tube, toon(color));
         m.scale.y = 0.6;
         m.castShadow = true;

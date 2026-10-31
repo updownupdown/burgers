@@ -118,6 +118,8 @@ export interface Order {
 
 export const GRILLABLE: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon", "egg", "pineapple"]);
 export const SAUCES: ReadonlySet<Kind> = new Set<Kind>(["ketchup", "mustard"]);
+/** Half the width of a squeezed line of sauce, in burger-local units (the bun has radius 1). */
+export const SAUCE_RADIUS = 0.09;
 /**
  * Toppings placed one piece at a time; a recipe asks for a number of them. Fewer saves money but
  * customers notice; a couple extra can win a better review.

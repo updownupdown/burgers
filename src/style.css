@@ -755,29 +755,35 @@ html, body {
 .stale::after { content: ""; position: absolute; left: 0; right: 0; bottom: var(--g); height: 1.5px; background: var(--bv-paper); }
 .zone[hidden] { display: none; }
 
-/* A sauce in hand: the kitchen dims around the tray, the caddy and the warm shelf (main.ts cuts the
-   holes as intersecting mask layers), and nothing under it takes a tap. */
-.sauce-mask {
-  position: absolute;
-  inset: 0;
-  background: rgb(42 38 34 / 0.5);
-  mask-composite: intersect;
-  -webkit-mask-composite: source-in;
-  pointer-events: none;
-  z-index: 4;
+/* The sauce close-up: the live score over the zoomed burger and the fill bar down its right side.
+   main.ts sizes the box to the zoom square; the bar's band is the coverage the customer calls perfect. */
+.sauce-ui { position: absolute; pointer-events: none; z-index: 6; box-shadow: 0 0 0 200vmax rgb(20 16 12 / var(--dim, 0)); }
+.sauce-ui > * { opacity: var(--ui, 0); }
+/* Receipts hang over the tray band, where the close-up opens: tuck them away while saucing. */
+#ui.saucing .ticket { opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+.sauce-ui[hidden] { display: none; }
+.sauce-score {
+  position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+  display: flex; gap: 8px; align-items: baseline; white-space: nowrap;
+  padding: 6px 14px 7px; border-radius: 999px;
+  background: var(--bv-paper); color: var(--bv-ink); box-shadow: var(--bv-shadow-2);
+  font: 600 14px/1.2 var(--bv-font-ui);
 }
-.sauce-mask[hidden] { display: none; }
-.sauce-mask > span {
-  position: absolute;
-  left: 50%;
-  bottom: calc(var(--tabs-h) + var(--safe-b) + 14px);
-  transform: translateX(-50%);
-  width: max-content;
-  max-width: calc(100% - 32px);
-  padding: 7px 14px 8px;
-  border-radius: 999px;
-  background: var(--bv-paper);
-  color: var(--bv-ink);
-  font: 700 13px/1.2 var(--bv-font-ui);
-  box-shadow: var(--bv-shadow-2);
+.sauce-score b { font-weight: 800; }
+.sauce-score[data-word="perfect"] span { color: var(--bv-olive); font-weight: 800; }
+.sauce-score[data-word="heavy"] span, .sauce-score[data-word="light"] span { color: var(--bv-amber); }
+.sauce-score[data-word="drowning"] span, .sauce-score[data-word="wrong"] span { color: var(--bv-paprika); font-weight: 800; }
+.sauce-meter {
+  position: absolute; right: 12px; top: 18%; bottom: 10%; width: 16px;
+  border-radius: 8px; background: var(--bv-paper-3); box-shadow: 0 0 0 3px var(--bv-paper), var(--bv-shadow-2);
+  overflow: visible;
+}
+.sauce-meter .band { position: absolute; left: 0; right: 0; background: color-mix(in srgb, var(--bv-olive) 35%, transparent); }
+.sauce-meter .fill { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 8px; background: #d8261b; transition: height 0.08s linear; }
+.sauce-ui[data-kind="mustard"] .fill { background: #e9b80f; }
+.sauce-meter .line { position: absolute; left: -6px; right: -6px; height: 2px; background: var(--bv-olive); }
+.sauce-meter em {
+  position: absolute; right: 24px; transform: translateY(50%);
+  font: 800 11px/1 var(--bv-font-ui); font-style: normal; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--bv-paper); text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
 }

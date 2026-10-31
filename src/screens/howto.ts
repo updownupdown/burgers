@@ -171,7 +171,7 @@ function sections(): Sec[] {
       </div>`,
       points: [
         "<b>Drag</b> ingredients up onto the active plate, or <b>flick</b> them up to toss them on.",
-        "<b>Sauce:</b> tap a bottle in the caddy to pick it up, then draw on a burger to squeeze. Tap the caddy to put it back; the rest of the kitchen waits until you do.",
+        "<b>Sauce:</b> press a bottle in the caddy and drag it up onto a burger on the tray. The view zooms in; keep moving to squeeze and watch the bar on the right for Perfect. Let go and the bottle goes back.",
         "Wrong layer? <b>Swipe down</b> on the plate to take the top one off. Mistakes go down the garbage chute.",
         "The <b>warm shelf</b> over the grill lets you build ahead or hold a patty. Food there slowly loses quality.",
       ],

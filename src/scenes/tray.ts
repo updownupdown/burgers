@@ -15,7 +15,7 @@ const PLATE_RIM = "#e4dccb";
  */
 const TRAY_SIDES = 0.6;
 const ACTIVE_RING = "#c8472e";
-const TRAY_VIEW_HALF_H = 2.2;
+export const TRAY_VIEW_HALF_H = 2.2;
 
 interface StackEntry {
   uid: number;
@@ -73,8 +73,11 @@ export class PlateView {
     return stackBases(this.entries.map((e) => e.piece)).top;
   }
 
-  /** Where a ray meets the top of the stack, in burger-local units (a bun has radius 1), kept on the bun. */
-  drawPoint(ray: THREE.Ray): { x: number; z: number } {
+  /**
+   * Where a ray meets the top of the stack, in burger-local units (a bun has radius 1), kept within
+   * `reach` of the middle (pass Infinity for the raw point).
+   */
+  drawPoint(ray: THREE.Ray, reach = 1.05): { x: number; z: number } {
     this.group.updateWorldMatrix(true, false);
     const pos = new THREE.Vector3().setFromMatrixPosition(this.group.matrixWorld);
     const g = new THREE.Vector3().setFromMatrixScale(this.group.matrixWorld).x;
@@ -85,7 +88,7 @@ export class PlateView {
     const lx = (p.x - pos.x) / scale;
     const lz = (p.z - pos.z) / scale;
     const r = Math.hypot(lx, lz);
-    const k = r > 1.05 ? 1.05 / r : 1;
+    const k = r > reach ? reach / r : 1;
     return { x: lx * k, z: lz * k };
   }
 
@@ -207,7 +210,7 @@ export class PlateView {
 }
 
 /** The pass shelf is seen nearly side on, so a burger's layers can be counted from the side. */
-const TRAY_PITCH = THREE.MathUtils.degToRad(24);
+export const TRAY_PITCH = THREE.MathUtils.degToRad(24);
 /** Height the camera centres on: about the middle of a tall burger. */
 const TRAY_LOOK_Y = 0.85;
 const STEEL = "#c9d0ce";
@@ -337,7 +340,24 @@ export class TrayView {
     this.plates.forEach((p, i) => {
       const on = occupied[i] && i === slot;
       p.ring.visible = on;
+      (p.ring.material as THREE.MeshBasicMaterial).opacity = 0.9;
       (this.flags[i].material as THREE.MeshToonMaterial).color.set(on ? ACTIVE_RING : "#a9b2af");
+    });
+  }
+
+  /** World height of the top of a plate's stack. */
+  stackTopY(slot: number): number {
+    const pv = this.plates[slot];
+    const s = pv.group.scale.x;
+    return s * (0.1 + pv.stackTop() * pv.s);
+  }
+
+  /** Light the ring of every plate that can take sauce, pulsing; the aimed-at one solid. Null restores. */
+  aim(ok: boolean[] | null, target: number, t: number): void {
+    if (!ok) return;
+    this.plates.forEach((p, i) => {
+      p.ring.visible = ok[i];
+      (p.ring.material as THREE.MeshBasicMaterial).opacity = i === target ? 0.95 : 0.35 + 0.3 * Math.sin(t * 7) ** 2;
     });
   }
 

@@ -150,14 +150,21 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
           await liftDone();
         }
       } else if (l.kind === 'ketchup' || l.kind === 'mustard') {
-        // Lift the bottle, draw a squiggle across the burger, put it back.
+        // One gesture: press the bottle, drag it up onto the burger (the view zooms in), zigzag
+        // across it, let go.
         const bt = await hp('bottle', { sauce: l.kind });
-        await tap(bt);
-        const pts = [];
-        for (let z = 0; z < 10; z++) pts.push([px - 28 + (z % 2) * 56, py - 8 + z * 1.6]);
-        await act(pts, 16);
+        const [cx, cy, side] = await ev(() => window.__bv.sauceCentre());
+        await fire('pointerdown', ...bt);
+        for (const q of line(bt[0], bt[1], px, cy, 12)) { await p.waitForTimeout(16); await fire('pointermove', ...q); }
+        await step(p, 0.4);
+        const zig = [];
+        for (let z = 0; z <= 5; z++) zig.push([cx + (z % 2 ? 0.3 : -0.3) * side, cy - 0.27 * side + z * 0.1 * side + 34]);
+        let at = [px, cy];
+        for (const q of zig) { for (const r of line(at[0], at[1], q[0], q[1], 8)) { await p.waitForTimeout(8); await fire('pointermove', ...r); } at = q; }
+        await step(p, 0.1);
         if (shots++ === 0) await p.screenshot({ path: OUT + 'kbot-sauce.png' });
-        await tap(bt);
+        await fire('pointerup', ...at);
+        await step(p, ACTION);
         if (await ev(() => window.__bv.counter.inHand)) console.log('SAUCE STILL IN HAND');
       } else {
         const [bx, by] = await hp('bin', { kind: l.kind });

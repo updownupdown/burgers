@@ -385,3 +385,15 @@ James's note after build #31: the pace was hectic even on Chill, because three c
 - **Summary** now lists walk-outs after ordering, people who gave up in line and people who walked past, plus the day's social media spend.
 
 Open: the Day Ledger / pre-open redesign (separate thread) should take over the social media control when it lands; it's one small block in `src/screens/home.ts` (`adsHtml`).
+
+## 12. The Kitchen Bench study: window line truck
+
+James's picks from the Kitchen Bench study (`/mnt/project-files/kitchen-study/`), built on the study's machines (`src/render/machines/`, one game unit = 15 cm).
+
+- **Window line.** Every counter faces the serving window, so the player stands with their back to the street side wall. **Grill** is the prep unit and lamp shelf: a stepped 3 x 3 cold prep unit on the left with the sauce caddy in front of it, the griddle (warm zone behind a rail on its right) and a warm shelf over the griddle's back edge. **Fryer** is a front pass: freezer bin, two wells on a hang rail, the topping station, carton stacks and pack pads along the front. **Drinks** is the ice and drink tower (cup tubes S/M/L, ice lever) beside the low fountain, lids and straws in front. **Supplies** is the wire rack behind the player, holding only what restocks something: one bay per cup and carton size.
+- **Camera: half stops.** One zoom for every counter (about 1.35 m across). The fryer line is wider than the screen, so it has two stops: tap its tab again, swipe along the bar, or carry something to the screen's edge and rest there. Pips on its tab show which end you're at. Supplies is reached by turning round on the spot. `STOPS` in `src/scenes/counter.ts`.
+- **Low pass tray.** The tray band is the window ledge: plates on a steel pass shelf seen nearly side on, with sides beside each burger.
+- **Sauce in hand.** Tap a bottle in the caddy to lift it; it stays in hand. Drawing over a burger (on the tray or on the warm shelf) squeezes; tapping the caddy puts it back. While it's out the rest of the kitchen dims, and counter changes, tabs and tickets wait. Scoring is as before (a stroke of 1.1 or longer is a full squeeze).
+- **Warm shelf.** No bulbs or orange glow; each plate gets a slim vertical bar that drains as the food dries out (green while it keeps, amber once it starts drying after `HOLD_GRACE`, red near `HOLD_RUIN`).
+- **Sized sleeves.** A sleeve carries a size and only opens on the stack of that size.
+- **Not built:** the study's fryer dump pan (it would add a step between basket and carton); the smash press on the griddle is decor, smashing is still press and hold.

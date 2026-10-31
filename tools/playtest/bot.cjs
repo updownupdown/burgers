@@ -192,13 +192,13 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       }
       await deliver(s);
     };
-    // 4. Fries: carton from the stacks (left stop) carried to the pad (right stop) with the edge carry.
+    // 4. Fries: carton from the stacks to the pad, all on the fryer's one screen.
     if (order.fries) {
-      await stop(2);
+      await page(2);
       await takeEmpty('carton', order.friesSize, async (s) => {
-        await carryVia(line(s[0], s[1], W - 8, s[1] - 40, 12), 480, () => hp('pack', { idx: 0 }));
+        const k = await hp('pack', { idx: 0 });
+        await act(line(s[0], s[1], k[0], k[1], 12));
       });
-      if ((await ev(() => window.__bv.counter.stop)) !== 3) console.log('EDGE CARRY DID NOT MOVE');
       if (!(await ev(() => window.__bv.counter.packs[0].size))) console.log('CARTON NOT ON PAD');
       const k2 = await hp('pack', { idx: 0 });
       for (let tries = 0; tries < 6; tries++) {
@@ -209,11 +209,9 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
         if (bi < 0) { bi = bs.findIndex(b => b.loaded && !b.down && b.cook < 0.5); if (bi >= 0) await tap(await hp('basket', { idx: bi })); }
         if (bi < 0) {
           const free = bs.findIndex(b => !b.loaded);
-          await stop(2);
           const f = await hp('friesBin'), k = await hp('basket', { idx: free });
           await act(line(f[0], f[1], k[0], k[1], 10));
           await tap(k);
-          await stop(3);
           continue;
         }
         for (let w = 0; w < 240; w++) { const c = await ev((i) => window.__bv.counter.baskets[i].cook, bi); if (c >= 0.68) break; await step(p, 0.25); }
@@ -222,8 +220,13 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       }
       for (const what of order.poutine ? ['curds', 'gravy'] : ['salt']) {
         const [tx, ty] = await hp(what === 'salt' ? 'shaker' : what);
-        await act(line(tx, ty, k2[0], k2[1], 10));
+        const pts = line(tx, ty, k2[0], k2[1], 10);
+        // Shake the shaker over the carton: six changes of direction, aiming for the Perfect line.
+        if (what === 'salt') for (let n = 0; n < 7; n++) pts.push([k2[0], k2[1] + (n % 2 ? 14 : -14)], [k2[0], k2[1] + (n % 2 ? 22 : -22)]);
+        await act(pts, 16);
       }
+      const salt = await ev(() => window.__bv.counter.packs[0].salt);
+      if (!order.poutine && !(salt >= 0.35 && salt <= 0.9)) console.log('SALT OFF', salt);
       await act(line(k2[0], k2[1], px, py, 12));
       await page(1);
     }
@@ -231,14 +234,24 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
     if (order.drink) {
       await page(0);
       const idx = ['pine', 'pink', 'cola', 'water', 'tea'].indexOf(order.drink);
-      const c = await hp('cup', { idx });
-      await takeEmpty('cup', order.drinkSize, async (s) => act(line(s[0], s[1], c[0], c[1], 10)));
-      const extra = async (what) => { const e = await hp(what); await act(line(e[0], e[1], c[0], c[1], 10)); };
+      // A cup goes down on the open counter first, then gets moved under its nozzle.
+      const open = await ev(() => window.__bv.project('counter', window.__bv.counter.taps[0].x + 0.4, 0.3, 0.4));
+      await takeEmpty('cup', order.drinkSize, async (s) => act(line(s[0], s[1], open[0], open[1], 10)));
+      const cupAt = () => ev(() => { const c = window.__bv.counter.cups[window.__bv.counter.cups.length - 1]; return c && window.__bv.project('counter', c.x, 0.5, c.z); });
+      const under = await hp('spill', { idx });
+      let c = await cupAt();
+      if (!c) console.log('CUP NOT PLACED');
+      else await act(line(c[0], c[1], under[0], under[1], 10));
+      if (!(await ev((i) => !!window.__bv.counter.taps[i].cup, idx))) console.log('CUP NOT UNDER NOZZLE');
+      c = await ev((i) => { const q = window.__bv.counter.taps[i].cup; return q && window.__bv.project('counter', q.x, 0.5, q.z); }, idx);
+      const extra = async (what, f) => { const e = await hp(what, f); await act(line(e[0], e[1], c[0], c[1], 10)); };
       if (order.ice) await extra('ice');
       const t = await hp('tap', { idx });
       await hold(p, t[0], t[1], Math.round(0.9 / (0.42 * { S: 1.35, M: 1, L: 0.78 }[order.drinkSize]) * 1000));
-      await extra('lids');
+      await extra('lids', { size: order.drinkSize });
       await extra('straws');
+      const d = await ev((i) => { const q = window.__bv.counter.taps[i].cup; return q && { lid: q.lid, straw: q.straw, fill: q.fill }; }, idx);
+      if (!d || !d.lid || !d.straw) console.log('DRINK NOT DRESSED', d && { lid: d.lid, straw: d.straw, fill: d.fill });
       await act(line(c[0], c[1], px, py, 12));
       await page(1);
     }

@@ -1,5 +1,5 @@
 import type { Order, Plate } from "./game/types";
-import { collapseCounted } from "./game/scoring";
+import { collapseCounted, layerQuality } from "./game/scoring";
 import { DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, DRINKS, KIND_COLOR, KIND_LABEL } from "./game/types";
 import { icon } from "./ui/icons";
 
@@ -234,6 +234,8 @@ interface TicketRow {
   mod: boolean;
   /** The next thing to put on the plate. */
   next: boolean;
+  /** A piece on the plate the order has no line for. */
+  extra?: boolean;
 }
 
 function rowHtml(r: TicketRow): string {
@@ -278,24 +280,45 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
   // Runs of counted toppings are one layer; a layer is done once it has its full count.
   const stacked = collapseCounted(plate.layers);
   const modded = new Set(order.mods.filter((m) => m.type !== "no").map((m) => m.kind));
-  // The plate matches the order up to `good` layers. Everything stacked above that has to come
-  // off: those pieces are listed in red, crossed out, where they sit, above the layer that should
-  // go there instead. A short count still on top is just unfinished.
-  let good = 0;
-  while (good < order.layers.length && stacked[good] && stacked[good].piece.kind === order.layers[good].kind && stacked[good].count >= (order.layers[good].count ?? 1)) good++;
-  const partial = stacked.length === good + 1 && good < order.layers.length && stacked[good].piece.kind === order.layers[good].kind;
-  const wrongFrom = partial ? stacked.length : good;
-  const states: RowState[] = order.layers.map((_, i) => (i < good ? "done" : ""));
-  const nextIdx = stacked.length > wrongFrom ? -1 : good;
+  // The ticket is forgiving (the score isn't): each piece on the plate ticks off the lowest
+  // ticket line of its kind still open, wherever it went in the stack, so a slip never asks for
+  // another copy. A patty at the wrong doneness, or a counted topping left short under other
+  // layers, still counts but shows red. Pieces the order has no line for are listed in red,
+  // crossed out, where they sit. A short count still on top is just unfinished.
+  const states: RowState[] = order.layers.map(() => "");
+  const got: number[] = order.layers.map(() => 0);
+  /** For each stack layer, the ticket line it ticked off, or -1 when the order has none for it. */
+  const matchOf: number[] = stacked.map(() => -1);
+  let partialIdx = -1;
+  stacked.forEach((st, j) => {
+    const i = order.layers.findIndex((exp, k) => exp.kind === st.piece.kind && !states[k] && k !== partialIdx);
+    if (i < 0) return;
+    matchOf[j] = i;
+    got[i] = st.count;
+    const exp = order.layers[i];
+    if (st.count < (exp.count ?? 1)) {
+      if (j === stacked.length - 1) partialIdx = i;
+      else states[i] = "wrong";
+    } else if (exp.kind === "patty" && layerQuality(exp, st.piece)[1]) states[i] = "wrong";
+    else states[i] = "done";
+  });
+  const nextIdx = partialIdx >= 0 ? partialIdx : states.findIndex((st) => !st);
   const removed = order.removed ?? order.mods.filter((m) => m.type === "no").map((m) => ({ kind: m.kind, at: order.layers.length - 1 }));
-  const wrongRows: TicketRow[] = [];
-  for (let i = stacked.length - 1; i >= wrongFrom; i--) {
-    const k = stacked[i].piece.kind;
-    const icon = k === "bun" ? (i === 0 ? "bunBottom" : "bunTop") : k;
-    wrongRows.push({ icon, color: KIND_COLOR[k], label: KIND_LABEL[k], tail: stacked[i].count > 1 ? `<span class="n">×${stacked[i].count}</span>` : "", state: "wrong", mod: false, next: false });
-  }
-  // Wrong pieces past the top of the build go first in the list.
-  if (wrongFrom >= order.layers.length) rows.push(...wrongRows);
+  // Extras sit just above the ticket line matched by the nearest piece under them (-1: at the very bottom).
+  const extrasAt = new Map<number, TicketRow[]>();
+  let below = -1;
+  stacked.forEach((st, j) => {
+    if (matchOf[j] >= 0) {
+      below = matchOf[j];
+      return;
+    }
+    const k = st.piece.kind;
+    const icon = k === "bun" ? (j === 0 ? "bunBottom" : "bunTop") : k;
+    const row: TicketRow = { icon, color: KIND_COLOR[k], label: KIND_LABEL[k], tail: st.count > 1 ? `<span class="n">×${st.count}</span>` : "", state: "wrong", mod: false, next: false, extra: true };
+    extrasAt.set(below, [row, ...(extrasAt.get(below) ?? [])]);
+  });
+  // Extras above the top of the build go first in the list.
+  rows.push(...(extrasAt.get(order.layers.length - 1) ?? []));
   for (let i = order.layers.length - 1; i >= 0; i--) {
     const exp = order.layers[i];
     let icon: string = exp.kind;
@@ -310,13 +333,14 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     } else if (exp.kind === "pineapple") tail = modBox("grill", "Grill");
     else if (exp.melted) tail = modBox("melt", "Melt");
     if (exp.count) {
-      const got = partial && i === good ? stacked[i].count : 0;
-      tail += `<span class="n">${got ? `${got}/` : "×"}${exp.count}</span>`;
+      const short = got[i] && got[i] < exp.count;
+      tail += `<span class="n">${short ? `${got[i]}/` : "×"}${exp.count}</span>`;
     }
     for (const r of removed.filter((r) => r.at === i + 1)) rows.push(removedRow(r.kind, states[i + 1] ?? ""));
-    if (i === wrongFrom && wrongFrom < order.layers.length) rows.push(...wrongRows);
+    if (i < order.layers.length - 1) rows.push(...(extrasAt.get(i) ?? []));
     rows.push({ icon, color: KIND_COLOR[exp.kind], label, tail, state: states[i], mod: modded.has(exp.kind), next: i === nextIdx });
   }
+  rows.push(...(extrasAt.get(-1) ?? []));
   for (const r of removed.filter((r) => r.at === 0)) rows.push(removedRow(r.kind, states[0] ?? ""));
   return rows;
 }
@@ -381,9 +405,8 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, focused
   const bar = `<span class="bar"><i style="width:${(pct * 100).toFixed(0)}%"></i></span>`;
   const rows = buildRows(order, plate);
   if (!focused) {
-    const build = rows.filter((r) => r.state !== "wrong" && !r.label.startsWith("−"));
-    const left = build.filter((r) => r.state !== "done").length;
-    const fix = rows.some((r) => r.state === "wrong");
+    const build = rows.filter((r) => !r.extra && !r.label.startsWith("−"));
+    const left = build.filter((r) => !r.state).length;
     const pips = build
       .reverse()
       .map((r) => `<i class="${r.state}" style="--k:${r.color}"></i>`)
@@ -391,7 +414,7 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, focused
     return `<div class="pat ${mood}">${moodFace(mood, !!order.critic)}${bar}</div>
       <div class="name"><span class="l">${esc(shortName(order.name))}</span>${nameMarks(order)}</div>
       ${pattyPills(order)}
-      <div class="left${fix ? " fix" : ""}">${fix ? "Fix plate" : left ? `<b>${left}</b> left` : "Ready"}</div><div class="pips">${pips}</div>`;
+      <div class="left">${left ? `<b>${left}</b> left` : "Ready"}</div><div class="pips">${pips}</div>`;
   }
   let list = rows;
   let folded = "";

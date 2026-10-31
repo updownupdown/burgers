@@ -291,14 +291,13 @@ html, body {
 .ticket.stub { padding: 9px 5px 12px; gap: 4px; cursor: pointer; }
 .ticket.stub .bar { min-width: 0; }
 .ticket.stub .name { flex-wrap: wrap; }
-.ticket.stub .name .l { font-size: 17px; line-height: 1; white-space: normal; overflow-wrap: anywhere; }
+.ticket.stub .name .l { font-size: 14px; letter-spacing: -0.01em; line-height: 1.05; white-space: normal; overflow-wrap: normal; }
 .ticket.stub .name .plus { margin-left: 2px; padding-left: 0; }
 .ticket .pp { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 3px; }
 .ticket .pp .dpill { min-width: 0; font-size: 12px; padding: 0 6px 1px; }
 .ticket .pp .x { font: 700 12px var(--bv-font-mono); }
 .ticket .left { margin-top: 2px; font: 600 12px/1 var(--bv-font-mono); color: var(--bv-ink-2); }
 .ticket .left b { color: var(--bv-ink); }
-.ticket .left.fix { color: var(--t-wrong); font: 800 12px/1 var(--bv-font-ui); }
 /* A list that still has to scroll fades out at the top, where the finished end of the burger is. */
 .ticket .tb.up { -webkit-mask-image: linear-gradient(transparent, #000 14px); mask-image: linear-gradient(transparent, #000 14px); }
 .ticket .pips { display: flex; gap: 1px; height: 5px; }

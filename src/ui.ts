@@ -1,6 +1,6 @@
-import type { Order, Plate } from "./game/types";
+import type { Dessert, DessertOrder, Order, Plate } from "./game/types";
 import { collapseCounted, layerQuality } from "./game/scoring";
-import { DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, DRINKS, KIND_COLOR, KIND_LABEL } from "./game/types";
+import { DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, DRINKS, FLAVOR_COLOR, FLAVOR_LABEL, KIND_COLOR, KIND_LABEL } from "./game/types";
 import { icon } from "./ui/icons";
 
 
@@ -34,7 +34,7 @@ export interface Ui {
 
 /*
  * Counter tabs show a small drawing of each station instead of a word: a fountain cup, the
- * flat-top with patties, the fry basket, a box of supplies. Inked like the kitchen, in muted
+ * flat-top with patties, the fry basket, a soft-serve cone. Inked like the kitchen, in muted
  * colour; tabs you're not on are faded (see .tab in style.css).
  */
 const INK = `stroke="#2a2622" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"`;
@@ -60,12 +60,11 @@ const TAB_ART: Record<string, string> = {
     <path d="M18.5 11.5v8M23.5 11.5v8M28.5 11.5v8M14.6 15.3h17.8" fill="none" stroke="#2a2622" stroke-width="1" opacity=".55"/>
     <path d="M33 12.5h7.5" fill="none" stroke="#2a2622" stroke-width="2.4" stroke-linecap="round"/>
     <circle cx="14" cy="27" r="1.6" fill="#f4efe6" ${INK}/>`,
-  Supplies: `<path d="M34 17.5 39 12v15.5l-5 5.5z" fill="#b98a55" ${INK}/>
-    <path d="M8 17.5h26V33H8z" fill="#d6a76f" ${INK}/>
-    <path d="M8 17.5 13 12h26l-5 5.5z" fill="#e8c08e" ${INK}/>
-    <path d="M18 17.5h6V33h-6zM18 17.5l5-5.5h6l-5 5.5z" fill="#f1e4ca" ${INK}/>
-    <path d="M28.5 4.5h7l-.8 7.5h-5.4z" fill="#faf7f1" ${INK}/><path d="M28.2 4.5h7.6" stroke="#2a2622" stroke-width="2.2" stroke-linecap="round"/>
-    <path d="M11 22.5h4M11 25.5h3" stroke="#2a2622" stroke-width="1.2" stroke-linecap="round" opacity=".6"/>`,
+  "Cold bar": `<path d="M16.5 17.5h11L22 33.5z" fill="#d9a35a" ${INK}/>
+    <path d="M18.6 21.5h6.8M19.9 25.5h4.2M17.8 19.5l5.6 10M26.2 19.5l-5.6 10" fill="none" stroke="#2a2622" stroke-width="1" opacity=".45"/>
+    <path d="M15 17.6c-.6-2.6 1.2-4 3-4.2-.2-2.6 1.6-4 3.6-4.2.4-1.8 1.4-3.2 2.6-3.6-.2 1.6.6 2.6 1.4 3.4 1.8.6 2.6 2.2 2.2 4.2 1.8.6 2.6 2.4 1.8 4.4z" fill="#f4ead2" ${INK}/>
+    <path d="M18.4 13.6c2.4.8 5 .8 7.4 0M21.6 9.4c1.2.5 2.6.5 3.8-.2" fill="none" stroke="#2a2622" stroke-width="1" opacity=".5" stroke-linecap="round"/>
+    <path d="M36 12h6.5l-1.2 21h-4.1z" fill="#cbd2d3" ${INK}/><path d="M35 33.5h8.5" stroke="#2a2622" stroke-width="1.5" stroke-linecap="round"/><path d="M39.5 4v20" stroke="#2a2622" stroke-width="1.6" stroke-linecap="round"/>`,
 };
 const tabArt = (page: string) => `<svg class="tab-art" viewBox="0 0 48 36" aria-hidden="true">${TAB_ART[page] ?? ""}</svg>`;
 
@@ -212,6 +211,8 @@ const ICON_PATH: Record<string, string> = {
   fries: `<path class="st" d="M4 5.5 3.4 1.6h1.2L5.4 5zM6.4 5 6.2.8h1.2L7.6 5zM9 5l.5-3.9h1.2L10.2 5.4zM11.4 5.5l1-3.2h1.1l-.9 3.6z"/><path d="M2.6 4.6h10.8l-1.3 6.6H3.9z"/>`,
   drink: `<path d="M3.2 2.6h9.6l-1.2 8.9H4.4z"/><rect class="lid" x="2.4" y="1" width="11.2" height="1.8" rx=".9"/>`,
   curds: `<rect x="2" y="5" width="4.6" height="4.6" rx="1"/><rect x="7.2" y="3" width="4.6" height="4.6" rx="1"/><rect x="9" y="7" width="4.6" height="4.2" rx="1"/>`,
+  cone: `<path class="waf" d="M4.4 6.4h7.2L8 11.6z"/><path d="M3.8 6.6c-.3-1.4.6-2.2 1.6-2.3C5.4 2.9 6.6 1.6 8 1.2c1.4.4 2.6 1.7 2.6 3.1 1 .1 1.9.9 1.6 2.3z"/>`,
+  shake: `<path class="lid" d="M3.4 3.4h9.2l-1.3 8.1H4.7z"/><path d="M3.8 6h8.4l-.5 3H4.3z"/><path d="M3 3.4c0-1.6 2.2-2.4 5-2.4s5 .8 5 2.4z"/><path class="st" d="M9.6 1.4 11 .2"/>`,
   gravy: `<path d="M1.5 6.5c2-1.4 3.6-.4 5-1.6 1.6-1.4 3.6-1 5.2.2 1.3 1 2.3.8 2.8.6v2.6c-1.6 1.6-4.6 2.3-7.5 2.3-2.8 0-4.6-.8-5.5-1.8z"/>`,
 };
 
@@ -267,6 +268,7 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
       const state: RowState = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy ? "done" : "wrong";
       rows.push({ icon: "fries", color: "#f3d36b", label: `<i class="sz">${order.friesSize}</i>Fries`, tail: "", state, mod: false, next: false });
     }
+    if (order.dessert) rows.push(dessertRow(order.dessert, plate.dessert));
     if (order.drink) {
       const iceOk = order.ice == null || !!d?.ice === order.ice;
       const state: RowState = !d ? "" : d.flavor !== order.drink || d.size !== order.drinkSize || !iceOk ? "wrong" : d.lid && d.straw ? "done" : "";
@@ -345,6 +347,12 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
   return rows;
 }
 
+/** A cone or shake: its flavour and kind, ticked once one of them is on the tray (red if it's the wrong one). */
+function dessertRow(want: DessertOrder, got: Dessert | null | undefined): TicketRow {
+  const state: RowState = !got ? "" : got.kind === want.kind && got.flavor === want.flavor ? "done" : "wrong";
+  return { icon: want.kind, color: FLAVOR_COLOR[want.flavor], label: `${FLAVOR_LABEL[want.flavor]} ${want.kind === "cone" ? "Cone" : "Shake"}`, tail: "", state, mod: false, next: false };
+}
+
 /** "- Ketchup": a leave-off, where it would have gone. Crossed off once the layer above it is on. */
 function removedRow(kind: Order["layers"][number]["kind"], above: RowState): TicketRow {
   const icon = kind === "bun" ? "bunTop" : kind;
@@ -375,6 +383,10 @@ function sideRows(order: Order, plate: Plate): string {
       `<div class="sg">${section("drink", DRINK_COLOR[order.drink])}<div class="sd ${state}"><span class="sl"><i class="sz">${order.drinkSize}</i><span class="dn">${DRINK_LABEL[order.drink]}</span></span>${ice ? `<span class="sm">${ice}</span>` : ""}</div></div>`,
     );
   }
+  if (order.dessert && order.layers.length) {
+    const r = dessertRow(order.dessert, plate.dessert);
+    out.push(`<div class="sg">${section(order.dessert.kind, FLAVOR_COLOR[order.dessert.flavor])}<div class="sd ${r.state}"><span class="sl"><span class="dn">${r.label}</span></span></div></div>`);
+  }
   return out.join("");
 }
 
@@ -389,7 +401,7 @@ function pattyPills(order: Order): string {
 /** "+2" for each side ordered with the main (fries, drink), "*" when the order changes the menu recipe. */
 function nameMarks(order: Order): string {
   // Sides with a burger; with no burger they're the order itself.
-  const extras = order.layers.length ? (order.fries ? 1 : 0) + (order.drink ? 1 : 0) : order.poutine && order.drink ? 1 : 0;
+  const extras = order.layers.length ? (order.fries ? 1 : 0) + (order.drink ? 1 : 0) + (order.dessert ? 1 : 0) : order.poutine && order.drink ? 1 : 0;
   return `${order.mods.length ? `<span class="ast">*</span>` : ""}${extras ? `<span class="plus">+${extras}</span>` : ""}`;
 }
 

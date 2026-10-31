@@ -6,6 +6,7 @@
 import { CROWD } from "../game/business";
 import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "../game/menu";
 import { HOLD_GRACE } from "../game/scoring";
+import { DESSERT_PRICE } from "../game/dessert";
 import type { Recipe } from "../game/stops";
 import { COUNTED, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, STANDARD_COUNT, type Kind, type Size } from "../game/types";
 import { icon } from "../ui/icons";
@@ -87,9 +88,9 @@ function sections(): Sec[] {
         <li>${icon("arrow-up")}<b>Swipe up</b><span>to serve</span></li>
       </ol>
       <div class="hw-tabs" aria-hidden="true">
-        <span>${icon("drink")}Drinks</span><span class="on">${icon("grill")}Grill</span><span>${icon("fryer")}Fryer</span><span>${icon("box")}Supplies</span>
+        <span>${icon("drink")}Drinks</span><span class="on">${icon("grill")}Grill</span><span>${icon("fryer")}Fryer</span><span>${icon("ice-cream")}Cold bar</span>
       </div>
-      <p class="hw-cap">${icon("swap")}Tap a counter in the bottom bar, or swipe along the bar to move between them. The fryer is wide: tap its tab again for the other end.</p>`,
+      <p class="hw-cap">${icon("swap")}Tap a counter in the bottom bar, or swipe along the bar to move between them.</p>`,
       points: [
         "<b>Customers and trays stay put</b> while you switch counters, so you never lose an order.",
         "Most things are a <b>drag</b>: from a bin, the grill or a counter up to a tray.",
@@ -253,22 +254,25 @@ function sections(): Sec[] {
         "Add ice from the ice bin unless the receipt says <b>No ice</b>.",
         "<b>Hold</b> the drink's button on top of the fountain to pour. A bar on the left shows the level: let go at <b>Perfect</b>. Overflowing leaves a spill: <b>wipe it</b> before that nozzle takes another cup.",
         "Snap on a <b>lid of the cup's size</b>, add a <b>straw</b>, then drag the drink up to the tray.",
+        "When a stack of cups (or the fryer's cartons) runs out, a fresh <b>sleeve</b> stands in its place: <b>tap it twice</b> to tear it open.",
       ],
     },
     {
-      id: "supplies",
-      chip: "Supplies",
-      icon: "box",
-      title: "Supplies",
-      lede: "The fourth counter, for when a stack of cups or cartons runs out.",
+      id: "coldbar",
+      chip: "Cold bar",
+      icon: "ice-cream",
+      title: "Cold bar",
+      lede: "Soft serve in a cone, or blended into a shake. Most people come back for one on its own.",
       fig: `<div class="hw-sup">
-        <span class="sleeve">${icon("box")}<b>Sleeve</b></span>${arrow}
-        <span class="taps"><i class="tapfx" aria-hidden="true"></i><b>Tap, tap</b><small>to tear it open</small></span>${arrow}
-        <span class="stack">${icon("cup-stack")}<b>Stack refilled</b></span>
+        <span>${icon("ice-cream")}<b>Cone or tin</b><small>under a nozzle</small></span>${arrow}
+        <span class="taps"><i class="tapfx" aria-hidden="true"></i><b>Hold + circle</b><small>one loop, one ring</small></span>${arrow}
+        <span class="stack">${icon("tray")}<b>To the tray</b><small>it melts there</small></span>
       </div>`,
       points: [
-        "The shelf has cups down the left and paper boats down the right. Grab a sleeve, hold it over the Drinks or Fryer tab, and tear it open on the empty stack of the same size.",
-        "Whatever's left <b>carries over</b> to the next day, so restock in a quiet moment, not mid-rush.",
+        "Take a <b>cone</b> or a steel <b>shake tin</b> from the front and stand it under a nozzle: <b>vanilla</b> on the left, the <b>region's flavour</b> on the right.",
+        "<b>Press the handle</b> above it and, still holding, <b>circle your finger</b> round the cone. Each loop lays a ring: <b>three</b> is a perfect cone. Wander off centre and it leans.",
+        "<b>Shakes:</b> two or three rings in a tin, then hang it on the <b>mixer</b> and <b>hold</b> the mixer. The bar on the left shows the blend: let go in the band. Drag the tin to the tray and it's poured into a cup.",
+        `Soft serve <b>melts</b> on the tray, so make it last, just before you serve. A cone is ${price(DESSERT_PRICE.cone)}, a shake ${price(DESSERT_PRICE.shake)}.`,
       ],
     },
     {

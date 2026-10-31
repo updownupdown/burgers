@@ -234,7 +234,7 @@ describe("makeOrder", () => {
         continue;
       }
       if (!o.layers.length) {
-        expect(o.fries || !!o.drink).toBe(true);
+        expect(o.fries || !!o.drink || !!o.dessert).toBe(true);
         continue;
       }
       for (const l of o.layers) if (l.kind !== "ketchup" && l.kind !== "mustard") expect(stop.pantry).toContain(l.kind);
@@ -464,7 +464,7 @@ describe("drinks-only and fries-only customers", () => {
 
   it("turn up rarely once the shift is going, never in the first orders", () => {
     const rng = seededRng(11);
-    const sidesOnly = (o: Order) => !o.layers.length && !o.poutine;
+    const sidesOnly = (o: Order) => !o.layers.length && !o.poutine && !o.dessert;
     const early = Array.from({ length: 200 }, (_, i) => makeOrder(i, rng, 0.1, STOPS[0]));
     expect(early.some(sidesOnly)).toBe(false);
     const later = Array.from({ length: 1000 }, (_, i) => makeOrder(i, rng, 0.6, STOPS[0])).filter(sidesOnly);

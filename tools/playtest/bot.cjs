@@ -1,6 +1,7 @@
 // The repo's competent-player bot (tools/playtest/bot.cjs), moved onto the window-line layout:
 // targets come from the counter's hit proxies, sauce is lifted / drawn / put back, cartons are
-// carried across the fryer's two stops with the edge carry, sleeves are sized.
+// carried across the fryer's two stops with the edge carry, sleeves are torn open in place,
+// cones and shakes are swirled at the Cold bar.
 const path = require('path');
 const { open, gesture, line, hold, step, state, out, enterShift } = require('./lib.cjs');
 const OUT = out;
@@ -174,19 +175,12 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
         for (let n = l.count || 1; n > 0; n--) await act(line(bx, by, px, py, 10));
       }
     }
-    // An empty cup or carton from its stack; fetch and unwrap a sleeve of that size when it's out.
-    // `deliver(from)` carries it from the stack to where it goes.
+    // An empty cup or carton from its stack; when it's out, a fresh sleeve stands in its place:
+    // tap it twice to tear it open. `deliver(from)` carries it from the stack to where it goes.
     const takeEmpty = async (kind, size, deliver) => {
       const si = await ev(([k, z]) => window.__bv.counter.stacks.findIndex(s => s.kind === k && s.size === z), [kind, size]);
-      let s = await hp('stack', { idx: si });
-      if (!(await ev((i) => window.__bv.counter.stacks[i].count, si))) {
-        const back = await ev(() => window.__bv.counter.page);
-        const backStop = await ev(() => window.__bv.counter.stop);
-        await page(3);
-        const a = await hp('supplies', { kind, size });
-        const tab = await ev((n) => { const r = document.querySelectorAll('.tab')[n].getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }, back);
-        await carryVia(line(a[0], a[1], tab[0], tab[1], 10), 480, async () => { if ((await ev(() => window.__bv.counter.stop)) !== backStop) { await ev((s) => window.__bv.goToStop(s), backStop); await step(p, 0.6); } return hp('stack', { idx: si }); });
-        s = await hp('stack', { idx: si });
+      const s = await hp('stack', { idx: si });
+      if (await ev((i) => window.__bv.counter.stacks[i].sleeve, si)) {
         await tap(s); await tap(s);
         refills++;
       }
@@ -254,6 +248,41 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       if (!d || !d.lid || !d.straw) console.log('DRINK NOT DRESSED', d && { lid: d.lid, straw: d.straw, fill: d.fill });
       await act(line(c[0], c[1], px, py, 12));
       await page(1);
+    }
+    // 6. Dessert, last, since it melts on the tray: a cone or tin under the nozzle with its
+    // flavour, press the handle and circle round it, then (a shake) the mixer, then up to the tray.
+    if (order.dessert) {
+      await page(3);
+      const d = order.dessert;
+      const side = await ev((f) => window.__bv.counter.flavors.indexOf(f), d.flavor);
+      const from = await hp(d.kind === 'cone' ? 'cones' : 'tins');
+      const spot = await hp('coldSpot', { idx: side });
+      await act(line(from[0], from[1], spot[0], spot[1], 12));
+      const top = () => ev((i) => { const t = window.__bv.counter.spotTop(i); return window.__bv.project('counter', t.x, t.y, t.z); }, side);
+      const h = await hp('handle', { idx: side });
+      await fire('pointerdown', ...h);
+      let c = await top(), at = h;
+      const loops = d.kind === 'cone' ? 3.1 : 2.6;
+      for (let k = 0; k <= 48 * loops; k++) {
+        if (k % 8 === 0) c = await top();
+        const a = -Math.PI / 2 + (k / 48) * Math.PI * 2;
+        at = [c[0] + Math.cos(a) * 40, c[1] + Math.sin(a) * 32];
+        await p.waitForTimeout(5);
+        await fire('pointermove', ...at);
+      }
+      await fire('pointerup', ...at);
+      await step(p, 0.2);
+      let takeFrom = spot;
+      if (d.kind === 'shake') {
+        const m = await hp('mixer');
+        await act(line(spot[0], spot[1], m[0], m[1], 12));
+        await hold(p, m[0], m[1], 2300);
+        takeFrom = m;
+      }
+      await act(line(takeFrom[0], takeFrom[1], px, py, 12));
+      const got = await ev((i) => window.__bv.game.slots[i].plate.dessert, slot);
+      if (!got) console.log('DESSERT NOT ON TRAY');
+      else if (got.kind !== d.kind || got.flavor !== d.flavor) console.log('WRONG DESSERT', JSON.stringify(got));
     }
     const before = await state(p);
     const servePlate = async () => { const [sx3, sy3] = await plate(slot); await gesture(p, line(sx3, sy3, sx3, sy3 - 120, 8), 16); await step(p, 0.3); };

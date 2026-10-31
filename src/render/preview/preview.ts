@@ -6,6 +6,8 @@ import { toon } from "../materials";
 import { makeColdRail, makeDrinkTower, makeFountain, makeFryBasket, makeFryer, makeGriddle, makeLidStrawCaddy, makePackPad, makePrepUnit, makeSauceBottle, makeSauceCaddy, makeTrashChute, makeWarmShelf, makeWireRack, FRY_BASKET } from "../machines";
 import { makeCup, makeFries, makeFryPile, makeCartonStack } from "../food";
 import { SCALE } from "../units";
+import { counterTop, wallPanels } from "../wear";
+import { makeKitchenTimer, makePaperRoll, makeTicketRail, makeTowel, makeUtensilCrock } from "../props";
 
 /*
  * Dev-only page for looking at models in the game's camera without playing a shift:
@@ -56,7 +58,7 @@ function food(p: Piece, x: number, y: number, z: number, role: "top" | "bottom" 
 
 const SHOWS: Record<string, () => void> = {
   grill() {
-    counterPatch(14, 5.4);
+    if (params.get("show") !== "kit") counterPatch(14, 5.4);
     const prep = makePrepUnit({ kinds: ["bun", "patty", "bacon", "egg", "cheese", "lettuce", "tomato", "onion", null] });
     const pf = prep.userData.footprint;
     at(prep, -4.0 + pf.w / 2, 0, 2.7 - 0.3 - pf.d / 2);
@@ -189,6 +191,26 @@ const SHOWS: Record<string, () => void> = {
       c.scale.setScalar(SCALE.cup);
       at(c, 1.2 + i * 1.1, 0, -1.8);
     });
+  },
+  kit() {
+    // The grill page with light wear and the working kit, all off the tap targets.
+    at(counterTop(14, 5.4), 0, 0, 0);
+    at(wallPanels(14, 6), 0, 0, -2.7);
+    SHOWS.grill();
+    at(makeTicketRail(5), -0.6, 3.0, -2.7);
+    at(makeKitchenTimer(), 2.6, 3.1, -2.7);
+    at(makePaperRoll(), -3.0, 4.0, -2.7);
+    at(makeTowel(), -3.6, 0, 2.7);
+    at(makeUtensilCrock(), 3.7, 0, -2.25);
+  },
+  props() {
+    at(counterTop(8, 3), 0, 0, 0);
+    at(wallPanels(8, 5), 0, 0, -1.5);
+    at(makeTicketRail(3), -1, 2.6, -1.5);
+    at(makeKitchenTimer(), 1.4, 2.4, -1.5);
+    at(makePaperRoll(), 2.4, 1.4, -1.5);
+    at(makeTowel(), -1.6, 0, 1.5);
+    at(makeUtensilCrock(), 0.6, 0, 0);
   },
   rail() {
     counterPatch(14, 6);

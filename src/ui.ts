@@ -11,7 +11,6 @@ import { SLOT_COLORS } from "./scenes/tray";
 import { buildLabel } from "./update";
 import { icon } from "./ui/icons";
 
-const MENU_SVG = `<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="2.4" rx="1.2" fill="currentColor"/><rect x="3" y="9" width="14" height="2.4" rx="1.2" fill="currentColor"/><rect x="3" y="14" width="14" height="2.4" rx="1.2" fill="currentColor"/></svg>`;
 
 
 const starsText = (n: number) => `${"★".repeat(n)}${"☆".repeat(3 - n)}`;
@@ -92,7 +91,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     <span class="chip" data-r="timer">3:00</span>
     <span class="chip money" data-r="money">$0</span>
     <span class="spacer"></span>
-    <button class="icon-btn" data-r="menuBtn" aria-label="Menu">${MENU_SVG}</button>
+    <button class="icon-btn" data-r="menuBtn" aria-label="Menu">${icon("menu")}</button>
   </div>
   <div class="rail" data-r="rail"></div>
   ${[0, 1, 2].map((i) => `<div class="ticket" data-r="ticket" data-slot="${i}" style="--slot:${SLOT_COLORS[i]}" hidden></div>`).join("")}

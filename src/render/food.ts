@@ -387,11 +387,10 @@ function eggWhiteGeo(seed: number): THREE.BufferGeometry {
 /**
  * One piece of a sliced topping as parts, in ingredient units before TOPPING_BOOST: chunky
  * silhouettes made to be counted at phone size, one strong tell each. `red` picks the ripe
- * jalapeño. The bins' heaps use these too.
+ * jalapeño; `ink` is the outline width after any later scale. The bins' heaps use these too.
  */
-export function vegParts(kind: Kind, red = false): Parts {
+export function vegParts(kind: Kind, red = false, ink = INK_W * 1.3): Parts {
   const p = new Parts();
-  const ink = INK_W * 1.3;
   switch (kind) {
     case "lettuce": {
       // Shredded iceberg: a pale mound with wide curled shreds on top.
@@ -694,7 +693,7 @@ export function stackHeight(piece: StackPiece, role: BunRole): number {
 
 // Fries and paper boats live in sides.ts, cups in models/drinks.ts; re-exported so existing imports keep working.
 export { CARTON_NEST, CARTON_SIZE, CURD, curdLumps, friesToppings, GRAVY, makeCarton, makeCartonStack, makeFries, makeFryPile, type FriesObject } from "./sides";
-export { CUP_SCALE, makeCup, type CupObject } from "./models/drinks";
+export { CUP_DIMS, CUP_SCALE, cupSurfaceY, makeCup, type CupObject } from "./models/drinks";
 
 export function bottle(color: string, label: string): THREE.Group {
   const g = new THREE.Group();

@@ -212,6 +212,19 @@ const SHOWS: Record<string, () => void> = {
     at(makeTowel(), -1.6, 0, 1.5);
     at(makeUtensilCrock(), 0.6, 0, 0);
   },
+  cups() {
+    counterPatch(14, 6);
+    (["S", "M", "L"] as const).forEach((sz, i) => {
+      for (const lid of [false, true]) {
+        const c = makeCup((["cola", "pink", "tea"] as const)[i], lid, sz);
+        c.userData.setFill(0.9);
+        c.userData.setIce(true);
+        c.userData.setStraw(true);
+        c.scale.setScalar(SCALE.cup);
+        at(c, -1.4 + i * 1.4, 0, lid ? 0.8 : -0.6);
+      }
+    });
+  },
   rail() {
     counterPatch(14, 6);
     at(makeColdRail({ cols: 5, rows: 2, kinds: ["bun", "patty", "bacon", "egg", "cheese", "lettuce", "tomato", "onion", "pickle"] }), 0, 0, 0);

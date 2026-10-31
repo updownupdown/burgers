@@ -105,9 +105,9 @@ function tops(size: Size): { lid: Baked; straw: Baked } {
   // The straw leans back from the lid's hole and bends over at the top, so it reads from above.
   const straw = new Parts();
   const sp = new Parts();
-  sp.add(new THREE.CylinderGeometry(0.04, 0.04, 0.95, 8), STRAW_RED, { p: [0, 0.475, 0], ink: 0.014 });
-  sp.add(new THREE.CylinderGeometry(0.045, 0.045, 0.07, 8), "#fbe9e4", { p: [0, 0.72, 0], ink: false });
-  sp.add(new THREE.CylinderGeometry(0.04, 0.04, 0.3, 8), STRAW_RED, { p: [0.12, 1.03, 0], r: [0, 0, -0.95], ink: 0.014 });
+  sp.add(new THREE.CylinderGeometry(0.05, 0.05, 0.95, 8), STRAW_RED, { p: [0, 0.475, 0], ink: 0.018 });
+  sp.add(new THREE.CylinderGeometry(0.056, 0.056, 0.07, 8), "#fbe9e4", { p: [0, 0.72, 0], ink: false });
+  sp.add(new THREE.CylinderGeometry(0.05, 0.05, 0.34, 8), STRAW_RED, { p: [0.13, 1.04, 0], r: [0, 0, -0.95], ink: 0.018 });
   straw.addParts(sp, { p: [rT * 0.3, H - 0.2, 0.02], r: [0.1, 0, -0.14] });
   TOPS.set(size, (t = { lid: bakeShared(lid), straw: bakeShared(straw) }));
   return t;
@@ -158,13 +158,15 @@ export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"):
   g.add(top, straw);
 
   let fill = 0;
+  let iceOn = false;
   const place = () => {
     liquid.visible = fill > 0.01;
     if (liquid.visible) liquid.geometry = liquidGeo(size, fill);
     // Ice floats at the surface, or sits on the floor of an empty cup.
     const y = fill > 0.01 ? cupSurfaceY(size, fill) - 0.04 : FLOOR_Y + 0.09;
     const r = lerp(rB, rT, y / H) - 0.1;
-    ice.position.y = Math.min(H - 0.12, y);
+    // ...but never through the lid.
+    ice.position.y = Math.min(H - 0.17, y);
     ice.scale.set(r, 1, r);
     for (const c of ice.children) c.scale.set(1 / r, 1, 1 / r);
   };
@@ -174,11 +176,14 @@ export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"):
       fill = f;
       place();
     },
+    // The lid is opaque, so ice under it is hidden rather than left to poke through.
     setIce: (on) => {
-      ice.visible = on;
+      iceOn = on;
+      ice.visible = iceOn && !top.visible;
     },
     setLid: (on) => {
       top.visible = on;
+      ice.visible = iceOn && !on;
     },
     setStraw: (on) => {
       straw.visible = on;

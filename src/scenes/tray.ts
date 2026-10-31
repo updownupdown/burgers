@@ -3,6 +3,7 @@ import type { Piece, Plate } from "../game/types";
 import { dressCup } from "../render/cup";
 import { makeCup, makeFood, makeFries, stackBases, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
+import { relScale } from "../render/units";
 
 /** Plain paper plates; only the one being worked on gets a ring, in the accent colour. */
 const PLATE_PAPER = "#f7f4ec";
@@ -23,6 +24,9 @@ interface StackEntry {
   squashV: number;
   offX: number;
   offZ: number;
+  /** The readable stack: each layer turned a little and set back so the rims below show. */
+  yaw: number;
+  back: number;
   onLand?: () => void;
 }
 
@@ -87,7 +91,7 @@ export class PlateView {
       this.burger.remove(e.obj);
       disposeObject(e.obj);
     }
-    const { bases } = stackBases(want.map((w) => w.l.piece));
+    const { bases, yaw, back } = stackBases(want.map((w) => w.l.piece));
     for (let i = same; i < want.length; i++) {
       const y = bases[i];
       const { l, role } = want[i];
@@ -106,10 +110,17 @@ export class PlateView {
         squashV: 0,
         offX: l.offX,
         offZ: l.offZ,
+        yaw: 0,
+        back: 0,
         onLand,
       };
       this.entries.push(e);
     }
+    this.entries.forEach((e, i) => {
+      e.yaw = yaw[i];
+      e.back = back[i];
+      e.obj.rotation.y = e.yaw;
+    });
     // Sauce layers grow while being drawn.
     p.layers.forEach((l, i) => {
       if (l.piece.stroke) this.entries[i]?.obj.userData.update(l.piece);
@@ -125,8 +136,8 @@ export class PlateView {
       if (p.fries) {
         this.fries = makeFries(true, p.fries.size, p.fries.fill, p.fries);
         this.fries.userData.setCook(p.fries.cook);
-        this.fries.scale.setScalar(0.62 * this.fries.userData.sizeScale);
-        this.fries.position.set(-1.0, 0.1, -0.45);
+        this.fries.scale.setScalar(relScale("fries") * this.fries.userData.sizeScale);
+        this.fries.position.set(-0.6, 0.1, -0.85);
         this.group.add(this.fries);
       }
       this.friesKey = fk;
@@ -142,8 +153,8 @@ export class PlateView {
         this.cup = makeCup(p.drink.flavor, !!p.drink.lid, p.drink.size);
         this.cup.userData.setFill(p.drink.fill);
         dressCup(this.cup, p.drink);
-        this.cup.scale.setScalar(0.62);
-        this.cup.position.set(1.0, 0.1, -0.45);
+        this.cup.scale.setScalar(relScale("cup"));
+        this.cup.position.set(0.75, 0.1, -0.9);
         this.group.add(this.cup);
       }
       this.cupKey = ck;
@@ -183,7 +194,7 @@ export class PlateView {
       const h = e.baseY + 0.15;
       const sq = THREE.MathUtils.clamp(e.squash * 0.05, -0.3, 0.3);
       e.obj.scale.set(1 + sq * 0.5, 1 - sq, 1 + sq * 0.5);
-      e.obj.position.set(e.offX + this.wobble * 0.05 * h * h, e.y, e.offZ);
+      e.obj.position.set(e.offX + this.wobble * 0.05 * h * h, e.y, e.offZ - e.back);
       e.obj.rotation.z = -this.wobble * 0.04 * h;
     }
   }

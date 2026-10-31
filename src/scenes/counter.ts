@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { FRIES_PERFECT, FRY_RATE, GRILL_RATE, MELT_RATE } from "../game/cooking";
 import type { DrinkId, FriesSize, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
 import { CUP_SPEED, DRINKS } from "../game/types";
+import { cupSurfaceY } from "../render/models/drinks";
+import { counterTop, wallPanels } from "../render/wear";
+import { makePaperRoll, makeTowel, makeUtensilCrock } from "../render/props";
 import { makeCarton, makeCartonStack, makeCup, makeFood, makeFries, makeFryPile, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { dressCup } from "../render/cup";
 import { FREEZER, makeCurdHandful, makeCurdTub, makeFreezer, makeGravyPot, makeLadle, makeShaker } from "../render/fryer";
@@ -215,8 +218,6 @@ export interface Tap {
   puddle: number;
   puddleObj: THREE.Mesh;
   x: number;
-  /** Height of the cup under this nozzle, for where the pour lands. */
-  cupH: number;
   /** Ice, lid and straw on the cup under this nozzle. */
   ice: boolean;
   lid: boolean;
@@ -319,12 +320,12 @@ export class CounterView {
     this.light = applyKitchenLight(this.scene, { shadowBox: { left: -9, right: 9, top: 7, bottom: -7 } });
     this.sun = this.light.sun;
 
-    const counter = new THREE.Mesh(new THREE.BoxGeometry(90, 0.4, 10.6), toon("#efe6d8"));
-    counter.position.set(7, -0.2, -0.7);
-    counter.receiveShadow = true;
+    // The window line's counter top and the steel wall panels under the window.
+    const counter = counterTop(90, 10.6);
+    counter.position.set(7, 0, -0.7);
     this.scene.add(counter);
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(90, 6, 0.4), toon("#e9dfcf"));
-    wall.position.set(7, 2.6, -3.6);
+    const wall = wallPanels(90, 6);
+    wall.position.set(7, -0.4, -3.4);
     this.scene.add(wall);
     // A steel backsplash strip where the counter meets the truck wall.
     const splash = new THREE.Mesh(new THREE.BoxGeometry(90, 0.5, 0.1), toon("#b9d6a2"));
@@ -373,6 +374,10 @@ export class CounterView {
     const caddy = makeSauceCaddy();
     caddy.position.copy(at(CADDY.x, 0, CADDY.z));
     this.scene.add(caddy);
+    // Working kit, clear of every target: a utensil crock in the free front corner.
+    const crock = makeUtensilCrock();
+    crock.position.copy(at(-3.3, 0, 2.5));
+    this.scene.add(crock);
     this.caddy = caddy;
     this.bottles = caddy.userData.bottles;
     for (const k of ["ketchup", "mustard"] as SauceKind[]) {
@@ -431,6 +436,10 @@ export class CounterView {
     const fryer = makeFryer();
     fryer.position.copy(at(F.fryer.x, 0, F.fryer.z));
     this.scene.add(fryer);
+    // A paper towel roll on the wall over the toppings, out of the way of the baskets.
+    const roll = makePaperRoll();
+    roll.position.copy(at(3.3, 2.6, -3.4));
+    this.scene.add(roll);
     this.fryer = fryer;
     const sp = fryer.userData.spots;
     sp.wells.forEach((w, i) => {
@@ -466,7 +475,7 @@ export class CounterView {
       puddleObj.position.set(x, CUP_Y + 0.02, CUP_Z + 0.1);
       puddleObj.visible = false;
       this.scene.add(puddleObj);
-      this.taps.push({ flavor, fill: 0, pouring: false, cup: null, size: null, stream, spill: 0, puddle: 0, puddleObj, x, cupH: 1, ice: false, lid: false, straw: false });
+      this.taps.push({ flavor, fill: 0, pouring: false, cup: null, size: null, stream, spill: 0, puddle: 0, puddleObj, x, ice: false, lid: false, straw: false });
       // The big button on top pours; the cup on the drip tray is picked up.
       const b = sp.buttons[i];
       this.proxy(new THREE.BoxGeometry(TAP_GAP - 0.04, 1.0, 1.5), at(FOUNTAIN.x + b.x, b.y, FOUNTAIN.z + b.z + 0.3), { type: "tap", idx: i });
@@ -499,11 +508,12 @@ export class CounterView {
    */
   private buildSupplies(): void {
     // Its own counter top and wall, facing the window line across the aisle.
-    const top = new THREE.Mesh(new THREE.BoxGeometry(20, 0.4, 7.6), toon("#efe6d8"));
-    top.position.copy(this.world(3, 0, -0.2, 0));
-    top.receiveShadow = true;
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(20, 6, 0.4), toon("#e9dfcf"));
-    wall.position.copy(this.world(3, 0, 2.6, -3.8));
+    const top = counterTop(20, 7.6);
+    top.position.copy(this.world(3, 0, 0, 0));
+    top.rotation.y = Math.PI;
+    const wall = wallPanels(20, 6);
+    wall.position.copy(this.world(3, 0, -0.4, -3.6));
+    wall.rotation.y = Math.PI;
     const splash = new THREE.Mesh(new THREE.BoxGeometry(20, 0.5, 0.1), toon("#b9d6a2"));
     splash.position.copy(this.world(3, 0, 0.25, -3.55));
     this.scene.add(top, wall, splash);
@@ -512,6 +522,11 @@ export class CounterView {
     rack.position.copy(this.world(3, RACK.x, 0, RACK.z));
     rack.rotation.y = Math.PI;
     this.scene.add(rack);
+    // A towel over the front edge of the supplies counter.
+    const towel = makeTowel();
+    towel.position.copy(this.world(3, 2.6, 0, 3.8));
+    towel.rotation.y = Math.PI;
+    this.scene.add(towel);
     const { bays, bayW } = rack.userData.spots;
     bays.forEach((b, i) => {
       rack.userData.setBay(i, 2);
@@ -630,7 +645,6 @@ export class CounterView {
     cup.scale.setScalar(CUP_AT_TAP);
     cup.position.set(t.x, CUP_Y, CUP_Z);
     this.scene.add(cup);
-    t.cupH = new THREE.Box3().setFromObject(cup).getSize(new THREE.Vector3()).y;
     t.cup = cup;
     t.size = size;
     t.fill = 0;
@@ -713,9 +727,10 @@ export class CounterView {
     return this.taps.findIndex((t) => Math.abs(world.x - t.x) < TAP_GAP / 2 && world.z > CUP_Z - 0.6 && world.z < CUP_Z + 1.4);
   }
 
-  /** Stack under a world point, or -1. */
-  overStack(world: THREE.Vector3): number {
-    return this.stacks.findIndex((s) => Math.hypot(world.x - s.x, world.z - s.z) < 0.7);
+  /** Stack under the pointer, or -1. Picked by its hit box, since the tower's tubes stand well above the counter. */
+  overStack(ndc: THREE.Vector2): number {
+    const h = this.hit(ndc);
+    return h?.type === "stack" ? h.idx : -1;
   }
 
   /** World position under each drink cup, for the HTML flavour labels; alternate rows so five fit. */
@@ -1160,7 +1175,7 @@ export class CounterView {
       t.cup?.userData.setFill(t.fill);
       t.stream.visible = t.pouring && !!t.cup;
       if (t.stream.visible) {
-        const topY = CUP_Y + t.cupH * (0.07 + Math.min(1, t.fill) * 0.93);
+        const topY = CUP_Y + cupSurfaceY(t.size ?? "L", Math.min(1, t.fill)) * CUP_AT_TAP;
         const h = Math.max(0.05, STREAM_TOP - topY);
         t.stream.scale.set(1, h, 1);
         t.stream.position.set(t.x, topY + h / 2, STREAM_Z);

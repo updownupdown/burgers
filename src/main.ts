@@ -693,10 +693,11 @@ let trayBottle: THREE.Object3D | null = null;
 /** A burger (or part of one) as a single object to carry around. */
 function stackVisual(layers: Layer[]): THREE.Object3D {
   const g = new THREE.Group();
-  const { bases } = stackBases(layers.map((l) => l.piece));
+  const { bases, yaw, back } = stackBases(layers.map((l) => l.piece));
   layers.forEach((l, i) => {
     const o = makeFood(l.piece, i === 0 ? "bottom" : "top");
-    o.position.set(l.offX, bases[i], l.offZ);
+    o.position.set(l.offX, bases[i], l.offZ - back[i]);
+    o.rotation.y = yaw[i];
     g.add(o);
   });
   g.scale.setScalar(SCALE.burger);
@@ -714,14 +715,14 @@ function payloadVisual(p: Payload): THREE.Object3D {
     // Straight from the freezer or the basket: loose fries, no carton yet.
     const f = makeFries(false, "L", p.amount);
     f.userData.setCook(p.cook);
-    f.scale.setScalar(1.3);
+    f.scale.setScalar(SCALE.fries);
     return f;
   }
   if (p.type === "salt" || p.type === "curds" || p.type === "gravy") return counter.fryTopMesh(p.type);
   if (p.type === "carton") {
     const f = makeFries(true, p.size, p.fill, p);
     f.userData.setCook(p.cook);
-    f.scale.setScalar(1.2 * f.userData.sizeScale);
+    f.scale.setScalar(SCALE.fries * f.userData.sizeScale);
     return f;
   }
   if (p.type === "empty") {
@@ -915,7 +916,7 @@ function finishHold(pt: Pointer): void {
     const gTop = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), GRILL_TOP);
     const hold = counter.page === HOME_PAGE ? counter.overHold(ndcIn(bands.counter, pt.x, pt.y)) : -1;
     const station = payload.type === "empty" || payload.type === "sleeve" || payload.type === "carton" || payload.type === "drink" || payload.type === "ice" || payload.type === "lid" || payload.type === "straw" || payload.type === "salt" || payload.type === "curds" || payload.type === "gravy" || (payload.type === "fries" && payload.basket !== null);
-    if (station) done = dropAtStation(payload, g);
+    if (station) done = dropAtStation(payload, g, ndcIn(bands.counter, pt.x, pt.y));
     if (!done && counter.overTrash(g)) {
       // Every counter has a trash slot along its front edge.
       sfx.thud();
@@ -1043,7 +1044,7 @@ function topFries(f: { salt?: boolean; curds?: boolean; gravy?: boolean }, what:
 }
 
 /** Drinks and fryer stations: cups under nozzles, cartons on packing spots, sleeves on empty stacks. */
-function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
+function dropAtStation(payload: Payload, g: THREE.Vector3, ndc: THREE.Vector2): boolean {
   if (payload.type === "salt" || payload.type === "curds" || payload.type === "gravy") {
     const pi = counter.friedPackAt(g);
     if (pi < 0) {
@@ -1109,7 +1110,7 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
     return true;
   }
   if (payload.type === "sleeve") {
-    const si = counter.overStack(g);
+    const si = counter.overStack(ndc);
     const s = counter.stacks[si];
     if (!s) return false;
     if (s.kind !== payload.kind) showHint(payload.kind === "cup" ? "Those are cups." : "Those are cartons.", 1.5);

@@ -79,6 +79,20 @@ export function toon(color: THREE.ColorRepresentation, opts: ToonOpts = {}): THR
   return m;
 }
 
+/**
+ * A three-band toon material over a texture (canvas textures are painted in graded colours
+ * already, so the material colour stays white). Cached per texture unless `unique`.
+ */
+const mapCache = new Map<THREE.Texture, THREE.MeshToonMaterial>();
+export function texturedToon(map: THREE.Texture, opts: { unique?: boolean } = {}): THREE.MeshToonMaterial {
+  const hit = !opts.unique && mapCache.get(map);
+  if (hit) return hit;
+  const m = new THREE.MeshToonMaterial({ color: WHITE, map, gradientMap: gradient });
+  if (opts.unique) m.userData.disposable = true;
+  else mapCache.set(map, m);
+  return m;
+}
+
 /** Mark geometry that many objects share, so disposeObject leaves it alone. */
 export function shareGeometry<T extends THREE.BufferGeometry>(geo: T): T {
   geo.userData.shared = true;

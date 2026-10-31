@@ -70,10 +70,22 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
         const [kx, ky] = await ev((i) => { const v = window.__bv.counter.baskets[i].obj.position; return window.__bv.project('counter', v.x, 1.0, v.z); }, freshB);
         // One scoop per small carton's worth: S/M/L take 1/2/3.
         for (let n = { S: 1, M: 2, L: 3 }[order.friesSize]; n > 0; n--) await act(line(fx, fy, kx, ky, 10));
-        // Baskets wait up top until they're tapped down; that happens once the burger is built.
+        // Fries take about half a minute, so tap the basket down now and let them cook while
+        // the burger does; liftDone() takes them out at the perfect line.
+        await act([[kx, ky], [kx, ky]], 30);
       }
       await page(1);
     }
+    // Lift any basket that has reached the perfect line, so it waits up top without burning.
+    const liftDone = async () => {
+      const bi = await ev((perfect) => window.__bv.counter.baskets.findIndex(b => b.loaded && b.down && b.cook >= perfect), 0.7);
+      if (bi < 0) return;
+      const back = await ev(() => window.__bv.counter.page);
+      await page(2);
+      const [ux, uy] = await ev((i) => { const v = window.__bv.counter.baskets[i].obj.position; return window.__bv.project('counter', v.x, 1.0, v.z); }, bi);
+      await act([[ux, uy], [ux, uy]], 30);
+      await page(back);
+    };
     // 3. Build bottom-up.
     const [px, py] = await plate(slot);
     for (let li = 0; li < order.layers.length; li++) {
@@ -83,7 +95,8 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       const cheeseOn = async (o) => { const [cx, cy] = await bin('cheese'); await act(line(cx, cy, o.scr[0], o.scr[1], 10)); };
       if (assigned[li]) {
         // cook, flipping when the down side reaches target
-        for (let w = 0; w < 200; w++) {
+        // Up to 100s: a well-done patty on the cooler edge of the grill takes over a minute.
+        for (let w = 0; w < 400; w++) {
           if (parked.has(assigned[li])) {
             // Parked under the heat lamp: drag that spot's stack onto the plate.
             const hi = parked.get(assigned[li]); parked.delete(assigned[li]);
@@ -126,6 +139,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
             break;
           }
           await step(p, 0.25);
+          await liftDone();
         }
       } else if (l.kind === 'ketchup' || l.kind === 'mustard') {
         const [sx, sy] = await ev((k) => { const b = window.__bv.counter.bottles[k]; return window.__bv.project('counter', b.position.x, 0.8, b.position.z); }, l.kind);
@@ -191,7 +205,8 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
           await act([[bx2, by2], [bx2, by2]], 30);
           continue;
         }
-        for (let w = 0; w < 80; w++) { const c = await ev((i) => window.__bv.counter.baskets[i].cook, bi); if (c >= 0.68) break; await step(p, 0.25); }
+        // Fries take about 27s in the oil to reach the 0.68 lift point; wait up to a minute.
+        for (let w = 0; w < 240; w++) { const c = await ev((i) => window.__bv.counter.baskets[i].cook, bi); if (c >= 0.68) break; await step(p, 0.25); }
         const [bx, by] = await ev((i) => { const v = window.__bv.counter.baskets[i].obj.position; return window.__bv.project('counter', v.x, 1.0, v.z); }, bi);
         await act(line(bx, by, kx2, ky2, 10));
       }

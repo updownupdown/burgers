@@ -12,3 +12,4 @@ node tools/playtest/bot.cjs        # plays a full shift, logs each order, screen
 
 Needs Playwright with Chromium available (`require('playwright')`).
 - `STOP=1 node tools/playtest/bot.cjs` plays a given road-trip stop (0-2) with the tutorial skipped.
+- `PORT=4175 node tools/playtest/kitchen-shots.cjs [tag]` screenshots the kitchen with the longest receipts and a burger on every plate (`out/kitchen-<tag>-*.png`). `PORT` points any script at another preview port.

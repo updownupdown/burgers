@@ -5,7 +5,7 @@ import { applyMods, makeOrder, orderFromRecipe, seededRng } from "./menu";
 import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent } from "./stops";
 import { passed, upgradeChoices } from "./progress";
 import { alignLayers, payout, scorePlate } from "./scoring";
-import { FRIES_PERFECT } from "./cooking";
+import { FRIES_PERFECT, FRIES_ZONE, FRY_RATE } from "./cooking";
 import type { Kind, Layer, Order, Piece, Plate } from "./types";
 import { DONENESS_TARGET, newPiece } from "./types";
 
@@ -114,6 +114,13 @@ describe("scorePlate", () => {
     expect(scorePlate(order, plate).score).toBe(100);
     plate.drink = { flavor: "pine", fill: 0.9, size: "M" };
     expect(scorePlate(order, plate).notes).toContain("wrong drink");
+  });
+
+  it("takes about half a minute in the oil to cook fries perfectly", () => {
+    // Seconds in the oil at the base fry rate (no upgrades).
+    expect(FRIES_ZONE.done / FRY_RATE).toBeCloseTo(20, 0);
+    expect(FRIES_PERFECT / FRY_RATE).toBeCloseTo(29, 0);
+    expect(FRIES_ZONE.over / FRY_RATE).toBeCloseTo(38, 0);
   });
 
   it("scores fries by zone and by where in the zone", () => {

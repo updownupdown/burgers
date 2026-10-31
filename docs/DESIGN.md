@@ -458,3 +458,13 @@ James's build #36 notes on the other three counters and on the truck as a whole,
 - **Shake to salt.** Hold the shaker over fries in a carton (on a pad or on a tray) and shake: each change of direction is one shake, `SALT.shake` (0.1). The level bar shows the salt with the Perfect line at 0.6 and the good band 0.35 to 0.9. `Fries.salt` is now that level: none costs 15% as before, a little under costs 7% ("could use more salt"), over 0.9 costs 20% ("too salty"); it tops out at 1.2.
 - **Supplies.** A shelf of shallow steel bins on the counter: cup sleeves down the left, paper-boat sleeves down the right, small at the back to large at the front. Each bin has a die-cut **sticker** on its sloped front rail with a cup or fry-boat drawing, the word and a big size badge (`stickerTex`). The wire rack and the rag are gone.
 
+
+## 17. After build #41: the Dusk UI look
+
+James picked option C, "Dusk", from the round-3 UI study (five full looks, fonts, logos and menu structure; study in the project Library). It replaces Bistro everywhere, through the same token and class names in `src/ui/` (`tokens.css`, `components.css`).
+
+- **Palette.** Slate-blue ground (`#2a3340`) behind the map and the Closing hero, cream paper cards (`#f6f2ea`) on top. Ink is a cool near-black, the accent is coral (`#d8573a`), stars and the logo's second word are butter (`#d9a93f`), good news is pine green. Dark surfaces use the `.bv-night` tokens; `.bv-light` forces cream inside them (dock, town sheet).
+- **Type.** Young Serif for names and titles (heavier than Instrument Serif, which James found too thin), Hanken Grotesk for everything else, DM Mono for money, time and build numbers. Tracked small caps for eyebrows.
+- **Logo.** "Bun" over "Voyage" in Young Serif, Voyage in butter with a dashed coral route under it. Text only, so it scales and needs no asset.
+- **Home.** One dark dashboard card groups the morning/evening Day tile (coral), budget, popularity and rating, with Menu, Reviews and Supplies as a button row under them. Help and Settings are icon buttons by the logo. The dock and the town sheet are cream.
+- **Pause sheet.** Resume; Restart shift and Quit to map side by side; a "This shift" group with Today's menu, Pacing and Complexity; then doors to Settings and How to play. Settings is split into Play, Device and App.

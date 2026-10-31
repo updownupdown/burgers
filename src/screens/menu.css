@@ -1,5 +1,5 @@
 /*
- * Game menu, How to Play and Today's menu. Built on the Bistro kit (src/ui); everything
+ * Game menu, How to Play and Today's menu. Built on the Dusk kit (src/ui); everything
  * here is prefixed menu-, mref- (menu reference) or hw- (how to play).
  */
 /* Doneness colours: the pills on the grill and the receipts should use these same values. */
@@ -25,7 +25,7 @@
   animation: menu-fade var(--bv-mid) var(--bv-ease);
 }
 /* A second layer over the first doesn't double the dimming. */
-.menu-layer.stacked { background: rgb(31 28 25 / 0.25); backdrop-filter: none; }
+.menu-layer.stacked { background: rgb(20 26 34 / 0.25); backdrop-filter: none; }
 @keyframes menu-fade { from { opacity: 0; } }
 @keyframes menu-rise { from { transform: translateY(14px) scale(0.985); opacity: 0; } }
 
@@ -45,7 +45,7 @@
 .menu-head { flex: none; display: flex; align-items: flex-start; gap: 8px; padding: 16px 12px 10px 18px; }
 .menu-headtext { flex: 1; min-width: 0; display: grid; gap: 4px; padding-top: 2px; }
 .menu-headtext .bv-eyebrow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.menu-headtext .bv-title { font-size: 30px; }
+.menu-headtext .bv-title { font-size: 26px; }
 .menu-head .bv-btn.icon { flex: none; margin-top: -2px; }
 .menu-head .bv-btn.icon .bv-icon { font-size: 22px; }
 .menu-head .menu-back { margin-left: -6px; }
@@ -78,7 +78,7 @@
   position: sticky; top: -10px; z-index: 2;
   display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
   margin: -10px -18px 0; padding: 10px 18px 10px;
-  background: linear-gradient(var(--bv-paper) 82%, rgb(250 247 241 / 0));
+  background: linear-gradient(var(--bv-paper) 82%, rgb(246 242 234 / 0));
   touch-action: pan-x pan-y;
 }
 .menu-chips::-webkit-scrollbar { display: none; }
@@ -95,6 +95,8 @@
 .menu-general > .bv-btn-row + .menu-confirm, .menu-general > .menu-confirm + .menu-confirm { margin-top: 8px; }
 .menu-general > .menu-h { margin: 22px 0 2px; }
 .menu-general > .menu-confirm + .menu-row, .menu-general > .bv-btn-row + .menu-row, .menu-general > .menu-confirm[hidden] + .menu-row { margin-top: 8px; }
+.menu-general > .menu-doors { margin-top: 16px; }
+.menu-general > .menu-doors .bv-btn { border-color: var(--bv-rule-2); color: var(--bv-ink-2); font-size: 15px; padding: 0 10px; }
 
 .menu-row .lead, .menu-toggle .lead, .menu-field .lead { width: 28px; height: 28px; flex: none; display: grid; place-items: center; font-size: 20px; color: var(--bv-ink-2); }
 .menu-row { min-height: 52px; }
@@ -141,7 +143,7 @@
 .mref-town.locked .mref-townhead .bv-icon { color: var(--bv-mute); }
 .mref-main { flex: 1; min-width: 0; display: grid; gap: 6px; align-content: start; }
 .mref-top { display: flex; align-items: baseline; gap: 8px; }
-.mref-name { margin: 0; font-family: var(--bv-font-serif); font-weight: 400; font-size: 22px; line-height: 1.02; letter-spacing: -0.01em; flex: 1; text-wrap: balance; }
+.mref-name { margin: 0; font-family: var(--bv-font-serif); font-weight: 400; font-size: 20px; line-height: 1.02; letter-spacing: -0.01em; flex: 1; text-wrap: balance; }
 .mref-price { font-size: 16px; font-weight: 500; }
 .mref-tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .mref-tags .bv-chip { font-size: 11.5px; padding: 3px 7px; gap: 3px; }

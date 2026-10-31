@@ -396,7 +396,7 @@ export function suppliesHtml(save: Save): string {
   return `<div class="day-screen bv">
     <header class="day-top">
       <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("back")}</button>
-      <div class="where"><span class="bv-eyebrow">${sellsHere ? `${esc(here.name)} supply yard` : "Supply yards are in the big cities"}</span><b>Supplies</b></div>
+      <div class="where"><span class="bv-eyebrow">${sellsHere ? `${esc(here.name)} supply yard` : "Sold in the big cities"}</span><b>Supplies</b></div>
       <span class="bv-chip pill">${icon("coin")}$${save.bank}</span>
     </header>
     <div class="day-scroll">

@@ -107,7 +107,7 @@ describe("scorePlate", () => {
     const order: Order = { ...classic, fries: true, drink: "cola" };
     const plate = perfectPlate();
     expect(scorePlate(order, plate).notes).toEqual(["forgot the fries", "forgot the drink"]);
-    plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt: true };
+    plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt: 0.6 };
     plate.drink = { flavor: "cola", fill: 0.9, size: "M" };
     expect(scorePlate(order, plate).notes).toContain("no lid");
     plate.drink = { flavor: "cola", fill: 0.9, size: "M", lid: true, straw: true };
@@ -126,7 +126,7 @@ describe("scorePlate", () => {
   it("scores fries by zone and by where in the zone", () => {
     const q = (cook: number) => {
       const plate = perfectPlate();
-      plate.fries = { cook, size: "S", fill: 1, salt: true };
+      plate.fries = { cook, size: "S", fill: 1, salt: 0.6 };
       return scorePlate({ ...classic, fries: true }, plate).sides;
     };
     expect(q(FRIES_PERFECT)).toBe(1);
@@ -139,6 +139,18 @@ describe("scorePlate", () => {
     const r = scorePlate({ ...classic, fries: true }, plate);
     expect(r.notes).toContain("fries needed salt");
     expect(r.sides).toBeCloseTo(0.85);
+  });
+
+  it("scores the salt level: a little short, on the line, too salty", () => {
+    const salted = (salt: number) => {
+      const plate = perfectPlate();
+      plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt };
+      return scorePlate({ ...classic, fries: true }, plate);
+    };
+    expect(salted(0.6).sides).toBe(1);
+    expect(salted(0.2).notes).toContain("fries could use more salt");
+    expect(salted(1.1).notes).toContain("fries too salty");
+    expect(salted(1.1).sides).toBeLessThan(salted(0.2).sides);
   });
 
   it("scores a poutine meal on the poutine", () => {
@@ -155,7 +167,7 @@ describe("scorePlate", () => {
     const plate = perfectPlate();
     plate.layers[1].piece.cook = [0.98, 0.98];
     const before = scorePlate(classic, plate).score;
-    plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt: true };
+    plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt: 0.6 };
     const r = scorePlate(classic, plate);
     expect(r.perks).toEqual(["free fries"]);
     expect(r.score).toBeGreaterThan(before);
@@ -431,7 +443,7 @@ describe("drinks-only and fries-only customers", () => {
   const drinkOnly: Order = { ...classic, name: "Road Cola", price: 2, layers: [], fries: false, drink: "cola", drinkSize: "M", ice: null };
   const goodDrink = { flavor: "cola" as const, fill: 0.9, size: "M" as const, lid: true, straw: true };
   const friesOnly: Order = { ...classic, name: "Fries", price: 3, layers: [], fries: true, friesSize: "M", drink: null };
-  const goodFries = { cook: FRIES_PERFECT, size: "M" as const, fill: 1, salt: true };
+  const goodFries = { cook: FRIES_PERFECT, size: "M" as const, fill: 1, salt: 0.6 };
 
   it("turn up rarely once the shift is going, never in the first orders", () => {
     const rng = seededRng(11);

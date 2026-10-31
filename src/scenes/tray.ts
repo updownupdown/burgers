@@ -200,7 +200,7 @@ export class PlateView {
       if (l.piece.stroke) this.entries[i]?.obj.userData.update(l.piece);
     });
 
-    const fk = p.fries ? `f${p.fries.cook.toFixed(2)}${p.fries.size}${p.fries.fill.toFixed(2)}${+!!p.fries.salt}${+!!p.fries.curds}${+!!p.fries.gravy}` : "";
+    const fk = p.fries ? `f${p.fries.cook.toFixed(2)}${p.fries.size}${p.fries.fill.toFixed(2)}${Math.round((p.fries.salt ?? 0) * 10)}${+!!p.fries.curds}${+!!p.fries.gravy}` : "";
     if (fk !== this.friesKey) {
       if (this.fries) {
         this.group.remove(this.fries);

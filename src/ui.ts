@@ -1,6 +1,6 @@
 import type { Order, Plate } from "./game/types";
 import { collapseCounted } from "./game/scoring";
-import { DRINK_COLOR, DRINK_LABEL, DRINKS, KIND_COLOR, KIND_LABEL } from "./game/types";
+import { DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, DRINKS, KIND_COLOR, KIND_LABEL } from "./game/types";
 import { icon } from "./ui/icons";
 
 
@@ -85,7 +85,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   ${[0, 1, 2].map((i) => `<div class="ticket" data-r="ticket" data-slot="${i}" hidden></div>`).join("")}
   ${[0, 1, 2].map(() => `<div class="sentback" data-r="sentback" hidden></div>`).join("")}
   <div class="hint" data-r="hint" role="status" hidden><span data-r="hintText"></span><button class="hint-x" data-r="hintClose" aria-label="Dismiss tip">${icon("close")}</button></div>
-  ${DRINKS.map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_LABEL[d]}</div>`).join("")}
+  ${DRINKS.map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_SHORT[d]}</div>`).join("")}
   <nav class="tabs">
     ${pages.map((p, i) => `<button class="tab" data-r="tab" data-page="${i}" aria-selected="false" aria-label="${p}" title="${p}">${TAB_ART[p] ? tabArt(p) : icon("box")}<span class="dot" hidden></span></button>`).join("")}
   </nav>

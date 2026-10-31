@@ -1,108 +1,70 @@
 import * as THREE from "three";
-import { FRIES_PERFECT, FRIES_ZONE } from "../../game/cooking";
 import { bakedMesh, Parts, rng } from "../bake";
 import { faceted, shareGeometry, toon } from "../materials";
 import { STUDY } from "../units";
-import { box, C, cached, canvasTex, decal, FONT, machine, prism, rbox, sideProfile, studySpace, textDecal, topKnob } from "./kit";
+import { box, C, cached, machine, rbox, sideProfile, topKnob } from "./kit";
 
 /*
- * The twin-well fryer with a hang rail and panel (the study's fryer option b): one stainless
- * body with two wells, a sloped panel at the back carrying a long under / done / over meter per
- * basket with a white perfect line, and a rail behind each well where a lifted basket hangs
- * tilted to drain, which is what "up" means. Study units below; 5.0 x 5.5 x 4.6.
+ * The twin-well fryer, dropped into the counter: only its deck shows, a hand's width proud of
+ * the counter top, with two oil wells, a low sloped panel at the back (the fry meter for each
+ * basket is drawn over it as UI, so there's one meter, not two) and a rail behind each well
+ * where a lifted basket hangs tilted to drain, which is what "up" means. Study units below;
+ * 5.0 x 5.5, 0.5 tall (the panel 1.1).
  */
 
 const W = 5.0;
 const D = 5.5;
-/** Deck height. */
-const H = 2.6;
+/** Deck height above the counter: the cabinet and the depth of the wells are under it. */
+const H = 0.5;
 const WELL_W = 1.95;
 const WELL_D = 2.4;
 const WZ = 0.55;
 const XS = [-1.2, 1.2];
-const OIL_Y = H - 0.45;
+/** The wells show down to the counter top; the oil sits just under the deck. */
+const OIL_Y = H - 0.14;
 /** Fry basket size. */
 const BW = 1.75;
 const BD = 2.05;
 const BH = 0.9;
 /** Basket floor height while frying, and the hanging pose on the rail. */
-const DOWN_Y = H - 1.1;
-const HANG = { y: H + 0.22, dz: -0.15, tilt: -0.42 };
-/** Meter range: fries cook from 0 to this along the meter. */
-const METER_MAX = 1.5;
-const SLOPE = Math.atan2(1.0, 1.5);
+const DOWN_Y = 0.04;
+const HANG = { y: H + 0.62, dz: -0.15, tilt: -0.42 };
+/** The back panel: where it starts and ends (z) and how high its back edge stands. */
+const PANEL = { z0: -2.65, z1: -1.15, lo: 0.15, hi: 0.6 };
+const SLOPE = Math.atan2(PANEL.hi - PANEL.lo, PANEL.z1 - PANEL.z0);
 
 const body = cached(() => {
   const p = new Parts();
   const hd = (D - 0.2) / 2;
-  p.add(box(W, 0.6, D - 0.2), C.steel, { p: [0, 0.3, 0] });
   // The deck around the wells: back and front blocks, and the two ends and the middle between wells.
   const z0 = WZ - WELL_D / 2;
   const z1 = WZ + WELL_D / 2;
-  p.add(box(W, H - 0.6, z0 + hd), C.steel, { p: [0, 0.6 + (H - 0.6) / 2, (-hd + z0) / 2] });
-  p.add(box(W, H - 0.6, hd - z1), C.steel, { p: [0, 0.6 + (H - 0.6) / 2, (z1 + hd) / 2] });
-  for (const [x, w] of [[-W / 2 + 0.07, 0.14], [0, 0.45], [W / 2 - 0.07, 0.14]]) p.add(box(w, H - 0.6, WELL_D), C.steel, { p: [x, 0.6 + (H - 0.6) / 2, WZ], ink: false });
+  p.add(box(W, H, z0 + hd), C.steel, { p: [0, H / 2, (-hd + z0) / 2] });
+  p.add(box(W, H, hd - z1), C.steel, { p: [0, H / 2, (z1 + hd) / 2] });
+  for (const [x, w] of [[-W / 2 + 0.07, 0.14], [0, 0.45], [W / 2 - 0.07, 0.14]]) p.add(box(w, H, WELL_D), C.steel, { p: [x, H / 2, WZ], ink: false });
   for (const cx of XS) {
     // Inside of the well: deep oil-brown, so the translucent oil on top reads golden and deep.
-    p.add(box(WELL_W, 0.02, WELL_D), "#5e3d15", { p: [cx, 0.61, WZ], ink: false });
+    p.add(box(WELL_W, 0.02, WELL_D), "#5e3d15", { p: [cx, 0.01, WZ], ink: false });
     for (const [w, d, x, z] of [[WELL_W, 0.02, 0, z0 + 0.01], [WELL_W, 0.02, 0, z1 - 0.01], [0.02, WELL_D, -WELL_W / 2 + 0.01, WZ], [0.02, WELL_D, WELL_W / 2 - 0.01, WZ]]) {
-      p.add(box(w, H - 0.6, d), "#7a5220", { p: [cx + x, 0.6 + (H - 0.6) / 2, z], ink: false });
+      p.add(box(w, H, d), "#7a5220", { p: [cx + x, H / 2, z], ink: false });
     }
     for (const [w, d, x, z] of [[WELL_W + 0.12, 0.06, 0, z0 - 0.03], [WELL_W + 0.12, 0.06, 0, z1 + 0.03], [0.06, WELL_D, -WELL_W / 2 - 0.03, WZ], [0.06, WELL_D, WELL_W / 2 + 0.03, WZ]]) {
       p.add(box(w, 0.035, d), "#3a4043", { p: [cx + x, H + 0.018, z], ink: false });
     }
   }
-  // The sloped control panel across the back.
-  p.add(sideProfile([[-2.65, 0], [-1.15, 0], [-1.15, 0.25], [-2.65, 1.25]], W), "#aeb8b6", { p: [0, H, 0] });
+  // A low sloped panel across the back, dark where each basket's meter sits.
+  p.add(sideProfile([[PANEL.z0, 0], [PANEL.z1, 0], [PANEL.z1, PANEL.lo], [PANEL.z0, PANEL.hi]], W), "#aeb8b6", { p: [0, H, 0] });
   // Hang rails: a bar behind each well on two posts, so a lifted basket drains into its own oil.
   for (const cx of XS) {
     p.add(faceted(new THREE.CylinderGeometry(0.05, 0.05, WELL_W, 10)), C.steelD, { p: [cx, H + 0.42, z0 - 0.1], r: [0, 0, Math.PI / 2] });
     for (const sx of [-1, 1]) p.add(box(0.07, 0.42, 0.07), C.steelD, { p: [cx + sx * (WELL_W / 2 - 0.05), H + 0.21, z0 - 0.1] });
-  }
-  // Front: drain doors with red valve handles, and a knob per well on the front deck.
-  for (const cx of XS) {
-    p.add(box(1.5, H - 1.1, 0.03), "#b7c0be", { p: [cx, (H - 0.3) / 2, hd + 0.01], ink: 0.012 });
-    p.add(rbox(0.5, 0.12, 0.14, 0.05), "#e5432b", { p: [cx, 0.9, hd + 0.08] });
+    // A knob per well on the front deck, and a dark meter window on the panel.
     topKnob(p, cx - 0.75, H + 0.05, 1.95, 0.16, C.knob, 0.5);
+    const mz = (PANEL.z0 + PANEL.z1) / 2;
+    p.add(box(WELL_W - 0.1, 0.03, 0.5), C.rubber, { p: [cx, H + PANEL.lo + ((PANEL.hi - PANEL.lo) * (PANEL.z1 - mz)) / (PANEL.z1 - PANEL.z0) + 0.01, mz], r: [SLOPE, 0, 0], ink: false });
   }
   return p;
 });
-
-/** Under / done / over / burnt bands, with the perfect line, along a dark rounded plate. */
-let meterTexture: THREE.CanvasTexture | null = null;
-function meterTex(): THREE.CanvasTexture {
-  meterTexture ??= canvasTex(512, 96, (x, w, h) => {
-    const f = (t: number) => t / METER_MAX;
-    const zones: [number, number, string][] = [
-      [0, f(FRIES_ZONE.done), "#f4ecc4"],
-      [f(FRIES_ZONE.done), f(FRIES_ZONE.over), "#f2b632"],
-      [f(FRIES_ZONE.over), f(FRIES_ZONE.burnt), "#a8622a"],
-      [f(FRIES_ZONE.burnt), 1, "#3a2418"],
-    ];
-    x.fillStyle = "#2d3336";
-    x.beginPath();
-    x.roundRect(0, 0, w, h, 22);
-    x.fill();
-    const pad = 12;
-    for (const [a, b, c] of zones) {
-      x.fillStyle = c;
-      x.fillRect(pad + a * (w - 2 * pad), pad, (b - a) * (w - 2 * pad), h - 2 * pad);
-    }
-    const pf = f(FRIES_PERFECT) * (w - 2 * pad) + pad;
-    x.fillStyle = "#ffffff";
-    x.fillRect(pf - 4, 4, 8, h - 8);
-    x.font = `800 26px ${FONT}`;
-    x.textAlign = "center";
-    x.textBaseline = "middle";
-    x.fillStyle = "#6b5a2a";
-    x.fillText("UNDER", pad + (f(FRIES_ZONE.done) / 2) * (w - 2 * pad), h / 2);
-    x.fillStyle = "#fff7e0";
-    x.fillText("OVER", pad + ((f(FRIES_ZONE.over) + f(FRIES_ZONE.burnt)) / 2) * (w - 2 * pad), h / 2);
-  });
-  return meterTexture;
-}
-
-const cursor = cached(() => new Parts().add(prism([[-0.07, -0.05], [0.07, -0.05], [0, 0.08]], 0.05), "#ffffff", { ink: 0.012 }));
 
 const OIL_GEO = shareGeometry(box(WELL_W * STUDY, 0.03 * STUDY, WELL_D * STUDY));
 const bubbleGeo = cached(() => {
@@ -127,40 +89,20 @@ export interface FryerObject extends THREE.Group {
       down: { y: number };
       /** Lifted basket hanging on the rail: position, and rotation.x = tilt. */
       hang: { x: number; y: number; z: number; tilt: number }[];
-      /** Panel meter centres. */
+      /** Where each basket's meter goes: the middle of its window on the back panel. */
       meters: { x: number; y: number; z: number }[];
     };
     /** Bubbles on each well's oil; show them while a basket is down. */
     bubbles: THREE.Mesh[];
-    /** Move the cursor on panel meter i to a fries cook value (0..1.5, FRIES_ZONE scale). */
-    setMeter: (i: number, cook: number) => void;
   };
 }
 
-/** The fryer, in game units: 3.33 x 3.67, 3.07 tall, wells at x -0.8 and 0.8. */
+/** The fryer, in game units: 3.33 x 3.67, 0.33 tall (the back panel 0.73), wells at x -0.8 and 0.8. */
 export function makeFryer(): FryerObject {
   const g = new THREE.Group() as FryerObject;
   g.add(bakedMesh(body()));
-  const st = studySpace();
-  g.add(st);
-  const sy = (z: number) => H + 0.25 + (-z - 1.15) / 1.5 + 0.012;
-  const cursors: THREE.Object3D[] = [];
   const bubbles: THREE.Mesh[] = [];
-  XS.forEach((cx, i) => {
-    const m = decal(meterTex(), 1.85, 0.36);
-    m.position.set(cx, sy(-1.9), -1.9);
-    m.rotation.x = SLOPE;
-    st.add(m);
-    const cur = bakedMesh(cursor());
-    cur.scale.setScalar(1.7 / STUDY);
-    cur.rotation.x = SLOPE + Math.PI / 2 - 0.2;
-    cur.position.set(cx, sy(-1.62), -1.62);
-    st.add(cur);
-    cursors.push(cur);
-    const lbl = textDecal(`BASKET ${i + 1}`, 0.12, { bg: "rgba(0,0,0,0)", color: "#4b5558", fs: 54 });
-    lbl.position.set(cx, sy(-2.25), -2.25);
-    lbl.rotation.x = SLOPE;
-    st.add(lbl);
+  XS.forEach((cx) => {
     const oil = new THREE.Mesh(OIL_GEO, toon("#e9b23f", { opacity: 0.62 }));
     oil.renderOrder = 2;
     oil.castShadow = false;
@@ -172,19 +114,14 @@ export function makeFryer(): FryerObject {
     g.add(b);
     bubbles.push(b);
   });
-  machine(g, W, D, 4.6, {
+  const mz = (PANEL.z0 + PANEL.z1) / 2;
+  machine(g, W, D, H + PANEL.hi, {
     wells: XS.map((x) => ({ x: x * STUDY, z: WZ * STUDY, oilY: OIL_Y * STUDY })),
     down: { y: DOWN_Y * STUDY },
     hang: XS.map((x) => ({ x: x * STUDY, y: HANG.y * STUDY, z: (WZ + HANG.dz) * STUDY, tilt: HANG.tilt })),
-    meters: XS.map((x) => ({ x: x * STUDY, y: sy(-1.9) * STUDY, z: -1.9 * STUDY })),
+    meters: XS.map((x) => ({ x: x * STUDY, y: (H + (PANEL.lo + PANEL.hi) / 2) * STUDY, z: mz * STUDY })),
   });
   g.userData.bubbles = bubbles;
-  g.userData.setMeter = (i, cook) => {
-    const c = cursors[i];
-    if (!c) return;
-    const f = Math.max(0, Math.min(1, cook / METER_MAX)) - 0.5;
-    c.position.x = XS[i] + f * 1.66;
-  };
   return g;
 }
 

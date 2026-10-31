@@ -1,4 +1,4 @@
-import { avgCook, bunToast, friesQuality, friesZone, FRIES_ZONE, isMelted } from "./cooking";
+import { avgCook, bunToast, friesQuality, friesZone, FRIES_ZONE, isMelted, DRINK_FILL, SALT } from "./cooking";
 import type { Drink, ExpectedLayer, Fries, Layer, Order, Piece, Plate } from "./types";
 import { COUNTED, DONENESS_TARGET, KIND_LABEL, SIZE_LABEL } from "./types";
 
@@ -288,10 +288,17 @@ function friesScore(order: Order, fries: Fries, notes: string[]): number {
       notes.push("no gravy on the poutine");
     }
   } else {
-    // Salt is optional but plain fries without it taste flat; poutine toppings on plain fries are a surprise.
-    if (!fries.salt) {
+    // Salt is optional but plain fries without it taste flat, and too much is worse; poutine toppings on plain fries are a surprise.
+    const salt = fries.salt ?? 0;
+    if (salt <= 0) {
       q *= 0.85;
       notes.push("fries needed salt");
+    } else if (salt < SALT.low) {
+      q *= 0.93;
+      notes.push("fries could use more salt");
+    } else if (salt > SALT.high) {
+      q *= 0.8;
+      notes.push("fries too salty");
     }
     if (fries.curds || fries.gravy) q *= 0.8;
   }
@@ -305,7 +312,7 @@ function drinkScore(order: Order, d: Drink, notes: string[]): number {
     return 0.3;
   }
   const f = d.fill;
-  let q = f < 0.6 ? 0.4 : f < 0.78 ? 0.75 : 1;
+  let q = f < 0.6 ? 0.4 : f < DRINK_FILL.full ? 0.75 : 1;
   if (q < 1) notes.push("drink not full");
   if (d.size !== order.drinkSize) {
     q *= 0.5;

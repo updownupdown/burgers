@@ -1,14 +1,13 @@
 import * as THREE from "three";
-import { DRINK_LABEL, DRINKS, type DrinkId, type Size } from "../../game/types";
+import { DRINKS, type DrinkId, type Size } from "../../game/types";
 import { bakedMesh, Parts, rng } from "../bake";
-import { toon } from "../materials";
 import { STUDY } from "../units";
-import { box, C, cached, canvasTex, cyl, decal, FONT, lathe, machine, rbox, studySpace, textDecal } from "./kit";
+import { box, C, cached, cyl, lathe, machine, rbox, tor } from "./kit";
 
 /*
- * Drinks counter machines from the study: the low fountain (option a, at true height), the
- * ice and cup tower from the "Ice and drink tower" layout, and a lid and straw caddy.
- * Study units below.
+ * Drinks counter machines: the low fountain from the study (option a, at true height) with a
+ * push button per drink, an ice bin as big as the fountain, counter stacks of cups and of lids
+ * for each size, and the older lid and straw caddy. Study units below.
  */
 
 /** Button, label and stream colours: a shade stronger than the drink itself so they read on the machine. */
@@ -20,13 +19,15 @@ const CUP_H: Record<Size, number> = { S: 1.21, M: 1.6, L: 1.93 };
 
 // ---- low fountain -------------------------------------------------------------
 
-const FW = 7.0;
+const PITCH = 1.2;
+const FW = DRINKS.length * PITCH + 0.4;
 /** Cabinet height: raised from the study's 2.6 so a large cup at x1.1 clears the nozzles. */
 const FH = 2.75;
-const PITCH = 1.3;
 /** Everything sits 0.5 forward of the study's model so the footprint is centred. */
 const FZ = 0.5;
 const fx = (i: number) => (i - (DRINKS.length - 1) / 2) * PITCH;
+/** The push buttons stand along the front of the top, one over each nozzle. */
+const BTN = { z: -0.95, w: PITCH - 0.14, d: 0.9 };
 
 const fountainBody = cached(() => {
   const p = new Parts();
@@ -39,37 +40,15 @@ const fountainBody = cached(() => {
   for (let i = 0; i < Math.round(tw / 0.22); i++) p.add(box(0.06, 0.02, 2.1 - 0.25), "#5a6164", { p: [-tw / 2 + 0.2 + i * 0.22, 0.17, 0.55 + FZ], ink: false });
   DRINKS.forEach((f, i) => {
     const x = fx(i);
-    p.add(rbox(PITCH - 0.16, 0.06, 1.5, 0.04), "#f8f6ef", { p: [x, FH + 0.19, -1.7 + FZ], ink: false });
-    p.add(cyl(0.42, 0.46, 0.22, 24), DRINK_TINT[f], { p: [x, FH + 0.32, -1.8 + FZ] });
-    p.add(cyl(0.22, 0.22, 0.02, 14), "#ffffff", { p: [x - 0.1, FH + 0.44, -1.92 + FZ], ink: false });
+    // A dark well for each push button (the button cap with its name is drawn over it as UI),
+    // a tint strip behind it, then the valve and nozzle over the drip tray.
+    p.add(rbox(BTN.w, 0.12, BTN.d, 0.05), "#2d3336", { p: [x, FH + 0.18, BTN.z + FZ] });
+    p.add(rbox(BTN.w - 0.1, 0.05, 0.4, 0.03), DRINK_TINT[f], { p: [x, FH + 0.19, BTN.z - 0.75 + FZ], ink: false });
     p.add(rbox(0.36, 0.24, 1.2, 0.05), "#8c9496", { p: [x, FH - 0.25, -0.2 + FZ] });
     p.add(cyl(0.09, 0.07, 0.16, 10), "#6f7779", { p: [x, FH - 0.44, 0.0 + FZ] });
   });
   return p;
 });
-
-const flavorTex = new Map<DrinkId, THREE.CanvasTexture>();
-function nameplate(f: DrinkId): THREE.CanvasTexture {
-  let t = flavorTex.get(f);
-  if (!t) {
-    const name = DRINK_LABEL[f];
-    t = canvasTex(256, 96, (x, w, h) => {
-      x.fillStyle = "#fbf7ee";
-      x.beginPath();
-      x.roundRect(2, 2, w - 4, h - 4, 14);
-      x.fill();
-      x.fillStyle = DRINK_TINT[f];
-      x.fillRect(2, 2, w - 4, 16);
-      x.fillStyle = "#3b2a3a";
-      x.font = `800 ${name.length > 10 ? 30 : 38}px ${FONT}`;
-      x.textAlign = "center";
-      x.textBaseline = "middle";
-      x.fillText(name, w / 2, h / 2 + 8);
-    });
-    flavorTex.set(f, t);
-  }
-  return t;
-}
 
 type P3 = { x: number; y: number; z: number };
 
@@ -82,108 +61,119 @@ export interface FountainObject extends THREE.Group {
       cups: P3[];
       /** Where each pour stream starts (the spout tip). */
       nozzles: P3[];
-      /** Name plates, and the big buttons on top. */
-      labels: P3[];
+      /** The push buttons along the front of the top (their caps are UI drawn here). */
       buttons: P3[];
     };
   };
 }
 
-/** The low fountain, in game units: 4.67 x 2.8, 2.17 tall, nozzles 0.87 apart. */
+/** The low fountain, in game units: 4.27 x 2.8, 1.95 tall, nozzles 0.8 apart. */
 export function makeFountain(): FountainObject {
   const g = new THREE.Group() as FountainObject;
   g.add(bakedMesh(fountainBody()));
-  const st = studySpace();
-  g.add(st);
-  DRINKS.forEach((f, i) => {
-    const d = decal(nameplate(f), 1.15, 0.43);
-    d.position.set(fx(i), FH + 0.23, -0.82 + FZ);
-    st.add(d);
-  });
   const S = STUDY;
-  machine(g, FW, 4.2, FH + 0.5, {
+  machine(g, FW, 4.2, FH + 0.3, {
     cups: DRINKS.map((_, i) => ({ x: fx(i) * S, y: 0.18 * S, z: (0.15 + FZ) * S })),
     nozzles: DRINKS.map((_, i) => ({ x: fx(i) * S, y: (FH - 0.52) * S, z: FZ * S })),
-    labels: DRINKS.map((_, i) => ({ x: fx(i) * S, y: (FH + 0.23) * S, z: (-0.82 + FZ) * S })),
-    buttons: DRINKS.map((_, i) => ({ x: fx(i) * S, y: (FH + 0.43) * S, z: (-1.8 + FZ) * S })),
+    buttons: DRINKS.map((_, i) => ({ x: fx(i) * S, y: (FH + 0.24) * S, z: (BTN.z + FZ) * S })),
   });
   return g;
 }
 
-// ---- ice and cup tower ----------------------------------------------------------
+// ---- ice bin ----------------------------------------------------------------------
 
-const TW = 3.6;
-const TH = 3.2;
-/** Tower body runs from z -1.7 to 0.3; the ice tray sits in front of it. */
-const TZ = -0.7;
-const TUBE_X: Record<Size, number> = { S: -1.05, M: 0, L: 1.2 };
-const TUBE_Z = -1.2;
-const LEVER = { y: 1.6, z: 0.42 };
-const ICE_CUP = { y: 0.08, z: 1.05 };
+/** The ice bin is as big as the fountain beside it: one open steel well heaped with cubes. */
+const IW = FW - 0.2;
+const ID = 3.6;
+const IH = 0.75;
 
-const towerBody = cached(() => {
+const iceBody = cached(() => {
   const p = new Parts();
-  p.add(rbox(TW, TH, 2.0, 0.08), "#e3e8e6", { p: [0, TH / 2, TZ] });
-  // Ice chute head, the lever (a big blueberry paddle) and the ice tray under it.
-  p.add(rbox(1.6, 0.7, 0.5, 0.06), C.steelD, { p: [0, TH - 1.1, 0.45] });
-  p.add(rbox(0.5, 1.2, 0.18, 0.08), "#6a8fd8", { p: [0, LEVER.y, LEVER.z], r: [-0.35, 0, 0] });
-  p.add(rbox(2.6, 0.08, 1.3, 0.03), "#3a3f41", { p: [0, 0.04, ICE_CUP.z] });
-  for (let i = 0; i < 11; i++) p.add(box(0.05, 0.02, 1.1), "#5a6164", { p: [-1.1 + i * 0.22, 0.09, ICE_CUP.z], ink: false });
-  // A cup tube per size on top: a steel collar, a clear tube, and a nested stack of cups mouth down.
-  for (const s of ["S", "M", "L"] as Size[]) {
-    const x = TUBE_X[s];
-    const r = CUP_R[s];
-    const h = CUP_H[s];
-    p.add(cyl(r + 0.06, r + 0.06, 0.12, 22), C.steelD, { p: [x, TH + 0.06, TUBE_Z] });
-    for (let k = 0; k < 7; k++) {
-      // Each cup upside down: rim at the bottom, base on top, nested 0.07 apart.
-      const y = TH + 0.14 + k * 0.07;
-      p.add(lathe([[r, 0], [r * 0.74, h], [0, h]], 22), k % 2 ? "#f3f1ea" : "#ebe7dc", { p: [x, y, TUBE_Z], ink: k === 0 ? 0.012 : false });
-    }
+  const r = rng(12);
+  const t = 0.14;
+  p.add(rbox(IW, 0.12, ID, 0.05), C.steel, { p: [0, 0.06, 0] });
+  for (const z of [-ID / 2 + t / 2, ID / 2 - t / 2]) p.add(rbox(IW, IH, t, 0.04), C.steel, { p: [0, IH / 2, z] });
+  for (const x of [-IW / 2 + t / 2, IW / 2 - t / 2]) p.add(rbox(t, IH, ID - 2 * t, 0.04), C.steel, { p: [x, IH / 2, 0] });
+  p.add(box(IW - 2 * t, 0.02, ID - 2 * t), "#9fb6bd", { p: [0, 0.3, 0], ink: false });
+  // Cubes heaped higher in the middle, a little over the rim.
+  const cube = box(0.32, 0.28, 0.32);
+  for (let i = 0; i < 170; i++) {
+    const x = (r() - 0.5) * (IW - 0.5);
+    const z = (r() - 0.5) * (ID - 0.5);
+    const heap = 1 - Math.hypot(x / (IW / 2), z / (ID / 2)) * 0.6;
+    p.add(cube, i % 5 ? "#e4f5fb" : "#cfeaf4", { p: [x, 0.42 + r() * 0.35 * heap + (i > 90 ? 0.18 * heap : 0), z], r: [r() * 1.2, r() * 3.1, r() * 1.2], ink: 0.01 });
   }
+  // The scoop resting in the corner.
+  p.add(cyl(0.28, 0.22, 0.42, 12, true), "#d7dedd", { p: [IW / 2 - 0.7, 0.95, ID / 2 - 0.75], r: [0, 0, Math.PI / 2 - 0.25] });
+  p.add(cyl(0.06, 0.06, 0.8, 8), "#3a3633", { p: [IW / 2 - 1.3, 1.02, ID / 2 - 0.75], r: [0, 0, Math.PI / 2 - 0.1] });
   return p;
 });
 
-const tubeGeo = (s: Size) => cyl(CUP_R[s] + 0.05, CUP_R[s] + 0.05, 2.4, 20, true);
-
-export interface DrinkTowerObject extends THREE.Group {
-  userData: {
-    footprint: { w: number; d: number };
-    h: number;
-    spots: {
-      /** Mouth of each inverted cup tube: pull a cup down from here. */
-      tubes: Record<Size, P3>;
-      /** Cup base under the ice chute. */
-      ice: P3;
-      /** The ice lever. */
-      lever: P3;
-    };
-  };
+/** The ice bin, in game units: 4.13 x 2.4, 0.5 tall. Grab a scoop from anywhere on it. */
+export function makeIceWell(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(bakedMesh(iceBody()));
+  machine(g, IW, ID, IH, {});
+  return g;
 }
 
-/** The ice and cup tower, in game units: 2.4 x 2.27, 3.8 tall with the cup tubes. */
-export function makeDrinkTower(): DrinkTowerObject {
-  const g = new THREE.Group() as DrinkTowerObject;
-  g.add(bakedMesh(towerBody()));
-  const st = studySpace();
-  g.add(st);
-  const glass = toon("#e9eef0", { opacity: 0.4, side: THREE.DoubleSide });
-  for (const s of ["S", "M", "L"] as Size[]) {
-    const tube = new THREE.Mesh(tubeGeo(s), glass);
-    tube.position.set(TUBE_X[s], TH + 1.3, TUBE_Z);
-    tube.renderOrder = 3;
-    tube.castShadow = false;
-    st.add(tube);
-    const lbl = textDecal(s, 0.34, { bg: "#3b2a3a", color: "#ffffff", fs: 64, w: 90, h: 90 });
-    lbl.position.set(TUBE_X[s], TH + 0.005, -0.1);
-    st.add(lbl);
-  }
-  const S = STUDY;
-  machine(g, TW, 3.4, TH + 2.5, {
-    tubes: Object.fromEntries((["S", "M", "L"] as Size[]).map((s) => [s, { x: TUBE_X[s] * S, y: TH * S, z: TUBE_Z * S }])) as Record<Size, P3>,
-    ice: { x: 0, y: ICE_CUP.y * S, z: ICE_CUP.z * S },
-    lever: { x: 0, y: LEVER.y * S, z: LEVER.z * S },
-  });
+// ---- cup and lid stacks ------------------------------------------------------------
+
+/** How much each nested cup or lid adds to a stack, study units. */
+const CUP_NEST = 0.1;
+const LID_NEST = 0.07;
+const STACKS = new Map<string, ReturnType<ReturnType<typeof cached>>>();
+const stacked = (key: string, build: () => Parts) => {
+  let b = STACKS.get(key);
+  if (!b) STACKS.set(key, (b = cached(build)()));
+  return b;
+};
+
+/**
+ * Empty cups nested mouth up, as a counter stack: you see the rims step up the side and the
+ * top cup's mouth. Study units match the cup models at real size; game units out.
+ */
+export function makeCupStack(size: Size, count: number): THREE.Group {
+  const g = new THREE.Group();
+  if (count <= 0) return g;
+  const n = Math.min(count, 12);
+  g.add(
+    bakedMesh(
+      stacked(`c${size}${n}`, () => {
+        const p = new Parts();
+        const r = CUP_R[size] * 0.9;
+        const h = CUP_H[size] * 0.9;
+        for (let k = 0; k < n; k++) {
+          const y = k * CUP_NEST;
+          const top = k === n - 1;
+          // Each cup's outer skin carries the outline; the top one is a whole cup, open to look into
+          // (the shell runs up the outside, over the rolled rim and down the inside to its floor).
+          p.add(lathe([[0, 0], [r * 0.74, 0], [r, h]], 22), k % 2 ? "#f6f3ec" : "#ece8de", { p: [0, y, 0], ink: top ? 0.014 : 0.006 });
+          if (top) p.add(lathe([[r * 0.74, 0], [r, h], [r + 0.025, h + 0.01], [r - 0.012, h + 0.01], [r * 0.74 - 0.012, 0.05], [0, 0.05]], 22), "#e9e4d8", { p: [0, y, 0], ink: false });
+        }
+        return p;
+      }),
+    ),
+  );
+  return g;
+}
+
+/** Lids for one cup size stacked on a small steel plate. */
+export function makeLidStackSized(size: Size, count: number): THREE.Group {
+  const g = new THREE.Group();
+  const n = Math.max(0, Math.min(count, 12));
+  g.add(
+    bakedMesh(
+      stacked(`l${size}${n}`, () => {
+        const p = new Parts();
+        const r = CUP_R[size] * 0.9 + 0.04;
+        p.add(rbox(r * 2 + 0.3, 0.08, r * 2 + 0.3, 0.04), C.steelL, { p: [0, 0.04, 0] });
+        for (let k = 0; k < n; k++) p.add(cyl(r, r - 0.02, 0.06, 22), "#f8f8f4", { p: [0, 0.11 + k * LID_NEST, 0], ink: k === n - 1 ? 0.012 : 0.005 });
+        if (n) p.add(tor(r * 0.62, 0.035, 5, 22), "#f8f8f4", { p: [0, 0.15 + (n - 1) * LID_NEST, 0], r: [Math.PI / 2, 0, 0], ink: 0.008 });
+        return p;
+      }),
+    ),
+  );
   return g;
 }
 

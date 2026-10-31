@@ -55,8 +55,8 @@ export interface Fries {
   size: FriesSize;
   /** How full the carton is, 0..1. */
   fill: number;
-  /** Shaken with salt. Plain fries want it; poutine doesn't need it. */
-  salt?: boolean;
+  /** How much salt has been shaken on (see SALT in cooking.ts); 0 or missing is none. Plain fries want it; poutine doesn't need it. */
+  salt?: number;
   /** Poutine toppings: cheese curds, then gravy. */
   curds?: boolean;
   gravy?: boolean;
@@ -170,6 +170,9 @@ export const DRINK_LABEL: Record<DrinkId, string> = {
   water: "Water",
   tea: "Iced Tea",
 };
+
+/** Short names for the fountain's push buttons. */
+export const DRINK_SHORT: Record<DrinkId, string> = { pine: "Fizz", pink: "Pink", cola: "Cola", water: "Water", tea: "Tea" };
 
 export const DRINK_COLOR: Record<DrinkId, string> = {
   pine: "#7dbd8a",

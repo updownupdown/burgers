@@ -347,24 +347,49 @@ html, body {
 @keyframes rise { to { transform: translate(-50%, -50px); opacity: 0; } }
 
 /* Printed labels in a row along the soda machine's front lip, one per nozzle. */
+/* The fountain's push buttons: a coloured cap per drink with its short name, sitting on the
+   button well modelled on the machine. While that drink pours it is pressed in. */
 .dlabel {
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -62%);
   box-sizing: border-box;
-  min-height: 26px;
+  height: 30px;
   display: grid;
   place-items: center;
-  background: #fffdf7;
-  border-top: 4px solid var(--c);
-  border-radius: 3px;
-  padding: 1px 3px 2px;
-  font: 800 10px/1.05 var(--bv-font-ui);
-  letter-spacing: 0.01em;
+  background: linear-gradient(#fffdf7 0 55%, color-mix(in srgb, var(--c) 28%, #fffdf7));
+  border: 2px solid var(--bv-ink);
+  border-bottom-width: 5px;
+  border-bottom-color: color-mix(in srgb, var(--c) 70%, var(--bv-ink));
+  border-radius: 9px;
+  padding: 0;
+  font: 800 11px/1 var(--bv-font-ui);
+  letter-spacing: -0.02em;
   text-align: center;
   color: var(--bv-ink);
   pointer-events: none;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  box-shadow: inset 0 3px 0 var(--c), 0 2px 3px rgb(0 0 0 / 0.35);
+  transition: transform 0.06s, border-bottom-width 0.06s, box-shadow 0.06s;
 }
+.dlabel.down {
+  transform: translate(-50%, -50%);
+  border-bottom-width: 2px;
+  box-shadow: inset 0 3px 0 var(--c), inset 0 2px 6px rgb(0 0 0 / 0.25);
+}
+
+/* The big level bar on the left of the counter: how full the cup is while pouring, or how salty
+   the fries are while shaking, with a Perfect line. Fades in and out. */
+.lvl { position: absolute; left: 12px; width: 44px; display: flex; flex-direction: column; align-items: center; gap: 5px; opacity: 0; transition: opacity 0.25s; pointer-events: none; z-index: 2; }
+.lvl.on { opacity: 1; transition-duration: 0.12s; }
+.lvl-tube { position: relative; flex: 1; width: 100%; border-radius: 14px; background: #2d3336; box-shadow: 0 0 0 2.5px var(--bv-paper), 0 0 0 4px var(--bv-ink), 0 5px 12px rgb(0 0 0 / 0.35); }
+.lvl-in, .lvl-mark { position: absolute; inset: 5px; }
+.lvl-in { overflow: hidden; border-radius: 9px; }
+.lvl .ok { position: absolute; left: 0; right: 0; background: rgb(150 214 120 / 0.32); }
+.lvl .fill { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 4px 4px 0 0; box-shadow: inset 0 3px 0 rgb(255 255 255 / 0.35); }
+.lvl .perfect { position: absolute; left: -9px; right: -9px; height: 4px; margin-bottom: -2px; background: #fff; border-radius: 2px; box-shadow: 0 0 0 1.5px var(--bv-ink); }
+.lvl .perfect span { position: absolute; left: calc(100% + 5px); top: 50%; transform: translateY(-50%); font: 800 12px/1 var(--bv-font-ui); background: var(--bv-ink); color: #fff; padding: 4px 7px; border-radius: 7px; white-space: nowrap; }
+.lvl em { font: 800 11px/1 var(--bv-font-ui); font-style: normal; color: var(--bv-ink); background: var(--bv-paper); padding: 3px 7px; border-radius: 7px; box-shadow: 0 0 0 1.5px var(--bv-ink); }
+.lvl.over .lvl-tube { animation: blink 0.3s infinite alternate; }
+.gtag.lid { background: rgb(42 38 34 / 0.7); }
 
 /* ---- Hint ------------------------------------------------------------ */
 .hint {

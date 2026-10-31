@@ -3,7 +3,7 @@ import { newPiece, type Kind, type Piece } from "../../game/types";
 import { makeFood, stackBases } from "../food";
 import { applyKitchenLight, KITCHEN_BG } from "../lighting";
 import { toon } from "../materials";
-import { makeColdRail, makeDrinkTower, makeFountain, makeFryBasket, makeFryer, makeGriddle, makeLidStrawCaddy, makePackPad, makePrepUnit, makeSauceBottle, makeSauceCaddy, makeTrashChute, makeWarmShelf, makeSupplyShelf, FRY_BASKET } from "../machines";
+import { makeColdRail, makeFountain, makeIceWell, makeFryBasket, makeFryer, makeGriddle, makeLidStrawCaddy, makePackPad, makePrepUnit, makeSauceBottle, makeSauceCaddy, makeTrashChute, makeWarmShelf, makeSupplyShelf, FRY_BASKET } from "../machines";
 import { makeCup, makeFries, makeFryPile, makeCartonStack } from "../food";
 import { SCALE } from "../units";
 import { counterTop, wallPanels } from "../wear";
@@ -104,12 +104,11 @@ const SHOWS: Record<string, () => void> = {
         b.rotation.x = h.tilt;
       }
       scene.add(b);
-      fr.userData.setMeter(i, i ? 0.75 : 0.4);
     });
     const pads = makePackPad();
     at(pads, 2.4, 0, 1.6);
     pads.userData.spots.pads.forEach((pd, i) => {
-      const f = makeFries(true, i ? "L" : "M", 1, { salt: i === 1 });
+      const f = makeFries(true, i ? "L" : "M", 1, { salt: i === 1 ? 0.6 : 0 });
       f.userData.setCook(0.72);
       f.scale.setScalar(SCALE.fries);
       at(f, pads.position.x + pd.x, pd.y, pads.position.z + pd.z);
@@ -134,7 +133,7 @@ const SHOWS: Record<string, () => void> = {
       cup.scale.setScalar(SCALE.cup);
       at(cup, fo.position.x + c.x, c.y, fo.position.z + c.z);
     });
-    const tw = makeDrinkTower();
+    const tw = makeIceWell();
     at(tw, -2.6, 0, -2.7 + 0.1 + tw.userData.footprint.d / 2);
     const ld = makeLidStrawCaddy();
     at(ld, -2.4, 0, 1.6);

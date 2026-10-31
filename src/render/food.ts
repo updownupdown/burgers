@@ -693,7 +693,7 @@ export function stackHeight(piece: StackPiece, role: BunRole): number {
 
 // Fries and paper boats live in sides.ts, cups in models/drinks.ts; re-exported so existing imports keep working.
 export { CARTON_NEST, CARTON_SIZE, CURD, curdLumps, friesToppings, GRAVY, makeCarton, makeCartonStack, makeFries, makeFryPile, type FriesObject } from "./sides";
-export { CUP_SCALE, makeCup, type CupObject } from "./models/drinks";
+export { CUP_DIMS, CUP_SCALE, cupSurfaceY, makeCup, type CupObject } from "./models/drinks";
 
 export function bottle(color: string, label: string): THREE.Group {
   const g = new THREE.Group();

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { nextReputation, planFor, ratingBonus, trafficMult } from "./business";
-import { applyMods, makeOrder, seededRng } from "./menu";
-import { STOPS } from "./stops";
+import { pieceFor, popularityChange, willingnessToPay } from "./press";
+import { applyMods, makeOrder, orderFromRecipe, seededRng } from "./menu";
+import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent } from "./stops";
 import { passed, upgradeChoices } from "./progress";
 import { alignLayers, payout, scorePlate } from "./scoring";
+import { FRIES_PERFECT } from "./cooking";
 import type { Kind, Layer, Order, Piece, Plate } from "./types";
 import { DONENESS_TARGET, newPiece } from "./types";
 
@@ -105,23 +107,75 @@ describe("scorePlate", () => {
     const order: Order = { ...classic, fries: true, drink: "cola" };
     const plate = perfectPlate();
     expect(scorePlate(order, plate).notes).toEqual(["forgot the fries", "forgot the drink"]);
-    plate.fries = { cook: 0.7, size: "S", fill: 1 };
+    plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt: true };
     plate.drink = { flavor: "cola", fill: 0.9, size: "M" };
+    expect(scorePlate(order, plate).notes).toContain("no lid");
+    plate.drink = { flavor: "cola", fill: 0.9, size: "M", lid: true, straw: true };
     expect(scorePlate(order, plate).score).toBe(100);
     plate.drink = { flavor: "pine", fill: 0.9, size: "M" };
     expect(scorePlate(order, plate).notes).toContain("wrong drink");
   });
 
+  it("scores fries by zone and by where in the zone", () => {
+    const q = (cook: number) => {
+      const plate = perfectPlate();
+      plate.fries = { cook, size: "S", fill: 1, salt: true };
+      return scorePlate({ ...classic, fries: true }, plate).sides;
+    };
+    expect(q(FRIES_PERFECT)).toBe(1);
+    expect(q(0.55)).toBeLessThan(q(0.65));
+    expect(q(0.55)).toBeGreaterThan(q(0.45));
+    expect(q(1.0)).toBeLessThan(q(0.9));
+    expect(q(1.2)).toBeLessThan(q(1.0));
+    const plate = perfectPlate();
+    plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1 };
+    const r = scorePlate({ ...classic, fries: true }, plate);
+    expect(r.notes).toContain("fries needed salt");
+    expect(r.sides).toBeCloseTo(0.85);
+  });
+
+  it("scores a poutine meal on the poutine", () => {
+    const order: Order = { ...classic, name: "Poutine", layers: [], mods: [], fries: true, friesSize: "L", poutine: true };
+    const plate: Plate = { layers: [], fries: { cook: FRIES_PERFECT, size: "L", fill: 1, curds: true, gravy: true }, drink: null };
+    expect(scorePlate(order, plate).score).toBe(100);
+    plate.fries!.gravy = false;
+    const r = scorePlate(order, plate);
+    expect(r.notes).toContain("no gravy on the poutine");
+    expect(r.score).toBe(50);
+  });
+
+  it("lets a free side soften a bad review", () => {
+    const plate = perfectPlate();
+    plate.layers[1].piece.cook = [0.98, 0.98];
+    const before = scorePlate(classic, plate).score;
+    plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt: true };
+    const r = scorePlate(classic, plate);
+    expect(r.perks).toEqual(["free fries"]);
+    expect(r.score).toBeGreaterThan(before);
+    plate.fries.cook = 1.4;
+    expect(scorePlate(classic, plate).score).toBe(before);
+  });
+
   it("checks side sizes and portions", () => {
     const order: Order = { ...classic, fries: true, drink: "cola", friesSize: "L", drinkSize: "S" };
     const plate = perfectPlate();
-    plate.fries = { cook: 0.7, size: "S", fill: 1 };
+    plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1 };
     plate.drink = { flavor: "cola", fill: 0.9, size: "L" };
     const notes = scorePlate(order, plate).notes;
     expect(notes).toContain("wanted large fries");
     expect(notes).toContain("wanted a small drink");
     plate.fries = { cook: 0.7, size: "L", fill: 0.5 };
     expect(scorePlate(order, plate).notes).toContain("skimpy fries");
+  });
+
+  it("checks ice", () => {
+    const plate = perfectPlate();
+    const drink = { flavor: "cola" as const, fill: 0.9, size: "M" as const, lid: true, straw: true };
+    plate.drink = { ...drink, ice: true };
+    expect(scorePlate({ ...classic, drink: "cola", ice: false }, plate).notes).toContain("asked for no ice");
+    expect(scorePlate({ ...classic, drink: "cola", ice: null }, plate).notes).toEqual([]);
+    plate.drink = { ...drink, ice: false };
+    expect(scorePlate({ ...classic, drink: "cola", ice: true }, plate).notes).toContain("forgot the ice");
   });
 });
 
@@ -138,11 +192,65 @@ describe("makeOrder", () => {
     for (let i = 0; i < 150; i++) {
       const stop = STOPS[i % STOPS.length];
       const o = makeOrder(i, rng, (i % 50) / 50, stop);
+      if (o.poutine) {
+        expect(o.layers).toEqual([]);
+        expect(o.fries).toBe(true);
+        continue;
+      }
       for (const l of o.layers) if (l.kind !== "ketchup" && l.kind !== "mustard") expect(stop.pantry).toContain(l.kind);
       expect(o.layers[0].kind).toBe("bun");
       expect(o.layers[o.layers.length - 1].kind).toBe("bun");
       expect(o.price).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("counted toppings", () => {
+  const withPickles = (n: number): Plate => {
+    const p = perfectPlate();
+    const pickles = Array.from({ length: n }, () => layer(piece("pickle")));
+    p.layers.splice(2, 0, ...pickles);
+    return p;
+  };
+  const order: Order = { ...classic, layers: [...classic.layers.slice(0, 2), { kind: "pickle", count: 3 }, ...classic.layers.slice(2)] };
+
+  it("counts a run of pickles as one layer", () => {
+    expect(scorePlate(order, withPickles(3)).score).toBe(100);
+    expect(scorePlate(order, withPickles(3)).notes).toEqual([]);
+  });
+
+  it("marks down a skimpy burger and calls it out", () => {
+    const r = scorePlate(order, withPickles(1));
+    expect(r.notes).toContain("skimpy on the pickles");
+    expect(r.score).toBeLessThan(90);
+  });
+
+  it("rewards a couple extra, not a pile", () => {
+    const base = scorePlate(order, (() => { const p = withPickles(3); p.layers[1].piece.cook = [0.3, 0.3]; return p; })()).score;
+    const generous = (() => { const p = withPickles(5); p.layers[1].piece.cook = [0.3, 0.3]; return p; })();
+    expect(scorePlate(order, generous).score).toBeGreaterThan(base);
+    expect(scorePlate(order, withPickles(7)).notes).toContain("way too many pickles");
+  });
+
+  it("orders extra pickles as more pieces, at a price", () => {
+    const recipe = { name: "P", price: 6, layers: ["bun", "patty", "pickle", "bun"] as Kind[], toasted: false };
+    const plain = orderFromRecipe(1, recipe, "medium", false, null);
+    const extra = orderFromRecipe(1, recipe, "medium", false, null, [{ type: "extra", kind: "pickle" }]);
+    expect(plain.layers.find((l) => l.kind === "pickle")?.count).toBe(3);
+    expect(extra.layers.filter((l) => l.kind === "pickle")).toHaveLength(1);
+    expect(extra.layers.find((l) => l.kind === "pickle")?.count).toBe(5);
+    expect(extra.price).toBeGreaterThan(plain.price);
+  });
+});
+
+describe("poutine", () => {
+  it("turns up now and then once the shift is going, never in the first orders", () => {
+    const rng = seededRng(5);
+    const early = Array.from({ length: 200 }, (_, i) => makeOrder(i, rng, 0.1, STOPS[0]));
+    expect(early.some((o) => o.poutine)).toBe(false);
+    const later = Array.from({ length: 400 }, (_, i) => makeOrder(i, rng, 0.6, STOPS[0])).filter((o) => o.poutine).length;
+    expect(later).toBeGreaterThan(20);
+    expect(later).toBeLessThan(90);
   });
 });
 
@@ -161,7 +269,10 @@ describe("smash burgers", () => {
 describe("melted cheese", () => {
   it("only asks for melting on cheese that sits right on a patty", () => {
     const recipe = STOPS.flatMap((s) => s.menu).find((r) => r.name === "Sunset Double")!;
-    const order = makeOrder(1, seededRng(3), 1, { ...STOPS[2], menu: [recipe] });
+    let seed = 3;
+    let order: Order;
+    do order = makeOrder(1, seededRng(seed++), 1, { ...STOPS[2], menu: [recipe] });
+    while (order.poutine);
     const melted = order.layers.map((l, i) => (l.melted ? order.layers[i - 1].kind : null)).filter(Boolean);
     expect(melted.length).toBeGreaterThan(0);
     expect(melted.every((k) => k === "patty")).toBe(true);
@@ -213,6 +324,7 @@ describe("recipe modifiers", () => {
     for (const stop of STOPS) {
       for (let i = 0; i < 200; i++) {
         const o = makeOrder(i, rng, 1, stop);
+        if (o.poutine) continue;
         for (const m of o.mods) {
           expect(["bun", "patty"]).not.toContain(m.kind);
           if (m.type === "add") expect(stop.pantry).toContain(m.kind);
@@ -247,5 +359,59 @@ describe("business mode", () => {
     const r = nextReputation(2, 6, [3, 3, 3]);
     expect(r.rep).toBeGreaterThan(2);
     expect(r.rep).toBeLessThan(3);
+  });
+});
+
+describe("crowds", () => {
+  it("foodies reward premium ingredients more than commuters do", () => {
+    const plan = { quality: "premium" as const, price: "fair" as const, menu: [] };
+    expect(ratingBonus(plan, "foodies")).toBeGreaterThan(ratingBonus(plan, "commuters"));
+  });
+
+  it("price-sensitive crowds thin out more at high prices", () => {
+    const high = { quality: "standard" as const, price: "high" as const, menu: [] };
+    expect(trafficMult(high, 2, 4, "party")).toBeLessThan(trafficMult(high, 2, 4, "foodies"));
+  });
+
+  it("gives every town a crowd", () => {
+    for (const t of STOPS) expect(t.crowd).toBeTruthy();
+  });
+});
+
+describe("events", () => {
+  it("happen on their day and repeat", () => {
+    const surf = EVENTS.find((e) => e.id === "surf")!;
+    expect(eventOn(surf.town, surf.day)?.id).toBe("surf");
+    expect(eventOn(surf.town, surf.day + 1)).toBeNull();
+    expect(eventOn(surf.town, surf.day + surf.every)?.id).toBe("surf");
+    expect(nextDay(surf, surf.day + 1)).toBe(surf.day + surf.every);
+  });
+
+  it("make a town busier with the event crowd and special", () => {
+    const rodeo = EVENTS.find((e) => e.id === "rodeo")!;
+    const t = townById(rodeo.town);
+    const on = withEvent(t, rodeo);
+    expect(on.customers).toBeGreaterThan(t.customers);
+    expect(on.crowd).toBe(rodeo.crowd);
+    expect(on.menu.some((r) => r.name === rodeo.special!.name)).toBe(true);
+  });
+});
+
+describe("critics and popularity", () => {
+  it("a great TV spot moves popularity more than a newspaper piece", () => {
+    expect(popularityChange(3, "tv")).toBeGreaterThan(popularityChange(3, "paper"));
+    expect(popularityChange(0, "paper")).toBeLessThan(0);
+  });
+
+  it("fame and good reviews raise what people will pay", () => {
+    expect(willingnessToPay(80, 2.8)).toBeGreaterThan(willingnessToPay(10, 2));
+    const high = { quality: "standard" as const, price: "high" as const, menu: [] };
+    expect(ratingBonus(high, "families", willingnessToPay(90, 3))).toBeGreaterThan(ratingBonus(high, "families", 0));
+  });
+
+  it("writes a piece with a headline and quote", () => {
+    const p = pieceFor(3, [], townById("summit"), null, seededRng(1));
+    expect(p.headline.length).toBeGreaterThan(5);
+    expect(p.pop).toBeGreaterThan(0);
   });
 });

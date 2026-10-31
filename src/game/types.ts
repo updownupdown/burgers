@@ -14,7 +14,8 @@ export type Kind =
   | "mustard";
 
 export type Doneness = "rare" | "medium" | "well";
-export type DrinkId = "pine" | "lemon" | "cola";
+export type DrinkId = "pine" | "pink" | "cola" | "water" | "tea";
+export const DRINKS: DrinkId[] = ["pine", "pink", "cola", "water", "tea"];
 export type SauceKind = "ketchup" | "mustard";
 
 /** A single physical food item. `cook[0]` is the face currently down on the grill. */
@@ -40,10 +41,12 @@ export interface Layer {
 }
 
 export type Size = "S" | "M" | "L";
-export type FriesSize = "S" | "L";
+export type FriesSize = "S" | "M" | "L";
 export const SIZE_LABEL: Record<Size, string> = { S: "Small", M: "Medium", L: "Large" };
 /** Share of a fryer basket each carton holds. */
-export const FRIES_PORTION: Record<FriesSize, number> = { S: 0.5, L: 1 };
+export const FRIES_PORTION: Record<FriesSize, number> = { S: 1 / 3, M: 2 / 3, L: 1 };
+/** One scoop from the freezer fills a small carton; a full basket holds three. */
+export const FRIES_SCOOP = 1 / 3;
 /** Small cups fill faster than large ones. */
 export const CUP_SPEED: Record<Size, number> = { S: 1.35, M: 1, L: 0.78 };
 
@@ -52,12 +55,20 @@ export interface Fries {
   size: FriesSize;
   /** How full the carton is, 0..1. */
   fill: number;
+  /** Shaken with salt. Plain fries want it; poutine doesn't need it. */
+  salt?: boolean;
+  /** Poutine toppings: cheese curds, then gravy. */
+  curds?: boolean;
+  gravy?: boolean;
 }
 
 export interface Drink {
   flavor: DrinkId;
   fill: number;
   size: Size;
+  ice?: boolean;
+  lid?: boolean;
+  straw?: boolean;
 }
 
 export interface Plate {
@@ -73,6 +84,8 @@ export interface ExpectedLayer {
   smashed?: boolean;
   /** Cheese that should be melted onto the patty below it. */
   melted?: boolean;
+  /** Counted toppings (COUNTED): how many pieces go in this layer. */
+  count?: number;
 }
 
 /** A change to a known recipe: "no pickles", "extra cheese", "add bacon". */
@@ -93,10 +106,27 @@ export interface Order {
   drink: DrinkId | null;
   friesSize: FriesSize;
   drinkSize: Size;
+  /** Ice in the drink: asked for, asked to leave out, or (null) either is fine. */
+  ice?: boolean | null;
+  /** A food critic: their verdict goes in the paper. */
+  critic?: boolean;
+  /** A poutine meal: a large carton of fries with curds and gravy, and no burger. */
+  poutine?: boolean;
 }
 
 export const GRILLABLE: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon", "egg", "pineapple"]);
 export const SAUCES: ReadonlySet<Kind> = new Set<Kind>(["ketchup", "mustard"]);
+/**
+ * Toppings placed one piece at a time; a recipe asks for a number of them. Fewer saves money but
+ * customers notice; a couple extra can win a better review.
+ */
+export const COUNTED: ReadonlySet<Kind> = new Set<Kind>(["pickle", "onion", "tomato", "jalapeno"]);
+/** Pieces of each counted topping in a standard recipe, unless the recipe says otherwise. */
+export const STANDARD_COUNT: Partial<Record<Kind, number>> = { pickle: 3, onion: 2, tomato: 2, jalapeno: 4 };
+/** "Extra pickles" adds this many on top of the recipe's count. */
+export function extraCount(kind: Kind): number {
+  return Math.max(1, Math.round((STANDARD_COUNT[kind] ?? 1) * 0.67));
+}
 
 export const KIND_LABEL: Record<Kind, string> = {
   bun: "Bun",
@@ -133,14 +163,18 @@ export const KIND_COLOR: Record<Kind, string> = {
 
 export const DRINK_LABEL: Record<DrinkId, string> = {
   pine: "Pine Fizz",
-  lemon: "Lemon Zip",
+  pink: "Pink Lemonade",
   cola: "Road Cola",
+  water: "Water",
+  tea: "Iced Tea",
 };
 
 export const DRINK_COLOR: Record<DrinkId, string> = {
-  pine: "#5fc46d",
-  lemon: "#f2d64b",
-  cola: "#6b3524",
+  pine: "#7dbd8a",
+  pink: "#f3a3b8",
+  cola: "#3b1d1b",
+  water: "#cfe8f2",
+  tea: "#c3731f",
 };
 
 export const DONENESS_TARGET: Record<Doneness, number> = {

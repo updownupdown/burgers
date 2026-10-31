@@ -1,14 +1,19 @@
 import * as THREE from "three";
 import { buzz, Sfx } from "./audio";
-import { avgCook, bunToast, MELT_RATE, pattyLabel } from "./game/cooking";
+import { avgCook, bunToast, FRIES_PERFECT, friesZone, FRIES_ZONE, MELT_RATE, pattyLabel } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { freshSave, loadSave, passed, passTown, upgradeChoices, UPGRADES, writeSave, type UpgradeId } from "./game/progress";
-import { townById } from "./game/stops";
+import { eventOn, townById, withEvent, type TownEvent } from "./game/stops";
+import { criticChance, fadePopularity, pieceFor, popularityTraffic, willingnessToPay, type PressPiece } from "./game/press";
+import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
 import { HOLD_GRACE, HOLD_RUIN, payout, scorePlate, starsFor } from "./game/scoring";
 import {
   CARTON_COST,
+  CROWD,
   CUP_COST,
+  EXTRA_COST,
   FRIES_BATCH_COST,
+  FRY_TOP_COST,
   KIND_COST,
   menuOf,
   nextReputation,
@@ -23,15 +28,19 @@ import {
   type Review,
 } from "./game/business";
 import type { DrinkId, FriesSize, Layer, Order, Piece, Plate, SauceKind, Size } from "./game/types";
-import { FRIES_PORTION, GRILLABLE, newPiece } from "./game/types";
-import { makeCarton, makeCup, makeFood, makeFries, stackHeight } from "./render/food";
+import { COUNTED, FRIES_PORTION, FRIES_SCOOP, GRILLABLE, KIND_LABEL, newPiece } from "./game/types";
+import { dressCup } from "./render/cup";
+import { makeCarton, makeCup, makeFood, makeFries, sliceSpot, stackBases } from "./render/food";
 import { disposeObject } from "./render/materials";
-import { CounterView, GRILL_SCALE, HOME_PAGE, PAGES, pageX, GRILL_TOP, SLEEVE, WARM_X0, type GrillItem, type Hit } from "./scenes/counter";
+import { CounterView, EMPTY_PACK, GRILL_SCALE, HOME_PAGE, PAGES, pageX, GRILL_TOP, SLEEVE, WARM_X0, type GrillItem, type Hit } from "./scenes/counter";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
+import "./ui/components.css";
 import "./style.css";
-import { buildUi, planHtml, summaryHtml, ticketHtml, titleHtml } from "./ui";
+import { mountHome } from "./screens/home";
+import { buildUi, donenessPill, patienceMood, planHtml, summaryHtml, ticketHtml } from "./ui";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
+import { closeAll, initMenu, openHowTo, openMenu, openMenuRef } from "./screens/menu";
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -46,10 +55,41 @@ const sfx = new Sfx();
 const customersView = new CustomersView();
 const trayView = new TrayView();
 const counter = new CounterView();
+
+/**
+ * Graphics tiers change only cost, never the look: high = soft shadows, standard = hard
+ * shadows, low = no shadows and a 1x pixel ratio for slower phones.
+ */
+type Gfx = "high" | "standard" | "low";
+let gfx: Gfx = "high";
+try {
+  const saved = localStorage.getItem("bv-gfx");
+  if (saved === "high" || saved === "standard" || saved === "low") gfx = saved;
+} catch {
+  // ignore
+}
+/** Chill, Balanced or Stressful (src/game/difficulty.ts); takes effect for new customers. */
+let difficulty: Difficulty = "balanced";
+try {
+  const saved = localStorage.getItem("bv-difficulty");
+  if (saved && saved in DIFFICULTY) difficulty = saved as Difficulty;
+} catch {
+  // ignore
+}
+function applyGfx(level: Gfx): void {
+  gfx = level;
+  renderer.shadowMap.enabled = level !== "low";
+  for (const sun of [counter.sun, trayView.sun]) {
+    sun.castShadow = level !== "low";
+    sun.shadow.radius = level === "high" ? 5 : 1;
+  }
+  renderer.shadowMap.needsUpdate = true;
+}
 const ui = buildUi(document.getElementById("ui")!, PAGES);
 
 const save = loadSave();
-const stop = () => townById(game.town);
+/** The town being played, as it is today (an event makes it busier and changes the crowd). */
+const stop = () => withEvent(townById(game.town), game.event);
 const has = (u: UpgradeId) => save.upgrades.includes(u);
 
 interface Slot {
@@ -63,6 +103,10 @@ interface Slot {
   bubble: HTMLElement | null;
   /** Ticket shows every layer rather than recipe + modifiers. */
   expanded: boolean;
+  /** The order came back once, with this complaint; next time they take it unless it's really wrong. */
+  sentBack: string | null;
+  /** Free sides they kept when they sent the order back: a customer never turns down free food. */
+  kept: Pick<Plate, "fries" | "drink">;
 }
 
 const emptyPlate = (): Plate => ({ layers: [], fries: null, drink: null });
@@ -84,9 +128,11 @@ const game = {
   town: save.town,
   /** Town highlighted on the map. */
   mapSel: save.town,
+  /** Event on in this town today, during a shift. */
+  event: null as TownEvent | null,
   rng: seededRng(Date.now() % 100000) as Rng,
   slots: [0, 1, 2].map(
-    (): Slot => ({ order: null, plate: emptyPlate(), patience: 0, maxPatience: 1, leaving: false, fig: null, ticketKey: "", bubble: null, expanded: false }),
+    (): Slot => ({ order: null, plate: emptyPlate(), patience: 0, maxPatience: 1, leaving: false, fig: null, ticketKey: "", bubble: null, expanded: false, sentBack: null, kept: { fries: null, drink: null } }),
   ),
   hintsShown: new Set<string>(),
   pendingUpdate: null as VersionInfo | null,
@@ -98,7 +144,18 @@ const game = {
   reviews: [] as Review[],
   /** Every rating this shift, walk-outs as zero, for reputation. */
   ratings: [] as number[],
+  /** Which customer (by arrival order) is a food critic today, or -1; and what they wrote. */
+  criticAt: -1,
+  press: null as PressPiece | null,
 };
+
+/** A critic's verdict counts like this many ordinary reviews. */
+const CRITIC_WEIGHT = 5;
+
+function criticVerdict(stars: number, notes: string[]): void {
+  game.press = pieceFor(stars, notes, stop(), game.event, game.rng);
+  if (game.plan) for (let k = 1; k < CRITIC_WEIGHT; k++) game.ratings.push(stars);
+}
 
 /** In business mode, ingredients cost money as they come out of the bins. */
 function spend(amount: number): void {
@@ -112,7 +169,7 @@ function shopStop() {
 }
 
 function plannedCustomers(plan: Plan): number {
-  return Math.max(4, Math.round(stop().customers * trafficMult(plan, save.rep, menuOf(stop(), plan).length)));
+  return Math.max(4, Math.round(stop().customers * trafficMult(plan, save.rep, menuOf(stop(), plan).length, stop().crowd) * popularityTraffic(save.popularity)));
 }
 
 // ---------------------------------------------------------------------------
@@ -126,6 +183,8 @@ interface Rect {
 }
 const bands = { customers: { x: 0, y: 0, w: 0, h: 0 } as Rect, tray: {} as Rect, counter: {} as Rect, tabs: {} as Rect };
 let colX = 0;
+/** Where the order rail sits in the customers band (CSS px from the top). */
+let railTop = 100;
 let viewH = 0;
 
 function layout(): void {
@@ -137,20 +196,24 @@ function layout(): void {
   const safeB = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-b")) || 0;
   const safeT = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-t")) || 0;
   const tabsH = 64 + safeB;
-  const custH = Math.round(THREE.MathUtils.clamp(H * 0.24, 150, 230));
-  const trayH = Math.round(THREE.MathUtils.clamp(H * 0.18, 110, 180));
+  // The customers band holds the window (HUD on top, customers, then the order rail) and the
+  // receipts hanging from the rail; it's taller than the tray so the receipts have room.
+  const custH = Math.round(THREE.MathUtils.clamp(H * 0.34, 200, 320));
+  const trayH = Math.round(THREE.MathUtils.clamp(H * 0.14, 96, 140));
+  const hudH = safeT + 42;
+  const railY = Math.round(hudH + (custH - hudH) * 0.42);
   bands.customers = { x: colX, y: 0, w, h: custH };
   bands.tray = { x: colX, y: custH, w, h: trayH };
   bands.counter = { x: colX, y: custH + trayH, w, h: H - custH - trayH - tabsH };
   bands.tabs = { x: colX, y: H - tabsH, w, h: tabsH };
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, gfx === "low" ? 1 : 1.5));
   renderer.setSize(W, H, false);
   // Size the canvas box to the visible viewport (not 100vh, which mobile browsers measure
   // with their toolbars hidden), so taps line up with what's drawn.
   canvas.style.width = `${W}px`;
   canvas.style.height = `${H}px`;
-  customersView.layout(w / custH);
+  customersView.layout(w / custH, hudH / custH, railY / custH);
   trayView.layout(w / trayH);
   counter.layout(w / bands.counter.h);
 
@@ -159,23 +222,23 @@ function layout(): void {
   st.setProperty("--gw", `${w}px`);
   st.setProperty("--gh", `${H}px`);
 
-  // Tickets fill the right part of each customer slot.
+  // Receipts hang from the rail, one under each customer.
   const slotW = w / 3;
+  ui.rail.style.top = `${railY - 4}px`;
+  railTop = railY;
   ui.tickets.forEach((t, i) => {
-    // At least wide enough for "Patty Med"; on narrow phones it overlaps the customer a little.
-    const tw = Math.max(slotW * 0.51, 72);
-    t.style.left = `${(i + 1) * slotW - tw - slotW * 0.02}px`;
+    const tw = Math.min(slotW * 0.88, 170);
+    t.style.left = `${slotW * i + (slotW - tw) / 2}px`;
     t.style.width = `${tw}px`;
-    const top = Math.max(custH * 0.16, safeT + 44);
-    t.style.top = `${top}px`;
-    t.style.maxHeight = `${custH - top + trayH * 0.22}px`;
+    t.style.top = `${railY}px`;
+    t.style.maxHeight = `${custH - railY + trayH * 0.1}px`;
   });
   ui.hint.style.top = `${bands.counter.y + 8}px`;
   // Turned sideways mid-shift: pause behind the "turn your phone" overlay.
   if (W > H && H < 500 && game.phase === "playing") {
     cancelPointer();
     game.phase = "paused";
-    ui.menu.hidden = false;
+    openMenu();
   }
 }
 window.addEventListener("resize", layout);
@@ -188,8 +251,9 @@ function bandAt(y: number): "customers" | "tray" | "counter" | "tabs" {
   return "tabs";
 }
 
+/** Pointer x is already relative to the game column (see pointerdown), so only y is offset by the band. */
 function ndcIn(r: Rect, x: number, y: number): THREE.Vector2 {
-  return new THREE.Vector2(((x - r.x) / r.w) * 2 - 1, -((y - r.y) / r.h) * 2 + 1);
+  return new THREE.Vector2((x / r.w) * 2 - 1, -((y - r.y) / r.h) * 2 + 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -204,12 +268,20 @@ function spawnCustomer(slotIdx: number): void {
   if (game.tutorial && game.spawned === 0) order = orderFromRecipe(order.id, stop().menu[0], "medium", false, null);
   s.order = order;
   s.plate = emptyPlate();
+  s.sentBack = null;
+  s.kept = { fries: null, drink: null };
   // Recipes you haven't made a couple of times yet start with the full layer list showing.
   s.expanded = game.tutorial || (save.known[order.name] ?? 0) < 2;
-  s.maxPatience = (50 + order.layers.length * 7 + (order.fries ? 12 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1);
+  // Every extra slice of a counted topping is another trip to the bin.
+  const slices = order.layers.reduce((n, l) => n + Math.max(0, (l.count ?? 1) - 1), 0);
+  s.maxPatience = (50 + order.layers.length * 7 + slices * 2 + order.layers.filter((l) => l.kind === "patty").length * 22 + (order.fries ? 12 : 0) + (order.poutine ? 10 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1) * CROWD[stop().crowd].patience * DIFFICULTY[difficulty].patience;
   if (game.tutorial && game.spawned === 0) s.maxPatience = 600;
   s.patience = s.maxPatience;
   s.leaving = false;
+  if (game.spawned === game.criticAt && !game.tutorial) {
+    order.critic = true;
+    showHint("A food critic just ordered. Their verdict goes in the papers!", 3.5);
+  }
   s.fig = customersView.arrive(slotIdx, Math.floor(game.rng() * 1000));
   game.spawned++;
   sfx.pop();
@@ -247,26 +319,41 @@ function customerLeaves(i: number, mood: "happy" | "sad" | "angry", say: string,
   setTimeout(() => customersView.leave(i, () => clearSlot(i)), 1100);
 }
 
+/**
+ * Hand a plate to its customer (swipe it up). They look it over: a good plate is taken and
+ * paid for; a clearly wrong one comes back once for changes; a really wrong one is refused.
+ * Free sides they didn't order are always kept.
+ */
 function serve(i: number): void {
   const s = game.slots[i];
   if (!s.order || s.leaving) {
-    showHint("Pick an order first: tap a ticket or plate.", 2);
+    showHint("No one's waiting for that plate yet.", 1.5);
     return;
   }
-  if (s.plate.layers.length === 0) {
-    showHint("That plate is empty!", 2);
+  if (s.plate.layers.length === 0 && !s.plate.fries && !s.plate.drink) {
+    showHint("That plate is empty!", 1.5);
     return;
   }
-  const r = scorePlate(s.order, s.plate);
+  // Freebies kept from an earlier send-back count towards this verdict too.
+  const plate: Plate = { ...s.plate, fries: s.plate.fries ?? s.kept.fries, drink: s.plate.drink ?? s.kept.drink };
+  const r = scorePlate(s.order, plate);
   if (game.plan) {
     // Ingredient quality and prices tilt every rating.
-    r.score = Math.max(0, Math.min(100, r.score + ratingBonus(game.plan)));
+    r.score = Math.max(0, Math.min(100, r.score + ratingBonus(game.plan, stop().crowd, willingnessToPay(save.popularity, save.rep))));
     r.stars = starsFor(r.score);
-    game.ratings.push(r.stars);
-    game.reviews.push({ stars: r.stars, text: reviewFor(r.stars, r.notes, game.plan, game.rng), stop: stop().name });
   }
+  const call = game.tutorial ? "accept" : verdict(r.score, difficulty, !!s.sentBack, r.faulty);
+  if (call === "sendBack") return sendBack(i, r.notes[0] ?? "this isn't quite right");
+  if (call === "refuse") return refuse(i, r.notes[0] ?? "this isn't what I ordered", r.perks.length > 0);
+  if (game.plan) {
+    game.ratings.push(r.stars);
+    const perk = r.perks.length && r.stars < 3 ? ` Loved the ${r.perks[0]}.` : "";
+    const back = s.sentBack ? " Had to send it back once." : "";
+    game.reviews.push({ stars: r.stars, text: reviewFor(r.stars, r.notes, game.plan, game.rng) + perk + back, stop: stop().name });
+  }
+  if (s.order.critic) criticVerdict(r.stars, r.notes);
   const { pay, tip: baseTip } = payout(s.order, r.score, s.patience / s.maxPatience);
-  const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1));
+  const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1) * CROWD[stop().crowd].tips);
   game.money += pay;
   game.tips += tip;
   game.served++;
@@ -280,11 +367,13 @@ function serve(i: number): void {
   const say =
     r.stars === 3
       ? praise[Math.floor(game.rng() * praise.length)]
-      : r.notes.length
-        ? capitalise(r.notes[0]) + (r.stars >= 2 ? ", but tasty!" : "…")
-        : r.stars === 2
-          ? "Pretty good!"
-          : "Hmm, okay.";
+      : r.perks.length
+        ? `Thanks for the ${r.perks[0]}!`
+        : r.notes.length
+          ? capitalise(r.notes[0]) + (r.stars >= 2 ? ", but tasty!" : "…")
+          : r.stars === 2
+            ? "Pretty good!"
+            : "Hmm, okay.";
   customerLeaves(i, r.stars >= 2 ? "happy" : r.stars === 1 ? "sad" : "angry", `${"★".repeat(r.stars)}${"☆".repeat(3 - r.stars)} ${say}`, r.stars >= 2);
   // The food is handed over right away so the plate is free for the next order.
   s.plate = emptyPlate();
@@ -301,6 +390,58 @@ function serve(i: number): void {
   }
 }
 
+/** Unordered sides on the plate: the customer keeps them whatever happens to the order. */
+function takeFreebies(s: Slot): string | null {
+  const o = s.order!;
+  let took: string | null = null;
+  if (s.plate.fries && !o.fries) {
+    s.kept.fries = s.plate.fries;
+    s.plate.fries = null;
+    took = s.kept.fries.curds ? "poutine" : "fries";
+  }
+  if (s.plate.drink && !o.drink) {
+    s.kept.drink = s.plate.drink;
+    s.plate.drink = null;
+    took = took ? "extras" : "drink";
+  }
+  return took;
+}
+
+/** The order comes back with a request; the plate stays as it is for you to fix. */
+function sendBack(i: number, note: string): void {
+  const s = game.slots[i];
+  s.sentBack = note;
+  const took = takeFreebies(s);
+  // Asking for a fix buys a little time.
+  s.patience = Math.min(s.maxPatience, s.patience + s.maxPatience * 0.2);
+  s.ticketKey = "";
+  syncTray(i, true);
+  trayView.plates[i].kick(0.5);
+  s.fig?.setMood("sad");
+  showBubble(i, `Can you fix it? ${capitalise(note)}.${took ? ` I'll keep the ${took}!` : ""}`, false);
+  sfx.grumble();
+  buzz([30, 40, 30]);
+  hintOnce("sent-back", "Sent back: fix the plate and swipe it up again. Drag the burger down to a prep spot to take layers off.", 4);
+}
+
+/** Really wrong: they won't take it and leave without paying (but keep any freebies). */
+function refuse(i: number, note: string, perk: boolean): void {
+  const s = game.slots[i];
+  const took = takeFreebies(s) ?? (s.kept.fries || s.kept.drink ? "freebie" : null);
+  const stars = took || perk ? 1 : 0;
+  game.lost++;
+  if (s.order!.critic) criticVerdict(0, [note]);
+  if (game.plan) {
+    game.ratings.push(stars);
+    game.reviews.push({ stars, text: `Refused it: ${note}.${took ? ` At least the ${took === "freebie" ? "free side" : took} was nice.` : ""}`, stop: stop().name });
+  }
+  sfx.grumble();
+  buzz(80);
+  customerLeaves(i, "angry", `No thanks. ${capitalise(note)}.${took ? ` I'll take the ${took === "freebie" ? "free side" : took} though.` : ""}`, false);
+  s.plate = emptyPlate();
+  syncTray(i, false);
+}
+
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function showBubble(i: number, text: string, good: boolean): void {
@@ -310,8 +451,9 @@ function showBubble(i: number, text: string, good: boolean): void {
   b.className = `bubble ${good ? "good" : "bad"}`;
   b.textContent = text;
   const slotW = bands.customers.w / 3;
-  b.style.left = `${Math.max(70, Math.min(bands.customers.w - 70, i * slotW + slotW * 0.4))}px`;
-  b.style.top = `${bands.customers.h * 0.62}px`;
+  b.style.left = `${Math.max(70, Math.min(bands.customers.w - 70, i * slotW + slotW * 0.5))}px`;
+  // Above the customer's head, clear of the receipts on the rail.
+  b.style.top = `${railTop * 0.55}px`;
   ui.root.appendChild(b);
   s.bubble = b;
   setTimeout(() => {
@@ -356,7 +498,7 @@ function tutorialHint(): string | null {
   if (!s) return null;
   const layers = s.plate.layers;
   const pattyOnGrill = counter.grillItems.find((g) => g.piece.kind === "patty");
-  if (counter.page !== HOME_PAGE) return "Swipe back to the Grill.";
+  if (counter.page !== HOME_PAGE) return "Tap Grill in the bar below to go back.";
   if (layers.length === 0) return "Drag a bun up onto the plate in the tray.";
   const hasPatty = layers.some((l) => l.piece.kind === "patty");
   if (!hasPatty) {
@@ -368,18 +510,24 @@ function tutorialHint(): string | null {
     return "Medium! Drag the patty up onto the bun.";
   }
   if (layers[layers.length - 1].piece.kind !== "bun" || layers.length < 3) return "Add the top bun.";
-  return "Ring the bell twice to serve!";
+  return "Swipe the plate up to hand it to the customer!";
 }
 
 // ---------------------------------------------------------------------------
 // Input
 
 type Payload =
-  | { type: "piece"; piece: Piece; fromGrill: { x: number; z: number } | null }
-  | { type: "stack"; layers: Layer[]; from: number; grill?: { x: number; z: number } }
+  | { type: "piece"; piece: Piece; fromGrill: { x: number; z: number } | null; fromHold?: number }
+  | { type: "stack"; layers: Layer[]; from: number; grill?: { x: number; z: number }; fromPlate?: number }
   | { type: "fries"; cook: number; basket: number | null; amount: number }
-  | { type: "carton"; size: FriesSize; cook: number; fill: number; pack: number }
-  | { type: "drink"; flavor: DrinkId; fill: number; tap: number; size: Size }
+  | { type: "carton"; size: FriesSize; cook: number; fill: number; pack: number; salt: boolean; curds: boolean; gravy: boolean }
+  | { type: "salt" }
+  | { type: "curds" }
+  | { type: "gravy" }
+  | { type: "drink"; flavor: DrinkId; fill: number; tap: number; size: Size; ice: boolean; lid: boolean; straw: boolean }
+  | { type: "ice" }
+  | { type: "lid" }
+  | { type: "straw" }
   | { type: "empty"; kind: "cup" | "carton"; size: Size; stack: number }
   | { type: "sleeve"; kind: "cup" | "carton" };
 
@@ -419,12 +567,10 @@ let lastSquirt = 0;
 /** A burger (or part of one) as a single object to carry around. */
 function stackVisual(layers: Layer[]): THREE.Object3D {
   const g = new THREE.Group();
-  let y = 0;
+  const { bases } = stackBases(layers.map((l) => l.piece));
   layers.forEach((l, i) => {
-    const role = i === 0 ? "bottom" : "top";
-    const o = makeFood(l.piece, role);
-    o.position.set(l.offX, y, l.offZ);
-    y += stackHeight(l.piece, role);
+    const o = makeFood(l.piece, i === 0 ? "bottom" : "top");
+    o.position.set(l.offX, bases[i], l.offZ);
     g.add(o);
   });
   g.scale.setScalar(0.6);
@@ -445,8 +591,9 @@ function payloadVisual(p: Payload): THREE.Object3D {
     f.scale.setScalar(1.3);
     return f;
   }
+  if (p.type === "salt" || p.type === "curds" || p.type === "gravy") return counter.fryTopMesh(p.type);
   if (p.type === "carton") {
-    const f = makeFries(true, p.size, p.fill);
+    const f = makeFries(true, p.size, p.fill, p);
     f.userData.setCook(p.cook);
     f.scale.setScalar(1.2 * f.userData.sizeScale);
     return f;
@@ -457,8 +604,10 @@ function payloadVisual(p: Payload): THREE.Object3D {
     return o;
   }
   if (p.type === "sleeve") return counter.sleeveMesh(p.kind);
-  const c = makeCup(p.flavor, true, p.size);
+  if (p.type === "ice" || p.type === "lid" || p.type === "straw") return counter.extraMesh(p.type);
+  const c = makeCup(p.flavor, p.lid, p.size);
   c.userData.setFill(p.fill);
+  dressCup(c, p);
   return c;
 }
 
@@ -479,13 +628,31 @@ function moveHold(pt: Pointer): void {
   const band = bandAt(pt.y);
   if (band === "tray" || band === "customers") {
     counter.moveHeld(new THREE.Vector3(), false);
+    counter.highlightTrash(false);
     const slot = band === "tray" ? trayView.pick(ndcIn(bands.tray, pt.x, pt.y)) : game.active;
     trayView.showGhost(slot >= 0 ? slot : game.active, pt.held.trayObj);
   } else {
     trayView.showGhost(-1, null);
     const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3);
     counter.moveHeld(g, true);
+    counter.highlightTrash(band === "counter" && counter.overTrash(g));
   }
+}
+
+/** Carrying something over a tab for a moment switches to that counter, so items can move between counters. */
+let hover = { tab: -1, since: 0 };
+function hoverTab(pt: Pointer, now: number): void {
+  if (bandAt(pt.y) !== "tabs") {
+    hover.tab = -1;
+    return;
+  }
+  const cx = pt.x + colX;
+  const tab = ui.tabs.findIndex((t) => {
+    const r = t.getBoundingClientRect();
+    return cx >= r.left && cx <= r.right;
+  });
+  if (tab !== hover.tab) hover = { tab, since: now };
+  else if (tab >= 0 && tab !== counter.page && now - hover.since > 280) goToPage(tab);
 }
 
 function velocity(pt: Pointer): { vx: number; vy: number } {
@@ -496,6 +663,16 @@ function velocity(pt: Pointer): { vx: number; vy: number } {
   const b = recent[recent.length - 1];
   const dt = Math.max(1, b.t - a.t);
   return { vx: (b.x - a.x) / dt, vy: (b.y - a.y) / dt };
+}
+
+/** Where a new piece lands on a stack: counted toppings go round the burger one by one, the rest roughly centred. */
+function landing(layers: Layer[], piece: Piece, spread: number): Layer {
+  const jitter = () => (Math.random() - 0.5) * spread;
+  if (!COUNTED.has(piece.kind)) return { piece, offX: jitter(), offZ: jitter() };
+  let k = 0;
+  for (let i = layers.length - 1; i >= 0 && layers[i].piece.kind === piece.kind; i--) k++;
+  const [x, z] = sliceSpot(piece.kind, k);
+  return { piece, offX: x + jitter() * 0.4, offZ: z + jitter() * 0.4 };
 }
 
 function addToPlate(slot: number, payload: Payload, spread: number): boolean {
@@ -513,10 +690,17 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
   }
   if (payload.type === "piece") {
     const p = payload.piece;
-    s.plate.layers.push({ piece: p, offX: (Math.random() - 0.5) * spread, offZ: (Math.random() - 0.5) * spread });
+    const l = landing(s.plate.layers, p, spread);
+    s.plate.layers.push(l);
     syncTray(slot, true);
-    trayView.plates[slot].kick(spread * 4);
-    if (s.order) {
+    trayView.plates[slot].kick(COUNTED.has(p.kind) ? 0.05 : spread * 4);
+    if (s.order && COUNTED.has(p.kind)) {
+      // Count them on: "Pickles 2 of 3".
+      let n = 0;
+      for (let i = s.plate.layers.length - 1; i >= 0 && s.plate.layers[i].piece.kind === p.kind; i--) n++;
+      const want = s.order.layers.find((e) => e.kind === p.kind)?.count;
+      if (want) showHint(`${KIND_LABEL[p.kind]} ${n} of ${want}${n > want ? ": generous!" : ""}`, 1.2);
+    } else if (s.order) {
       const exp = s.order.layers[s.plate.layers.length - 1];
       if (exp && exp.kind === "patty" && p.kind === "patty") showHint(`Patty: ${pattyLabel((p.cook[0] + p.cook[1]) / 2)}`, 1.5);
     }
@@ -530,18 +714,33 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
     showHint(payload.type === "sleeve" ? "Unwrap that at the stack first." : "Fill it first!", 1.5);
     return false;
   }
+  if (payload.type === "ice" || payload.type === "lid" || payload.type === "straw") {
+    showHint(`That goes on a cup at the drinks counter.`, 1.5);
+    return false;
+  }
+  if (payload.type === "salt" || payload.type === "curds" || payload.type === "gravy") {
+    if (!s.plate.fries) {
+      showHint("That goes on fries.", 1.5);
+      return false;
+    }
+    if (!topFries(s.plate.fries, payload.type)) return false;
+    syncTray(slot, false);
+    return true;
+  }
   if (payload.type === "carton") {
     if (s.plate.fries) {
       showHint("This plate already has fries.", 2);
       return false;
     }
-    s.plate.fries = { cook: payload.cook, size: payload.size, fill: payload.fill };
+    const { cook, size, fill, salt, curds, gravy } = payload;
+    s.plate.fries = { cook, size, fill, salt, curds, gravy };
   } else {
     if (s.plate.drink) {
       showHint("This plate already has a drink.", 2);
       return false;
     }
-    s.plate.drink = { flavor: payload.flavor, fill: payload.fill, size: payload.size };
+    s.plate.drink = { flavor: payload.flavor, fill: payload.fill, size: payload.size, ice: payload.ice, lid: payload.lid, straw: payload.straw };
+    if (!payload.lid) hintOnce("lid", "Drinks need a lid and a straw before they go out.", 3);
   }
   syncTray(slot, false);
   sfx.plop();
@@ -552,6 +751,7 @@ function finishHold(pt: Pointer): void {
   const held = pt.held!;
   const payload = held.payload;
   counter.setHeld(null);
+  counter.highlightTrash(false);
   trayView.showGhost(-1, null);
   disposeObject(held.trayObj);
   const band = bandAt(pt.y);
@@ -567,16 +767,19 @@ function finishHold(pt: Pointer): void {
   } else if (band === "counter") {
     const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3);
     const hold = counter.page === HOME_PAGE ? counter.overHold(g) : -1;
-    if (payload.type === "empty" || payload.type === "sleeve" || payload.type === "carton" || payload.type === "drink" || (payload.type === "fries" && payload.basket !== null)) {
-      done = dropAtStation(payload, g);
-    } else if (counter.page === HOME_PAGE && counter.overTrash(g)) {
+    const station = payload.type === "empty" || payload.type === "sleeve" || payload.type === "carton" || payload.type === "drink" || payload.type === "ice" || payload.type === "lid" || payload.type === "straw" || payload.type === "salt" || payload.type === "curds" || payload.type === "gravy" || (payload.type === "fries" && payload.basket !== null);
+    if (station) done = dropAtStation(payload, g);
+    if (!done && counter.overTrash(g)) {
+      // Every counter has a trash slot along its front edge.
       sfx.thud();
       buzz(20);
       done = true;
+    } else if (station) {
+      // Missed the station: it goes back where it came from below.
     } else if (hold >= 0 && (payload.type === "piece" || payload.type === "stack")) {
       // Build a burger ahead (or park food) under the heat lamp.
       const spot = counter.holds[hold];
-      const add = payload.type === "piece" ? [{ piece: payload.piece, offX: (Math.random() - 0.5) * 0.06, offZ: (Math.random() - 0.5) * 0.06 }] : payload.layers;
+      const add = payload.type === "piece" ? [landing(spot.layers, payload.piece, 0.06)] : payload.layers;
       if (spot.layers.length + add.length > 9) showHint("That stack's tall enough.", 1.5);
       else {
         spot.layers.push(...add);
@@ -622,17 +825,19 @@ function finishHold(pt: Pointer): void {
       const hit = counter.hit(ndcIn(bands.counter, pt.x, pt.y));
       if (hit?.type === "basket") {
         const b = counter.baskets[hit.idx];
-        if (!b.loaded) {
-          spend(FRIES_BATCH_COST);
-          b.loaded = true;
-          b.amount = payload.amount;
-          b.cook = 0;
-          b.down = true;
-          b.goldenRung = false;
-          sfx.sizzleHit();
+        if (b.loaded && b.amount > 1 - FRIES_SCOOP / 2) showHint("That basket is full.", 1.5);
+        else {
+          // Each scoop is one small carton's worth; raw fries added later pull the batch's cook back.
+          spend(FRIES_BATCH_COST * payload.amount);
+          const had = b.loaded ? b.amount : 0;
+          b.cook = had ? (b.cook * had) / (had + payload.amount) : 0;
+          b.amount = Math.min(1, had + payload.amount);
+          if (!b.loaded) Object.assign(b, { loaded: true, down: false, goldenRung: false });
+          if (b.down) sfx.sizzleHit();
+          else sfx.plop();
           done = true;
-          hintOnce("fries-ding", "The fryer chimes when fries are golden. Tap the basket to lift it.", 4);
-        } else showHint("That basket is busy.", 1.5);
+          hintOnce("fries-scoop", "One scoop fills a small carton, two a medium, three a large. Tap the basket to lower it.", 4);
+        }
       }
     }
   }
@@ -640,10 +845,17 @@ function finishHold(pt: Pointer): void {
   if (!done) {
     // Put things back where they came from.
     if (payload.type === "piece" && payload.fromGrill) counter.addGrillItem(payload.piece, payload.fromGrill.x, payload.fromGrill.z);
+    if (payload.type === "piece" && payload.fromHold !== undefined) {
+      counter.holds[payload.fromHold].layers.push({ piece: payload.piece, offX: 0, offZ: 0 });
+      counter.syncHold(payload.fromHold, false);
+    }
     if (payload.type === "stack" && payload.grill) {
       const [base, top] = payload.layers.map((l) => l.piece);
       counter.addGrillItem(base, payload.grill.x, payload.grill.z, top);
-    } else if (payload.type === "stack") {
+    } else if (payload.type === "stack" && payload.fromPlate !== undefined) {
+      game.slots[payload.fromPlate].plate.layers.push(...payload.layers);
+      syncTray(payload.fromPlate, false);
+    } else if (payload.type === "stack" && payload.from >= 0) {
       counter.holds[payload.from].layers.push(...payload.layers);
       counter.syncHold(payload.from, false);
     }
@@ -654,10 +866,12 @@ function finishHold(pt: Pointer): void {
     if (payload.type === "drink") {
       counter.placeCup(payload.tap, payload.size);
       counter.taps[payload.tap].fill = payload.fill;
+      for (const k of ["ice", "lid", "straw"] as const) if (payload[k]) counter.dressTap(payload.tap, k);
       spend(-payload.fill * SODA_COST[payload.size]);
     }
     if (payload.type === "carton") {
-      Object.assign(counter.packs[payload.pack], { size: payload.size, cook: payload.cook, fill: payload.fill });
+      const { size, cook, fill, salt, curds, gravy } = payload;
+      Object.assign(counter.packs[payload.pack], { size, cook, fill, salt, curds, gravy });
       counter.syncPack(payload.pack);
     }
     if (payload.type === "empty") {
@@ -667,8 +881,56 @@ function finishHold(pt: Pointer): void {
   }
 }
 
+/** Salt, curds or gravy onto fries in a carton (on a pad or a plate). False if it's already on. */
+function topFries(f: { salt?: boolean; curds?: boolean; gravy?: boolean }, what: "salt" | "curds" | "gravy"): boolean {
+  if (f[what]) {
+    showHint(what === "salt" ? "Already salted." : what === "curds" ? "It's got curds." : "It's got gravy.", 1.2);
+    return false;
+  }
+  f[what] = true;
+  spend(FRY_TOP_COST[what]);
+  if (what === "salt") sfx.whoosh();
+  else sfx.plop();
+  if (what === "gravy" && !f.curds) hintOnce("curds-first", "Curds go under the gravy so they soften just right.", 3);
+  return true;
+}
+
 /** Drinks and fryer stations: cups under nozzles, cartons on packing spots, sleeves on empty stacks. */
 function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
+  if (payload.type === "salt" || payload.type === "curds" || payload.type === "gravy") {
+    const pi = counter.friedPackAt(g);
+    if (pi < 0) {
+      if (counter.overPack(g) >= 0) showHint("Fill the carton with fries first.", 1.5);
+      return false;
+    }
+    return topFries(counter.packs[pi], payload.type) && (counter.syncPack(pi), true);
+  }
+  if (payload.type === "ice" || payload.type === "lid" || payload.type === "straw") {
+    const ti = counter.overTap(g);
+    const t = counter.taps[ti];
+    if (!t) return false;
+    // Ice first, then pour, then the lid, then the straw through it.
+    const problem = !t.cup
+      ? "Put a cup under the nozzle first."
+      : t[payload.type]
+        ? `It already has ${payload.type === "ice" ? "ice" : `a ${payload.type}`}.`
+        : payload.type === "ice" && t.lid
+          ? "Ice goes in before the lid."
+          : payload.type === "lid" && t.fill < 0.05
+            ? "Pour the drink first."
+            : payload.type === "straw" && !t.lid
+              ? "Lid first, then the straw."
+              : "";
+    if (problem) {
+      showHint(problem, 1.8);
+      return false;
+    }
+    counter.dressTap(ti, payload.type);
+    spend(EXTRA_COST[payload.type]);
+    sfx.plop();
+    if (payload.type === "lid") hintOnce("straw", "Now a straw through the lid.", 2.5);
+    return true;
+  }
   if (payload.type === "empty" && payload.kind === "cup") {
     const ti = counter.overTap(g);
     const t = counter.taps[ti];
@@ -820,7 +1082,7 @@ canvas.addEventListener("pointerdown", (e) => {
       pt.mode = "sauce";
       pt.sauce = hit.sauce;
       counter.liftBottle(hit.sauce, counter.groundPoint(ndcIn(bands.counter, x, y), 0.3));
-    } else if (hit.type === "friesBin") startHold(pt, { type: "fries", cook: 0, basket: null, amount: 1 });
+    } else if (hit.type === "friesBin") startHold(pt, { type: "fries", cook: 0, basket: null, amount: FRIES_SCOOP });
     else if (hit.type === "stack") {
       const s = counter.stacks[hit.idx];
       const what = s.kind === "cup" ? "cups" : "cartons";
@@ -833,20 +1095,31 @@ canvas.addEventListener("pointerdown", (e) => {
         s.count--;
         counter.syncStack(s);
         startHold(pt, { type: "empty", kind: s.kind, size: s.size, stack: hit.idx });
-      } else showHint(`Out of ${what}! Grab a wrapped sleeve from the supplies cabinet and drop it here.`, 3);
-    } else if (hit.type === "supplies") startHold(pt, { type: "sleeve", kind: hit.kind });
+      } else showHint(`Out of ${what}! Fetch a wrapped sleeve from the Supplies counter.`, 3);
+    } else if (hit.type === "ice") startHold(pt, { type: "ice" });
+    else if (hit.type === "lids") startHold(pt, { type: "lid" });
+    else if (hit.type === "straws") startHold(pt, { type: "straw" });
+    else if (hit.type === "supplies") {
+      startHold(pt, { type: "sleeve", kind: hit.kind });
+      hintOnce("carry", `Hold the sleeve over the ${hit.kind === "cup" ? "Drinks" : "Fryer"} tab to carry it there, then drop it on an empty stack.`, 3.5);
+    }
     else if (hit.type === "pack") {
       const p = counter.packs[hit.idx];
       if (p.size && p.fill > 0) {
-        startHold(pt, { type: "carton", size: p.size, cook: p.cook, fill: p.fill, pack: hit.idx });
-        Object.assign(p, { size: null, cook: 0, fill: 0 });
+        startHold(pt, { type: "carton", size: p.size, cook: p.cook, fill: p.fill, pack: hit.idx, salt: p.salt, curds: p.curds, gravy: p.gravy });
+        Object.assign(p, EMPTY_PACK);
         counter.syncPack(hit.idx);
       } else showHint(p.size ? "Drag fries from the basket into the carton." : "Grab a carton from the stacks behind the fryer.", 2);
     }
     else if (hit.type === "basket") pt.mode = "basket";
+    else if (hit.type === "shaker" || hit.type === "curds" || hit.type === "gravy") {
+      startHold(pt, { type: hit.type === "shaker" ? "salt" : hit.type });
+      hintOnce(`fry-${hit.type}`, hit.type === "shaker" ? "Shake salt over fries in a carton, on the pad or on the plate." : hit.type === "curds" ? "Poutine: fries, then cheese curds, then gravy on top." : "Ladle gravy over the curds to finish a poutine.", 3);
+    }
     else if (hit.type === "tap") {
       const t = counter.taps[hit.idx];
       if (!t.cup) showHint("Put a cup under the nozzle first. Cups are in the stacks below.", 2.5);
+      else if (t.lid) showHint("The lid's on.", 1.5);
       else {
         pt.mode = "pour";
         t.pouring = true;
@@ -854,7 +1127,7 @@ canvas.addEventListener("pointerdown", (e) => {
     } else if (hit.type === "cup") {
       const t = counter.taps[hit.idx];
       if (t.cup && t.fill > 0.05) {
-        startHold(pt, { type: "drink", flavor: t.flavor, fill: t.fill, tap: hit.idx, size: t.size! });
+        startHold(pt, { type: "drink", flavor: t.flavor, fill: t.fill, tap: hit.idx, size: t.size!, ice: t.ice, lid: t.lid, straw: t.straw });
         spend(t.fill * SODA_COST[t.size!]);
         counter.removeCup(hit.idx);
       } else if (!t.cup && t.puddle > 0.01) {
@@ -894,10 +1167,11 @@ canvas.addEventListener("pointermove", (e) => {
 
   switch (pt.mode) {
     case "swipe":
-      counter.dragOffset = -dx * (7.3 / bands.counter.w);
+      // Sideways swipes on the counter are free for station actions; counters change from the tab bar.
       break;
     case "held":
       moveHold(pt);
+      hoverTab(pt, e.timeStamp);
       break;
     case "wipe": {
       // Scrub back and forth to mop up an overflow.
@@ -924,11 +1198,28 @@ canvas.addEventListener("pointermove", (e) => {
         }
       }
       break;
+    case "plate": {
+      // Drag a burger down off its plate to a prep spot under the heat lamp, to fix it there.
+      const s = pt.plate >= 0 ? game.slots[pt.plate] : null;
+      if (s && s.plate.layers.length && bandAt(pt.y) === "counter") {
+        const layers = s.plate.layers.splice(0);
+        syncTray(pt.plate, false);
+        if (counter.page !== HOME_PAGE) goToPage(HOME_PAGE);
+        startHold(pt, { type: "stack", layers, from: -1, fromPlate: pt.plate });
+        hintOnce("to-prep", "Drop it on a prep spot, then swipe down on it to take layers off.", 3);
+      }
+      break;
+    }
     case "hold":
-      // Drag a whole assembly-spot stack: to a plate, another spot, back to the grill, or the trash.
+      // Swipe down on a prep spot to peel the top layer off; drag any other way to move the whole stack.
       if (pt.moved && pt.hit?.type === "hold") {
         const spot = counter.holds[pt.hit.idx];
-        if (spot.layers.length) {
+        if (spot.layers.length && dy > 0 && dy > Math.abs(dx) * 1.2) {
+          const top = spot.layers.pop()!;
+          counter.syncHold(pt.hit.idx, false);
+          startHold(pt, { type: "piece", piece: top.piece, fromGrill: null, fromHold: pt.hit.idx });
+          hintOnce("peel", "Peeled off. Drop it in the trash slot, back on a stack, or on the grill.", 3);
+        } else if (spot.layers.length) {
           const layers = spot.layers.splice(0);
           counter.syncHold(pt.hit.idx, false);
           startHold(pt, { type: "stack", layers, from: pt.hit.idx });
@@ -936,7 +1227,7 @@ canvas.addEventListener("pointermove", (e) => {
       }
       break;
     case "basket":
-      if (pt.moved && pt.hit?.type === "basket" && (now - pt.t0 > 400 || dy > 0 || bandAt(pt.y) !== "counter")) {
+      if (pt.moved && pt.hit?.type === "basket" && (now - pt.t0 > 400 || dy > 0 || Math.abs(dx) > Math.abs(dy) || bandAt(pt.y) !== "counter")) {
         const b = counter.baskets[pt.hit.idx];
         if (b.loaded) {
           b.loaded = false;
@@ -966,11 +1257,8 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
   lastGesture = { mode: pt.mode, dx, dy, dt, vy, flickUp, moved: pt.moved };
 
   switch (pt.mode) {
-    case "swipe": {
-      counter.dragOffset = 0;
-      if (!cancelled && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) goToPage(counter.page + (dx < 0 ? 1 : -1));
+    case "swipe":
       break;
-    }
     case "held":
       if (cancelled) {
         pt.y = pt.y0;
@@ -996,8 +1284,10 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
         if (!b.loaded) showHint("Drag frozen fries into the basket.", 2);
         else if (!pt.moved || flickUp) {
           b.down = !b.down;
-          sfx.whoosh();
-          if (!b.down) hintOnce("fries-drag", "Drag the fries up to the tray.", 2.5);
+          if (b.down) sfx.sizzleHit();
+          else sfx.whoosh();
+          if (b.down) hintOnce("fries-ding", "Watch the bar: lift them in the gold zone. The fryer chimes at perfect.", 3.5);
+          else hintOnce("fries-drag", "Drag the fries into a carton on the pad.", 2.5);
         }
       }
       break;
@@ -1029,7 +1319,12 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       }
       break;
     case "plate":
-      if (!cancelled && pt.plate >= 0 && dy > 40 && Math.abs(dy) > Math.abs(dx)) removeTop(pt.plate);
+      if (cancelled || pt.plate < 0) break;
+      // Swipe a plate up to hand it to its customer.
+      if (dy < -40 && -dy > Math.abs(dx)) serve(pt.plate);
+      // Swipe down on a plate with only sides to take them off.
+      else if (dy > 40 && dy > Math.abs(dx)) removeTop(pt.plate);
+      else if (!pt.moved && game.slots[pt.plate].order) hintOnce("serve", "Swipe the plate up to hand it over.", 2.5);
       break;
   }
 }
@@ -1060,6 +1355,37 @@ function goToPage(p: number): void {
   armedSauce = null;
 }
 
+// Swipe along the tab bar to move between counters (the counters themselves don't swipe).
+{
+  const nav = ui.tabs[0].parentElement!;
+  let sx = -1;
+  let swiped = false;
+  nav.addEventListener("pointerdown", (e) => {
+    sx = e.clientX;
+    swiped = false;
+  });
+  nav.addEventListener("pointermove", (e) => {
+    if (sx < 0 || swiped) return;
+    const dx = e.clientX - sx;
+    if (Math.abs(dx) > 36) {
+      swiped = true;
+      sfx.unlock();
+      goToPage(counter.page + (dx < 0 ? 1 : -1));
+    }
+  });
+  const end = () => (sx = -1);
+  nav.addEventListener("pointerup", end);
+  nav.addEventListener("pointercancel", end);
+  // A swipe that started on a tab shouldn't also count as tapping it.
+  nav.addEventListener("click", (e) => {
+    if (swiped) {
+      e.stopPropagation();
+      e.preventDefault();
+      swiped = false;
+    }
+  }, true);
+}
+
 ui.tabs.forEach((t, i) =>
   t.addEventListener("click", () => {
     sfx.unlock();
@@ -1074,29 +1400,6 @@ ui.tickets.forEach((t, i) =>
     setActive(i);
   }),
 );
-
-let lastDing = 0;
-let singleDingTimer = 0;
-ui.bell.addEventListener("pointerdown", (e) => {
-  e.preventDefault();
-  sfx.unlock();
-  if (game.phase !== "playing") return;
-  sfx.ding();
-  buzz(10);
-  ui.bell.classList.remove("ring");
-  void ui.bell.offsetWidth;
-  ui.bell.classList.add("ring");
-  const now = performance.now();
-  if (now - lastDing < 550) {
-    clearTimeout(singleDingTimer);
-    lastDing = 0;
-    serve(game.active);
-  } else {
-    lastDing = now;
-    clearTimeout(singleDingTimer);
-    singleDingTimer = window.setTimeout(() => showHint("Ding ding! Ring twice to serve.", 1.6), 600);
-  }
-});
 
 // ---------------------------------------------------------------------------
 // Screens
@@ -1155,21 +1458,6 @@ ui.root.addEventListener("click", (e) => {
     case "next":
       showTitle();
       break;
-    case "town": {
-      const id = btn!.dataset.id!;
-      game.mapSel = id;
-      showTitle(true);
-      break;
-    }
-    case "drive": {
-      const id = btn!.dataset.id!;
-      if (!save.unlocked.includes(id) || save.offer.length) break;
-      save.town = id;
-      writeSave(save);
-      sfx.whoosh();
-      showTitle(true);
-      break;
-    }
     case "new-trip":
       if (btn!.dataset.armed !== "1") {
         btn!.dataset.armed = "1";
@@ -1181,35 +1469,8 @@ ui.root.addEventListener("click", (e) => {
       writeSave(save);
       showTitle();
       break;
-    case "resume":
-      game.phase = "playing";
-      ui.menu.hidden = true;
-      break;
-    case "sound": {
-      sfx.setMuted(!sfx.muted);
-      (e.target as HTMLElement).textContent = `Sound: ${sfx.muted ? "off" : "on"}`;
-      try {
-        localStorage.setItem("bv-muted", sfx.muted ? "1" : "0");
-      } catch {
-        // Storage can be unavailable (private mode); the setting just won't stick.
-      }
-      break;
-    }
-    case "check-update": {
-      const btn = e.target as HTMLButtonElement;
-      btn.textContent = "Checking…";
-      void checkNow().then((v) => {
-        if (!v) btn.textContent = "Couldn't reach the server";
-        else if (Number(v.build) > Number(__BUILD__)) btn.textContent = `Build #${v.build} is available`;
-        else btn.textContent = "You're on the latest build";
-      });
-      break;
-    }
     case "update-now":
       if (game.pendingUpdate) reloadTo(game.pendingUpdate.build, true);
-      break;
-    case "install":
-      void installPrompt?.prompt();
       break;
     case "update-later":
       ui.update.hidden = true;
@@ -1217,18 +1478,79 @@ ui.root.addEventListener("click", (e) => {
   }
 });
 
+// The game menu (src/screens/menu.ts). In a shift it pauses; closing it resumes.
+const inShift = () => game.phase === "playing" || game.phase === "paused";
+initMenu({
+  inShift,
+  town: () => (inShift() ? shopStop() : withEvent(townById(game.mapSel), eventOn(game.mapSel, save.day))),
+  priceMult: () => (inShift() && game.plan ? PRICE[game.plan.price].mult : 1),
+  subtitle: () => `Day ${save.day} · ${townById(save.town).name}`,
+  sound: () => !sfx.muted,
+  setSound: (on) => {
+    sfx.unlock();
+    sfx.setMuted(!on);
+    try {
+      localStorage.setItem("bv-muted", on ? "0" : "1");
+    } catch {
+      // Storage can be unavailable (private mode); the setting just won't stick.
+    }
+  },
+  difficulty: () => difficulty,
+  setDifficulty: (d) => {
+    difficulty = d;
+    try {
+      localStorage.setItem("bv-difficulty", d);
+    } catch {
+      // ignore
+    }
+  },
+  gfx: () => gfx,
+  setGfx: (level) => {
+    applyGfx(level);
+    layout();
+    try {
+      localStorage.setItem("bv-gfx", level);
+    } catch {
+      // ignore
+    }
+  },
+  biz: () => save.biz,
+  setBiz: (on) => {
+    save.biz = on;
+    writeSave(save);
+    if (game.phase === "title") showTitle();
+  },
+  canInstall: () => !!installPrompt,
+  install: () => void installPrompt?.prompt(),
+  checkUpdate: () => checkNow(),
+  resume: () => {
+    if (game.phase === "paused") game.phase = "playing";
+  },
+  restart: () => {
+    if (save.biz && save.tutorialDone) showPlan();
+    else startShift();
+  },
+  quit: () => showTitle(),
+  newTrip: () => {
+    Object.assign(save, freshSave(), { tutorialDone: save.tutorialDone, trips: save.trips, best: save.best });
+    game.mapSel = save.town;
+    writeSave(save);
+    showTitle();
+  },
+});
+
 ui.menuBtn.addEventListener("click", () => {
   if (game.phase === "playing") {
     cancelPointer();
     game.phase = "paused";
-    ui.menu.hidden = false;
+    openMenu();
   }
 });
 
+applyGfx(gfx);
 try {
   if (localStorage.getItem("bv-muted") === "1") {
     sfx.setMuted(true);
-    ui.menu.querySelector('[data-act="sound"]')!.textContent = "Sound: off";
   }
 } catch {
   // ignore
@@ -1251,7 +1573,9 @@ function startShift(plan: Plan | null = null): void {
   });
   counter.warm = false;
   for (const b of counter.baskets) Object.assign(b, { loaded: false, cook: 0, down: false, goldenRung: false, amount: 0 });
-  counter.resetStations();
+  counter.resetStations(save.stock);
+  game.town = save.town;
+  game.event = eventOn(save.town, save.day);
   Object.assign(game, {
     phase: "playing",
     time: 0,
@@ -1269,16 +1593,21 @@ function startShift(plan: Plan | null = null): void {
     costs: 0,
     reviews: [],
     ratings: [],
-    customers: plan ? plannedCustomers(plan) : stop().customers,
+    customers: plan ? plannedCustomers(plan) : Math.round(stop().customers * CROWD[stop().crowd].traffic * popularityTraffic(save.popularity)),
+    press: null,
   });
   applyStop();
+  // Maybe a critic in today's line, never the very first customer.
+  game.criticAt = game.rng() < criticChance(stop().crowd, game.event) ? 1 + Math.floor(game.rng() * Math.max(1, game.customers - 2)) : -1;
   counter.fryBoost = has("turbo") ? 1.35 : 1;
   counter.autoStopPour = has("autostop");
   counter.setPage(HOME_PAGE);
-  const intro = stop().newThing;
+  const intro = game.event
+    ? `${game.event.name} today! ${game.event.blurb}${game.event.special ? ` Special: ${game.event.special.name}.` : ""}`
+    : stop().newThing;
   if (intro && !game.tutorial) showHint(intro, 6);
   ui.title.hidden = true;
-  ui.menu.hidden = true;
+  closeAll();
   ui.summary.hidden = true;
 }
 
@@ -1287,7 +1616,7 @@ function applyStop(): void {
   const st = stop();
   counter.setPantry(st.pantry);
   customersView.setBackdrop(st.backdrop);
-  ui.stop.textContent = st.name;
+  ui.stop.textContent = game.event ? `${st.name} · ${game.event.name}` : st.name;
 }
 
 const offerList = () => save.offer.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean);
@@ -1300,49 +1629,74 @@ function highlights(reviews: Review[]): Review[] {
 }
 
 function showPlan(): void {
+  game.event = eventOn(save.town, save.day);
   const plan = planFor(stop(), save.plan);
-  ui.title.innerHTML = planHtml({ stop: stop(), plan, rep: save.rep, reviews: save.reviews, customers: plannedCustomers(plan) });
+  ui.title.innerHTML = planHtml({
+    stop: stop(),
+    plan,
+    rep: save.rep,
+    reviews: save.reviews,
+    customers: plannedCustomers(plan),
+    wtp: willingnessToPay(save.popularity, save.rep),
+    popularity: save.popularity,
+  });
   ui.title.hidden = false;
   ui.summary.hidden = true;
 }
 
-function showTitle(keepScroll = false): void {
+/**
+ * The home screen: the road map with the truck's numbers, where the player drives, opens the
+ * window or picks a pending upgrade. Lives in src/screens/home.ts; this only hands it what it needs.
+ */
+function showTitle(): void {
   game.town = save.town;
+  game.event = eventOn(save.town, save.day);
   applyStop();
-  const card = ui.title.querySelector(".card");
-  const scroll = keepScroll && card ? card.scrollTop : 0;
-  ui.title.innerHTML = titleHtml({
-    town: stop(),
-    selected: townById(game.mapSel),
-    unlocked: save.unlocked,
-    passed: save.passedTowns,
-    best: save.best,
-    trips: save.trips,
-    bank: save.bank,
-    owned: save.upgrades.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean),
-    offer: offerList(),
-    fresh: !save.tutorialDone && save.passedTowns.length === 0,
-    biz: save.biz,
-    rep: save.rep,
-    reviews: save.reviews,
-  });
-  ui.title.querySelector(".card")!.scrollTop = scroll;
   game.phase = "title";
-  if (!keepScroll) screenShownAt = performance.now();
+  screenShownAt = performance.now();
   ui.title.hidden = false;
   ui.summary.hidden = true;
-  ui.menu.hidden = true;
+  mountHome(ui.title, {
+    save,
+    focus: game.mapSel,
+    startShift: () => {
+      if (save.biz && save.tutorialDone) {
+        showPlan();
+        screenShownAt = performance.now();
+      } else startShift();
+    },
+    commit: () => {
+      writeSave(save);
+      game.town = save.town;
+      game.event = eventOn(save.town, save.day);
+      applyStop();
+    },
+    openMenu: () => openMenu({ tab: "general" }),
+    openHowTo: () => openHowTo(),
+    sfx: { whoosh: () => sfx.whoosh(), coin: () => sfx.coin(), tap: () => sfx.unlock() },
+  });
+  game.mapSel = save.town;
   if (game.pendingUpdate) reloadTo(game.pendingUpdate.build);
 }
 
 function endShift(): void {
   game.phase = "summary";
+  save.day++;
+  const popBefore = save.popularity;
+  save.popularity = Math.min(100, fadePopularity(save.popularity) + (game.press?.pop ?? 0));
+  save.popularity = Math.max(10, save.popularity);
+  if (game.press) save.press = [game.press, ...save.press].slice(0, 10);
   for (const s of game.slots) {
     s.bubble?.remove();
     s.bubble = null;
   }
   const here = stop();
   const avg = game.stars.length ? game.stars.reduce((a, b) => a + b, 0) / game.stars.length : 0;
+  // Lifetime rating for the home screen: every served order's stars, in either mode.
+  save.ratingCount += game.stars.length;
+  save.ratingSum += game.stars.reduce((a, b) => a + b, 0);
+  // A shift ends the day, so the truck may drive one road overnight again.
+  save.overnightUsed = false;
   const ok = passed(avg, game.served, game.customers);
   let lastStop = false;
   const before = [...save.unlocked];
@@ -1356,6 +1710,7 @@ function endShift(): void {
     save.reviews = [...game.reviews.slice().reverse(), ...save.reviews].slice(0, 30);
   }
   save.best[here.id] = Math.max(save.best[here.id] ?? 0, avg);
+  save.stock = counter.stock();
   if (ok) {
     save.offer = upgradeChoices(save.upgrades, game.rng).map((u) => u.id);
     const firstTime = !save.passedTowns.includes(here.id);
@@ -1368,6 +1723,7 @@ function endShift(): void {
   writeSave(save);
   ui.summary.innerHTML = summaryHtml({
     stop: here,
+    shiftsHere: save.shiftsIn?.[here.id] ?? 0,
     served: game.served,
     lost: game.lost,
     stars: game.stars,
@@ -1387,6 +1743,8 @@ function endShift(): void {
     best: game.best?.name ?? null,
     outcome: !ok ? "failed" : lastStop ? "trip" : "passed",
     opened,
+    press: game.press,
+    pop: [popBefore, save.popularity],
     offer: offerList(),
   });
   ui.summary.hidden = false;
@@ -1426,11 +1784,9 @@ let installPrompt: (Event & { prompt: () => Promise<void> }) | null = null;
 window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   installPrompt = e as typeof installPrompt;
-  ui.install.hidden = false;
 });
 window.addEventListener("appinstalled", () => {
   installPrompt = null;
-  ui.install.hidden = true;
 });
 
 // ---------------------------------------------------------------------------
@@ -1447,7 +1803,7 @@ function tick(dt: number): void {
       spawnCustomer(free);
       const level = game.time / stop().shiftLength;
       const busy = game.customers / stop().customers;
-      game.nextSpawn = game.time + ((17 - 8 * level) * (0.8 + game.rng() * 0.4)) / busy;
+      game.nextSpawn = game.time + (((17 - 8 * level) * (0.8 + game.rng() * 0.4)) / busy) * DIFFICULTY[difficulty].spawnGap;
     }
     // If the window is empty, don't make the player wait.
     if (!game.slots.some((s) => s.order) && game.nextSpawn > game.time + 2 && !game.tutorial) game.nextSpawn = game.time + 2;
@@ -1455,9 +1811,10 @@ function tick(dt: number): void {
     game.slots.forEach((s, i) => {
       if (!s.order || s.leaving) return;
       s.patience -= dt;
-      if (s.fig) s.fig.setMood(s.patience / s.maxPatience < 0.3 ? "sad" : "neutral");
+      if (s.fig) s.fig.setMood(patienceMood(s.patience / s.maxPatience));
       if (s.patience <= 0) {
         game.lost++;
+        if (s.order.critic) criticVerdict(0, []);
         if (game.plan) {
           game.ratings.push(0);
           game.reviews.push({ stars: 0, text: reviewFor(0, [], game.plan, game.rng, true), stop: stop().name });
@@ -1534,16 +1891,17 @@ function updateUi(): void {
   const money = net < 0 ? `−$${-net}` : `$${net}`;
   if (ui.money.textContent !== money) ui.money.textContent = money;
 
+  ui.rail.hidden = game.phase === "title";
   game.slots.forEach((s, i) => {
     const t = ui.tickets[i];
     const show = !!s.order && !s.leaving && game.phase !== "title";
     t.hidden = !show;
     if (!show || !s.order) return;
     const pct = s.patience / s.maxPatience;
-    const key = `${s.order.id}|${s.expanded}|${s.plate.layers.map((l) => l.piece.kind).join(",")}|${!!s.plate.fries}|${s.plate.drink?.flavor}|${Math.round(pct * 50)}`;
+    const key = `${s.order.id}|${s.expanded}|${s.plate.layers.map((l) => l.piece.kind).join(",")}|${s.plate.fries ? `${+!!s.plate.fries.salt}${+!!s.plate.fries.curds}${+!!s.plate.fries.gravy}` : ""}|${s.plate.drink?.flavor}|${Math.round(pct * 50)}`;
     if (key !== s.ticketKey) {
       const fresh = !s.ticketKey.startsWith(`${s.order.id}|${s.expanded}|`);
-      t.innerHTML = ticketHtml(s.order, s.plate, game.tutorial && game.spawned === 1 && i === game.slots.findIndex((x) => x.order) ? 1 : pct, s.expanded);
+      t.innerHTML = ticketHtml(s.order, s.plate, game.tutorial && game.spawned === 1 && i === game.slots.findIndex((x) => x.order) ? 1 : pct, s.expanded, s.sentBack);
       s.ticketKey = key;
       // Long orders on short screens get a denser ticket rather than being cut off.
       if (fresh) {
@@ -1560,11 +1918,15 @@ function updateUi(): void {
 
   ui.tabs.forEach((t, i) => t.setAttribute("aria-selected", String(i === counter.page)));
   updateGrillTags();
+  updateFryTags();
   updateHoldUi();
   updateStationUi();
+  // Labels are as wide as one tap, so they line up edge to edge along the machine.
+  const tapPx = ((counter.drinkLabelPoint(1).project(counter.camera).x - counter.drinkLabelPoint(0).project(counter.camera).x) / 2) * bands.counter.w;
   ui.drinkLabels.forEach((el, i) => {
     const v = counter.drinkLabelPoint(i).project(counter.camera);
     const x = ((v.x + 1) / 2) * bands.counter.w;
+    el.style.width = `${Math.round(tapPx - 4)}px`;
     const visible = game.phase === "playing" && x > 20 && x < bands.counter.w - 20;
     el.hidden = !visible;
     if (visible) {
@@ -1573,11 +1935,13 @@ function updateUi(): void {
     }
   });
   // Tab dots: something needs attention on that counter.
-  const friesReady = counter.baskets.some((b) => b.loaded && b.cook >= 0.55);
-  const friesBurning = counter.baskets.some((b) => b.loaded && b.down && b.cook >= 0.9);
+  const friesReady = counter.baskets.some((b) => b.loaded && friesZone(b.cook) === "done");
+  const friesBurning = counter.baskets.some((b) => b.loaded && b.down && b.cook >= FRIES_ZONE.over - 0.05);
   const grillBurning = counter.grillItems.some((g) => g.piece.cook[0] > 0.85);
-  const dots = [false, grillBurning, friesReady || friesBurning];
-  const hot = [false, grillBurning, friesBurning];
+  // Supplies: a stack is out (or nearly), so a sleeve is needed.
+  const lowStock = counter.stacks.some((st) => !st.sleeve && st.count <= 1);
+  const dots = [false, grillBurning, friesReady || friesBurning, lowStock];
+  const hot = [false, grillBurning, friesBurning, counter.stacks.some((st) => !st.sleeve && st.count === 0)];
   ui.tabDots.forEach((d, i) => {
     d.hidden = !dots[i] || i === counter.page;
     d.classList.toggle("hot", hot[i]);
@@ -1592,14 +1956,22 @@ function updateUi(): void {
 
 /** Small doneness tags floating over grill items, so players don't have to judge colour alone. */
 const grillTags: HTMLElement[] = [];
+/** Colour for each doneness band, so the grill tag can be read at a glance. */
+/** Cook thresholds of each patty doneness level, to show progress through the current one. */
+const DONENESS_BANDS: [string, number, number][] = [["raw", 0, 0.18], ["rare", 0.18, 0.43], ["medium", 0.43, 0.67], ["well", 0.67, 0.92], ["burnt", 0.92, 1.2]];
+
 function itemTag(p: Piece): string {
-  const short = (t: number) => {
-    const l = pattyLabel(t);
-    return l === "Well done" ? "Well" : l === "Medium" ? "Med" : l;
-  };
   switch (p.kind) {
-    case "patty":
-      return `<span>▼ ${short(p.cook[0])}</span><span>▲ ${short(p.cook[1])}</span>`;
+    case "patty": {
+      // Two pills that mirror the patty: the top one is the face up, the bottom one the face on the grill.
+      // Each shows its level and how far into it the face is; a face matching the active order gets a tick.
+      const want = game.slots[game.active]?.order?.layers.find((l) => l.kind === "patty")?.doneness;
+      const half = (t: number) => {
+        const [d, lo, hi] = DONENESS_BANDS.find(([, , h]) => t < h) ?? DONENESS_BANDS[4];
+        return donenessPill(d, (t - lo) / (hi - lo), d === want ? "ok" : "");
+      };
+      return `<i class="pind">${half(p.cook[1])}${half(p.cook[0])}</i>`;
+    }
     case "bacon": {
       const t = avgCook(p);
       return t >= 1 ? "Burnt" : t >= 0.4 ? "Crispy" : p.cook[0] > 0.3 && p.cook[1] < 0.1 ? "Flip me" : "Raw";
@@ -1637,8 +2009,8 @@ const stationTag = (cls: string): HTMLElement => {
   return el;
 };
 const stackTags = counter.stacks.map(() => stationTag("stack"));
-const supplyTags = [0, 2].map(() => stationTag("supply"));
 const puddleTags = counter.taps.map(() => stationTag("hot"));
+const supplyTags = [0, 1].map(() => stationTag("stack"));
 function placeTag(el: HTMLElement, world: THREE.Vector3, text: string, cls?: [string, boolean]): void {
   el.hidden = false;
   if (el.textContent !== text) el.textContent = text;
@@ -1656,10 +2028,12 @@ function updateStationUi(): void {
     const text = s.sleeve ? "Tap to unwrap" : s.count ? `${s.size} · ${s.count}` : `${s.size} · empty`;
     placeTag(stackTags[i], new THREE.Vector3(s.x, 0, s.z + 0.6), text, ["low", !s.sleeve && s.count <= 1]);
   });
-  supplyTags.forEach((el, k) => {
-    const page = k ? 2 : 0;
-    if (!on(page)) return void (el.hidden = true);
-    placeTag(el, k ? new THREE.Vector3(pageX(2) + 2.1, 0.3, 3.5) : new THREE.Vector3(pageX(0) + 2.0, 0.3, 2.62), "Supplies");
+  // Supplies counter: each crate's label lists how full the stacks it restocks are.
+  (["cup", "carton"] as const).forEach((kind, k) => {
+    if (!on(3)) return void (supplyTags[k].hidden = true);
+    const st = counter.stacks.filter((x) => x.kind === kind);
+    const text = `${kind === "cup" ? "Cups" : "Cartons"}: ${st.map((x) => `${x.size} ${x.sleeve ? "sleeve" : x.count}`).join(" · ")}`;
+    placeTag(supplyTags[k], counter.supplyAt[kind].clone().add(new THREE.Vector3(0, 0, 1.55)), text, ["low", st.some((x) => !x.sleeve && x.count <= 1)]);
   });
   counter.taps.forEach((t, i) => {
     if (!on(0) || t.puddle < 0.01) return void (puddleTags[i].hidden = true);
@@ -1700,6 +2074,51 @@ function updateHoldUi(): void {
   zoneBtn.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
 }
 
+/**
+ * A fries doneness meter: underdone, done and overdone zones, a line at perfect, and a marker
+ * for where these fries are now.
+ */
+function friesMeter(cook: number): string {
+  const end = FRIES_ZONE.burnt;
+  const pct = (v: number) => `${((Math.min(end, Math.max(0, v)) / end) * 100).toFixed(1)}%`;
+  return `<span class="fmeter ${friesZone(cook)}${cook >= end ? " burnt" : ""}" style="--u:${pct(FRIES_ZONE.done)};--d:${pct(FRIES_ZONE.over)};--p:${pct(FRIES_PERFECT)}"><i style="left:${pct(cook)}"></i></span>`;
+}
+
+const fryTags: HTMLElement[] = [];
+/** Meters over each loaded basket and each filled carton on the packing pads. */
+function updateFryTags(): void {
+  const on = game.phase === "playing" && counter.page === 2;
+  const spots: { at: THREE.Vector3; html: string }[] = [];
+  if (on) {
+    for (const b of counter.baskets) {
+      if (!b.loaded) continue;
+      const scoops = Math.round(b.amount / FRIES_SCOOP);
+      const pips = [0, 1, 2].map((k) => `<b class="${k < scoops ? "on" : ""}"></b>`).join("");
+      spots.push({ at: new THREE.Vector3(b.obj.position.x, 1.3, b.obj.position.z - 1.3), html: `${friesMeter(b.cook)}<span class="scoops" aria-label="${scoops} of 3 scoops">${pips}</span>` });
+    }
+    for (const p of counter.packs) {
+      if (!p.size || p.fill <= 0) continue;
+      const tops = [p.salt && "Salt", p.curds && "Curds", p.gravy && "Gravy"].filter(Boolean).map((t) => `<em>${t}</em>`).join("");
+      spots.push({ at: new THREE.Vector3(p.x, 0.2, p.z + 0.5), html: `${friesMeter(p.cook)}${tops ? `<span class="tops">${tops}</span>` : ""}` });
+    }
+  }
+  while (fryTags.length < spots.length) {
+    const el = document.createElement("div");
+    el.className = "ftag";
+    ui.root.appendChild(el);
+    fryTags.push(el);
+  }
+  fryTags.forEach((el, i) => {
+    const sp = spots[i];
+    el.hidden = !sp;
+    if (!sp) return;
+    if (el.innerHTML !== sp.html) el.innerHTML = sp.html;
+    const v = sp.at.project(counter.camera);
+    el.style.left = `${((v.x + 1) / 2) * bands.counter.w}px`;
+    el.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
+  });
+}
+
 function updateGrillTags(): void {
   const items = game.phase === "playing" ? counter.grillItems : [];
   while (grillTags.length < items.length) {
@@ -1714,12 +2133,16 @@ function updateGrillTags(): void {
       el.hidden = true;
       return;
     }
-    const v = it.obj.position.clone().add(new THREE.Vector3(0, 0.2, 0.75)).project(counter.camera);
+    const v = it.obj.position.clone().add(new THREE.Vector3(0, 0.2, 0.66)).project(counter.camera);
     const x = ((v.x + 1) / 2) * bands.counter.w;
-    el.hidden = x < 0 || x > bands.counter.w || it.flipT >= 0;
+    const patty = it.piece.kind === "patty";
+    el.hidden = x < 0 || x > bands.counter.w || (it.flipT >= 0 && !patty);
     if (el.hidden) return;
     const html = itemTag(it.piece);
     if (el.innerHTML !== html) el.innerHTML = html;
+    // The patty indicator flips with the patty.
+    if (patty) (el.firstElementChild as HTMLElement).style.transform = it.flipT >= 0 ? `scaleY(${Math.cos(Math.PI * Math.min(1, it.flipT)).toFixed(3)})` : "";
+    el.classList.toggle("pt", patty);
     const burning = Math.max(it.piece.cook[0], it.piece.cook[1]) >= (it.piece.kind === "patty" || it.piece.kind === "bacon" ? 0.92 : 0.95);
     el.classList.toggle("hot", burning && !counter.isWarm(it));
     el.classList.toggle("warm", counter.isWarm(it));
@@ -1754,7 +2177,8 @@ function frame(now: number): void {
   last = now;
   if (!manualClock) {
     tick(dt);
-    render();
+    // The home screen covers the truck completely, so skip drawing it there and save battery.
+    if (game.phase !== "title") render();
   }
   requestAnimationFrame(frame);
 }
@@ -1766,7 +2190,7 @@ document.addEventListener("visibilitychange", () => {
     cancelPointer();
     if (game.phase === "playing") {
       game.phase = "paused";
-      ui.menu.hidden = false;
+      openMenu();
     }
     sfx.suspend();
   }
@@ -1781,6 +2205,7 @@ window.addEventListener("blur", cancelPointer);
   bands,
   startShift,
   serve,
+  goToPage,
   gesture: () => lastGesture,
   ptr: () => ptr && { mode: ptr.mode, hit: ptr.hit?.type, band: ptr.band },
   mem: () => ({ ...renderer.info.memory }),
@@ -1801,6 +2226,7 @@ window.addEventListener("blur", cancelPointer);
   },
   save,
   showTitle,
+  menu: { openMenu, openHowTo, openMenuRef, closeAll },
   manual: (on: boolean) => {
     manualClock = on;
   },

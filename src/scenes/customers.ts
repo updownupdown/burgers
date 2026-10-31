@@ -158,22 +158,25 @@ export class CustomersView {
   private kind: Backdrop = "mountains";
 
   constructor() {
-    this.scene.add(new THREE.HemisphereLight("#fff7e6", "#7a9a8a", 1.4));
+    this.scene.add(new THREE.HemisphereLight("#fff7e6", "#8f84b8", 1.4));
     const sun = new THREE.DirectionalLight("#fff1d6", 1.4);
     sun.position.set(-3, 6, 6);
     this.scene.add(sun);
     this.scene.add(this.backdrop);
     this.setBackdrop("mountains");
     // Truck window frame and serving ledge, in front of the customers.
-    const ledge = mesh(faceted(new THREE.BoxGeometry(40, 0.5, 1.4)), "#f3efe4");
-    ledge.position.set(0, 0.45, 1.8);
-    const trim = mesh(faceted(new THREE.BoxGeometry(40, 0.6, 0.2)), "#d24c3f", { ink: false });
-    trim.position.set(0, 0.0, 2.45);
+    // It sits in front of every backdrop's ground so nothing pokes through below the sill.
+    const ledge = mesh(faceted(new THREE.BoxGeometry(40, 0.5, 2.2)), "#f3efe4");
+    ledge.position.set(0, 0.05, 3.4);
+    const trim = mesh(faceted(new THREE.BoxGeometry(40, 0.6, 0.2)), "#ff8a70", { ink: false });
+    trim.position.set(0, -0.4, 4.5);
     this.scene.add(trim);
+    // The truck's inside wall under the window, where the order rail is mounted.
+    const wall = mesh(new THREE.BoxGeometry(40, 8, 0.2), "#d6cdbf", { ink: false });
+    wall.position.set(0, -4.6, 4.6);
+    this.scene.add(wall);
     this.scene.add(ledge);
     for (let i = 0; i < 3; i++) this.slots.push({ fig: null, x: 0, enterT: 0, leaving: false });
-    this.camera.position.set(0, 2.6, 10);
-    this.camera.lookAt(0, 2.15, 0);
   }
 
   setBackdrop(kind: Backdrop): void {
@@ -231,19 +234,31 @@ export class CustomersView {
     }
   }
 
-  layout(aspect: number): void {
+  /**
+   * The band shows the HUD strip at the top, the customers, then the window sill where the
+   * order rail hangs (at `railF` of the band height). The camera looks straight out and is placed
+   * so the sill lands on the rail and the customers fill the space above it.
+   */
+  layout(aspect: number, hudF = 0.18, railF = 0.45): void {
+    const sill = 0.3;
+    const top = 2.75;
+    const hv = (top - sill) / Math.max(0.15, railF - hudF);
+    const d = hv / 2 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const yc = sill + (railF - 0.5) * hv;
+    this.camera.position.set(0, yc + 0.35, d);
+    this.camera.lookAt(0, yc, 0);
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
-    // Customers stand at the left side of each slot; the ticket card fills the right side.
+    // Each customer stands centred over their receipt.
     for (let i = 0; i < 3; i++) {
-      this.raycaster.setFromCamera(new THREE.Vector2(((i + 0.25) / 3) * 2 - 1, 0), this.camera);
+      this.raycaster.setFromCamera(new THREE.Vector2(((i + 0.5) / 3) * 2 - 1, 0), this.camera);
       const out = new THREE.Vector3();
       this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), out);
       this.slotX[i] = out.x;
     }
     const spacing = this.slotX[1] - this.slotX[0];
-    const s = Math.min(0.95, spacing * 0.26);
+    const s = Math.min(0.95, spacing * 0.3);
     for (const sl of this.slots) if (sl.fig) sl.fig.root.scale.setScalar(s);
     this.figScale = s;
   }

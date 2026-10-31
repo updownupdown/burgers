@@ -86,54 +86,92 @@ html, body {
 }
 .icon-btn svg { width: 18px; height: 18px; }
 
-/* ---- Tickets --------------------------------------------------------- */
+/* ---- Order receipts on the rail -------------------------------------- */
+/* A steel order rail runs under the customers; each order is a till receipt clipped to it. */
+.rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 7px;
+  background: linear-gradient(#e9eef0, #a9b3b6 55%, #7d878a);
+  box-shadow: 0 2px 3px rgb(0 0 0 / 0.25);
+  z-index: 1;
+  pointer-events: none;
+}
+.rail[hidden] { display: none; }
 .ticket {
   position: absolute;
+  z-index: 2;
   pointer-events: auto;
-  background: var(--paper);
-  border-radius: 6px 6px 3px 3px;
-  box-shadow: 0 3px 0 rgb(0 0 0 / 0.18);
-  padding: 4px 5px 5px;
-  font-size: 10.5px;
-  line-height: 1.18;
-  border-top: 4px solid var(--slot, #888);
-  transition: transform 0.15s;
+  /* Paper stops 6px short of the bottom; ::after draws the torn edge there. No clip-path, so
+     the drop shadow follows the paper's outline, tear included. */
+  background: linear-gradient(#fffdf7, #fffdf7) top / 100% calc(100% - 6px) no-repeat;
+  color: var(--bv-ink);
+  padding: 9px 7px 13px;
+  font: 600 12.5px/1.2 var(--bv-font-ui);
+  filter: drop-shadow(0 2px 3px rgb(42 38 34 / 0.28));
+  transform-origin: 50% 0;
+  transition: transform 0.15s var(--bv-ease), filter 0.15s;
   overflow: hidden;
 }
-.ticket .name { display: flex; gap: 2px; }
-.ticket .name .l { min-width: 0; overflow: hidden; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.1; }
-.ticket .name .exp { margin-left: auto; flex: none; font-size: 9px; opacity: 0.7; }
-.ticket .how { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 1px; }
-.ticket .how em { font-style: normal; font-weight: 700; color: var(--tomato); }
-.ticket li.m.no { color: #9b3a2c; }
-.ticket li.m.no b { opacity: 0.45; }
-.ticket li.no { color: #9b3a2c; font-weight: 700; }
-.ticket li.mod .l { font-weight: 700; }
-.ticket .pips { display: flex; gap: 1px; margin-top: 3px; height: 7px; }
-.ticket .pips i { flex: 1; border-radius: 2px; opacity: 0.3; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25); }
+.ticket::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+  background: linear-gradient(135deg, #fffdf7 4px, transparent 0) 0 0 / 8px 6px repeat-x, linear-gradient(-135deg, #fffdf7 4px, transparent 0) 0 0 / 8px 6px repeat-x;
+}
+/* The clip that holds it on the rail, in the plate's colour. */
+.ticket::before { content: ""; position: absolute; left: 50%; top: 0; width: 34px; height: 5px; margin-left: -17px; border-radius: 0 0 3px 3px; background: var(--slot, #888); }
+.ticket .name { display: flex; gap: 3px; align-items: baseline; margin-top: 1px; }
+.ticket .name .l { min-width: 0; overflow: hidden; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.02; font: 400 16px/1.02 var(--bv-font-serif); color: var(--bv-ink); letter-spacing: -0.01em; }
+.ticket .name .l small { font: 500 10px var(--bv-font-mono); color: var(--bv-mute); margin-right: 3px; letter-spacing: 0; }
+.ticket .name .exp { margin-left: auto; flex: none; font-size: 9px; opacity: 0.55; }
+.ticket .back { margin-top: 3px; padding: 2px 4px; border-radius: 3px; background: var(--bv-paprika); color: #fff; font: 800 10.5px/1.15 var(--bv-font-ui); }
+.ticket .how { display: flex; gap: 3px; flex-wrap: wrap; align-items: center; margin-top: 3px; }
+.ticket .how em { font-style: normal; font-weight: 800; color: var(--bv-paprika); font-size: 11.5px; }
+.ticket li.m.no { color: var(--bv-paprika); }
+.ticket li.m.no > b { opacity: 0.45; }
+.ticket li.no { color: var(--bv-paprika); font-weight: 700; }
+.ticket li.mod .l { font-weight: 800; color: var(--bv-paprika); }
+.ticket .pips { display: flex; gap: 1px; margin-top: 4px; height: 6px; }
+.ticket .pips i { flex: 1; border-radius: 2px; opacity: 0.28; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25); }
 .ticket .pips i.ok { opacity: 1; }
-.ticket.tight { font-size: 9px; line-height: 1.02; padding-top: 2px; }
-.ticket.tight .name { font-size: 9px; }
+.ticket.tight { font-size: 11px; line-height: 1.05; padding-top: 7px; }
+.ticket.tight .name .l { font-size: 14px; }
 .ticket.tight .pat { margin-bottom: 1px; }
 .ticket.tight ol { gap: 0; margin-top: 0; }
-.ticket.tight li b { width: 7px; height: 7px; }
+.ticket.tight li > b { width: 7px; height: 7px; }
 .ticket.tight .sides { margin-top: 1px; padding-top: 1px; }
-.ticket.active { transform: translateY(-2px) scale(1.04); box-shadow: 0 0 0 2px var(--slot), 0 4px 0 rgb(0 0 0 / 0.2); }
+.ticket.active { transform: translateY(2px) scale(1.05); filter: drop-shadow(0 6px 7px rgb(42 38 34 / 0.35)); z-index: 3; }
+.ticket.active::before { left: 0; width: 100%; margin-left: 0; height: 4px; border-radius: 0; }
 .ticket[hidden] { display: none; }
-.ticket .pat { height: 4px; background: var(--paper-line); border-radius: 2px; margin-bottom: 3px; overflow: hidden; }
-.ticket .pat i { display: block; height: 100%; background: #4caf50; border-radius: 2px; transition: width 0.3s linear, background 0.3s; }
-.ticket .name { font-weight: 700; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
-.ticket ol { list-style: none; margin: 2px 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
-.ticket li { display: flex; align-items: center; gap: 3px; white-space: nowrap; }
-.ticket li b { width: 8px; height: 8px; border-radius: 2px; flex: none; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25); }
-.ticket li.ok { color: #3c8a3f; }
-.ticket li.ok::after { content: "✓"; margin-left: auto; font-weight: 700; }
+.ticket .pat { display: flex; align-items: center; gap: 4px; margin-bottom: 2px; --mood: #6f9a4f; }
+.ticket .pat.sad { --mood: var(--bv-amber); }
+.ticket .pat.angry { --mood: var(--bv-paprika); }
+.ticket .pat > span { flex: 1; height: 6px; background: var(--bv-rule); border-radius: 3px; overflow: hidden; }
+.ticket .pat i { display: block; height: 100%; background: var(--mood); border-radius: 3px; transition: width 0.5s linear, background 0.3s; }
+.ticket .pat .face { width: 18px; height: 18px; flex: none; }
+.ticket .pat .face > circle { fill: var(--mood); stroke: var(--bv-ink); stroke-width: 1.2; }
+.ticket .pat .face g { fill: var(--bv-ink); stroke: var(--bv-ink); stroke-width: 1.3; stroke-linecap: round; }
+.ticket .pat .face g path { fill: none; }
+.ticket .pat.angry .face { animation: fume 0.5s ease-in-out infinite alternate; }
+@keyframes fume { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
+.ticket ol { list-style: none; margin: 3px 0 0; padding: 3px 0 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; border-top: 1px dashed var(--bv-rule-2); }
+.ticket li { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.ticket li > b { width: 9px; height: 9px; border-radius: 2px; flex: none; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25); }
+.ticket li.ok { color: var(--bv-olive); }
+.ticket li.ok::after { content: "✓"; margin-left: auto; font-weight: 800; }
 .ticket li .l { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ticket li em { font-style: normal; font-weight: 700; color: var(--tomato); flex: none; }
-.ticket .sides { display: flex; gap: 4px; margin-top: 3px; border-top: 1px dashed var(--paper-line); padding-top: 2px; flex-wrap: wrap; }
-.ticket .sides span { display: inline-flex; align-items: center; gap: 2px; }
-.ticket .sides span.ok { color: #3c8a3f; }
-.ticket .sides b { width: 8px; height: 8px; border-radius: 50%; }
+.ticket li .n { font: 600 10.5px var(--bv-font-mono); color: var(--bv-mute); flex: none; margin-left: auto; }
+.ticket li.ok .n { color: inherit; }
+.ticket li em { font-style: normal; font-weight: 800; color: var(--bv-paprika); flex: none; }
+.ticket .sides { display: flex; gap: 2px 6px; margin-top: 4px; border-top: 1px dashed var(--bv-rule-2); padding-top: 3px; flex-wrap: wrap; }
+.ticket .sides span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 3px; white-space: nowrap; }
+.ticket .sides span.ok { color: var(--bv-olive); }
+.ticket .sides span > b { width: 9px; height: 9px; border-radius: 50%; }
 
 .bubble {
   position: absolute;
@@ -144,10 +182,11 @@ html, body {
   font-weight: 700;
   box-shadow: 0 2px 0 rgb(0 0 0 / 0.2);
   transform: translate(-50%, -100%);
-  white-space: nowrap;
-  max-width: 46vw;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: max-content;
+  max-width: min(60vw, 230px);
+  text-align: center;
+  line-height: 1.25;
+  z-index: 4;
   pointer-events: none;
   animation: pop 0.25s ease-out;
 }
@@ -178,18 +217,24 @@ html, body {
 }
 @keyframes rise { to { transform: translate(-50%, -50px); opacity: 0; } }
 
+/* Printed labels in a row along the soda machine's front lip, one per nozzle. */
 .dlabel {
   position: absolute;
-  transform: translate(-50%, 0);
-  background: var(--paper);
-  border-left: 6px solid var(--c);
-  border-radius: 6px;
-  padding: 2px 7px;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  min-height: 26px;
+  display: grid;
+  place-items: center;
+  background: #fffdf7;
+  border-top: 4px solid var(--c);
+  border-radius: 3px;
+  padding: 1px 3px 2px;
+  font: 800 10px/1.05 var(--bv-font-ui);
+  letter-spacing: 0.01em;
+  text-align: center;
+  color: var(--bv-ink);
   pointer-events: none;
-  box-shadow: 0 2px 0 rgb(0 0 0 / 0.2);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
 }
 
 /* ---- Hint ------------------------------------------------------------ */
@@ -210,58 +255,53 @@ html, body {
 }
 .hint[hidden] { display: block !important; opacity: 0; }
 
-/* ---- Tabs + bell ----------------------------------------------------- */
+/* ---- Counter tabs (Bistro): tap one, or swipe along the bar ---------- */
 .tabs {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   height: calc(var(--tabs-h) + var(--safe-b));
-  padding: 8px 10px calc(8px + var(--safe-b));
-  background: var(--teal);
+  padding: 6px 8px calc(6px + var(--safe-b));
+  background: rgb(250 247 241 / 0.98);
+  box-shadow: 0 -1px 0 var(--bv-rule), 0 -6px 16px rgb(42 38 34 / 0.08);
   display: flex;
-  gap: 6px;
+  gap: 4px;
   align-items: stretch;
   pointer-events: auto;
+  touch-action: none;
+  font-family: var(--bv-font-ui);
 }
 .tab {
   flex: 1;
   border: 0;
-  border-radius: 12px;
-  background: var(--teal-2);
-  color: #cfe3dd;
-  font-weight: 700;
-  font-size: 14px;
+  border-radius: var(--bv-r-md);
+  background: transparent;
+  color: var(--bv-mute);
+  font: 700 12px var(--bv-font-ui);
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  transition: color var(--bv-fast), background var(--bv-fast);
 }
-.tab[aria-selected="true"] { background: var(--cream); color: var(--ink); }
+.tab .bv-icon { width: 24px; height: 24px; }
+.tab[aria-selected="true"] { color: var(--bv-ink); background: var(--bv-paper-2); }
+.tab[aria-selected="true"]::after { content: ""; position: absolute; left: 26%; right: 26%; bottom: 2px; height: 2px; border-radius: 1px; background: var(--bv-paprika); }
 .tab .dot {
   position: absolute;
   top: 5px;
-  right: 7px;
+  right: calc(50% - 20px);
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--mustard);
-  box-shadow: 0 0 0 2px var(--teal);
+  background: var(--bv-amber);
+  box-shadow: 0 0 0 2px var(--bv-paper);
 }
-.tab .dot.hot { background: var(--tomato); animation: blink 0.6s infinite alternate; }
+.tab .dot.hot { background: var(--bv-paprika); animation: blink 0.6s infinite alternate; }
 @keyframes blink { to { opacity: 0.35; } }
-.bell {
-  flex: 0 0 74px;
-  border: 0;
-  border-radius: 14px;
-  background: var(--mustard);
-  color: var(--ink);
-  display: grid;
-  place-items: center;
-  padding: 0;
-  box-shadow: 0 3px 0 #b8861d;
-}
-.bell:active { transform: translateY(2px); box-shadow: 0 1px 0 #b8861d; }
-.bell svg { width: 34px; height: 34px; }
-.bell.ring svg { animation: ring 0.35s; }
-@keyframes ring { 25% { transform: rotate(-18deg); } 75% { transform: rotate(14deg); } }
 
 /* ---- Screens --------------------------------------------------------- */
 .screen {
@@ -376,7 +416,32 @@ html, body {
 .gtag[hidden] { display: none; }
 .gtag.stack.low { background: #c9651f; }
 .gtag.supply { background: #6b4329; }
-.ticket .sides .sz { font-style: normal; font-weight: 800; background: var(--ink); color: var(--cream); border-radius: 3px; padding: 0 2px; margin-right: 2px; font-size: 0.85em; }
+
+/* Fries meter over baskets and cartons: underdone | done | overdone, a line at perfect, a marker for now. */
+.ftag { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; z-index: 1; }
+.ftag[hidden] { display: none; }
+.fmeter {
+  position: relative;
+  display: block;
+  width: 78px;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e9e2c4 0 var(--u), #e7b43c var(--u) var(--d), #9a5a22 var(--d) 100%);
+  box-shadow: 0 0 0 1.5px rgb(42 38 34 / 0.75), 0 2px 4px rgb(0 0 0 / 0.3);
+}
+/* Perfect: a thin dark line in the middle of the done zone. */
+.fmeter::before { content: ""; position: absolute; left: var(--p); top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--bv-ink); border-radius: 1px; }
+.fmeter i { position: absolute; top: 50%; width: 10px; height: 18px; margin: -9px 0 0 -5px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 1.5px var(--bv-ink), 0 1px 3px rgb(0 0 0 / 0.4); transition: left 0.2s linear; }
+.fmeter.done i { background: #fff7d6; }
+.fmeter.over i, .fmeter.burnt i { background: var(--bv-paprika); }
+.fmeter.burnt { animation: fmeter-hot 0.5s ease-in-out infinite alternate; }
+@keyframes fmeter-hot { to { box-shadow: 0 0 0 2px var(--bv-paprika), 0 2px 6px rgb(194 59 72 / 0.6); } }
+.ftag .scoops { display: flex; gap: 3px; }
+.ftag .scoops b { width: 7px; height: 7px; border-radius: 50%; background: rgb(255 255 255 / 0.5); box-shadow: 0 0 0 1px rgb(42 38 34 / 0.7); }
+.ftag .scoops b.on { background: #e7b43c; }
+.ftag .tops { display: flex; gap: 2px; }
+.ftag .tops em { font: 800 9.5px var(--bv-font-ui); font-style: normal; color: #fff; background: rgb(42 38 34 / 0.8); border-radius: 4px; padding: 0 4px; }
+.ticket .sides .sz { font: 700 10px var(--bv-font-mono); font-style: normal; border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; }
 
 /* Landscape phones: the kitchen only fits upright. */
 .rotate { display: none; }
@@ -461,3 +526,34 @@ html, body {
 .map .truck { transition: transform 0.5s ease; pointer-events: none; }
 .townCard { display: grid; gap: 6px; }
 .townCard h3 .rg { font: 700 12px var(--body); color: var(--muted); margin-left: 4px; }
+.card .crowd { font-size: 13px; background: #eef4e4; border-radius: 10px; padding: 6px 9px; }
+.map .flag circle { fill: var(--tomato); stroke: var(--ink); stroke-width: 0.4; }
+.map .flag text { font: 800 3px var(--body); fill: #fff; text-anchor: middle; }
+.events { list-style: none; padding: 0 !important; display: grid; gap: 4px; font-size: 13px !important; }
+.events li { background: #fff; border-radius: 9px; padding: 5px 9px; cursor: pointer; }
+.events li b { color: var(--tomato); margin-right: 4px; }
+.card .event { font-size: 13px; background: #ffe3d6; border-radius: 10px; padding: 6px 9px; }
+.press { background: #f4efe2; border: 1px solid #cfc3a6; border-radius: 6px; padding: 8px 10px; display: grid; gap: 3px; font-family: Georgia, "Times New Roman", serif; }
+.press.tv { background: #1f2a33; color: #f3f1ea; border-color: #1f2a33; }
+.press.magazine { background: #fff4f0; border-color: #e5a28f; }
+.press .plabel { font: 700 12px var(--body); color: var(--tomato); }
+.press.tv .plabel { color: #ffb199; }
+.press .psrc { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
+.press .phead { font-size: 18px; font-weight: 700; line-height: 1.15; }
+.press .pquote { font-size: 13px; font-style: italic; }
+.press .rs { color: #e0a100; font-style: normal; }
+.ticket .critic { font: 800 9px var(--bv-font-ui); background: var(--bv-ink); color: var(--bv-amber); border-radius: 4px; padding: 1px 4px; margin-bottom: 2px; text-transform: uppercase; width: fit-content; letter-spacing: 0.04em; }
+/* Patty doneness: two colour halves, top face over bottom face. */
+.gtag.pt { background: transparent; padding: 0; box-shadow: none; }
+/* Doneness pill: the patty's colour with white text, and (on the grill) a bar for progress through that level. */
+.dpill { display: inline-grid; justify-items: center; gap: 1px; min-width: 34px; padding: 1px 7px 2px; border-radius: 999px; background: var(--c); color: #fff; font: 800 10.5px/1.15 var(--bv-font-ui); letter-spacing: 0.02em; vertical-align: 1px; box-shadow: inset 0 -1.5px 0 rgb(0 0 0 / 0.18); }
+.dpill b { font-weight: 800; }
+.dpill u { display: block; width: 100%; height: 3px; border-radius: 2px; background: rgb(255 255 255 / 0.3); overflow: hidden; margin-bottom: 1px; }
+.dpill u i { display: block; height: 100%; background: #fff; border-radius: 2px; }
+.dpill.ok { outline: 2px solid #6fcf6a; outline-offset: 1px; }
+.pind { display: grid; gap: 2px; justify-items: center; }
+.pind .dpill { min-width: 44px; font-size: 10px; box-shadow: 0 1px 3px rgb(0 0 0 / 0.35), inset 0 -1.5px 0 rgb(0 0 0 / 0.18); }
+.ticket .how .dpill { margin-right: 2px; }
+.ticket li .dpill { flex: none; margin-left: auto; font-size: 10px; padding: 0 6px 1px; }
+.ticket .sides .ice { font-style: normal; font-weight: 800; margin-left: 1px; color: #3d6f99; }
+.ticket .sides .ice.no { color: var(--bv-paprika); }

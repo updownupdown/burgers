@@ -1,4 +1,6 @@
+import type { CrowdId } from "./business";
 import type { Kind } from "./types";
+import { STANDARD_COUNT } from "./types";
 
 export interface Recipe {
   name: string;
@@ -12,6 +14,13 @@ export interface Recipe {
   melt?: boolean;
   /** Only ordered once the shift has warmed up (0..1 of the way through). */
   from?: number;
+  /** Pieces of counted toppings (pickles, onions...) when not the standard number (STANDARD_COUNT). */
+  counts?: Partial<Record<Kind, number>>;
+}
+
+/** How many pieces of a counted topping go in each of its layers in this recipe. */
+export function recipeCount(recipe: Recipe, kind: Kind): number {
+  return recipe.counts?.[kind] ?? STANDARD_COUNT[kind] ?? 1;
 }
 
 export type Backdrop = "mountains" | "beach" | "desert";
@@ -36,6 +45,8 @@ export interface Stop {
   roads: string[];
   /** The region's big city: passing it opens the next region. */
   capital?: boolean;
+  /** Who turns up here (see CROWD in business.ts). */
+  crowd: CrowdId;
 }
 
 export type RegionId = "mountains" | "coast" | "desert";
@@ -57,6 +68,7 @@ export const REGIONS: Region[] = [
 const REGION_STARTS: Stop[] = [
   {
     id: "pinecrest",
+    crowd: "families",
     name: "Pinecrest",
     blurb: "Pinecrest is a mountain town full of hungry hikers. Keep them fed until closing time.",
     backdrop: "mountains",
@@ -77,6 +89,7 @@ const REGION_STARTS: Stop[] = [
   },
   {
     id: "saltwater",
+    crowd: "party",
     name: "Saltwater Bay",
     blurb: "Saltwater Bay is a beach town of surfers, lifeguards and one very bold crab.",
     backdrop: "beach",
@@ -98,6 +111,7 @@ const REGION_STARTS: Stop[] = [
   },
   {
     id: "redmesa",
+    crowd: "families",
     name: "Red Mesa",
     blurb: "Red Mesa is a desert crossroads where the cowhands like it hot.",
     backdrop: "desert",
@@ -139,6 +153,7 @@ export const STOPS: Stop[] = [
   {
     ...PINES,
     id: "elkpass",
+    crowd: "commuters",
     name: "Elk Pass",
     blurb: "Elk Pass is a highway rest stop. Drivers want food fast and back on the road.",
     newThing: undefined,
@@ -151,6 +166,7 @@ export const STOPS: Stop[] = [
   {
     ...PINES,
     id: "cedarfalls",
+    crowd: "families",
     name: "Cedar Falls",
     blurb: "Cedar Falls is a lakeside campground. Families, fishing rods and very hungry kids.",
     newThing: "New here: the Campfire Melt. Melt the cheese on the patty while it's on the grill.",
@@ -163,6 +179,7 @@ export const STOPS: Stop[] = [
   {
     ...PINES,
     id: "summit",
+    crowd: "foodies",
     name: "Summit City",
     blurb: "Summit City is the big town in the hills. Do well here and the coast road opens.",
     newThing: undefined,
@@ -178,6 +195,7 @@ export const STOPS: Stop[] = [
   {
     ...COAST,
     id: "gullpoint",
+    crowd: "commuters",
     name: "Gull Point",
     blurb: "Gull Point is a fishing harbour. Early starts, big appetites, no patience for fuss.",
     newThing: undefined,
@@ -190,6 +208,7 @@ export const STOPS: Stop[] = [
   {
     ...COAST,
     id: "driftwood",
+    crowd: "party",
     name: "Driftwood",
     blurb: "Driftwood is a surf camp. Everyone's sandy, sunburnt and starving.",
     newThing: undefined,
@@ -202,6 +221,7 @@ export const STOPS: Stop[] = [
   {
     ...COAST,
     id: "harbor",
+    crowd: "foodies",
     name: "Harbor City",
     blurb: "Harbor City is the coast's big city. Do well here and the desert highway opens.",
     newThing: "New here: the Harbor Classic, with melted cheese.",
@@ -217,6 +237,7 @@ export const STOPS: Stop[] = [
   {
     ...DESERT,
     id: "cactus",
+    crowd: "commuters",
     name: "Cactus Junction",
     blurb: "Cactus Junction is a truck stop where three highways meet.",
     newThing: undefined,
@@ -229,6 +250,7 @@ export const STOPS: Stop[] = [
   {
     ...DESERT,
     id: "dustbowl",
+    crowd: "party",
     name: "Dust Bowl Flats",
     blurb: "Dust Bowl Flats is a rodeo town. They like their burgers big and their peppers hot.",
     newThing: undefined,
@@ -241,6 +263,7 @@ export const STOPS: Stop[] = [
   {
     ...DESERT,
     id: "sunvalley",
+    crowd: "foodies",
     name: "Sun Valley",
     blurb: "Sun Valley is the end of the road. Finish here and the trip is complete.",
     newThing: "New here: the Sun Valley Supreme.",
@@ -263,3 +286,113 @@ export function townById(id: string): Stop {
 
 /** First town of each region, in trip order. */
 export const REGION_START_IDS = REGION_STARTS.map((t) => t.id);
+
+/** A local event: on its days the town is busier, with its own crowd and sometimes a special. */
+export interface TownEvent {
+  id: string;
+  name: string;
+  town: string;
+  /** First day it happens, then again every `every` days. */
+  day: number;
+  every: number;
+  crowd: CrowdId;
+  /** Customers multiplier and extra seconds of shift. */
+  busy: number;
+  longer: number;
+  blurb: string;
+  special?: Recipe;
+}
+
+export const EVENTS: TownEvent[] = [
+  {
+    id: "market",
+    name: "Farmers' market",
+    town: "cedarfalls",
+    day: 3,
+    every: 5,
+    crowd: "foodies",
+    busy: 1.3,
+    longer: 30,
+    blurb: "Locals with tote bags and opinions about bread.",
+  },
+  {
+    id: "fair",
+    name: "County fair",
+    town: "summit",
+    day: 5,
+    every: 7,
+    crowd: "families",
+    busy: 1.5,
+    longer: 40,
+    blurb: "Rides, prize pigs and a very long queue for food.",
+  },
+  {
+    id: "surf",
+    name: "Surf contest",
+    town: "driftwood",
+    day: 6,
+    every: 6,
+    crowd: "party",
+    busy: 1.6,
+    longer: 40,
+    blurb: "Half the coast turns up to watch. Nobody packed lunch.",
+    special: { name: "Wipeout", price: 12, layers: ["bun", "patty", "pineapple", "cheese", "ketchup", "bun"], toasted: true, melt: false },
+  },
+  {
+    id: "seafest",
+    name: "Harbor festival",
+    town: "harbor",
+    day: 9,
+    every: 7,
+    crowd: "foodies",
+    busy: 1.35,
+    longer: 30,
+    blurb: "Boat parade, brass band, and a lot of people who know their food.",
+  },
+  {
+    id: "rodeo",
+    name: "Rodeo",
+    town: "dustbowl",
+    day: 10,
+    every: 6,
+    crowd: "party",
+    busy: 1.6,
+    longer: 40,
+    blurb: "Big appetites. Bigger hats.",
+    special: { name: "Rodeo Double", price: 17, layers: ["bun", "patty", "cheese", "bacon", "patty", "onion", "bun"], toasted: true, melt: true },
+  },
+  {
+    id: "chili",
+    name: "Chili cook-off",
+    town: "redmesa",
+    day: 12,
+    every: 7,
+    crowd: "families",
+    busy: 1.4,
+    longer: 30,
+    blurb: "Everyone's tasting chili all day and craving something else.",
+  },
+];
+
+/** The event on in a town on a given day, if any. */
+export function eventOn(town: string, day: number): TownEvent | null {
+  return EVENTS.find((e) => e.town === town && day >= e.day && (day - e.day) % e.every === 0) ?? null;
+}
+
+/** Next day (from `day` on) that an event happens. */
+export function nextDay(e: TownEvent, day: number): number {
+  if (day <= e.day) return e.day;
+  return e.day + Math.ceil((day - e.day) / e.every) * e.every;
+}
+
+/** A town as it plays on an event day: busier, longer, its event crowd, and any special added to the menu. */
+export function withEvent(t: Stop, e: TownEvent | null): Stop {
+  if (!e) return t;
+  return {
+    ...t,
+    crowd: e.crowd,
+    customers: Math.round(t.customers * e.busy),
+    shiftLength: t.shiftLength + e.longer,
+    menu: e.special ? [...t.menu, e.special] : t.menu,
+  };
+}

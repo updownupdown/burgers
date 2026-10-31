@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import type { Piece, Plate } from "../game/types";
-import { makeCup, makeFood, makeFries, stackHeight, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
-import { disposeObject, faceted, mesh } from "../render/materials";
+import { dressCup } from "../render/cup";
+import { makeCup, makeFood, makeFries, stackBases, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
+import { disposeObject, faceted, mesh, toon } from "../render/materials";
 
-export const SLOT_COLORS = ["#2bb3a3", "#f07d4a", "#8f6ee0"];
+export const SLOT_COLORS = ["#6a8fd8", "#9ccf8a", "#b48ad8"];
 
 interface StackEntry {
   uid: number;
@@ -55,8 +56,7 @@ export class PlateView {
   }
 
   stackTop(): number {
-    const last = this.entries[this.entries.length - 1];
-    return last ? last.baseY + stackHeight(last.piece, last.role) : 0;
+    return stackBases(this.entries.map((e) => e.piece)).top;
   }
 
   sync(p: Plate, animate: boolean, onLand: () => void): void {
@@ -67,8 +67,9 @@ export class PlateView {
       this.burger.remove(e.obj);
       disposeObject(e.obj);
     }
-    let y = same ? this.entries[same - 1].baseY + stackHeight(this.entries[same - 1].piece, this.entries[same - 1].role) : 0;
+    const { bases } = stackBases(want.map((w) => w.l.piece));
     for (let i = same; i < want.length; i++) {
+      const y = bases[i];
       const { l, role } = want[i];
       const obj = makeFood(l.piece, role);
       this.burger.add(obj);
@@ -88,14 +89,13 @@ export class PlateView {
         onLand,
       };
       this.entries.push(e);
-      y += stackHeight(l.piece, role);
     }
     // Sauce layers grow while being drawn.
     p.layers.forEach((l, i) => {
       if (l.piece.stroke) this.entries[i]?.obj.userData.update(l.piece);
     });
 
-    const fk = p.fries ? `f${p.fries.cook.toFixed(2)}${p.fries.size}${p.fries.fill.toFixed(2)}` : "";
+    const fk = p.fries ? `f${p.fries.cook.toFixed(2)}${p.fries.size}${p.fries.fill.toFixed(2)}${+!!p.fries.salt}${+!!p.fries.curds}${+!!p.fries.gravy}` : "";
     if (fk !== this.friesKey) {
       if (this.fries) {
         this.group.remove(this.fries);
@@ -103,7 +103,7 @@ export class PlateView {
       }
       this.fries = null;
       if (p.fries) {
-        this.fries = makeFries(true, p.fries.size, p.fries.fill);
+        this.fries = makeFries(true, p.fries.size, p.fries.fill, p.fries);
         this.fries.userData.setCook(p.fries.cook);
         this.fries.scale.setScalar(0.62 * this.fries.userData.sizeScale);
         this.fries.position.set(-0.78, 0.1, -0.72);
@@ -111,7 +111,7 @@ export class PlateView {
       }
       this.friesKey = fk;
     }
-    const ck = p.drink ? `${p.drink.flavor}${p.drink.fill.toFixed(2)}${p.drink.size}` : "";
+    const ck = p.drink ? `${p.drink.flavor}${p.drink.fill.toFixed(2)}${p.drink.size}${+!!p.drink.ice}${+!!p.drink.lid}${+!!p.drink.straw}` : "";
     if (ck !== this.cupKey) {
       if (this.cup) {
         this.group.remove(this.cup);
@@ -119,8 +119,9 @@ export class PlateView {
       }
       this.cup = null;
       if (p.drink) {
-        this.cup = makeCup(p.drink.flavor, true, p.drink.size);
+        this.cup = makeCup(p.drink.flavor, !!p.drink.lid, p.drink.size);
         this.cup.userData.setFill(p.drink.fill);
+        dressCup(this.cup, p.drink);
         this.cup.scale.setScalar(0.62);
         this.cup.position.set(0.8, 0.1, -0.72);
         this.group.add(this.cup);
@@ -172,15 +173,17 @@ export class TrayView {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(26, 2.4, 0.1, 60);
   plates: PlateView[] = [];
+  /** The shadow-casting light, so the graphics setting can soften or disable it. */
+  sun: THREE.DirectionalLight;
   private raycaster = new THREE.Raycaster();
   private ghost: THREE.Object3D | null = null;
   private ghostSlot = -1;
   private ghostT = 0;
-
   constructor() {
-    this.scene.background = new THREE.Color("#c98f55");
-    this.scene.add(new THREE.HemisphereLight("#fff4dc", "#6b4a2c", 1.3));
+    this.scene.background = new THREE.Color("#efe6d8");
+    this.scene.add(new THREE.HemisphereLight("#fff4dc", "#7a6a9a", 1.3));
     const sun = new THREE.DirectionalLight("#fff1d6", 1.9);
+    this.sun = sun;
     sun.position.set(2, 8, 5);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 512);
@@ -188,11 +191,11 @@ export class TrayView {
     sun.shadow.bias = -0.002;
     this.scene.add(sun);
 
-    const counter = new THREE.Mesh(new THREE.BoxGeometry(40, 0.4, 12), new THREE.MeshToonMaterial({ color: "#c98f55" }));
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(40, 0.4, 12), toon("#efe6d8"));
     counter.position.set(0, -0.32, 0);
     counter.receiveShadow = true;
     this.scene.add(counter);
-    const tray = mesh(faceted(new THREE.BoxGeometry(30, 0.12, 3.1)), "#3a4f4b", { ink: false });
+    const tray = mesh(faceted(new THREE.BoxGeometry(30, 0.12, 3.1)), "#ff8a70", { ink: false });
     tray.position.y = -0.06;
     tray.receiveShadow = true;
     this.scene.add(tray);
@@ -204,6 +207,7 @@ export class TrayView {
     }
     this.camera.position.set(0, 7.6, 6.4);
     this.camera.lookAt(0, 0.5, -0.15);
+
   }
 
   /** Place plates under the three customer slots for the band's aspect ratio. */
@@ -211,9 +215,10 @@ export class TrayView {
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
+    // One plate under each customer; swipe a plate up to hand it over.
     const pts = [0, 1, 2].map((i) => this.groundAt(new THREE.Vector2(((i + 0.5) / 3) * 2 - 1, -0.25)));
     const spacing = pts[1].x - pts[0].x;
-    const r = Math.min(1.4, spacing * 0.4);
+    const r = Math.min(1.4, spacing * 0.39);
     this.plates.forEach((p, i) => {
       p.group.position.set(pts[i].x, 0, pts[i].z);
       p.group.scale.setScalar(r);

@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { avgCook, bunToast, isMelted } from "../game/cooking";
-import type { DrinkId, FriesSize, Kind, Piece, Size } from "../game/types";
-import { DRINK_COLOR } from "../game/types";
+import type { FriesSize, Kind, Piece } from "../game/types";
+import { COUNTED } from "../game/types";
+import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
 import { faceted, mesh, outline, ramp, shareGeometry, toon } from "./materials";
 
 /** Thickness each piece adds to a stack, in ingredient units (a patty is ~2 units wide). */
@@ -127,7 +128,8 @@ const GEO = {
 for (const g of Object.values(GEO)) for (const geo of Array.isArray(g) ? g : [g]) shareGeometry(geo);
 
 function pattyGeo(): THREE.BufferGeometry {
-  const g = new THREE.CylinderGeometry(1, 1, 0.28, 26, 2);
+  // Several rings up the edge so the seared crust can creep up from each face.
+  const g = new THREE.CylinderGeometry(1, 1, 0.28, 26, 6);
   const p = g.attributes.position;
   const seed = Math.random() * 10;
   for (let i = 0; i < p.count; i++) {
@@ -175,14 +177,28 @@ function eggWhiteGeo(): THREE.BufferGeometry {
 const tmpA = new THREE.Color();
 const tmpB = new THREE.Color();
 const tmpC = new THREE.Color();
+const tmpD = new THREE.Color();
+const tmpE = new THREE.Color();
 
-function paintTwoSided(m: THREE.Mesh, down: THREE.Color, up: THREE.Color, side: THREE.Color, split: number) {
+/**
+ * Faces take their own doneness colour. On the edge, a crust band grows up from the bottom
+ * (and down from the top) as each face cooks, so the underside reads from the angled camera.
+ */
+function paintPatty(m: THREE.Mesh, downCook: number, upCook: number, down: THREE.Color, up: THREE.Color, mid: THREE.Color) {
   const g = m.geometry;
   const pos = g.attributes.position;
+  const nrm = g.attributes.normal;
   const col = g.attributes.color;
+  const bandDown = 0.06 + 0.4 * Math.min(1, downCook);
+  const bandUp = 0.06 + 0.4 * Math.min(1, upCook);
+  // Heat from the grill greys the outer ring of the top face first, like a real patty.
+  tmpD.copy(up).lerp(down, downCook > upCook ? 0.7 : 0);
+  tmpE.copy(down).lerp(up, upCook > downCook ? 0.7 : 0);
   for (let i = 0; i < pos.count; i++) {
-    const y = pos.getY(i);
-    const c = y > split + 0.1 ? up : y < split - 0.1 ? down : side;
+    const ny = nrm.getY(i);
+    const f = pos.getY(i) / 0.28;
+    const rim = Math.hypot(pos.getX(i), pos.getZ(i)) > 0.5;
+    const c = ny > 0.6 ? (rim ? tmpD : up) : ny < -0.6 ? (rim ? tmpE : down) : f < bandDown ? down : f > 1 - bandUp ? up : mid;
     col.setXYZ(i, c.r, c.g, c.b);
   }
   col.needsUpdate = true;
@@ -238,13 +254,13 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
     case "patty": {
       const m = new THREE.Mesh(pattyGeo(), toon(0xffffff, { vertexColors: true }));
       m.castShadow = m.receiveShadow = true;
-      outline(m, 1.045);
+      outline(m);
       const g = group("patty", LAYER_HEIGHT.patty, (p) => {
         if (p.smashed) m.scale.set(1.22, 0.5, 1.22);
         pattyRamp(p.cook[0], tmpA);
         pattyRamp(p.cook[1], tmpB);
         pattyRamp(avgCook(p) * 0.85, tmpC);
-        paintTwoSided(m, tmpA, tmpB, tmpC, 0.14);
+        paintPatty(m, p.cook[0], p.cook[1], tmpA, tmpB, tmpC);
       });
       g.add(m);
       g.userData.update(piece);
@@ -254,7 +270,7 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       const strips = [baconGeo(), baconGeo()].map((geo, i) => {
         const m = new THREE.Mesh(geo, toon(0xffffff, { vertexColors: true }));
         m.castShadow = m.receiveShadow = true;
-        outline(m, 1.04);
+        outline(m);
         m.position.z = i ? 0.22 : -0.22;
         m.rotation.y = i ? 0.08 : -0.05;
         return m;
@@ -302,23 +318,14 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       return g;
     }
     case "jalapeno": {
+      // One slice; a ripe red one now and then makes a pile read as "hot peppers" rather than pickles.
       const g = group("jalapeno", LAYER_HEIGHT.jalapeno);
-      const spots = [
-        [0.45, 0.15],
-        [-0.4, 0.3],
-        [-0.15, -0.5],
-        [0.2, 0.55],
-        [0.05, -0.05],
-      ];
-      spots.forEach(([x, z], i) => {
-        // One ripe red slice makes the pile read as "hot peppers" rather than pickles.
-        const r = mesh(GEO.jalapeno, i === 2 ? "#d8392b" : "#2fa83a", { ink: 1.15 });
-        r.rotation.x = Math.PI / 2;
-        r.position.set(x, 0.03 + i * 0.004, z);
-        const c = mesh(GEO.jalapenoCore, "#fff4b8", { ink: false, shadow: false });
-        c.position.set(x, 0.03, z);
-        g.add(r, c);
-      });
+      const r = mesh(GEO.jalapeno, piece.uid % 4 === 2 ? "#d8392b" : "#2fa83a", { ink: 1.15 });
+      r.rotation.x = Math.PI / 2;
+      r.position.y = 0.03;
+      const c = mesh(GEO.jalapenoCore, "#fff4b8", { ink: false, shadow: false });
+      c.position.y = 0.03;
+      g.add(r, c);
       return g;
     }
     case "cheese": {
@@ -343,40 +350,26 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
     }
     case "tomato": {
       const g = group("tomato", LAYER_HEIGHT.tomato);
-      for (let i = 0; i < 3; i++) {
-        const a = (i * Math.PI * 2) / 3 + 0.4;
-        const t = mesh(GEO.tomato, "#e5432b");
-        t.position.set(Math.cos(a) * 0.46, 0.045 + i * 0.01, Math.sin(a) * 0.46);
-        const core = mesh(GEO.tomatoCore, "#f2765d", { ink: false, shadow: false });
-        t.add(core);
-        g.add(t);
-      }
+      const t = mesh(GEO.tomato, "#e5432b");
+      t.position.y = 0.045;
+      t.add(mesh(GEO.tomatoCore, "#f2765d", { ink: false, shadow: false }));
+      g.add(t);
       return g;
     }
     case "onion": {
       const g = group("onion", LAYER_HEIGHT.onion);
-      GEO.onion.forEach((geo, i) => {
-        const ring = mesh(geo, "#ecd5f0");
-        ring.rotation.x = Math.PI / 2;
-        ring.position.set(i ? -0.25 : 0.3, 0.05, i ? 0.15 : -0.1);
-        g.add(ring);
-      });
+      const ring = mesh(GEO.onion[piece.uid % 2], "#ecd5f0");
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.05;
+      g.add(ring);
       return g;
     }
     case "pickle": {
       const g = group("pickle", LAYER_HEIGHT.pickle);
-      const spots = [
-        [0.45, 0.1],
-        [-0.35, 0.35],
-        [-0.2, -0.45],
-        [0.15, 0.55],
-      ];
-      spots.forEach(([x, z], i) => {
-        const p = mesh(GEO.pickle, "#6f9a3c");
-        p.position.set(x, 0.03 + i * 0.006, z);
-        p.add(mesh(GEO.pickleCore, "#b9d27a", { ink: false, shadow: false }));
-        g.add(p);
-      });
+      const p = mesh(GEO.pickle, "#6f9a3c");
+      p.position.y = 0.03;
+      p.add(mesh(GEO.pickleCore, "#b9d27a", { ink: false, shadow: false }));
+      g.add(p);
       return g;
     }
     case "ketchup":
@@ -414,6 +407,36 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
   }
 }
 
+/** How far from the middle of the burger each counted topping's slices sit. */
+const SLICE_RING: Partial<Record<Kind, number>> = { tomato: 0.42, onion: 0.28, pickle: 0.45, jalapeno: 0.46 };
+
+/** Where the `k`th slice of a counted topping goes (x, z), spread around the burger so they don't pile up. */
+export function sliceSpot(kind: Kind, k: number): [number, number] {
+  const r = (SLICE_RING[kind] ?? 0.4) * (k % 3 === 2 ? 0.45 : 1);
+  const a = 0.6 + k * 2.39996;
+  return [Math.cos(a) * r, Math.sin(a) * r];
+}
+
+/**
+ * Base height of each piece in a stack, bottom first, plus the height of the top. A run of the
+ * same counted topping lies side by side at one level.
+ */
+export function stackBases(pieces: Pick<Piece, "kind" | "smashed">[]): { bases: number[]; top: number } {
+  const bases: number[] = [];
+  let next = 0;
+  let runBase = 0;
+  pieces.forEach((p, i) => {
+    const joins = i > 0 && COUNTED.has(p.kind) && pieces[i - 1].kind === p.kind;
+    if (joins) bases.push(bases[i - 1] + 0.004);
+    else {
+      runBase = next;
+      bases.push(next);
+    }
+    next = Math.max(next, runBase + stackHeight(p, i === 0 ? "bottom" : "top"));
+  });
+  return { bases, top: next };
+}
+
 /** Height of a stacked piece, accounting for bun shape and smashed patties. */
 export function stackHeight(piece: Pick<Piece, "kind" | "smashed">, role: BunRole): number {
   if (piece.kind === "bun") return role === "bottom" ? LAYER_HEIGHT.bun : TOP_BUN_HEIGHT;
@@ -424,101 +447,323 @@ export function stackHeight(piece: Pick<Piece, "kind" | "smashed">, role: BunRol
 // ---- sides -----------------------------------------------------------------
 
 export interface FriesObject extends THREE.Group {
-  userData: { setCook: (t: number) => void; sizeScale: number };
+  userData: {
+    setCook: (t: number) => void;
+    /**
+     * Extra scale callers multiply in. Sizes are built into the carton models now, so this is
+     * 1 for every size; it stays so existing call sites keep working.
+     */
+    sizeScale: number;
+    /** Piles made with `makeFryPile(…, own)`: show this share (0..1) of the sticks. */
+    setAmount?: (a: number) => void;
+  };
 }
 
-const FRY_STICK = shareGeometry(faceted(new THREE.BoxGeometry(0.09, 0.75, 0.09)));
-const CARTON = shareGeometry(faceted(new THREE.CylinderGeometry(0.42, 0.32, 0.6, 4, 1, true)));
-const CARTON_BAND = shareGeometry(faceted(new THREE.CylinderGeometry(0.405, 0.37, 0.12, 4, 1, true)));
+/** Carton proportions per size, [width and depth, height], against the large one. */
+export const CARTON_SIZE: Record<FriesSize, [number, number]> = { S: [0.84, 0.74], M: [0.92, 0.87], L: [1, 1] };
+/** Large carton: bottom and top half-width (x) and half-depth (z), height, scooped front, wall. */
+const CART = { a0: 0.2, b0: 0.12, a1: 0.3, b1: 0.18, h: 0.62, scoop: 0.11, wall: 0.022, floor: 0.035 };
+/** Sticks in a full carton. */
+const FRY_COUNT: Record<FriesSize, number> = { S: 20, M: 26, L: 32 };
+/** Height each nested carton adds to a stack, in carton units. */
+export const CARTON_NEST = 0.075;
 
-/** An empty fries carton, for stacks and the packing spots. */
+/** Rounded-rectangle ring of a carton wall. `y(u, v)` gives the height at each point. */
+function cartonRing(n: number, w: number, d: number, inset: number, y: (u: number, v: number) => number): THREE.Vector3[] {
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + Math.PI / n;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    const u = Math.sign(c) * Math.abs(c) ** 0.4;
+    const v = Math.sign(s) * Math.abs(s) ** 0.4;
+    pts.push(new THREE.Vector3(u * (w - inset), y(u, v), v * (d - inset)));
+  }
+  return pts;
+}
+
+/**
+ * A closed, thin-walled fries carton: red outside with a cream and yellow band, darker inside,
+ * its front and back scooped low so the fries show. Vertex coloured, bottom at y = 0.
+ */
+function cartonShell(size: FriesSize): THREE.BufferGeometry {
+  const [sw, sh] = CARTON_SIZE[size];
+  const { a0, b0, a1, b1, wall, floor } = CART;
+  const h = CART.h * sh;
+  const scoop = CART.scoop * sh;
+  const N = 24;
+  const top = (u: number, v: number) => h - scoop * (1 - u * u) * v * v;
+  const ring = (f: number, inset: number, y0: number) =>
+    cartonRing(N, (a0 + (a1 - a0) * f) * sw, (b0 + (b1 - b0) * f) * sw, inset, (u, v) => y0 + (top(u, v) - y0) * f);
+  const bands = [0, 0.48, 0.54, 0.7, 0.76, 1];
+  const bandCol = ["#d8473a", "#f6e7c8", "#f3c642", "#f6e7c8", "#d8473a"].map((c) => new THREE.Color(c));
+  const outer = bands.map((f) => ring(f, 0, 0));
+  const innerTop = ring(1, wall, 0);
+  const innerBot = ring(0, wall, floor).map((p) => p.setY(floor));
+  const inside = new THREE.Color("#a8342b");
+  const floorCol = new THREE.Color("#8e2a23");
+  const rim = new THREE.Color("#ec6a58");
+  const pos: number[] = [];
+  const col: number[] = [];
+  const n = new THREE.Vector3();
+  const e1 = new THREE.Vector3();
+  const e2 = new THREE.Vector3();
+  const tri = (p: THREE.Vector3, q: THREE.Vector3, r: THREE.Vector3, want: THREE.Vector3, c: THREE.Color) => {
+    n.crossVectors(e1.subVectors(q, p), e2.subVectors(r, p));
+    for (const v of n.dot(want) >= 0 ? [p, q, r] : [p, r, q]) {
+      pos.push(v.x, v.y, v.z);
+      col.push(c.r, c.g, c.b);
+    }
+  };
+  const quad = (p: THREE.Vector3, q: THREE.Vector3, r: THREE.Vector3, s: THREE.Vector3, want: THREE.Vector3, c: THREE.Color) => {
+    tri(p, q, r, want, c);
+    tri(p, r, s, want, c);
+  };
+  const out = new THREE.Vector3();
+  const inward = new THREE.Vector3();
+  const up = new THREE.Vector3(0, 1, 0);
+  const down = new THREE.Vector3(0, -1, 0);
+  const floorMid = new THREE.Vector3(0, floor, 0);
+  const bottomMid = new THREE.Vector3(0, 0, 0);
+  for (let i = 0; i < N; i++) {
+    const j = (i + 1) % N;
+    out.set(outer[0][i].x + outer[0][j].x, 0, outer[0][i].z + outer[0][j].z).normalize();
+    inward.copy(out).negate();
+    for (let k = 0; k < bands.length - 1; k++) quad(outer[k][i], outer[k][j], outer[k + 1][j], outer[k + 1][i], out, bandCol[k]);
+    quad(outer[bands.length - 1][i], outer[bands.length - 1][j], innerTop[j], innerTop[i], up, rim);
+    quad(innerTop[i], innerTop[j], innerBot[j], innerBot[i], inward, inside);
+    tri(floorMid, innerBot[i], innerBot[j], up, floorCol);
+    tri(bottomMid, outer[0][i], outer[0][j], down, bandCol[0]);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+const SHELLS: Partial<Record<FriesSize, THREE.BufferGeometry>> = {};
+const shell = (size: FriesSize) => (SHELLS[size] ??= shareGeometry(cartonShell(size)));
+const CARTONS = new Map<string, Baked>();
+
+/** `count` cartons nested into each other, baked into one mesh (count 1 is a single carton). */
+function cartonBaked(size: FriesSize, count: number): Baked {
+  const key = `${size}${count}`;
+  let b = CARTONS.get(key);
+  if (!b) {
+    const parts = new Parts();
+    for (let i = 0; i < count; i++) parts.add(shell(size), null, { p: [0, i * CARTON_NEST * CARTON_SIZE[size][1], 0], ink: 0.016 });
+    b = bakeShared(parts);
+    CARTONS.set(key, b);
+  }
+  return b;
+}
+
+/** An empty fries carton, for stacks and the packing spots. Bottom at y = 0, sized for `size`. */
 export function makeCarton(size: FriesSize): THREE.Group {
   const g = new THREE.Group();
-  const carton = mesh(CARTON, "#d8473a", { side: THREE.DoubleSide });
-  carton.rotation.y = Math.PI / 4;
-  carton.scale.z = 0.6;
-  carton.position.y = 0.3;
-  const band = mesh(CARTON_BAND, "#f6e7c8", { side: THREE.DoubleSide, ink: false });
-  band.rotation.y = Math.PI / 4;
-  band.scale.z = 0.62;
-  band.position.y = 0.38;
-  g.add(carton, band);
-  g.scale.setScalar(size === "S" ? 0.8 : 1);
+  g.add(bakedMesh(cartonBaked(size, 1)));
   return g;
 }
 
-/** `fill` (0..1) hides sticks for a part-filled carton or a part-emptied basket. */
-export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1): FriesObject {
+/** A stack of `count` empty cartons nested into each other, as one mesh. */
+export function makeCartonStack(size: FriesSize, count: number): THREE.Group {
+  const g = new THREE.Group();
+  if (count > 0) g.add(bakedMesh(cartonBaked(size, count)));
+  return g;
+}
+
+const FRY_STICK = shareGeometry(faceted(new THREE.BoxGeometry(0.075, 1, 0.075)));
+const FRY_VERTS = FRY_STICK.attributes.position.count;
+
+/** `n` sticks standing in a carton of this size (a full carton holds FRY_COUNT[size]). */
+const CARTON_FRIES = new Map<string, Baked>();
+function cartonFries(size: FriesSize, n: number): Baked {
+  const key = `${size}${n}`;
+  let b = CARTON_FRIES.get(key);
+  if (b) return b;
+  const [sw, sh] = CARTON_SIZE[size];
+  const total = FRY_COUNT[size];
+  const r = rng(7 + total);
+  const hw = (CART.a1 - CART.wall) * sw - 0.06;
+  const hd = (CART.b1 - CART.wall) * sw - 0.05;
+  const slots = Array.from({ length: total }, (_, i) => {
+    const a = i * 2.39996;
+    const rr = Math.sqrt((i + 0.5) / total);
+    const u = Math.cos(a) * rr;
+    const v = Math.sin(a) * rr;
+    return {
+      p: [u * hw, v * hd] as const,
+      // Longer in the middle, so the top of the fries domes like a real carton; outer ones fan out.
+      len: (0.56 + 0.3 * (1 - rr * rr) + r() * 0.12) * (0.55 + 0.45 * sh),
+      r: [v * 0.34 + (r() - 0.5) * 0.14, (r() - 0.5) * 0.9, -u * 0.42 + (r() - 0.5) * 0.14] as [number, number, number],
+    };
+  });
+  // A part-filled carton keeps an even spread: take slots in a golden-ratio order.
+  const order = slots.map((_, i) => i).sort((p, q) => ((p * 0.618034) % 1) - ((q * 0.618034) % 1));
+  // ...and sits lower in the carton.
+  const sink = (1 - n / total) * 0.3 * sh;
+  const parts = new Parts();
+  for (const i of order.slice(0, n)) {
+    const s = slots[i];
+    parts.add(FRY_STICK, "#ffffff", { p: [s.p[0], 0.1 * sh - sink + s.len / 2, s.p[1]], r: s.r, s: [1, s.len, 1], ink: 0.013 });
+  }
+  b = bakeShared(parts);
+  CARTON_FRIES.set(key, b);
+  return b;
+}
+
+/** A loose handful of fries lying across each other (from the freezer or a basket). */
+const HANDFULS = new Map<number, Baked>();
+function handful(n: number): Baked {
+  let b = HANDFULS.get(n);
+  if (b) return b;
+  const r = rng(31);
+  const parts = new Parts();
+  for (let i = 0; i < n; i++) {
+    const a = i * 2.39996;
+    const rr = Math.sqrt((i + 0.5) / 16);
+    parts.add(FRY_STICK, "#ffffff", {
+      p: [Math.cos(a) * rr * 0.24, 0.06 + (1 - rr) * 0.16 + (i % 3) * 0.03, Math.sin(a) * rr * 0.18],
+      r: [(r() - 0.5) * 0.4, r() * Math.PI, Math.PI / 2 + (r() - 0.5) * 0.5],
+      s: [1, 0.55 + r() * 0.25, 1],
+      ink: 0.013,
+    });
+  }
+  b = bakeShared(parts);
+  HANDFULS.set(n, b);
+  return b;
+}
+
+function friesGroup(baked: Baked | null): FriesObject {
   const g = new THREE.Group() as FriesObject;
   const mat = toon("#f6efc9", { unique: true });
-  const stick = FRY_STICK;
-  const n = Math.round(16 * Math.min(1, Math.max(0, fill)));
-  for (let i = 0; i < n; i++) {
-    const m = new THREE.Mesh(stick, mat);
-    const a = i * 2.4;
-    const r = 0.08 + (i % 4) * 0.07;
-    m.position.set(Math.cos(a) * r * 1.4, 0.55 + (i % 3) * 0.07, Math.sin(a) * r * 0.8);
-    m.rotation.set(Math.sin(a) * 0.25, a, Math.cos(a) * 0.25);
-    m.castShadow = true;
-    outline(m, 1.25);
+  if (baked) {
+    const m = bakedMesh(baked, { material: mat });
+    // Thin sticks only cast shadows: receiving them just speckles the faces.
+    m.receiveShadow = false;
     g.add(m);
   }
-  if (withCarton) {
-    g.add(makeCarton("L"));
-  }
-  // Small cartons are the same shape, just smaller: callers multiply their scale by this.
-  g.userData.sizeScale = size === "S" ? 0.8 : 1;
-  g.userData.setCook = (t) => mat.color.copy(friesRamp(t, tmpA));
+  g.userData = { sizeScale: 1, setCook: (t) => void mat.color.copy(friesRamp(t, tmpA)) };
   return g;
 }
 
-export interface CupObject extends THREE.Group {
-  userData: { setFill: (f: number) => void; flavor: DrinkId };
-}
-
-const CUP = shareGeometry(faceted(new THREE.CylinderGeometry(0.4, 0.3, 1.0, 14, 1, true)));
-const CUP_LIQUID = shareGeometry(faceted(new THREE.CylinderGeometry(0.37, 0.3, 1, 14)));
-const CUP_LID = shareGeometry(faceted(new THREE.CylinderGeometry(0.43, 0.43, 0.06, 14)));
-const CUP_STRAW = shareGeometry(faceted(new THREE.CylinderGeometry(0.035, 0.035, 0.6, 6)));
-const CUP_STRIPE = shareGeometry(faceted(new THREE.CylinderGeometry(0.385, 0.35, 0.18, 14, 1, true)));
-/** Cup sizes differ in height more than width, so they still nest the same way. */
-export const CUP_SCALE: Record<Size, [number, number]> = { S: [0.84, 0.72], M: [0.92, 0.86], L: [1, 1] };
-
-/** A cup; with no flavour it's a plain empty cup (for the stacks). */
-export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"): CupObject {
-  const g = new THREE.Group() as CupObject;
-  const body = new THREE.Group();
-  const [sw, sh] = CUP_SCALE[size];
-  body.scale.set(sw, sh, sw);
-  g.add(body);
-  const cup = mesh(CUP, "#f3f1ea", { side: THREE.DoubleSide });
-  cup.position.y = 0.5;
-  body.add(cup);
-  const stripe = mesh(CUP_STRIPE, flavor ? DRINK_COLOR[flavor] : "#c9c4b8", { side: THREE.DoubleSide, ink: false });
-  stripe.position.y = 0.45;
-  body.add(stripe);
-  const liquid = mesh(CUP_LIQUID, flavor ? DRINK_COLOR[flavor] : "#ffffff", { ink: false, shadow: false });
-  body.add(liquid);
-  if (lid) {
-    const top = mesh(CUP_LID, "#f8f8f4");
-    top.position.y = 1.02;
-    const straw = mesh(CUP_STRAW, "#e5432b", { ink: 1.2 });
-    straw.position.set(0.1, 1.25, 0);
-    straw.rotation.z = -0.15;
-    body.add(top, straw);
+/**
+ * Fries in a carton of `size`, or a loose handful without one. `fill` (0..1) hides sticks for
+ * a part-filled carton or a part-emptied basket. Bottom at y = 0.
+ */
+export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1, top?: { salt?: boolean; curds?: boolean; gravy?: boolean }): FriesObject {
+  const f = Math.min(1, Math.max(0, fill));
+  if (!withCarton) {
+    const n = Math.round(16 * f);
+    return friesGroup(n ? handful(n) : null);
   }
-  g.userData = {
-    flavor: flavor ?? "cola",
-    setFill: (f) => {
-      const h = Math.max(0.001, Math.min(1, f) * 0.94);
-      liquid.visible = f > 0.01;
-      liquid.scale.set(0.96 * (0.82 + 0.18 * h), h, 0.96 * (0.82 + 0.18 * h));
-      liquid.position.y = 0.03 + h / 2;
-    },
-  };
-  g.userData.setFill(0);
+  const n = Math.round(FRY_COUNT[size] * f);
+  const g = friesGroup(n ? cartonFries(size, n) : null);
+  g.add(makeCarton(size));
+  if (n && top) {
+    const [sw, sh] = CARTON_SIZE[size];
+    const sink = (1 - n / FRY_COUNT[size]) * 0.3 * sh;
+    const y = 0.1 * sh - sink + 0.8 * (0.55 + 0.45 * sh);
+    const t = friesToppings((CART.a1 - CART.wall) * sw, (CART.b1 - CART.wall) * sw + 0.03, y, !!top.salt, !!top.curds, !!top.gravy);
+    if (t) g.add(t);
+  }
   return g;
 }
+
+/**
+ * Fries lying in a layered mound about `w` × `d` (a fryer basket, the freezer), bottom layer
+ * first. With `own`, the geometry belongs to this object and `setAmount` hides the top layers;
+ * otherwise it's cached and shared by seed.
+ */
+const PILES = new Map<string, Baked>();
+export function makeFryPile(w: number, d: number, layers: number, seed: number, own = false): FriesObject {
+  const key = `${w}|${d}|${layers}|${seed}`;
+  let baked = own ? null : PILES.get(key) ?? null;
+  const parts = new Parts();
+  if (!baked) {
+    const r = rng(seed);
+    const per = Math.max(3, Math.round((w * d) / 0.045));
+    for (let l = 0; l < layers; l++) {
+      // Upper layers cover less ground, so the pile mounds up in the middle.
+      const k = 1 - (l / Math.max(1, layers)) * 0.5;
+      for (let i = 0; i < per * k; i++) {
+        parts.add(FRY_STICK, "#ffffff", {
+          p: [(r() - 0.5) * w * 0.86 * k, 0.045 + l * 0.07 + r() * 0.025, (r() - 0.5) * d * 0.86 * k],
+          r: [(r() - 0.5) * 0.3, r() * Math.PI, Math.PI / 2 + (r() - 0.5) * 0.3],
+          s: [1, 0.5 + r() * 0.3, 1],
+          ink: 0.009,
+        });
+      }
+    }
+    baked = own ? parts.bake() : bakeShared(parts);
+    if (!own) PILES.set(key, baked);
+  }
+  const g = friesGroup(baked);
+  if (own) {
+    const b = baked;
+    const total = parts.count;
+    g.userData.setAmount = (a) => {
+      const count = Math.ceil(total * Math.min(1, Math.max(0, a))) * FRY_VERTS;
+      b.geo.setDrawRange(0, count);
+      b.hull?.setDrawRange(0, count);
+    };
+  }
+  return g;
+}
+
+/** Cheese curds: squeaky off-white lumps. */
+export const CURD = "#f5edcf";
+export const GRAVY = "#6e4020";
+const lump = shareGeometry(faceted(new THREE.IcosahedronGeometry(0.07, 0)));
+
+export function curdLumps(p: Parts, n: number, rx: number, rz: number, y: number, seed: number, s = 1): void {
+  const r = rng(seed);
+  for (let i = 0; i < n; i++) {
+    const a = i * 2.39996;
+    const rr = Math.sqrt((i + 0.5) / n);
+    p.add(lump, CURD, {
+      p: [Math.cos(a) * rr * rx, y + r() * 0.05 * s, Math.sin(a) * rr * rz],
+      r: [r() * 3, r() * 3, r() * 3],
+      s: [s * (0.9 + r() * 0.5), s * (0.7 + r() * 0.4), s * (0.9 + r() * 0.4)],
+      ink: 0.01,
+    });
+  }
+}
+
+/**
+ * Toppings on fries in a carton: a sprinkle of salt, curds and a pour of gravy. Built in
+ * carton units around the top of the fries at height `top` (half-width `rx`, half-depth `rz`).
+ */
+const TOPPED = new Map<string, Baked>();
+export function friesToppings(rx: number, rz: number, top: number, salt: boolean, curds: boolean, gravy: boolean): THREE.Mesh | null {
+  if (!salt && !curds && !gravy) return null;
+  const key = `${rx.toFixed(2)}|${rz.toFixed(2)}|${top.toFixed(2)}|${+salt}${+curds}${+gravy}`;
+  let b = TOPPED.get(key);
+  if (!b) {
+    const p = new Parts();
+    const r = rng(17);
+    if (gravy) {
+      p.add(new THREE.SphereGeometry(1, 12, 6), GRAVY, { p: [0, top - 0.02, 0], s: [rx * 1.25, 0.1, rz * 1.6], ink: 0.012 });
+      // A few runs down the outside sticks.
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + 0.4;
+        p.add(new THREE.SphereGeometry(1, 8, 5), GRAVY, { p: [Math.cos(a) * rx * 0.8, top - 0.12, Math.sin(a) * rz * 0.8], s: [0.05, 0.12, 0.05], ink: 0 });
+      }
+    }
+    if (curds) curdLumps(p, 8, rx * 0.9, rz * 1.2, top + 0.02, 23, 0.75);
+    if (salt) {
+      const grain = new THREE.BoxGeometry(0.018, 0.018, 0.018);
+      for (let i = 0; i < 26; i++) p.add(grain, "#ffffff", { p: [(r() - 0.5) * rx * 1.7, top + 0.03 + r() * 0.05, (r() - 0.5) * rz * 1.7], ink: 0 });
+    }
+    b = bakeShared(p);
+    TOPPED.set(key, b);
+  }
+  return bakedMesh(b);
+}
+
+// Cups moved to models/drinks.ts; re-exported so existing imports keep working.
+export { CUP_SCALE, makeCup, type CupObject } from "./models/drinks";
 
 export function bottle(color: string, label: string): THREE.Group {
   const g = new THREE.Group();

@@ -319,7 +319,8 @@ James's idea (2026-10-30): replace the fixed list of stops with a simple overwor
 - Each town plays one shift. Passing a shift (the current pass rule) opens the roads out of it, so the map fills in as you go. Some towns sit on side roads you can skip; a few are gated ("needs 2.5 ★ reputation", "needs a fryer upgrade").
 - Regions follow the current stops: **Mountains** (Pinecrest), **Coast** (Saltwater Bay), **Desert** (Red Mesa), each with 3–5 towns. Reaching a region's big city finishes it and opens the next region's road.
 - Each town keeps a postcard: best stars, best profit, and a one-line note from the locals. That's the story, told in small pieces rather than cut-scenes.
-- The road trip has a day counter. Each shift is one day and driving to a neighbouring town is free, so the counter only matters for events.
+- The road trip has a day counter. Each shift is one day. Driving (built 2026-10-30, `src/game/travel.ts`): one road can be driven overnight for a little gas money ($4 minimum, $0.40 per map unit, so $7–10 for most roads and about $21 between regions) without a day passing, but only once per night; a second drive that night, or any trip of two roads or more, takes a whole day and costs gas by distance. The truck starts with $120. Three passed shifts in a town open its roads (`shiftsIn` in the save), including a capital's road into the next region.
+- The home screen (`src/screens/home.ts`) is the map itself, full screen, with pan and zoom: day, budget, popularity and the lifetime rating (average stars over every served order, with the count) stay in view; tapping a town opens a sheet with its crowd, a two-week event calendar, shifts worked there and the drive there.
 
 ### Crowds
 
@@ -359,3 +360,14 @@ In numbers, a profile sets base traffic, how much prices put people off, how muc
 
 1. Should the map show the whole country with locked regions greyed out, or reveal one region at a time?
 2. Should events be on fixed days (so you plan a route), or pop up a day or two ahead (so you react)? Fixed days suit a map you can plan on; I'd start there.
+
+## 10. After build #25: what changed in the truck
+
+- **Counters:** Drinks, Grill, Fryer and Supplies. Move between them only by tapping or swiping the bottom bar, or by holding a carried item over a tab. The counters themselves don't swipe, so side swipes there are free for future actions.
+- **Orders:** till receipts clipped to a steel rail under each customer. Patty doneness is a coloured pill (Rare, Med, Well) on the receipt and under each patty on the grill, with a bar for progress through that level.
+- **Counted toppings:** pickles (3), onions (2), tomato (2) and jalapeños (4) go on one piece at a time and spread around the burger. Extra adds about two thirds more at $0.50; other extras and adds are $1. Short is marked down as skimpy; one or two over reads as generous and lifts the score a little; more is a mess.
+- **Fries:** three cook zones (under 0–0.5, done 0.5–0.95, over 0.95–1.3, burnt past that). Happiness depends on the zone and the spot in it, peaking at the middle of the done zone, which the meter marks with a line. Baskets stay up until tapped down; pips show scoops. Salt is optional; plain fries without it lose 15%.
+- **Poutine:** a meal with no burger (12% of orders once the shift is going): a large carton of fries, then cheese curds, then gravy, all from the fryer counter. $8.
+- **Free sides:** a side the customer didn't order, made well, softens a bad review; the worse the meal, the more it helps.
+- **Drinks:** labels sit in a row on the machine; the pour falls from a spout into the back of the cup so it can be seen.
+- **Service bell:** a 3D bell beside the plates; ring twice to serve.

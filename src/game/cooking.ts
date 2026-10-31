@@ -1,6 +1,6 @@
 import type { Doneness, Piece } from "./types";
 
-/** Seconds of grill time per unit of cook on one face. A side goes raw to medium in about 7s. */
+/** Seconds of grill time per unit of cook on one face. A side goes raw to medium in about 7s; patties cook at a third of that pace. */
 export const GRILL_RATE = 0.08;
 export const FRY_RATE = 0.075;
 
@@ -43,11 +43,35 @@ export function isMelted(p: Piece): boolean {
 /** Melt per second: fast on a hot patty, slow on the warm end or under the heat lamp. */
 export const MELT_RATE = { hot: 0.45, warm: 0.14, lamp: 0.12 };
 
+/**
+ * Fries cook in three zones: underdone (pale and limp), done (golden) and overdone (dark and
+ * hard), with burnt past the end. Perfect is the middle of the done zone.
+ */
+export const FRIES_ZONE = { done: 0.5, over: 0.95, burnt: 1.3 };
+export const FRIES_PERFECT = (FRIES_ZONE.done + FRIES_ZONE.over) / 2;
+
+export function friesZone(t: number): "under" | "done" | "over" {
+  return t < FRIES_ZONE.done ? "under" : t < FRIES_ZONE.over ? "done" : "over";
+}
+
+/**
+ * How happy fries make a customer, 0..1. It depends on the zone and on where in it: anywhere
+ * in the done zone is good and dead centre is best; underdone gets better towards done, and
+ * overdone gets worse the longer they stay in.
+ */
+export function friesQuality(t: number): number {
+  const { done, over, burnt } = FRIES_ZONE;
+  if (t < done) return 0.15 + 0.4 * Math.max(0, t / done);
+  if (t < over) return 1 - (0.25 * Math.abs(t - FRIES_PERFECT)) / (FRIES_PERFECT - done);
+  if (t < burnt) return 0.6 - (0.45 * (t - over)) / (burnt - over);
+  return 0.1;
+}
+
 export function friesLabel(t: number): string {
-  if (t < 0.3) return "Frozen";
-  if (t < 0.5) return "Soggy";
-  if (t < 0.85) return "Golden";
-  if (t < 1.05) return "Extra crispy";
+  if (t < 0.25) return "Frozen";
+  if (t < FRIES_ZONE.done) return "Soggy";
+  if (t < FRIES_ZONE.over) return "Golden";
+  if (t < FRIES_ZONE.burnt) return "Overdone";
   return "Burnt";
 }
 

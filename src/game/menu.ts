@@ -1,8 +1,29 @@
 import type { Doneness, DrinkId, ExpectedLayer, FriesSize, Kind, Modifier, Order, Size } from "./types";
-import type { Recipe, Stop } from "./stops";
+import { COUNTED, DRINKS, extraCount } from "./types";
+import { recipeCount, type Recipe, type Stop } from "./stops";
 
-export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, L: 4 };
+export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, M: 3, L: 4 };
 export const DRINK_PRICE: Record<Size, number> = { S: 1, M: 2, L: 3 };
+/** What an extra helping of a counted topping (pickles, onions, tomato, jalapeños) adds to the price. */
+export const EXTRA_PRICE = 0.5;
+/** What adding (or doubling) any other layer adds to the price, as orderFromRecipe charges it. */
+export const ADD_PRICE = 1;
+/** A poutine meal: a large carton of fries under cheese curds and gravy. */
+export const POUTINE_PRICE = 8;
+/** Share of orders, once the shift is going, that are a poutine instead of a burger. */
+const POUTINE_CHANCE = 0.12;
+
+function poutineOrder(id: number, rng: Rng, level: number): Order {
+  const drink = rng() < 0.2 + level * 0.4 ? DRINKS[Math.floor(rng() * DRINKS.length)] : null;
+  const r = rng();
+  const drinkSize: Size = r < 0.3 ? "S" : r < 0.7 ? "M" : "L";
+  const order: Order = { id, name: "Poutine", price: POUTINE_PRICE + (drink ? DRINK_PRICE[drinkSize] : 0), mods: [], layers: [], fries: true, friesSize: "L", drink, drinkSize, poutine: true };
+  if (drink) {
+    const i = rng();
+    order.ice = i < 0.45 ? true : i < 0.7 ? false : null;
+  }
+  return order;
+}
 
 export type Rng = () => number;
 
@@ -13,7 +34,6 @@ export function seededRng(seed: number): Rng {
 }
 
 const DONENESS: Doneness[] = ["rare", "medium", "well"];
-const DRINKS: DrinkId[] = ["pine", "lemon", "cola"];
 
 /** Recipe layers with modifiers applied, bottom to top. */
 export function applyMods(base: Kind[], mods: Modifier[]): Kind[] {
@@ -42,14 +62,17 @@ export function orderFromRecipe(
   friesSize: FriesSize = "S",
   drinkSize: Size = "M",
 ): Order {
-  const kinds = applyMods(recipe.layers, mods);
+  // "Extra pickles" means more pickles in the same layer, not a second layer of them.
+  const more = new Set(mods.filter((m) => m.type === "extra" && COUNTED.has(m.kind)).map((m) => m.kind));
+  const kinds = applyMods(recipe.layers, mods.filter((m) => !(m.type === "extra" && COUNTED.has(m.kind))));
   const layers: ExpectedLayer[] = kinds.map((kind, i) => {
     if (kind === "patty") return recipe.smash ? { kind, doneness, smashed: true } : { kind, doneness };
     if (kind === "bun") return { kind, toasted: recipe.toasted };
     if (kind === "cheese" && recipe.melt && kinds[i - 1] === "patty") return { kind, melted: true };
+    if (COUNTED.has(kind)) return { kind, count: recipeCount(recipe, kind) + (more.has(kind) ? extraCount(kind) : 0) };
     return { kind };
   });
-  const extras = mods.filter((m) => m.type !== "no").length;
+  const extras = mods.filter((m) => m.type !== "no").reduce((n, m) => n + (m.type === "extra" && COUNTED.has(m.kind) ? EXTRA_PRICE : ADD_PRICE), 0);
   const price = recipe.price + extras + (fries ? FRIES_PRICE[friesSize] : 0) + (drink ? DRINK_PRICE[drinkSize] : 0);
   return { id, name: recipe.name, price, mods, layers, fries, drink, friesSize, drinkSize };
 }
@@ -87,6 +110,7 @@ export function pickMods(recipe: Recipe, pantry: Kind[], rng: Rng, level: number
  * come with sides.
  */
 export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Order {
+  if (level >= 0.15 && rng() < POUTINE_CHANCE) return poutineOrder(id, rng, level);
   let pool = stop.menu.filter((r) => (r.from ?? 0) <= level);
   if (level < 0.25) pool = pool.filter((r) => r.layers.length <= 6);
   if (!pool.length) pool = stop.menu;
@@ -97,8 +121,14 @@ export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Orde
   const drink = rng() < 0.2 + level * 0.5 ? DRINKS[Math.floor(rng() * DRINKS.length)] : null;
   // Modifiers keep tickets short: a known recipe plus "no pickles" rather than a new list.
   const mods = level < 0.1 ? [] : pickMods(recipe, stop.pantry, rng, level);
-  const friesSize: FriesSize = rng() < 0.5 ? "S" : "L";
+  const f = rng();
+  const friesSize: FriesSize = f < 0.35 ? "S" : f < 0.75 ? "M" : "L";
   const r = rng();
   const drinkSize: Size = r < 0.3 ? "S" : r < 0.7 ? "M" : "L";
-  return orderFromRecipe(id, recipe, doneness, fries, drink, mods, friesSize, drinkSize);
+  const order = orderFromRecipe(id, recipe, doneness, fries, drink, mods, friesSize, drinkSize);
+  if (drink) {
+    const i = rng();
+    order.ice = i < 0.45 ? true : i < 0.7 ? false : null;
+  }
+  return order;
 }

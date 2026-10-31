@@ -8,7 +8,7 @@ async function open(opts = {}) {
   const p = await (await b.newContext({ viewport: { width: opts.w || 390, height: opts.h || 844 }, deviceScaleFactor: opts.dpr || 1 })).newPage();
   p.on('pageerror', e => console.log('PAGEERR', e.message, e.stack));
   p.on('console', m => { if (m.type() === 'error') console.log('CONSOLE', m.text().slice(0, 300)); });
-  await p.goto('http://localhost:4173/' + (opts.query || ''));
+  await p.goto('http://localhost:' + (process.env.PORT || 4173) + '/' + (opts.query || ''));
   await p.waitForTimeout(600);
   return { b, p };
 }

@@ -3,7 +3,7 @@ import { UPGRADES, type Save, type UpgradeId } from "../game/progress";
 import { EVENTS, eventOn, nextDay, REGIONS, STOPS, townById, type Stop } from "../game/stops";
 import { applyTrip, canAfford, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Trip } from "../game/travel";
 import { icon } from "../ui/icons";
-import { renderMap, roadPath, SEA, townPoint, VIEW } from "./map";
+import { renderMap, roadPath, routePoints, SEA, townPoint, VIEW } from "./map";
 import { PanZoom } from "./panzoom";
 import "./home.css";
 
@@ -69,6 +69,7 @@ export function mountHome(root: HTMLElement, deps: HomeDeps): void {
     maxScale: 1,
     margin: 0,
     onTap: (target) => onMapTap(target),
+    onChange: (scale) => markerScale(world, scale),
     // Only the map itself pans; the dock, sheet, stats and buttons float over it.
     ignore: (target) => target !== map && !world.contains(target),
   });
@@ -162,6 +163,21 @@ function renderMapInto(m: Mounted): void {
   m.world.innerHTML = renderMap({ town: s.town, unlocked: s.unlocked, shiftsIn: s.shiftsIn, day: s.day, selected: m.selected });
 }
 
+/**
+ * Town markers, names and the truck grow a little when zoomed out and shrink a little when
+ * zoomed in, so names stay readable over the whole map without crowding it up close.
+ */
+function markerScale(world: HTMLElement, scale: number): void {
+  const pxPerUnit = (cur?.base ?? 1) * scale;
+  const k = Math.max(0.62, Math.min(1.45, (MARKER_UNIT / pxPerUnit) ** 0.55));
+  const v = k.toFixed(2);
+  if (world.style.getPropertyValue("--mk") !== v) world.style.setProperty("--mk", v);
+}
+/** Screen px per map unit at which markers are drawn at their natural size. */
+const MARKER_UNIT = 5.2;
+/** Screen px per map unit at the default zoom: neighbouring towns a comfortable thumb apart. */
+const DEFAULT_UNIT = 5.6;
+
 /** Content px of a map point. */
 function px(m: Mounted, p: [number, number]): [number, number] {
   return [(p[0] - VIEW.x) * m.base, (p[1] - VIEW.y) * m.base];
@@ -181,8 +197,7 @@ function fitMap(keepView: boolean, lookAt?: string): void {
   const svg = m.world.querySelector<SVGSVGElement>("svg")!;
   svg.setAttribute("width", `${VIEW.w * m.base}`);
   svg.setAttribute("height", `${VIEW.h * m.base}`);
-  const unit = 5.6; // px per map unit at the default zoom
-  const home = Math.min(3, Math.max(1, unit / m.base));
+  const home = Math.min(3, Math.max(1, DEFAULT_UNIT / m.base));
   // Some slack past the edges, so towns near the coast can still be brought to the middle.
   m.pz.resize(VIEW.w * m.base, VIEW.h * m.base, 0.9, 5, Math.round(Math.min(w * 0.3, h * 0.18)));
   const dockH = m.el.querySelector<HTMLElement>(".home-sheet:not([hidden])")?.offsetHeight ?? m.el.querySelector<HTMLElement>(".home-dock")?.offsetHeight ?? 0;
@@ -233,7 +248,11 @@ function revealTown(m: Mounted, id: string): void {
   const [x, y] = px(m, townPoint(id));
   const sp = m.pz.toScreen(x, y);
   const w = m.map.clientWidth;
-  if (sp.y > free - 48 || sp.y < 90 || sp.x < 40 || sp.x > w - 40) m.pz.centerOn(x, y, m.pz.scale, { x: w / 2, y: Math.max(100, free * 0.5) }, true);
+  if (sp.y > free - 48 || sp.y < 90 || sp.x < 40 || sp.x > w - 40) {
+    // Zoomed all the way out the map can't pan (it sits centred), so come in far enough to bring the town clear of the sheet.
+    const fits = VIEW.h * m.base * m.pz.scale <= m.map.clientHeight * 1.2;
+    m.pz.centerOn(x, y, fits ? Math.max(m.pz.scale, DEFAULT_UNIT / m.base) : m.pz.scale, { x: w / 2, y: Math.max(100, free * 0.5) }, true);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -442,8 +461,10 @@ function drive(m: Mounted, to: string): void {
 function animateDrive(m: Mounted, trip: Trip): void {
   const truck = m.world.querySelector<SVGGElement>(".home-truck")!;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const pts = trip.path.map(townPoint);
-  const total = Math.max(1, trip.distance);
+  const pts = routePoints(trip.path);
+  let total = 0;
+  for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  total = Math.max(1, total);
   const duration = reduce ? 0 : Math.min(1700, 500 + trip.distance * 14);
   const from = townById(trip.from);
   const dest = townById(trip.to);

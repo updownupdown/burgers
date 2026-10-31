@@ -1,8 +1,9 @@
 /**
  * The in-game menus, as three cards:
  *
- *   openMenu()        the pause menu, in a shift: Resume, Restart, Quit, and doors to the
- *                     menu, Settings and How to Play. Closing it resumes.
+ *   openMenu()        the pause menu, in a shift: Resume, Restart, Quit, then this shift's
+ *                     menu, Pacing and Complexity, and doors to Settings and How to Play.
+ *                     Closing it resumes.
  *   openSettings()    Settings on their own: pacing, complexity, sound, graphics, the app.
  *                     From the map's Settings button, and from the pause menu.
  *   openHowTo()       How to Play on its own (howto.ts). From the map's Help button.
@@ -107,18 +108,24 @@ export function openMenu(over: Partial<MenuDeps> = {}): void {
           inShift
             ? `<button class="bv-btn primary lg block" data-m="resume">${icon("play")}Resume</button>
           <div class="bv-btn-row inline">
-            <button class="bv-btn" data-m="restart">${icon("restart")}Restart</button>
+            <button class="bv-btn" data-m="restart">${icon("restart")}Restart shift</button>
             <button class="bv-btn" data-m="quit">${icon("map")}Quit to map</button>
           </div>
           ${confirmBox("restart", "Start this shift again from the top? Today's customers and takings so far are lost.", "Restart")}
           ${confirmBox("quit", `Leave ${esc(town.name)} for the map? This shift's takings are lost and it won't count.`, "Quit to map")}
-          <h3 class="menu-h">${icon("sun")}Today</h3>`
-            : ""
-        }
-        ${row("menuref", "menu-book", "Menu", `${esc(town.name)} · ${town.menu.length} burgers, sides and drinks`)}
+          <h3 class="menu-h">${icon("sun")}This shift</h3>
+          ${row("menuref", "menu-book", "Today's menu", `${esc(town.name)} · ${town.menu.length} burgers, sides and drinks`)}
+          ${field("difficulty", "clock", "Pacing", DIFFICULTY[d.difficulty()].blurb + " New customers feel it straight away.", DIFFICULTIES.map((k) => ({ v: k, label: DIFFICULTY[k].label })), d.difficulty())}
+          ${field("complexity", "chart", "Complexity", COMPLEXITY[d.complexity()].blurb + " Takes effect with your next shift.", COMPLEXITIES.map((k) => ({ v: k, label: COMPLEXITY[k].label })), d.complexity())}
+          <div class="bv-btn-row inline menu-doors">
+            <button class="bv-btn" data-m="settings">${icon("settings")}Settings</button>
+            <button class="bv-btn" data-m="howto">${icon("help")}How to play</button>
+          </div>`
+            : `${row("menuref", "menu-book", "Menu", `${esc(town.name)} · ${town.menu.length} burgers, sides and drinks`)}
         <h3 class="menu-h">${icon("truck")}Bun Voyage</h3>
         ${row("settings", "settings", "Settings", "Pacing, complexity, sound, graphics")}
-        ${row("howto", "help", "How to Play", "The grill, the fryer, the drinks, the road")}
+        ${row("howto", "help", "How to Play", "The grill, the fryer, the drinks, the road")}`
+        }
         <p class="menu-build bv-mono">${esc(buildLabel())}</p>
       </div>`,
   });
@@ -164,6 +171,18 @@ export function openMenu(over: Partial<MenuDeps> = {}): void {
       case "howto":
         openHowTo();
         break;
+      case "difficulty": {
+        const v = btn.dataset.v as Difficulty;
+        d.setDifficulty(v);
+        pickSeg(card, btn, DIFFICULTY[v].blurb + " New customers feel it straight away.");
+        break;
+      }
+      case "complexity": {
+        const v = btn.dataset.v as Complexity;
+        d.setComplexity(v);
+        pickSeg(card, btn, COMPLEXITY[v].blurb + " Takes effect with your next shift.");
+        break;
+      }
     }
   });
 }
@@ -184,11 +203,11 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
     cls: "tall settings",
     html: `${head("Bun Voyage", "Settings", stacked)}
       <div class="menu-body menu-scroll menu-general">
-        <h3 class="menu-h">${icon("grill")}The game</h3>
+        <h3 class="menu-h">${icon("grill")}Play</h3>
         ${field("difficulty", "clock", "Pacing", DIFFICULTY[d.difficulty()].blurb + (inShift ? " New customers feel it straight away." : ""), DIFFICULTIES.map((k) => ({ v: k, label: DIFFICULTY[k].label })), d.difficulty())}
         ${field("complexity", "chart", "Complexity", COMPLEXITY[d.complexity()].blurb, COMPLEXITIES.map((k) => ({ v: k, label: COMPLEXITY[k].label })), d.complexity())}
         <p class="menu-note">${icon("info")}<span>Change either any time. Stepping down keeps your reputation, reviews and upgrades for when you step back up.${inShift ? " Complexity changes take effect with your next shift." : ""}</span></p>
-        <h3 class="menu-h">${icon("settings")}Phone</h3>
+        <h3 class="menu-h">${icon("settings")}Device</h3>
         ${toggle("sound", d.sound() ? "sound-on" : "sound-off", "Sound", d.sound())}
         ${hapticsSupported() ? toggle("haptics", "vibrate", "Vibration", hapticsOn(), "A buzz on flips, dings and burns") : ""}
         ${field("gfx", "sparkle", "Graphics", GFX.find((g) => g.id === gfx)!.blurb, GFX.map((g) => ({ v: g.id, label: g.label })), gfx)}

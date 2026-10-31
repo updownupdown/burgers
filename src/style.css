@@ -1,5 +1,5 @@
 :root {
-  /* Legacy names, mapped onto the Bistro tokens (src/ui/tokens.css) so older rules follow the kit. */
+  /* Legacy names, mapped onto the Dusk tokens (src/ui/tokens.css) so older rules follow the kit. */
   --ink: var(--bv-ink);
   --paper: var(--bv-paper);
   --paper-line: var(--bv-rule);
@@ -62,7 +62,7 @@ html, body {
   align-items: center;
   padding: 5px 6px 5px 10px;
   border-radius: var(--bv-r-md);
-  background: rgb(250 247 241 / 0.96);
+  background: rgb(246 242 234 / 0.96);
   box-shadow: 0 1px 0 var(--bv-rule), var(--bv-shadow-2);
   pointer-events: none;
 }
@@ -76,7 +76,7 @@ html, body {
   gap: 4px;
 }
 .chip .bv-icon { width: 15px; height: 15px; color: var(--bv-mute); }
-.chip[data-r="stop"] { font: 400 15px var(--bv-font-serif); min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.chip[data-r="stop"] { font: 400 14px var(--bv-font-serif); min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 1; }
 .chip.money { color: var(--bv-ink); }
 .chip.closing { color: var(--bv-paprika); }
 .chip.closing .bv-icon { color: inherit; animation: blink 0.7s ease-in-out infinite alternate; }
@@ -210,7 +210,7 @@ html, body {
 
 /* Row 2: the name, the thing read first. "*" = changed from the menu, "+2" = sides with it. */
 .ticket .name { display: flex; align-items: baseline; gap: 2px; min-width: 0; }
-.ticket .name .l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 20px/1.05 var(--bv-font-serif); letter-spacing: -0.005em; -webkit-text-stroke: 0.45px currentColor; }
+.ticket .name .l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 17px/1.05 var(--bv-font-serif); letter-spacing: 0; }
 .ticket .name .ast { font: 800 16px/1 var(--bv-font-ui); color: var(--t-mod); flex: none; }
 .ticket .name .plus { margin-left: auto; padding-left: 4px; font: 700 12px/1 var(--bv-font-mono); color: var(--bv-ink-2); flex: none; }
 

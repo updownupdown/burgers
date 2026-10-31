@@ -21,7 +21,7 @@ npm run build    # type-check and build to dist/
 - Design doc: [docs/DESIGN.md](docs/DESIGN.md)
 - Scripted playtests: [tools/playtest](tools/playtest)
 - Art style spike: [spikes/render-test.html](spikes/render-test.html)
-- UI kit ("Bistro"): tokens, components and icons in [src/ui](src/ui); review every component and
+- UI kit ("Dusk"): tokens, components and icons in [src/ui](src/ui); review every component and
   its states at `/ui.html` (deployed beside the game, or `npm run dev` then open `/ui.html`).
 
 Everything visual is generated in code with three.js (toon shading and ink outlines);

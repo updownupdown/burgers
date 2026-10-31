@@ -1,5 +1,5 @@
 /*
- * Prep, Closing, Night, Reviews and Supplies: full-height Bistro screens with a header, a
+ * Prep, Closing, Night, Reviews and Supplies: full-height Dusk screens with a header, a
  * scrolling body of expand boxes and a footer. A box's closed line carries the choice on the
  * left and its effect, in mono, on the right.
  */
@@ -28,7 +28,7 @@
 
 .day-top { display: flex; align-items: center; gap: 10px; padding: calc(var(--safe-t) + 10px) 12px 10px; border-bottom: 1px solid var(--bv-rule); }
 .day-top .where { display: grid; line-height: 1.05; min-width: 0; flex: 1; }
-.day-top .where b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 26px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day-top .where b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 22px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .day-top .bv-btn.icon { border-color: transparent; }
 
 .day-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; overscroll-behavior: contain; }
@@ -99,15 +99,16 @@
 .day-ledger .foot b { color: var(--bv-ink); }
 
 /* ---- closing ---------------------------------------------------------------------------- */
-.day-hero { padding: calc(var(--safe-t) + 16px) 16px 14px; display: grid; gap: 6px; background: linear-gradient(180deg, #3b2f3f 0%, #7a4a44 55%, #c98a5c 100%); color: #fff8ee; }
-.day-hero .bv-eyebrow { color: rgb(255 248 238 / 0.75); }
-.day-hero .bv-title { color: #fff8ee; font-size: 30px; }
-.day-hero p { margin: 0; font-size: 13px; color: rgb(255 248 238 / 0.9); font-weight: 600; }
-.day-hero-stars { display: flex; align-items: center; gap: 8px; font-size: 22px; color: #ffd27a; }
-.day-hero-stars .bv-mono { font-size: 14px; color: #fff8ee; }
+/* Dusk hero band: the home ground's colour, so Closing reads as part of the map's evening. */
+.day-hero { padding: calc(var(--safe-t) + 16px) 16px 16px; display: grid; gap: 6px; background: var(--bv-night); color: var(--bv-on-night); }
+.day-hero .bv-eyebrow { color: #aab2bd; }
+.day-hero .bv-title { color: var(--bv-on-night); font-size: 27px; }
+.day-hero p { margin: 0; font-size: 13px; color: #d5d0c6; font-weight: 600; }
+.day-hero-stars { display: flex; align-items: center; gap: 8px; font-size: 22px; color: #f2c262; }
+.day-hero-stars .bv-mono { font-size: 14px; color: var(--bv-on-night); }
 .day-stars { letter-spacing: 2px; color: var(--bv-amber); font-size: 12px; white-space: nowrap; }
 .day-stars .off { opacity: 0.3; }
-.day-hero-stars .day-stars { font-size: 22px; color: #ffd27a; }
+.day-hero-stars .day-stars { font-size: 22px; color: #f2c262; }
 .day-hero-stars .day-stars .off { opacity: 0.3; }
 .day-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .day-kpis.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -138,19 +139,19 @@
 .day-press small { font-size: var(--bv-fs-sm); color: var(--bv-mute); font-weight: 700; }
 
 /* ---- night -------------------------------------------------------------------------------- */
-.day-screen.night { background: radial-gradient(ellipse at 50% 30%, #2f2a33 0%, #1a1816 70%); color: #f2eadb; cursor: pointer; }
+.day-screen.night { background: radial-gradient(ellipse at 50% 30%, #3a4452 0%, #1f2630 70%); color: #f1ece2; cursor: pointer; }
 .day-night { flex: 1; display: grid; align-content: center; justify-items: center; gap: 14px; padding: 24px; text-align: center; }
-.day-night .moon { width: 56px; height: 56px; border-radius: 50%; background: #f2e4bf; box-shadow: -14px -8px 0 0 #1a1816 inset, 0 0 40px rgb(242 228 191 / 0.25); }
-.day-night .bv-eyebrow { color: #a8a094; }
-.day-night .bv-title { color: #f2eadb; font-size: 34px; }
+.day-night .moon { width: 56px; height: 56px; border-radius: 50%; background: #f2e4bf; box-shadow: -14px -8px 0 0 #222a35 inset, 0 0 40px rgb(242 228 191 / 0.25); }
+.day-night .bv-eyebrow { color: #aab2bd; }
+.day-night .bv-title { color: #f1ece2; font-size: 30px; }
 .day-night dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 18px; margin: 0; width: 100%; max-width: 280px; font-size: 13.5px; text-align: left; }
-.day-night dt { color: #d9d0c0; font-weight: 600; }
-.day-night dd { margin: 0; font-family: var(--bv-font-mono); font-weight: 500; color: #f2eadb; text-align: right; }
-.day-night dd.ok { color: #a9ba88; }
+.day-night dt { color: #d5d0c6; font-weight: 600; }
+.day-night dd { margin: 0; font-family: var(--bv-font-mono); font-weight: 500; color: #f1ece2; text-align: right; }
+.day-night dd.ok { color: #9fc2ae; }
 .day-night dd.neg { color: #e8735a; }
-.day-night .tot { width: 100%; max-width: 280px; border-top: 1px solid #4d463e; padding-top: 8px; display: flex; justify-content: space-between; gap: 10px; font-weight: 800; font-size: 14px; }
+.day-night .tot { width: 100%; max-width: 280px; border-top: 1px solid #586579; padding-top: 8px; display: flex; justify-content: space-between; gap: 10px; font-weight: 800; font-size: 14px; }
 .day-night .tot span:last-child { font-family: var(--bv-font-serif); font-weight: 400; font-size: 17px; }
-.day-night p { margin: 0; font-size: 13px; color: #a8a094; }
+.day-night p { margin: 0; font-size: 13px; color: #aab2bd; }
 
 /* ---- reviews ------------------------------------------------------------------------------- */
 .day-filters { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -180,7 +181,7 @@
 @media (max-width: 379px) {
   .day-box-h { gap: 8px; padding: 10px 10px; }
   .day-box-h .t b { font-size: 14px; }
-  .day-top .where b { font-size: 23px; }
+  .day-top .where b { font-size: 20px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .day-screen *, .day-screen *::before { transition: none !important; animation: none !important; }

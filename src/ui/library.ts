@@ -324,7 +324,7 @@ root.innerHTML = `
 </nav>
 <main class="lib-main bv">
   <div class="lib-top">
-    <div><h1>Bistro components</h1><p>Every piece of the Bun Voyage UI with its states, so adjustments can be made here before they go in the game. Source: <code class="bv-mono">src/ui/</code>.</p></div>
+    <div><h1>Dusk components</h1><p>Every piece of the Bun Voyage UI with its states, so adjustments can be made here before they go in the game. Source: <code class="bv-mono">src/ui/</code>.</p></div>
     <div class="lib-globals">
       <label>Scale <input id="g-scale" type="range" min="0.8" max="1.4" step="0.05" value="1" /></label>
       <label><input id="g-night" type="checkbox" /> Night everywhere</label>

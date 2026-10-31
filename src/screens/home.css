@@ -1,6 +1,7 @@
 /*
- * Home screen: a full-screen road map under night-variant Bistro chrome. The map itself is
- * daylight paper in the Sorbet palette; the HUD, dock and city sheet are dark. Nothing scrolls.
+ * Home screen: a full-screen road map in a dusk-slate frame (Dusk, UI study round 3 option C).
+ * The map itself is daylight paper in the Sorbet palette; the dashboard card is slate with a
+ * coral Day tile, and the dock and the town sheet are cream (.bv-light). Nothing scrolls.
  */
 .home {
   /* Map paper colours (the Sorbet palette in map.ts). Text colours here are checked for AA on the sea and land. */
@@ -36,39 +37,57 @@
   gap: 10px;
   padding: calc(var(--safe-t) + 8px) 14px 8px;
 }
-.home-brand { display: grid; gap: 1px; min-width: 0; }
-.home-logo { font-family: var(--bv-font-serif); font-weight: 400; font-size: 28px; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; }
-.home-logo i { font-style: italic; color: var(--bv-paprika); }
+.home-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* The wordmark: two stacked lines of the serif, "Voyage" in butter behind a short dashed coral route. */
+.home-logo { display: grid; font-family: var(--bv-font-serif); font-weight: 400; font-size: 19px; line-height: 0.92; letter-spacing: 0; white-space: nowrap; }
+.home-logo .w2 { position: relative; padding-left: 18px; color: var(--bv-amber); }
+.home-logo .w2::before { content: ""; position: absolute; left: 0; top: 50%; width: 13px; border-top: 2px dashed var(--bv-paprika); }
 .home-brand .bv-eyebrow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.home-actions { margin-left: auto; display: flex; gap: 6px; }
-.home-actions .bv-btn { border-color: var(--bv-rule-2); }
-.home-actions .bv-btn .bv-icon { font-size: 18px; }
-.home-actions .bv-btn.sm:not(.icon) { padding: 0 12px 0 10px; }
+.home-actions { margin-left: auto; display: flex; gap: 8px; }
+.home-actions .bv-btn.icon { width: 40px; min-height: 40px; border: 0; background: var(--bv-paper-2); color: var(--bv-ink); }
+.home-actions .bv-btn.icon:active { background: var(--bv-paper-3); }
+.home-actions .bv-btn .bv-icon { font-size: 19px; }
 .home-brand .bv-eyebrow:empty { display: none; }
 
-/* ---- stats strip (floats over the top of the map) --------------------- */
+/* ---- dashboard card (floats over the top of the map) ------------------ */
+/* Four numbers, then the three doors. Slate on slate: the card is a tone lighter than the frame. */
 .home-stats {
   position: absolute;
   top: 10px;
   left: 10px;
   right: 10px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  background: var(--bv-paper);
-  border-radius: var(--bv-r-md);
-  box-shadow: 0 0 0 1px var(--bv-rule), var(--bv-shadow-2);
-  pointer-events: none;
+  grid-template-columns: 1.05fr 1fr 1.15fr 0.9fr;
+  background: var(--bv-paper-2);
+  border-radius: var(--bv-r-lg);
+  box-shadow: var(--bv-shadow-3);
+  overflow: hidden;
 }
-.home-stat { display: grid; gap: 1px; padding: 7px 10px; min-width: 0; border-right: 1px solid var(--bv-rule); }
-.home-stat:last-child { border-right: 0; }
-.home-stat .bv-eyebrow { font-size: 10px; letter-spacing: 0.12em; }
-.home-stat b { display: flex; align-items: baseline; gap: 4px; font-family: var(--bv-font-mono); font-weight: 500; font-size: 15px; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.home-stat { display: grid; gap: 1px; padding: 8px 9px; min-width: 0; border-right: 1px solid var(--bv-rule); pointer-events: none; }
+.home-stat:nth-child(4) { border-right: 0; }
+.home-stat .bv-eyebrow { font-size: 9.5px; letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-stat b { display: flex; align-items: baseline; gap: 4px; font-family: var(--bv-font-mono); font-weight: 500; font-size: 14px; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
 .home-stat b .bv-icon { align-self: center; font-size: 13px; color: var(--bv-amber); }
 .home-stat small { font-family: var(--bv-font-ui); font-size: 10px; font-weight: 600; color: var(--bv-mute); }
 .home-stat.low b { color: var(--bv-paprika); }
-.home-stat.time b { font-family: var(--bv-font-ui); font-weight: 700; font-size: 13px; }
-.home-stat.time b .bv-icon { color: var(--bv-amber); }
-.home.evening .home-stat.time b .bv-icon { color: #b9c6e8; }
+/* The Day tile is coral: it is the thing that changed since the player last looked. */
+.home-stat.time { background: var(--bv-paprika-2); color: #fff7f2; border-right-color: transparent; }
+.home-stat.time .bv-eyebrow { color: #ffd9cc; }
+.home-stat.time b { font-family: var(--bv-font-mono); font-weight: 500; font-size: 14px; }
+.home-stat.time b .bv-icon { color: #ffd9cc; }
+.home.evening .home-stat.time { background: #3f4d73; }
+.home.evening .home-stat.time .bv-eyebrow, .home.evening .home-stat.time b .bv-icon { color: #c9d4f2; }
+.home-stats-acts { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--bv-rule); }
+.home-stats-acts button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 6px;
+  font-size: 13px; font-weight: 700; color: var(--bv-ink); border-right: 1px solid var(--bv-rule); white-space: nowrap;
+  transition: background var(--bv-fast);
+}
+.home-stats-acts button:last-child { border-right: 0; }
+.home-stats-acts button:active { background: var(--bv-paper-3); }
+.home-stats-acts button:disabled { color: var(--bv-mute); }
+.home-stats-acts button .bv-icon { font-size: 15px; color: var(--bv-amber); }
+.home-stats-acts button:disabled .bv-icon { color: var(--bv-mute); }
 
 /* ---- map -------------------------------------------------------------- */
 .home-map {
@@ -165,10 +184,10 @@
 .home-truck.west .truck-body { transform: translate(0, -4.6px) scaleX(-1); }
 
 /* ---- zoom buttons ------------------------------------------------------ */
-.home-zoom { position: absolute; right: 10px; top: 78px; display: grid; gap: 6px; }
+.home-zoom { position: absolute; right: 10px; top: 118px; display: grid; gap: 6px; }
 .home-zoom button {
   width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--bv-paper); color: var(--bv-ink); box-shadow: 0 0 0 1px var(--bv-rule), var(--bv-shadow-1);
+  background: var(--bv-paper-2); color: var(--bv-ink); box-shadow: var(--bv-shadow-2);
   font-size: 18px; transition: transform var(--bv-fast) var(--bv-ease);
 }
 .home-zoom button:active { transform: scale(0.94); }
@@ -179,17 +198,14 @@
 /* ---- dock (the current town, always one tap from a shift) ------------- */
 .home-dock {
   position: absolute; left: 10px; right: 10px; bottom: calc(var(--safe-b) + 10px);
-  display: grid; gap: 8px; padding: 10px 10px 10px 14px;
-  background: var(--bv-paper); border-radius: var(--bv-r-lg); box-shadow: 0 0 0 1px var(--bv-rule), var(--bv-shadow-3);
+  display: grid; gap: 8px; padding: 12px 12px 12px 16px;
+  background: var(--bv-paper); border-radius: var(--bv-r-lg); box-shadow: var(--bv-shadow-3);
   animation: home-rise 0.3s var(--bv-ease);
 }
 .home-dock-row { display: flex; align-items: center; gap: 10px; }
-.home-dock-row2 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-left: -4px; }
-.home-dock-row2 .bv-btn { padding: 0 6px; font-size: 13px; border-color: var(--bv-rule-2); }
-.home-dock-row2 .bv-btn .bv-icon { font-size: 15px; }
 .home-dock .bv-btn .cost { font-family: var(--bv-font-mono); font-weight: 500; font-size: 13px; opacity: 0.8; }
 .home-dock-info { display: grid; gap: 2px; min-width: 0; flex: 1; text-align: left; }
-.home-dock-info b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 24px; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-dock-info b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 22px; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-dock-info .bv-caption { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; }
 .home-dock .bv-btn { flex: none; }
 .home-dock .bv-btn .bv-icon { font-size: 20px; }
@@ -205,20 +221,20 @@
   display: grid; gap: 10px; padding: 10px 16px calc(var(--safe-b) + 14px);
   max-height: calc(100% - 70px); overflow: hidden;
   background: var(--bv-paper); color: var(--bv-ink);
-  border-radius: 16px 16px 0 0; box-shadow: 0 0 0 1px var(--bv-rule), var(--bv-shadow-3);
+  border-radius: 16px 16px 0 0; box-shadow: var(--bv-shadow-3);
   animation: home-rise 0.28s var(--bv-ease);
 }
 .home-sheet[hidden] { display: none; }
 .home-sheet-head { display: flex; align-items: flex-start; gap: 10px; padding-top: 4px; }
 .home-sheet-head > div { display: grid; gap: 6px; min-width: 0; flex: 1; }
-.home-sheet-head .bv-title { font-size: 30px; }
+.home-sheet-head .bv-title { font-size: 26px; }
 .home-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .home-tags .bv-chip { font-size: 12px; }
 .home-tags .bv-chip .bv-icon { font-size: 14px; }
 .home-tags .bv-chip.crowd { color: var(--bv-ink); border-color: var(--bv-rule-2); background: var(--bv-paper-2); }
 .home-tags .bv-chip.here { color: var(--bv-paprika); border-color: var(--bv-paprika); background: var(--bv-paprika-soft); }
 /* The close button is the one thing a thumb reaches for on this sheet: a full-size target. */
-.home-sheet-head .bv-btn.icon { flex: none; width: 44px; height: 44px; border-color: var(--bv-rule-2); background: var(--bv-paper-2); color: var(--bv-ink); margin: -4px -4px 0 0; }
+.home-sheet-head .bv-btn.icon { flex: none; width: 44px; height: 44px; border: 0; background: var(--bv-ink); color: var(--bv-paper); margin: -4px -4px 0 0; }
 .home-sheet-head .bv-btn.icon .bv-icon { font-size: 22px; }
 .home-blurb { font-size: var(--bv-fs-md); }
 
@@ -254,7 +270,7 @@
 .home-action .bv-caption.warn { color: var(--bv-paprika); }
 
 /* A locked town: a box, not a button. Says what opens the road and how far along that is. */
-.home-locked { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--bv-r-md); background: var(--bv-paper-2); color: var(--bv-ink-2); }
+.home-locked { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--bv-r-md); background: var(--bv-paper-2); color: var(--bv-ink-2); border: 1px dashed var(--bv-rule-2); }
 .home-locked > .bv-icon { font-size: 20px; color: var(--bv-mute); flex: none; margin-top: 2px; }
 .home-locked > div { display: grid; gap: 3px; min-width: 0; }
 .home-locked b { color: var(--bv-ink); font-size: var(--bv-fs-md); }
@@ -274,6 +290,7 @@
 .home-offer { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: var(--bv-scrim); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); animation: home-fade 0.25s; }
 .home-offer[hidden] { display: none; }
 .home-offer .bv-card { width: min(380px, 100%); gap: 12px; }
+.home-offer .bv-card { --bv-paper: #f6f2ea; --bv-paper-2: #ebe6dc; --bv-paper-3: #dfd8ca; --bv-ink: #232a33; --bv-ink-2: #434b55; --bv-mute: #6b727c; --bv-rule: #dfd9cd; --bv-rule-2: #c9c2b3; --bv-paprika: #d8573a; --bv-paprika-soft: #fbe3da; color: var(--bv-ink); }
 .home-offers { display: grid; gap: 8px; }
 .home-offer-btn {
   display: grid; gap: 2px; text-align: left; padding: 10px 12px; border-radius: var(--bv-r-md);
@@ -303,18 +320,18 @@
   .home-top { padding-left: 20px; padding-right: 20px; }
   .home-stats { left: 50%; right: auto; transform: translateX(-50%); width: min(560px, calc(100% - 24px)); }
   .home-dock { left: 50%; right: auto; transform: translateX(-50%); width: min(480px, calc(100% - 24px)); bottom: 16px; }
-  .home-dock-row2 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .home-sheet { left: 50%; right: auto; transform: translateX(-50%); width: min(480px, calc(100% - 24px)); bottom: 16px; border-radius: 14px; max-height: calc(100% - 90px); }
   .home-sheet .grip { display: none; }
   .home-zoom { right: 16px; top: auto; bottom: 16px; }
   .home-toast { bottom: 100px; }
 }
 @media (max-width: 379px) {
-  .home-logo { font-size: 24px; }
+  .home-logo { font-size: 17px; }
   .home-stat { padding: 6px 7px; }
-  .home-stat b { font-size: 14px; }
-  .home-dock-info b { font-size: 21px; }
-  .home-sheet-head .bv-title { font-size: 26px; }
+  .home-stat b, .home-stat.time b { font-size: 13px; }
+  .home-stats-acts button { font-size: 12px; }
+  .home-dock-info b { font-size: 20px; }
+  .home-sheet-head .bv-title { font-size: 23px; }
 }
 @media (max-height: 700px) {
   .home-sheet { gap: 8px; }

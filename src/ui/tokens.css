@@ -1,61 +1,66 @@
 /*
- * Bun Voyage design tokens: "Bistro".
+ * Bun Voyage design tokens: "Dusk" (UI study round 3, option C; replaced "Bistro").
  *
- * Warm white paper, charcoal ink, a serif reserved for the names of things
- * (the town, the sandwich), paprika for anything that changes an order or is
- * the active thing, olive for "done / good". Numbers always in the mono face.
+ * Cream paper for anything you read, a dusk-slate ground for the map and the night screens,
+ * a chunky one-weight serif (Young Serif) for the names of things, coral for the one thing
+ * that changes an order or is the next action, pine for "done / good", butter for stars.
+ * Numbers always in the mono face.
  *
  * Rules of thumb:
- *  - one accent (paprika), used sparingly;
+ *  - one accent (coral), used sparingly;
  *  - serif only for names, never for instructions or numbers;
  *  - money and time in --bv-font-mono with tabular figures;
  *  - theme (route, coordinates) appears only where the town does;
  *  - nothing read during a shift below 12px.
+ *
+ * Token names keep their Bistro spellings (--bv-paprika, --bv-olive, --bv-amber, --bv-night)
+ * so every screen follows without a rename: paprika is now coral, olive is pine, amber is
+ * butter and night is dusk.
  */
 :root {
   /* colour */
-  --bv-paper: #faf7f1;
-  --bv-paper-2: #f3eee4;      /* a slightly deeper paper for tiles and inset areas */
-  --bv-paper-3: #ebe4d6;      /* pressed / hover */
-  --bv-ink: #2a2622;
-  --bv-ink-2: #4b4640;        /* body text on paper */
-  --bv-mute: #7b746b;         /* captions, eyebrows, disabled text */
-  --bv-rule: #e2dcd1;         /* hairlines */
-  --bv-rule-2: #cfc7b8;       /* a firmer rule, e.g. table header */
-  --bv-paprika: #c8472e;
-  --bv-paprika-2: #a93b26;    /* pressed paprika */
-  --bv-paprika-soft: #f6e3dc; /* paprika wash for selected rows, badges */
-  --bv-olive: #5f6b4a;
-  --bv-olive-soft: #e7eadc;
-  --bv-amber: #c99a3a;        /* sparingly: stars, warming lamp, warnings */
-  --bv-amber-soft: #f5ecd4;
-  --bv-night: #1f1c19;        /* scrims, the dark variant ground */
-  --bv-night-2: #2b2723;
-  --bv-on-night: #f2eadb;
+  --bv-paper: #f6f2ea;
+  --bv-paper-2: #ebe6dc;      /* a slightly deeper paper for tiles and inset areas */
+  --bv-paper-3: #dfd8ca;      /* pressed / hover */
+  --bv-ink: #232a33;
+  --bv-ink-2: #434b55;        /* body text on paper */
+  --bv-mute: #6b727c;         /* captions, eyebrows, disabled text */
+  --bv-rule: #dfd9cd;         /* hairlines */
+  --bv-rule-2: #c9c2b3;       /* a firmer rule, e.g. table header */
+  --bv-paprika: #d8573a;   /* coral */
+  --bv-paprika-2: #b5452b;    /* pressed paprika */
+  --bv-paprika-soft: #fbe3da; /* paprika wash for selected rows, badges */
+  --bv-olive: #4e7d6a;      /* pine */
+  --bv-olive-soft: #e3ebe6;
+  --bv-amber: #d9a93f;      /* butter */        /* sparingly: stars, warming lamp, warnings */
+  --bv-amber-soft: #f7ecd0;
+  --bv-night: #2a3340;      /* dusk */        /* scrims, the dark variant ground */
+  --bv-night-2: #3a4452;
+  --bv-on-night: #f1ece2;
 
   /* ticket slot colours: one per open order. Kept muted so the paprika accent still reads. */
-  --bv-slot-0: #5f6b4a;
-  --bv-slot-1: #b6683b;
-  --bv-slot-2: #6b6f9a;
+  --bv-slot-0: #4e7d6a;
+  --bv-slot-1: #b8713f;
+  --bv-slot-2: #6b7aa0;
 
   /* type */
-  --bv-font-serif: "Instrument Serif", "Iowan Old Style", "Palatino", Georgia, serif;
-  --bv-font-ui: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --bv-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bv-font-serif: "Young Serif", "Iowan Old Style", "Palatino", Georgia, serif;
+  --bv-font-ui: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --bv-font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   --bv-fs-xs: 11px;   /* eyebrows, ids; never for anything read in a hurry */
   --bv-fs-sm: 12px;   /* smallest size allowed during a shift */
   --bv-fs-md: 14px;   /* body */
   --bv-fs-lg: 16px;   /* buttons */
-  --bv-fs-xl: 20px;   /* ticket names (serif) */
-  --bv-fs-2xl: 28px;  /* card titles (serif) */
-  --bv-fs-3xl: 40px;  /* town name on the stop card (serif) */
-  --bv-track: 0.18em; /* letter-spacing for uppercase eyebrows */
+  --bv-fs-xl: 18px;   /* ticket names (serif) */
+  --bv-fs-2xl: 25px;  /* card titles (serif) */
+  --bv-fs-3xl: 34px;  /* town name on the stop card (serif) */
+  --bv-track: 0.14em; /* letter-spacing for uppercase eyebrows */
 
   /* shape and space */
-  --bv-r-sm: 4px;
-  --bv-r-md: 6px;
-  --bv-r-lg: 10px;
+  --bv-r-sm: 5px;
+  --bv-r-md: 8px;
+  --bv-r-lg: 12px;
   --bv-r-pill: 999px;
   --bv-sp-1: 4px;
   --bv-sp-2: 8px;
@@ -65,10 +70,10 @@
   --bv-tap: 44px;     /* minimum touch target */
 
   /* elevation: paper over the 3D scene needs a soft, warm shadow, never a hard black one */
-  --bv-shadow-1: 0 1px 2px rgb(42 38 34 / 0.14);
-  --bv-shadow-2: 0 4px 12px rgb(42 38 34 / 0.16);
-  --bv-shadow-3: 0 12px 28px rgb(42 38 34 / 0.24);
-  --bv-scrim: rgb(31 28 25 / 0.55);
+  --bv-shadow-1: 0 1px 2px rgb(35 42 51 / 0.14);
+  --bv-shadow-2: 0 4px 12px rgb(35 42 51 / 0.16);
+  --bv-shadow-3: 0 12px 28px rgb(35 42 51 / 0.26);
+  --bv-scrim: rgb(20 26 34 / 0.55);
 
   /* motion */
   --bv-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -76,26 +81,50 @@
   --bv-mid: 220ms;
 }
 
-/* Dark variant for the title, map and end-of-shift screens: same tokens, night values. */
+/* Dark variant for the map, the pause scrim and the end-of-shift screens: same tokens, dusk values. */
 .bv-night {
-  --bv-paper: #1f1c19;
-  --bv-paper-2: #2b2723;
-  --bv-paper-3: #37322c;
-  --bv-ink: #f2eadb;
-  --bv-ink-2: #d9d0c0;
-  --bv-mute: #9d958a;
-  --bv-rule: #3c3630;
-  --bv-rule-2: #4d463e;
-  --bv-paprika: #e0654c;
-  --bv-paprika-2: #c8472e;
-  --bv-paprika-soft: #3d2a25;
-  --bv-olive: #9fb07f;
-  --bv-olive-soft: #2d3127;
-  --bv-amber: #e1b55c;
-  --bv-amber-soft: #3a3225;
-  --bv-shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
-  --bv-shadow-2: 0 4px 12px rgb(0 0 0 / 0.45);
-  --bv-shadow-3: 0 12px 28px rgb(0 0 0 / 0.6);
+  --bv-paper: #2a3340;
+  --bv-paper-2: #3a4452;
+  --bv-paper-3: #465160;
+  --bv-ink: #f1ece2;
+  --bv-ink-2: #d5d0c6;
+  --bv-mute: #aab2bd;
+  --bv-rule: #46515f;
+  --bv-rule-2: #586579;
+  --bv-paprika: #e8694a;
+  --bv-paprika-2: #d8573a;
+  --bv-paprika-soft: #4a3b3b;
+  --bv-olive: #9fc2ae;
+  --bv-olive-soft: #34443f;
+  --bv-amber: #f2c262;
+  --bv-amber-soft: #4a4232;
+  --bv-shadow-1: 0 1px 2px rgb(0 0 0 / 0.35);
+  --bv-shadow-2: 0 4px 12px rgb(0 0 0 / 0.4);
+  --bv-shadow-3: 0 12px 28px rgb(0 0 0 / 0.5);
   color-scheme: dark;
+  color: var(--bv-ink);
+}
+
+/* Light again inside a dark container: the cream dock and town sheet on the dusk map. */
+.bv-light {
+  --bv-paper: #f6f2ea;
+  --bv-paper-2: #ebe6dc;
+  --bv-paper-3: #dfd8ca;
+  --bv-ink: #232a33;
+  --bv-ink-2: #434b55;
+  --bv-mute: #6b727c;
+  --bv-rule: #dfd9cd;
+  --bv-rule-2: #c9c2b3;
+  --bv-paprika: #d8573a;
+  --bv-paprika-2: #b5452b;
+  --bv-paprika-soft: #fbe3da;
+  --bv-olive: #4e7d6a;
+  --bv-olive-soft: #e3ebe6;
+  --bv-amber: #d9a93f;
+  --bv-amber-soft: #f7ecd0;
+  --bv-shadow-1: 0 1px 2px rgb(0 0 0 / 0.2);
+  --bv-shadow-2: 0 4px 12px rgb(0 0 0 / 0.25);
+  --bv-shadow-3: 0 12px 28px rgb(0 0 0 / 0.4);
+  color-scheme: light;
   color: var(--bv-ink);
 }

@@ -135,11 +135,11 @@ function shellHtml(save: Save): string {
   return `<div class="home bv bv-night">
     <header class="home-top">
       <div class="home-brand">
-        <span class="home-logo">Bun <i>Voyage</i></span>${save.trips > 0 ? `<span class="bv-eyebrow">Trip ${save.trips + 1}</span>` : ""}
+        <span class="home-logo" aria-label="Bun Voyage"><span class="w1">Bun</span><span class="w2">Voyage</span></span>${save.trips > 0 ? `<span class="bv-eyebrow">Trip ${save.trips + 1}</span>` : ""}
       </div>
       <div class="home-actions">
-        <button class="bv-btn sm" data-home="howto">${icon("help")}Help</button>
-        <button class="bv-btn sm" data-home="settings">${icon("settings")}Settings</button>
+        <button class="bv-btn icon" data-home="howto" aria-label="How to play" title="How to play">${icon("help")}</button>
+        <button class="bv-btn icon" data-home="settings" aria-label="Settings" title="Settings">${icon("settings")}</button>
       </div>
     </header>
     <div class="home-map" style="--home-sea:${SEA}">
@@ -150,21 +150,32 @@ function shellHtml(save: Save): string {
         <button data-home="zoom-out" aria-label="Zoom out">${icon("minus")}</button>
         <button class="locate" data-home="locate" aria-label="Find the truck">${icon("truck")}</button>
       </div>
-      <div class="home-dock"></div>
-      <div class="home-sheet" hidden></div>
+      <div class="home-dock bv-light"></div>
+      <div class="home-sheet bv-light" hidden></div>
       <div class="home-offer" hidden></div>
     </div>
   </div>`;
 }
 
+/**
+ * The dashboard card: the truck's four numbers, with the Day tile in coral because it is the one
+ * that changes every morning, and the three doors (Menu or Results, Reviews, Supplies) in a row
+ * under them. One card, so the map below it is the only other thing on the screen.
+ */
 function statsHtml(save: Save): string {
   const avg = save.ratingCount ? save.ratingSum / save.ratingCount : null;
   const evening = save.time === "evening";
-  return `<div class="home-stats" role="status">
-    <div class="home-stat time"><span class="bv-eyebrow">Day ${save.day}</span><b>${icon(evening ? "moon" : "sun")}${evening ? "Evening" : "Morning"}</b></div>
+  const last = save.last && save.last.town === save.town ? save.last : null;
+  return `<div class="home-stats" role="group" aria-label="Your truck">
+    <div class="home-stat time"><span class="bv-eyebrow">${evening ? "Evening" : "Morning"}</span><b>${icon(evening ? "moon" : "sun")}Day ${save.day}</b></div>
     <div class="home-stat ${save.bank < 15 ? "low" : ""}"><span class="bv-eyebrow">Budget</span><b>${icon("coin")}$${save.bank}</b></div>
     <div class="home-stat"><span class="bv-eyebrow">Popularity</span><b>${icon("people")}${save.popularity}</b></div>
-    <div class="home-stat"><span class="bv-eyebrow">Rating</span><b>${icon("star")}${avg === null ? "–" : avg.toFixed(1)}<small>${save.ratingCount ? `· ${save.ratingCount}` : "none yet"}</small></b></div>
+    <div class="home-stat"><span class="bv-eyebrow">Rating</span><b>${icon("star")}${avg === null ? "–" : avg.toFixed(1)}${save.ratingCount ? `<small>· ${save.ratingCount}</small>` : ""}</b></div>
+    <div class="home-stats-acts">
+      ${evening ? `<button data-home="results" ${last ? "" : "disabled"}>${icon("receipt")}Results</button>` : `<button data-home="menuref">${icon("menu")}Menu</button>`}
+      <button data-home="reviews">${icon("star")}Reviews</button>
+      <button data-home="supplies">${icon("box")}Supplies</button>
+    </div>
   </div>`;
 }
 
@@ -321,11 +332,6 @@ function renderDock(m: Mounted): void {
           ? `<button class="bv-btn primary lg" data-home="sleep">${icon("moon")}Sleep<span class="cost">${due ? `−$${due}` : "free"}</span></button>`
           : `<button class="bv-btn primary lg" data-home="open" ${s.offer.length ? "disabled" : ""}>${icon("bell")}Prep &amp; Open</button>`
       }
-    </div>
-    <div class="home-dock-row2">
-      ${evening ? `<button class="bv-btn sm" data-home="results" ${last ? "" : "disabled"}>${icon("receipt")}Results</button>` : `<button class="bv-btn sm" data-home="menuref">${icon("menu")}Menu</button>`}
-      <button class="bv-btn sm" data-home="reviews">${icon("star")}Reviews</button>
-      <button class="bv-btn sm" data-home="supplies">${icon("box")}Supplies</button>
     </div>`;
 }
 

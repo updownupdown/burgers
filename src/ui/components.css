@@ -1,5 +1,5 @@
 /*
- * Bun Voyage components: "Bistro". Every class is prefixed bv- so these can be
+ * Bun Voyage components: "Dusk" (formerly Bistro; same class names). Every class is prefixed bv- so these can be
  * adopted screen by screen next to the current game styles. Relies on tokens.css.
  */
 @import "./tokens.css";
@@ -45,9 +45,9 @@
 }
 .bv-btn .bv-icon { font-size: 1.15em; }
 .bv-btn:active { transform: translateY(1px); background: var(--bv-paper-3); }
-.bv-btn.primary { background: var(--bv-ink); color: var(--bv-paper); border-color: var(--bv-ink); }
-.bv-btn.primary:active { background: var(--bv-night-2); }
-.bv-night .bv-btn.primary { background: var(--bv-ink); color: var(--bv-night); }
+.bv-btn.primary { background: var(--bv-paprika); color: #fff7f2; border-color: var(--bv-paprika); }
+.bv-btn.primary:active { background: var(--bv-paprika-2); }
+.bv-night .bv-btn.primary { background: var(--bv-paprika); color: #fff7f2; }
 .bv-btn.accent { background: var(--bv-paprika); color: #fff; border-color: var(--bv-paprika); }
 .bv-btn.accent:active { background: var(--bv-paprika-2); }
 .bv-btn.ghost { border-color: transparent; color: var(--bv-ink-2); }
@@ -89,9 +89,9 @@
 .bv-hud {
   display: flex; align-items: center; gap: var(--bv-sp-2);
   padding: 6px 10px; border-radius: var(--bv-r-md);
-  background: rgb(250 247 241 / 0.96); box-shadow: 0 1px 0 var(--bv-rule), var(--bv-shadow-2);
+  background: rgb(246 242 234 / 0.96); box-shadow: 0 1px 0 var(--bv-rule), var(--bv-shadow-2);
 }
-.bv-night .bv-hud { background: rgb(31 28 25 / 0.94); box-shadow: 0 1px 0 var(--bv-rule), var(--bv-shadow-2); }
+.bv-night .bv-hud { background: rgb(42 51 64 / 0.94); box-shadow: 0 1px 0 var(--bv-rule), var(--bv-shadow-2); }
 .bv-hud .where { display: grid; line-height: 1.05; min-width: 0; flex: 1; }
 .bv-hud .where > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bv-hud .where b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -114,12 +114,12 @@
 .bv-ticket {
   position: relative; display: grid; gap: 3px; align-content: start; text-align: left; min-width: 0;
   padding: 6px 8px 7px; border-radius: var(--bv-r-md);
-  background: rgb(250 247 241 / 0.97); box-shadow: var(--bv-shadow-1);
+  background: rgb(246 242 234 / 0.97); box-shadow: var(--bv-shadow-1);
   border-left: 3px solid var(--slot, var(--bv-slot-0));
   color: var(--bv-ink); width: 100%;
   transition: box-shadow var(--bv-fast), transform var(--bv-fast) var(--bv-ease);
 }
-.bv-night .bv-ticket { background: rgb(43 39 35 / 0.97); }
+.bv-night .bv-ticket { background: rgb(58 68 82 / 0.97); }
 .bv-ticket .id { font-family: var(--bv-font-mono); font-size: var(--bv-fs-xs); font-weight: 500; color: var(--bv-mute); display: flex; justify-content: space-between; align-items: center; gap: 4px; }
 .bv-ticket .name { font-family: var(--bv-font-serif); font-weight: 400; font-size: var(--bv-fs-lg); line-height: 1.02; letter-spacing: -0.01em; }
 .bv-ticket .mods { display: flex; flex-wrap: wrap; gap: 2px 6px; font-size: var(--bv-fs-sm); font-weight: 700; line-height: 1.2; }
@@ -162,8 +162,8 @@
 .bv-ticket-x .foot { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 2px; }
 
 /* ---- tabs and bell --------------------------------------------------- */
-.bv-tabs { display: flex; gap: 6px; align-items: stretch; padding: 7px 8px; background: rgb(250 247 241 / 0.97); box-shadow: 0 -1px 0 var(--bv-rule); }
-.bv-night .bv-tabs { background: rgb(31 28 25 / 0.96); }
+.bv-tabs { display: flex; gap: 6px; align-items: stretch; padding: 7px 8px; background: rgb(246 242 234 / 0.97); box-shadow: 0 -1px 0 var(--bv-rule); }
+.bv-night .bv-tabs { background: rgb(42 51 64 / 0.96); }
 .bv-tab { flex: 1; position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: var(--bv-tap); border-radius: var(--bv-r-sm); color: var(--bv-mute); font-size: var(--bv-fs-sm); font-weight: 700; transition: color var(--bv-fast); }
 .bv-tab .bv-icon { font-size: 20px; }
 .bv-tab[aria-selected="true"] { color: var(--bv-ink); }
@@ -191,8 +191,8 @@
 .bv-toggle[aria-checked="true"] .state { color: var(--bv-paprika); }
 
 .bv-seg { min-height: var(--bv-tap); display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--bv-ink); border-radius: var(--bv-r-md); background: var(--bv-paper); }
-.bv-seg button:first-child { border-radius: 5px 0 0 5px; }
-.bv-seg button:last-child { border-radius: 0 5px 5px 0; }
+.bv-seg button:first-child { border-radius: 7px 0 0 7px; }
+.bv-seg button:last-child { border-radius: 0 7px 7px 0; }
 .bv-seg button { display: grid; justify-items: center; align-content: center; gap: 1px; min-height: var(--bv-tap); padding: 4px 4px; line-height: 1.15; font-size: var(--bv-fs-sm); font-weight: 600; color: var(--bv-mute); border-right: 1px solid var(--bv-rule); transition: background var(--bv-fast), color var(--bv-fast); }
 .bv-seg button:last-child { border-right: 0; }
 .bv-seg button b { font-family: var(--bv-font-mono); font-weight: 500; font-size: var(--bv-fs-md); color: var(--bv-ink); }

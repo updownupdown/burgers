@@ -264,8 +264,9 @@ function layout(): void {
   const slotW = w / 3;
   ui.rail.style.top = `${railY - 4}px`;
   railTop = railY;
-  // Long receipts may hang over the back of the tray, down to just above the plates' rims, so the
-  // plates stay clear to tap and swipe. Across, they're placed by placeTickets as focus moves.
+  // Long receipts may hang over the back of the tray band, down to the trays' receipt line, so the
+  // trays stay clear to tap and swipe (burgers shrink to fit under them). Across, they're placed by
+  // placeTickets as focus moves.
   const rimY = bands.tray.y + trayView.rimTop() * trayH;
   const maxH = Math.max(custH - railY + trayH * 0.1, rimY - 6 - railY);
   ui.tickets.forEach((t) => {
@@ -415,11 +416,11 @@ function customerLeaves(i: number, mood: "happy" | "sad" | "angry", say: string,
 function serve(i: number): void {
   const s = game.slots[i];
   if (!s.order || s.leaving) {
-    showHint("No one's waiting for that plate yet.", 1.5);
+    showHint("No one's waiting for that tray yet.", 1.5);
     return;
   }
   if (s.plate.layers.length === 0 && !s.plate.fries && !s.plate.drink) {
-    showHint("That plate is empty!", 1.5);
+    showHint("That tray is empty!", 1.5);
     return;
   }
   // Freebies kept from an earlier send-back count towards this verdict too.
@@ -631,10 +632,10 @@ function tutorialHint(): string | null {
   const layers = s.plate.layers;
   const pattyOnGrill = counter.grillItems.find((g) => g.piece.kind === "patty");
   if (counter.page !== HOME_PAGE) return "Tap the grill tab below to go back.";
-  if (layers.length === 0) return "Drag a bun up onto the plate in the tray.";
+  if (layers.length === 0) return "Drag a bun up onto the plate on the tray.";
   const hasPatty = layers.some((l) => l.piece.kind === "patty");
   if (!hasPatty) {
-    if (!pattyOnGrill) return "Now drag a patty onto the grill.";
+    if (!pattyOnGrill) return "Now drag a patty onto a hot part of the grill.";
     const p = pattyOnGrill.piece;
     if (p.cook[0] < 0.5 && p.cook[1] < 0.3) return "Let it sizzle until the bottom browns…";
     if (p.cook[1] < 0.45) return "Swipe up on the patty to flip it!";
@@ -642,7 +643,7 @@ function tutorialHint(): string | null {
     return "Medium! Drag the patty up onto the bun.";
   }
   if (layers[layers.length - 1].piece.kind !== "bun" || layers.length < 3) return "Add the top bun.";
-  return "Swipe the plate up to hand it to the customer!";
+  return "Swipe the tray up to hand it to the customer!";
 }
 
 // ---------------------------------------------------------------------------
@@ -865,14 +866,14 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
   }
   if (payload.type === "carton") {
     if (s.plate.fries) {
-      showHint("This plate already has fries.", 2);
+      showHint("This tray already has fries.", 2);
       return false;
     }
     const { cook, size, fill, salt, curds, gravy } = payload;
     s.plate.fries = { cook, size, fill, salt, curds, gravy };
   } else {
     if (s.plate.drink) {
-      showHint("This plate already has a drink.", 2);
+      showHint("This tray already has a drink.", 2);
       return false;
     }
     s.plate.drink = { flavor: payload.flavor, fill: payload.fill, size: payload.size, ice: payload.ice, lid: payload.lid, straw: payload.straw };
@@ -1500,7 +1501,7 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       if (dy < -40 && -dy > Math.abs(dx)) serve(pt.plate);
       // Swipe down on a plate with only sides to take them off.
       else if (dy > 40 && dy > Math.abs(dx)) removeTop(pt.plate);
-      else if (!pt.moved && game.slots[pt.plate].order) hintOnce("serve", "Swipe the plate up to hand it over.", 2.5);
+      else if (!pt.moved && game.slots[pt.plate].order) hintOnce("serve", "Swipe the tray up to hand it over.", 2.5);
       break;
   }
 }

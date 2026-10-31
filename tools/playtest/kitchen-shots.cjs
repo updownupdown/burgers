@@ -1,5 +1,5 @@
 // Screenshots of the kitchen with the longest orders the game makes and a burger on every plate.
-// PORT=4175 node tools/playtest/kitchen-shots.cjs [tag]  ->  tools/playtest/out/kitchen-<tag>-<w>x<h>.png
+// PORT=4175 [ACTIVE=n] [TWO=1] [FOLD=1] node tools/playtest/kitchen-shots.cjs [tag]  ->  tools/playtest/out/kitchen-<tag>-<w>x<h>.png
 const { open, step, out } = require('./lib.cjs');
 const tag = process.argv[2] || 'after';
 const sizes = (process.env.SIZES || '390x844,360x740,430x932').split(',').map((s) => s.split('x').map(Number));
@@ -10,6 +10,10 @@ const sizes = (process.env.SIZES || '390x844,360x740,430x932').split(',').map((s
     await p.reload();
     await p.waitForTimeout(600);
     await p.click('[data-home=open]');
+    // The day's prep screen, when there is one.
+    await p.waitForTimeout(500);
+    await p.evaluate(() => document.querySelector('[data-act=open]')?.click());
+    await p.waitForTimeout(300);
     await p.evaluate((a) => (window.__shotActive = a), +(process.env.ACTIVE || 0));
     await p.evaluate(() => window.__bv.manual(true));
     await step(p, 3);
@@ -52,6 +56,14 @@ const sizes = (process.env.SIZES || '390x844,360x740,430x932').split(',').map((s
     await step(p, 0.5);
     await p.waitForTimeout(400);
     const file = `${out}kitchen-${tag}-${w}x${h}.png`;
+    // TWO=1 leaves two orders; FOLD=1 taps the open ticket to fold it back.
+    if (process.env.TWO) await p.evaluate(() => (window.__bv.game.slots[2].order = null));
+    if (process.env.FOLD) {
+      await step(p, 0.1);
+      await p.click('[data-r=ticket][data-mode=big]');
+      await step(p, 0.2);
+      await p.waitForTimeout(300);
+    }
     await p.screenshot({ path: file });
     // How each receipt fits: content height vs. box height.
     const fit = await p.evaluate(() => [...document.querySelectorAll('[data-r=ticket]')].map((t) => ({ cls: t.className, scrollH: t.scrollHeight, clientH: t.clientHeight, top: Math.round(t.getBoundingClientRect().top), bottom: Math.round(t.getBoundingClientRect().bottom) })));

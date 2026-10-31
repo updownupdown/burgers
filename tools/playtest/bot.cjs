@@ -14,6 +14,9 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
   await p.evaluate(([n]) => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: n, tutorialDone: true })), [+(process.env.STOP || 0)]);
   await p.reload(); await p.waitForTimeout(600);
   await p.click('[data-home=open]');
+  // The day's prep screen, when there is one.
+  await p.waitForTimeout(500);
+  await p.evaluate(() => document.querySelector('[data-act=open]')?.click());
   await p.evaluate(() => window.__bv.manual(true));
   const ev = (f, a) => p.evaluate(f, a);
   // Screen point of a hit proxy's centre: hp('bin', {kind: 'patty'}).

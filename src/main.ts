@@ -224,6 +224,8 @@ let colX = 0;
 let railTop = 100;
 /** Where the receipts were last placed, so they're only moved when focus or the orders change. */
 let ticketsAt = "";
+/** The focused order's ticket is opened out. Tapping it folds it back; tapping a stub opens that one. */
+let ticketOpen = true;
 let viewH = 0;
 
 function layout(): void {
@@ -1642,24 +1644,36 @@ ui.tabs.forEach((t, i) =>
     else goToPage(i);
   }),
 );
-// Touching a stub brings that order into focus, as touching its plate does.
+// Touching a stub brings that order into focus and opens it; tapping the open ticket folds it back
+// to a stub. Folding waits for the click, which the browser drops when the touch scrolls the list.
 ui.tickets.forEach((t, i) => {
+  let wasOpen = false;
   t.addEventListener("pointerdown", () => {
     sfx.unlock();
+    wasOpen = t.dataset.mode === "big";
     if (counter.inHand) sauceBlocked();
-    else setActive(i);
+    else if (!wasOpen) {
+      setActive(i);
+      ticketOpen = true;
+    }
+  });
+  t.addEventListener("click", () => {
+    if (wasOpen && t.dataset.mode === "big" && !counter.inHand) ticketOpen = false;
+    wasOpen = false;
   });
   // Scroll events don't bubble; listen in the capture phase for the list inside.
   t.addEventListener("scroll", (e) => (e.target as HTMLElement).classList?.toggle("up", (e.target as HTMLElement).scrollTop > 0), true);
 });
 
 /**
- * The focus rail: the order being worked on gets a wide receipt with its whole build; the others
- * shrink to stubs beside it, in their customers' order along the rail.
+ * The focus rail: the order being worked on gets a wide receipt with its whole build ("big"); the
+ * others shrink to stubs beside it, in their customers' order along the rail. With every ticket
+ * folded, two orders (or one) share the rail as "half" tickets that still show the whole build,
+ * and three are even stubs.
  */
 function placeTickets(): void {
   const shown = game.slots.map((s) => !!s.order && !s.leaving && game.phase !== "title");
-  const key = `${shown.join()}|${game.active}`;
+  const key = `${shown.join()}|${game.active}|${ticketOpen}`;
   if (key === ticketsAt) return;
   ticketsAt = key;
   const w = bands.customers.w;
@@ -1670,12 +1684,17 @@ function placeTickets(): void {
   const focus = shown[game.active] ? game.active : shown.indexOf(true);
   const slotW = w / 3;
   const bigW = n <= 1 ? Math.min(w - 2 * m, 260) : w - 2 * m - (n - 1) * (stub + gap);
+  const evenW = (w - 2 * m - (n - 1) * gap) / Math.max(1, n);
+  const halfW = n <= 1 ? Math.min(w - 2 * m, 200) : evenW;
+  const mode = (i: number) => (ticketOpen ? (i === focus ? "big" : "stub") : n <= 2 ? "half" : "stub");
+  const width = (i: number) => ({ big: bigW, half: halfW, stub: ticketOpen ? stub : evenW })[mode(i)];
   // A lone order sits under its own customer, as far as the screen allows.
-  let x = n <= 1 ? THREE.MathUtils.clamp(slotW * (focus + 0.5) - bigW / 2, m, w - m - bigW) : m;
+  const loneW = n <= 1 && focus >= 0 ? width(focus) : 0;
+  let x = n <= 1 ? THREE.MathUtils.clamp(slotW * (focus + 0.5) - loneW / 2, m, w - m - loneW) : m;
   ui.tickets.forEach((t, i) => {
     if (!shown[i]) return;
-    const big = i === focus;
-    const tw = big ? bigW : stub;
+    const tw = width(i);
+    t.dataset.mode = mode(i);
     t.style.left = `${Math.round(x)}px`;
     t.style.width = `${Math.round(tw)}px`;
     x += tw + gap;
@@ -2356,11 +2375,13 @@ function updateUi(): void {
     const focused = i === game.active;
     const pct = s.patience / s.maxPatience;
     const shownPct = game.tutorial && game.ordered === 1 && i === game.slots.findIndex((x) => x.order) ? 1 : pct;
-    const key = `${order.id}|${focused}|${t.style.width}|${s.plate.layers.map((l) => l.piece.kind).join(",")}|${s.plate.fries ? `${s.plate.fries.size}${+!!s.plate.fries.salt}${+!!s.plate.fries.curds}${+!!s.plate.fries.gravy}` : ""}|${s.plate.drink ? `${s.plate.drink.flavor}${s.plate.drink.size}${+!!s.plate.drink.ice}${+!!s.plate.drink.lid}${+!!s.plate.drink.straw}` : ""}`;
+    const mode = t.dataset.mode ?? "stub";
+    const key = `${order.id}|${focused}|${mode}|${t.style.width}|${s.plate.layers.map((l) => l.piece.kind).join(",")}|${s.plate.fries ? `${s.plate.fries.size}${+!!s.plate.fries.salt}${+!!s.plate.fries.curds}${+!!s.plate.fries.gravy}` : ""}|${s.plate.drink ? `${s.plate.drink.flavor}${s.plate.drink.size}${+!!s.plate.drink.ice}${+!!s.plate.drink.lid}${+!!s.plate.drink.straw}` : ""}`;
     if (key !== s.ticketKey || !t.dataset.fit) {
       t.classList.toggle("active", focused);
-      t.classList.toggle("stub", !focused);
-      if (focused) fitTicket(t, (fold) => ticketHtml(order, s.plate, shownPct, true, fold));
+      t.classList.toggle("stub", mode === "stub");
+      t.classList.toggle("half", mode === "half");
+      if (mode !== "stub") fitTicket(t, (fold) => ticketHtml(order, s.plate, shownPct, true, fold));
       else {
         t.classList.remove("dense");
         t.innerHTML = ticketHtml(order, s.plate, shownPct, false);

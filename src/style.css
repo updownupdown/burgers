@@ -190,8 +190,6 @@ html, body {
   height: 6px;
   background: linear-gradient(135deg, #fffdf7 4px, transparent 0) 0 0 / 8px 6px repeat-x, linear-gradient(-135deg, #fffdf7 4px, transparent 0) 0 0 / 8px 6px repeat-x;
 }
-/* The steel clip that holds it on the rail. */
-.ticket::before { content: ""; position: absolute; left: 50%; top: 0; width: 30px; height: 5px; margin-left: -15px; border-radius: 0 0 3px 3px; background: linear-gradient(#c9d0d2, #8d979a); }
 .ticket.active { filter: drop-shadow(0 5px 7px rgb(42 38 34 / 0.34)); z-index: 3; }
 
 /* Row 1: face, patience, critic. */
@@ -260,7 +258,8 @@ html, body {
 .ticket .sides { display: flex; flex-direction: column; gap: 2px; border-left: 1px dashed var(--bv-rule-2); padding-left: 6px; min-width: 0; }
 /* A section per kind of side: its icon, then a pale rule out to the edge. */
 .ticket .sec { display: flex; align-items: center; gap: 4px; }
-.ticket .sec + .sd { margin-bottom: 4px; }
+.ticket .sg { display: grid; gap: 2px; min-width: 0; align-content: start; }
+.ticket .sg + .sg { margin-top: 4px; }
 .ticket .sec i { flex: 1; height: 1px; background: var(--bv-rule); }
 .ticket .sd { display: grid; gap: 2px; min-width: 0; justify-items: start; }
 .ticket .sd .sl { display: flex; align-items: center; gap: 3px; min-width: 0; max-width: 100%; }
@@ -277,6 +276,16 @@ html, body {
 .ticket.dense .name .l { font-size: 18px; }
 .ticket.dense li { min-height: 13.5px; line-height: 1.08; }
 .ticket.dense ol { gap: 0; }
+
+/* Two tickets, neither opened: each gets half the rail and the whole build, sides under it. */
+.ticket.half .cols { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 4px; }
+.ticket.half .sides { flex-direction: row; gap: 8px; border-left: 0; padding-left: 0; border-top: 1px dashed var(--bv-rule-2); padding-top: 3px; }
+/* Side by side, each item beside its section icon, to keep the room for the build. */
+.ticket.half .sg { flex: 1; display: flex; align-items: flex-start; gap: 4px; }
+.ticket.half .sec i { display: none; }
+.ticket.half .sec .ic { margin-top: 1px; }
+.ticket.half .sg + .sg { margin-top: 0; }
+.ticket.half .name .l { font-size: 18px; }
 
 /* Stubs: patience, short name, doneness, how much is left. */
 .ticket.stub { padding: 9px 5px 12px; gap: 4px; cursor: pointer; }

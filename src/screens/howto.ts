@@ -173,7 +173,7 @@ function sections(): Sec[] {
       </div>`,
       points: [
         "<b>Drag</b> ingredients up onto the active tray, or <b>flick</b> them up to toss them on.",
-        "<b>Sauce:</b> tap a bottle in the caddy to pick it up, then draw on a burger to squeeze. Tap the caddy to put it back; the rest of the kitchen waits until you do.",
+        "<b>Sauce:</b> press a bottle in the caddy and drag it up onto a burger on the tray. The view zooms in; keep moving to squeeze and watch the bar on the right for Perfect. Let go and the bottle goes back.",
         "Wrong layer? <b>Swipe down</b> on the tray to take the top one off. Mistakes go down the garbage chute.",
         "Cooking ahead? Leave finished food on a <b>warm</b> grill zone rather than on the tray, where it goes cold.",
       ],
@@ -187,7 +187,7 @@ function sections(): Sec[] {
       fig: `<ul class="hw-counts">${counted
         .map((k) => `<li><i class="swc" style="--c:${KIND_COLOR[k]}"></i><span>${KIND_LABEL[k]}</span><span class="pcs ${k}" style="--c:${KIND_COLOR[k]}">${"<b></b>".repeat(count(k))}</span><b class="bv-mono">×${count(k)}</b></li>`)
         .join("")}</ul>
-      <p class="hw-cap">The standard count. Some recipes differ: check Today's menu.</p>
+      <p class="hw-cap">The standard count. Some recipes differ: check the Menu.</p>
       <div class="hw-scale">
         <div class="lo"><b>Fewer</b><span>Saves money. May cost a review.</span></div>
         <div class="std"><b>Standard</b><span>Exactly right.</span></div>
@@ -355,10 +355,10 @@ function sections(): Sec[] {
     },
     {
       id: "biz",
-      chip: "Business",
+      chip: "Complexity",
       icon: "chart",
-      title: "Business mode",
-      lede: "Optional: run the books as well as the grill.",
+      title: "Complexity",
+      lede: "Simple cooks and serves. Balanced and Complex run the books as well as the grill.",
       fig: `<div class="hw-biz">
         <span class="bv-eyebrow">Ingredients</span>
         <div class="bv-seg compact" aria-hidden="true"><button tabindex="-1">Budget</button><button tabindex="-1" aria-pressed="true">Standard</button><button tabindex="-1">Premium</button></div>
@@ -366,16 +366,16 @@ function sections(): Sec[] {
         <div class="bv-seg compact" aria-hidden="true"><button tabindex="-1">Low</button><button tabindex="-1" aria-pressed="true">Fair</button><button tabindex="-1">High</button></div>
       </div>`,
       points: [
-        "Before each shift, pick <b>ingredient quality</b>, <b>prices</b> and <b>today's menu</b>.",
+        "At <b>Balanced</b> or <b>Complex</b>, pick <b>ingredient quality</b>, <b>prices</b> and <b>today's menu</b> on the Prep screen before each shift. Complex opens the ledger too.",
         "Better food rates higher; higher prices bring fewer, pickier customers. Premium at high prices rates like standard at fair.",
         "Ingredients, cups and spills all cost money, so waste shows in your profit.",
-        "Reviews build a <b>reputation</b> that follows the truck from town to town. Switch the mode in General & Settings.",
+        "Reviews build a <b>reputation</b> that follows the truck from town to town. Change complexity any time in Settings; stepping down keeps your reputation and upgrades for later.",
       ],
     },
   ];
 }
 
-/** The last section: today's recipes with their counts, as in Today's menu. */
+/** The last section: today's recipes with their counts, as in the Menu. */
 function menuSec(): Sec {
   const d = getDeps();
   const town = d?.town();

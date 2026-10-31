@@ -17,7 +17,8 @@ const TRAY_LINER = "#fbf6ea";
 /** Tray size and where the plate and sides sit on it, in plate radii (tray-local units). */
 const TRAY = { w: 3.15, d: 2.05 };
 const DISH_AT = { x: -0.42, z: 0.08 };
-const DISH_R = 0.86;
+/** The paper plate's radius, in tray units (the group's scale turns it into world units). */
+export const DISH_R = 0.86;
 const FRIES_AT = { x: 1.0, z: 0.42 };
 const CUP_AT = { x: 1.02, z: -0.42 };
 /** With no burger ordered the sides move to the middle of the tray. */
@@ -32,7 +33,7 @@ const MIN_FIT = 0.55;
  */
 const TRAY_SIDES = 0.6;
 const ACTIVE_RING = "#c8472e";
-const TRAY_VIEW_HALF_H = 2.2;
+export const TRAY_VIEW_HALF_H = 2.2;
 
 interface StackEntry {
   uid: number;
@@ -141,8 +142,11 @@ export class PlateView {
     return Math.max(this.full * MIN_FIT, Math.min(this.full, room / top));
   }
 
-  /** Where a ray meets the top of the stack, in burger-local units (a bun has radius 1), kept on the bun. */
-  drawPoint(ray: THREE.Ray): { x: number; z: number } {
+  /**
+   * Where a ray meets the top of the stack, in burger-local units (a bun has radius 1), kept within
+   * `reach` of the middle (pass Infinity for the raw point).
+   */
+  drawPoint(ray: THREE.Ray, reach = 1.05): { x: number; z: number } {
     this.burger.updateWorldMatrix(true, false);
     const pos = new THREE.Vector3().setFromMatrixPosition(this.burger.matrixWorld);
     const g = new THREE.Vector3().setFromMatrixScale(this.group.matrixWorld).x;
@@ -153,7 +157,7 @@ export class PlateView {
     const lx = (p.x - pos.x) / scale;
     const lz = (p.z - pos.z) / scale;
     const r = Math.hypot(lx, lz);
-    const k = r > 1.05 ? 1.05 / r : 1;
+    const k = r > reach ? reach / r : 1;
     return { x: lx * k, z: lz * k };
   }
 
@@ -280,7 +284,7 @@ export class PlateView {
  * The pass shelf is seen from a little above eye level: high enough that the trays read as trays
  * (not slivers) and the plate as round, low enough that a burger's layers are counted from the side.
  */
-const TRAY_PITCH = THREE.MathUtils.degToRad(44);
+export const TRAY_PITCH = THREE.MathUtils.degToRad(44);
 /** Height the camera centres on: about the middle of a tall burger. */
 const TRAY_LOOK_Y = 0.85;
 /** The receipts hang over the back of the band down to here (a fraction of its height from the top); burgers fit under it. */
@@ -438,7 +442,24 @@ export class TrayView {
     this.plates.forEach((p, i) => {
       const on = occupied[i] && i === slot;
       p.ring.visible = on;
+      (p.ring.material as THREE.MeshBasicMaterial).opacity = 0.9;
       (this.flags[i].material as THREE.MeshToonMaterial).color.set(on ? ACTIVE_RING : "#a9b2af");
+    });
+  }
+
+  /** World height of the top of a plate's stack. */
+  stackTopY(slot: number): number {
+    const pv = this.plates[slot];
+    const s = pv.group.scale.x;
+    return pv.group.position.y + s * (pv.burger.position.y + pv.stackTop() * pv.s);
+  }
+
+  /** Light the ring of every plate that can take sauce, pulsing; the aimed-at one solid. Null restores. */
+  aim(ok: boolean[] | null, target: number, t: number): void {
+    if (!ok) return;
+    this.plates.forEach((p, i) => {
+      p.ring.visible = ok[i];
+      (p.ring.material as THREE.MeshBasicMaterial).opacity = i === target ? 0.95 : 0.35 + 0.3 * Math.sin(t * 7) ** 2;
     });
   }
 

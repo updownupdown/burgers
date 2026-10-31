@@ -969,8 +969,26 @@ export class CounterView {
   liftSauce(kind: SauceKind | null): void {
     this.inHand = kind;
     for (const k of ["ketchup", "mustard"] as SauceKind[]) this.bottles[k].visible = k !== kind;
+    this.pointSauce(null);
   }
   inHand: SauceKind | null = null;
+  private handBottle: THREE.Object3D | null = null;
+
+  /** The bottle in hand over a world point on the counter (while it's dragged up to the trays), or out of view. */
+  pointSauce(world: THREE.Vector3 | null): void {
+    if (this.handBottle && (!world || this.handBottle.userData.kind !== this.inHand)) {
+      this.scene.remove(this.handBottle);
+      disposeObject(this.handBottle);
+      this.handBottle = null;
+    }
+    if (!world || !this.inHand) return;
+    if (!this.handBottle) {
+      this.handBottle = this.sauceBottle(this.inHand);
+      this.handBottle.userData.kind = this.inHand;
+      this.scene.add(this.handBottle);
+    }
+    this.handBottle.position.copy(world);
+  }
 
   /** A sauce bottle hanging nozzle down, its origin at the nozzle tip. */
   sauceBottle(kind: SauceKind): THREE.Object3D {

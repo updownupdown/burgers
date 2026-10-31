@@ -50,6 +50,8 @@
 .menu-head .bv-btn.icon .bv-icon { font-size: 22px; }
 .menu-head .menu-back { margin-left: -6px; }
 
+.menu-note { display: flex; gap: 8px; align-items: flex-start; margin: 2px 0 0; font-size: var(--bv-fs-sm); color: var(--bv-mute); font-weight: 600; line-height: 1.35; }
+.menu-note .bv-icon { font-size: 16px; flex: none; margin-top: 1px; }
 .menu-tabs { flex: none; margin: 0 16px 4px; }
 .menu-tabs button { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 700; padding: 0 6px; white-space: nowrap; }
 .menu-tabs button .bv-icon { font-size: 16px; }
@@ -129,6 +131,14 @@
 .mref-biz { font-size: var(--bv-fs-sm); }
 .mref-item { display: flex; gap: 14px; padding: 12px 0 14px; border-bottom: 1px dotted var(--bv-rule-2); }
 .mref-item:last-child { border-bottom: 0; }
+.mref-item.locked { opacity: 0.55; filter: saturate(0.3); }
+.mref-town { display: grid; gap: 0; }
+.mref-town + .mref-town { margin-top: 6px; }
+.mref-townhead { display: flex; align-items: center; gap: 8px; padding: 10px 10px; border-radius: var(--bv-r-md); background: var(--bv-paper-2); font-size: var(--bv-fs-sm); font-weight: 700; }
+.mref-townhead .bv-icon { font-size: 16px; color: var(--bv-olive); flex: none; }
+.mref-townhead b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 18px; letter-spacing: -0.01em; }
+.mref-townhead span { margin-left: auto; text-align: right; color: var(--bv-mute); font-weight: 600; max-width: 55%; }
+.mref-town.locked .mref-townhead .bv-icon { color: var(--bv-mute); }
 .mref-main { flex: 1; min-width: 0; display: grid; gap: 6px; align-content: start; }
 .mref-top { display: flex; align-items: baseline; gap: 8px; }
 .mref-name { margin: 0; font-family: var(--bv-font-serif); font-weight: 400; font-size: 22px; line-height: 1.02; letter-spacing: -0.01em; flex: 1; text-wrap: balance; }

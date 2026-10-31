@@ -4,7 +4,10 @@ import { dressCup } from "../render/cup";
 import { makeCup, makeFood, makeFries, stackBases, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 
-export const SLOT_COLORS = ["#6a8fd8", "#9ccf8a", "#b48ad8"];
+/** Plain paper plates; only the one being worked on gets a ring, in the accent colour. */
+const PLATE_PAPER = "#f7f4ec";
+const PLATE_RIM = "#e4dccb";
+const ACTIVE_RING = "#c8472e";
 const TRAY_VIEW_HALF_H = 2.2;
 
 interface StackEntry {
@@ -40,15 +43,15 @@ export class PlateView {
   /** Stack scale relative to ingredient units. */
   s = 0.6;
 
-  constructor(color: string) {
-    const plate = mesh(faceted(new THREE.CylinderGeometry(1.0, 0.86, 0.1, 28)), "#f7f4ec");
+  constructor(rimColor = PLATE_RIM) {
+    const plate = mesh(faceted(new THREE.CylinderGeometry(1.0, 0.86, 0.1, 28)), PLATE_PAPER);
     plate.position.y = 0.05;
-    const rim = mesh(faceted(new THREE.TorusGeometry(0.93, 0.05, 4, 28)), color, { ink: false });
+    const rim = mesh(faceted(new THREE.TorusGeometry(0.93, 0.05, 4, 28)), rimColor, { ink: false });
     rim.rotation.x = Math.PI / 2;
     rim.position.y = 0.1;
     this.ring = new THREE.Mesh(
       new THREE.RingGeometry(1.08, 1.22, 40),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 }),
+      new THREE.MeshBasicMaterial({ color: ACTIVE_RING, transparent: true, opacity: 0.9 }),
     );
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.position.y = 0.02;
@@ -206,7 +209,7 @@ export class TrayView {
     this.scene.add(tray);
 
     for (let i = 0; i < 3; i++) {
-      const pv = new PlateView(SLOT_COLORS[i]);
+      const pv = new PlateView();
       this.plates.push(pv);
       this.scene.add(pv.group);
     }
@@ -280,9 +283,7 @@ export class TrayView {
 
   setActive(slot: number, occupied: boolean[]): void {
     this.plates.forEach((p, i) => {
-      p.ring.visible = occupied[i];
-      (p.ring.material as THREE.MeshBasicMaterial).opacity = i === slot ? 0.95 : 0.25;
-      p.ring.scale.setScalar(i === slot ? 1.06 : 1);
+      p.ring.visible = occupied[i] && i === slot;
     });
   }
 

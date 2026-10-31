@@ -7,7 +7,6 @@ import type { Order, Plate } from "./game/types";
 import { collapseCounted } from "./game/scoring";
 import { SHIFTS_TO_UNLOCK } from "./game/travel";
 import { DRINK_COLOR, DRINK_LABEL, DRINKS, KIND_COLOR, KIND_LABEL } from "./game/types";
-import { SLOT_COLORS } from "./scenes/tray";
 import { buildLabel } from "./update";
 import { icon } from "./ui/icons";
 
@@ -74,6 +73,8 @@ export interface Ui {
   sentBack: HTMLElement[];
   drinkLabels: HTMLElement[];
   hint: HTMLElement;
+  hintText: HTMLElement;
+  hintClose: HTMLButtonElement;
   tabs: HTMLButtonElement[];
   tabDots: HTMLElement[];
   menuBtn: HTMLButtonElement;
@@ -87,8 +88,42 @@ export interface Ui {
   updateText: HTMLElement;
 }
 
-/** Icons on the counter tabs. */
-const TAB_ICONS: Record<string, string> = { Drinks: "drink", Grill: "grill", Fryer: "fryer", Supplies: "box" };
+/*
+ * Counter tabs show a small drawing of each station instead of a word: a fountain cup, the
+ * flat-top with patties, the fry basket, a box of supplies. Inked like the kitchen, in muted
+ * colour; tabs you're not on are faded (see .tab in style.css).
+ */
+const INK = `stroke="#2a2622" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"`;
+const TAB_ART: Record<string, string> = {
+  Drinks: `<path d="M15.5 12h17l-2.2 19.6a2 2 0 0 1-2 1.8h-8.6a2 2 0 0 1-2-1.8z" fill="#de6f55" ${INK}/>
+    <path d="M16.3 18.6h15.4l-.85 7.6H17.15z" fill="#faf7f1" ${INK}/>
+    <path d="M19.6 22.6c1.4-1.1 2.8-1.1 4.2 0s2.8 1.1 4.2 0" fill="none" stroke="#de6f55" stroke-width="1.4" stroke-linecap="round"/>
+    <path d="M26.5 10 29.5 3h3.5" fill="none" stroke="#2a2622" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M26.5 10 29.5 3h3.5" fill="none" stroke="#f3d36b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="13.5" y="9" width="21" height="3.6" rx="1.8" fill="#f4efe6" ${INK}/>`,
+  Grill: `<path d="M13 11.5c-1.2-1.6 1.2-2.6 0-4.4M24 10.5c-1.2-1.6 1.2-2.6 0-4.4M35 11.5c-1.2-1.6 1.2-2.6 0-4.4" fill="none" stroke="#c8472e" stroke-width="1.4" stroke-linecap="round"/>
+    <path d="M5 21h38v8.5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z" fill="#8a8178" ${INK}/>
+    <path d="M7.5 21 10 14.5h28L40.5 21z" fill="#4b4640" ${INK}/>
+    <ellipse cx="17.5" cy="17.6" rx="5.4" ry="2.3" fill="#8a4a33" ${INK}/>
+    <ellipse cx="30.5" cy="17.6" rx="5.4" ry="2.3" fill="#8a4a33" ${INK}/>
+    <path d="M26.6 16.1h7.8l-1.2 2.3h-1.6l-.6 1.4-.8-1.4h-2.6z" fill="#f2c14e" ${INK}/>
+    <circle cx="11" cy="26.2" r="1.7" fill="#f4efe6" ${INK}/><circle cx="17" cy="26.2" r="1.7" fill="#f4efe6" ${INK}/>`,
+  Fryer: `<path d="M17.5 12.5 16 5M20.5 12.5V3.5M23.5 12.5l1-8M26.5 12.5l1.8-6.6M29.2 12.5l2.4-5.4" fill="none" stroke="#2a2622" stroke-width="3.4" stroke-linecap="round"/>
+    <path d="M17.5 12.5 16 5M20.5 12.5V3.5M23.5 12.5l1-8M26.5 12.5l1.8-6.6M29.2 12.5l2.4-5.4" fill="none" stroke="#f0c341" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M7 19h34v11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z" fill="#b9b2a6" ${INK}/>
+    <path d="M7.75 19h32.5v3.2H7.75z" fill="#e0a83a"/>
+    <path d="M14 11h19l-1.6 9H15.6z" fill="#e4ded3" ${INK}/>
+    <path d="M18.5 11.5v8M23.5 11.5v8M28.5 11.5v8M14.6 15.3h17.8" fill="none" stroke="#2a2622" stroke-width="1" opacity=".55"/>
+    <path d="M33 12.5h7.5" fill="none" stroke="#2a2622" stroke-width="2.4" stroke-linecap="round"/>
+    <circle cx="14" cy="27" r="1.6" fill="#f4efe6" ${INK}/>`,
+  Supplies: `<path d="M34 17.5 39 12v15.5l-5 5.5z" fill="#b98a55" ${INK}/>
+    <path d="M8 17.5h26V33H8z" fill="#d6a76f" ${INK}/>
+    <path d="M8 17.5 13 12h26l-5 5.5z" fill="#e8c08e" ${INK}/>
+    <path d="M18 17.5h6V33h-6zM18 17.5l5-5.5h6l-5 5.5z" fill="#f1e4ca" ${INK}/>
+    <path d="M28.5 4.5h7l-.8 7.5h-5.4z" fill="#faf7f1" ${INK}/><path d="M28.2 4.5h7.6" stroke="#2a2622" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M11 22.5h4M11 25.5h3" stroke="#2a2622" stroke-width="1.2" stroke-linecap="round" opacity=".6"/>`,
+};
+const tabArt = (page: string) => `<svg class="tab-art" viewBox="0 0 48 36" aria-hidden="true">${TAB_ART[page] ?? ""}</svg>`;
 
 export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   root.innerHTML = `
@@ -103,12 +138,12 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     <button class="icon-btn" data-r="menuBtn" aria-label="Menu">${icon("menu")}</button>
   </div>
   <div class="rail" data-r="rail"></div>
-  ${[0, 1, 2].map((i) => `<div class="ticket" data-r="ticket" data-slot="${i}" style="--slot:${SLOT_COLORS[i]}" hidden></div>`).join("")}
+  ${[0, 1, 2].map((i) => `<div class="ticket" data-r="ticket" data-slot="${i}" hidden></div>`).join("")}
   ${[0, 1, 2].map(() => `<div class="sentback" data-r="sentback" hidden></div>`).join("")}
-  <div class="hint" data-r="hint" hidden></div>
+  <div class="hint" data-r="hint" role="status" hidden><span data-r="hintText"></span><button class="hint-x" data-r="hintClose" aria-label="Dismiss tip">${icon("close")}</button></div>
   ${DRINKS.map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_LABEL[d]}</div>`).join("")}
   <nav class="tabs">
-    ${pages.map((p, i) => `<button class="tab" data-r="tab" data-page="${i}" aria-selected="false">${icon(TAB_ICONS[p] ?? "box")}<span>${p}</span><span class="dot" hidden></span></button>`).join("")}
+    ${pages.map((p, i) => `<button class="tab" data-r="tab" data-page="${i}" aria-selected="false" aria-label="${p}" title="${p}">${TAB_ART[p] ? tabArt(p) : icon("box")}<span class="dot" hidden></span></button>`).join("")}
   </nav>
   <div class="update" data-r="update" hidden>
     <span data-r="updateText">A new build is ready.</span>
@@ -131,6 +166,8 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     sentBack: [...root.querySelectorAll<HTMLElement>('[data-r="sentback"]')],
     drinkLabels: [...root.querySelectorAll<HTMLElement>('[data-r="dlabel"]')],
     hint: q("hint"),
+    hintText: q("hintText"),
+    hintClose: q("hintClose") as HTMLButtonElement,
     tabs,
     tabDots: tabs.map((t) => t.querySelector<HTMLElement>(".dot")!),
     menuBtn: q("menuBtn") as HTMLButtonElement,
@@ -328,13 +365,17 @@ function removedRow(kind: Order["layers"][number]["kind"], above: RowState): Tic
   return { icon, color: KIND_COLOR[kind], label: `− ${KIND_LABEL[kind]}`, tail: "", state: above === "done" ? "done" : "", mod: true, next: false };
 }
 
-/** Fries and drink beside the build: icon, then the item and its own modifiers stacked under it. */
+/**
+ * Fries and drinks beside the build, each under its own section icon with a pale rule, so the
+ * items get the column's full width: size first ("[L] Pine Fizz"), its own modifiers under it.
+ */
 function sideRows(order: Order, plate: Plate): string {
   const out: string[] = [];
+  const section = (icon: string, color: string) => `<div class="sec">${ticketIcon(icon, color)}<i></i></div>`;
   if (order.fries && !(order.poutine && !order.layers.length)) {
     const f = plate.fries;
     const state = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy ? "done" : "wrong";
-    out.push(`<div class="sd ${state}">${ticketIcon("fries", "#c8472e")}<div><span class="sl"><i class="sz">${order.friesSize}</i>Fries</span></div></div>`);
+    out.push(section("fries", "#c8472e"), `<div class="sd ${state}"><span class="sl"><i class="sz">${order.friesSize}</i><span class="dn">Fries</span></span></div>`);
   }
   if (order.drink) {
     const d = plate.drink;
@@ -343,7 +384,8 @@ function sideRows(order: Order, plate: Plate): string {
     const state = !d ? "" : wrong ? "wrong" : d.lid && d.straw ? "done" : "";
     const ice = order.ice === true ? modBox("ice", "Ice") : order.ice === false ? modBox("noice", "No ice") : "";
     out.push(
-      `<div class="sd ${state}">${ticketIcon("drink", DRINK_COLOR[order.drink])}<div><span class="sl"><i class="sz">${order.drinkSize}</i><span class="dn">${DRINK_LABEL[order.drink]}</span></span>${ice ? `<span class="sm">${ice}</span>` : ""}</div></div>`,
+      section("drink", DRINK_COLOR[order.drink]),
+      `<div class="sd ${state}"><span class="sl"><i class="sz">${order.drinkSize}</i><span class="dn">${DRINK_LABEL[order.drink]}</span></span>${ice ? `<span class="sm">${ice}</span>` : ""}</div>`,
     );
   }
   return out.join("");

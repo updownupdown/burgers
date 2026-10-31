@@ -39,6 +39,7 @@ import { TrayView } from "./scenes/tray";
 import "./ui/components.css";
 import "./style.css";
 import { mountHome } from "./screens/home";
+import { icon } from "./ui/icons";
 import { buildUi, donenessPill, patienceMood, planHtml, summaryHtml, ticketHtml } from "./ui";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 import { closeAll, initMenu, openHowTo, openMenu, openMenuRef } from "./screens/menu";
@@ -271,7 +272,8 @@ function layout(): void {
     b.style.maxWidth = `${slotW - 8}px`;
   });
   ticketsAt = "";
-  ui.hint.style.top = `${bands.counter.y + 8}px`;
+  // Tips sit over the customers, clear of the receipts and the counter you're working on.
+  ui.hint.style.top = `${hudH + 6}px`;
   // Turned sideways mid-shift: pause behind the "turn your phone" overlay.
   if (W > H && H < 500 && game.phase === "playing") {
     cancelPointer();
@@ -561,8 +563,49 @@ function syncTray(i: number, animate: boolean): void {
 
 let hintUntil = 0;
 let hintText = "";
+/** A tip the player closed: it stays hidden until a different one comes up. */
+let hintDismissed = "";
+
+function dismissHint(): void {
+  hintDismissed = ui.hintText.textContent ?? "";
+  if (hintText === hintDismissed) hintUntil = 0;
+  ui.hint.hidden = true;
+}
+// Close a tip with its X, or flick it away sideways or up.
+ui.hintClose.addEventListener("click", (e) => {
+  e.stopPropagation();
+  dismissHint();
+});
+{
+  let start: { x: number; y: number; id: number } | null = null;
+  ui.hint.addEventListener("pointerdown", (e) => {
+    // The X takes its own tap; capturing here would steal its click.
+    if ((e.target as HTMLElement).closest(".hint-x")) return;
+    start = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    ui.hint.setPointerCapture(e.pointerId);
+  });
+  ui.hint.addEventListener("pointermove", (e) => {
+    if (!start || e.pointerId !== start.id) return;
+    const dx = e.clientX - start.x;
+    const dy = Math.min(0, e.clientY - start.y);
+    ui.hint.style.transform = `translate(calc(-50% + ${dx}px), ${dy}px)`;
+    ui.hint.style.opacity = `${Math.max(0.2, 1 - Math.hypot(dx, dy) / 160)}`;
+  });
+  const end = (e: PointerEvent) => {
+    if (!start || e.pointerId !== start.id) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    start = null;
+    ui.hint.style.opacity = "";
+    if (Math.abs(dx) > 50 || dy < -30) dismissHint();
+    else ui.hint.style.transform = "";
+  };
+  ui.hint.addEventListener("pointerup", end);
+  ui.hint.addEventListener("pointercancel", end);
+}
 function showHint(text: string, seconds = 3): void {
   hintText = text;
+  if (text === hintDismissed) hintDismissed = "";
   hintUntil = performance.now() + seconds * 1000;
 }
 function hintOnce(key: string, text: string, seconds = 4): void {
@@ -577,7 +620,7 @@ function tutorialHint(): string | null {
   if (!s) return null;
   const layers = s.plate.layers;
   const pattyOnGrill = counter.grillItems.find((g) => g.piece.kind === "patty");
-  if (counter.page !== HOME_PAGE) return "Tap Grill in the bar below to go back.";
+  if (counter.page !== HOME_PAGE) return "Tap the grill tab below to go back.";
   if (layers.length === 0) return "Drag a bun up onto the plate in the tray.";
   const hasPatty = layers.some((l) => l.piece.kind === "patty");
   if (!hasPatty) {
@@ -2145,8 +2188,12 @@ function updateUi(): void {
   const tut = tutorialHint();
   const now = performance.now();
   const text = now < hintUntil ? hintText : tut;
-  if (text && ui.hint.textContent !== text) ui.hint.textContent = text;
-  ui.hint.hidden = !text || game.phase !== "playing";
+  const show = !!text && text !== hintDismissed && game.phase === "playing";
+  if (show && ui.hintText.textContent !== text) {
+    ui.hintText.textContent = text;
+    ui.hint.style.transform = "";
+  }
+  ui.hint.hidden = !show;
 }
 
 /** Small doneness tags floating over grill items, so players don't have to judge colour alone. */
@@ -2261,8 +2308,13 @@ function updateHoldUi(): void {
   });
   zoneBtn.hidden = !onGrill;
   if (zoneBtn.hidden) return;
-  const label = counter.warm ? "Warm: on" : "Warm: off";
-  if (zoneBtn.textContent !== label) zoneBtn.textContent = label;
+  // The right end of the grill: full heat (a flame) or turned down to keep things warm (a lamp).
+  const label = counter.warm ? "Warm zone on" : "Warm zone off";
+  if (zoneBtn.getAttribute("aria-label") !== label) {
+    zoneBtn.setAttribute("aria-label", label);
+    zoneBtn.title = label;
+    zoneBtn.innerHTML = icon(counter.warm ? "warming-lamp" : "flame");
+  }
   zoneBtn.classList.toggle("on", counter.warm);
   const v = new THREE.Vector3(pageX(1) + WARM_X0 + 0.95, GRILL_TOP, 2.6).project(counter.camera);
   zoneBtn.style.left = `${((v.x + 1) / 2) * bands.counter.w}px`;

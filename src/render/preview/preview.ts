@@ -3,10 +3,8 @@ import { newPiece, type Kind, type Piece } from "../../game/types";
 import { makeFood } from "../food";
 import { applyKitchenLight, KITCHEN_BG } from "../lighting";
 import { toon } from "../materials";
-import { makeColdRail, makePrepUnit } from "../machines/coldRail";
-import { makeGriddle } from "../machines/griddle";
-import { makeSauceCaddy, makeSauceBottle } from "../machines/sauces";
-import { makeWarmShelf } from "../machines/warmShelf";
+import { makeColdRail, makeDrinkTower, makeFountain, makeFryBasket, makeFryer, makeGriddle, makeLidStrawCaddy, makePackPad, makePrepUnit, makeSauceBottle, makeSauceCaddy, makeTrashChute, makeWarmShelf, makeWireRack, FRY_BASKET } from "../machines";
+import { makeCup, makeFries, makeFryPile, makeCartonStack } from "../food";
 import { SCALE } from "../units";
 
 /*
@@ -82,6 +80,69 @@ const SHOWS: Record<string, () => void> = {
     food(piece("bun", [0.4, 0]), gx + 1.3, y, gz + 0.1, "bottom");
     const b = makeSauceBottle("ketchup");
     at(b, -1.0, 2.2, 3.0);
+  },
+  fryer() {
+    counterPatch(14, 5.4);
+    const fr = makeFryer();
+    const ff = fr.userData.footprint;
+    at(fr, -0.6, 0, -2.7 + 0.1 + ff.d / 2);
+    const sp = fr.userData.spots;
+    sp.wells.forEach((w, i) => {
+      const b = makeFryBasket();
+      const pile = makeFryPile(FRY_BASKET.w - 0.1, FRY_BASKET.d - 0.1, 4, 21 + i, true);
+      pile.userData.setCook(i ? 0.75 : 0.4);
+      pile.position.y = 0.02;
+      b.add(pile);
+      if (i === 0) {
+        b.position.set(fr.position.x + w.x, sp.down.y, fr.position.z + w.z);
+        fr.userData.bubbles[0].visible = true;
+      } else {
+        const h = sp.hang[i];
+        b.position.set(fr.position.x + h.x, h.y, fr.position.z + h.z);
+        b.rotation.x = h.tilt;
+      }
+      scene.add(b);
+      fr.userData.setMeter(i, i ? 0.75 : 0.4);
+    });
+    const pads = makePackPad();
+    at(pads, 2.4, 0, 1.6);
+    pads.userData.spots.pads.forEach((pd, i) => {
+      const f = makeFries(true, i ? "L" : "M", 1, { salt: i === 1 });
+      f.userData.setCook(0.72);
+      f.scale.setScalar(SCALE.fries);
+      at(f, pads.position.x + pd.x, pd.y, pads.position.z + pd.z);
+    });
+    (["S", "M", "L"] as const).forEach((sz, i) => {
+      const st = makeCartonStack(sz, 8);
+      st.scale.setScalar(SCALE.fries);
+      at(st, -3.4, 0, 0.2 + i * 0.9);
+    });
+    at(makeTrashChute(7.6), 0, 0, 2.45);
+  },
+  drinks() {
+    counterPatch(14, 5.4);
+    const fo = makeFountain();
+    at(fo, 1.4, 0, -2.7 + 0.1 + fo.userData.footprint.d / 2);
+    const sizes = ["S", "M", "L", "M", "L"] as const;
+    fo.userData.spots.cups.forEach((c, i) => {
+      const cup = makeCup((["pine", "pink", "cola", "water", "tea"] as const)[i], i === 3, sizes[i]);
+      cup.userData.setFill(0.3 + i * 0.15);
+      cup.userData.setIce(i > 1);
+      cup.userData.setStraw(i === 3);
+      cup.scale.setScalar(SCALE.cup);
+      at(cup, fo.position.x + c.x, c.y, fo.position.z + c.z);
+    });
+    const tw = makeDrinkTower();
+    at(tw, -2.6, 0, -2.7 + 0.1 + tw.userData.footprint.d / 2);
+    const ld = makeLidStrawCaddy();
+    at(ld, -2.4, 0, 1.6);
+    at(makeTrashChute(7.6), 0, 0, 2.45);
+  },
+  supplies() {
+    counterPatch(14, 5.4);
+    const r = makeWireRack();
+    at(r, 0, 0, -2.7 + 0.1 + r.userData.footprint.d / 2);
+    r.userData.setBay(2, 1);
   },
   rail() {
     counterPatch(14, 6);

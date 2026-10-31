@@ -204,7 +204,7 @@ function sections(): Sec[] {
       chip: "Fryer",
       icon: "fries",
       title: "The fryer",
-      lede: "Scoop, lower, watch the bar, lift, salt, pack.",
+      lede: "Scoop, lower, watch the meter, lift, pack, salt.",
       fig: `<div class="hw-scoops">${(["S", "M", "L"] as Size[])
         .map((s) => `<div><span class="dots">${"<i></i>".repeat(scoops(s))}</span><span class="cap">${scoops(s)} scoop${scoops(s) > 1 ? "s" : ""}</span>${carton(s)}<b><span class="bv-chip size">${s}</span> <span class="bv-mono">${price(FRIES_PRICE[s])}</span></b></div>`)
         .join("")}</div>
@@ -226,9 +226,10 @@ function sections(): Sec[] {
       points: [
         "Drag <b>1, 2 or 3 scoops</b> of frozen fries into a basket for a small, medium or large.",
         "The basket waits for you: <b>tap it to lower</b> it into the oil, and tap again to lift. Fries take <b>about half a minute</b>, so get them going while the patties cook.",
-        "Lift when the marker is on the line. <b>Under</b> is soggy, <b>over</b> is burnt.",
-        "<b>Salt</b> them with the shaker. It's optional, but customers notice when you skip it.",
-        "Put an empty carton on a pad and <b>pack the fries</b> into it, then drag it to the plate.",
+        "Lift when the marker on the fryer's meter is on the line: the fryer <b>beeps</b> from perfect until you lift the basket. <b>Under</b> is soggy, <b>over</b> is burnt.",
+        "Put an empty carton on a pad and <b>pack the fries</b> into it.",
+        "<b>Salt:</b> hold the shaker over the carton and <b>shake it</b>. A bar on the left shows how salty they are: stop at <b>Perfect</b>. None tastes flat, too much is worse.",
+        "Then drag the carton to the tray.",
         "<b>Poutine</b> is a meal of its own: fries in a carton, then cheese curds, then gravy.",
       ],
     },
@@ -246,10 +247,10 @@ function sections(): Sec[] {
         <li>${cupSvg("straw")}<b>Straw</b></li>
       </ol>`,
       points: [
-        `Take a cup of the right size from its stack: <b>S, M or L</b> (${price(DRINK_PRICE.S)} to ${price(DRINK_PRICE.L)}).`,
-        "Add ice unless the receipt says <b>No ice</b>.",
-        "<b>Hold</b> the nozzle to pour and let go at the line. Overflowing wastes soda and leaves a spill: <b>wipe it</b> before that nozzle takes another cup.",
-        "Snap on a <b>lid</b>, add a <b>straw</b>, then drag the drink up to the plate.",
+        `Take a cup of the right size from the front row: <b>S, M or L</b> (${price(DRINK_PRICE.S)} to ${price(DRINK_PRICE.L)}). Stand it anywhere on the counter, or straight under a nozzle; you can move a cup any time.`,
+        "Add ice from the ice bin unless the receipt says <b>No ice</b>.",
+        "<b>Hold</b> the drink's button on top of the fountain to pour. A bar on the left shows the level: let go at <b>Perfect</b>. Overflowing leaves a spill: <b>wipe it</b> before that nozzle takes another cup.",
+        "Snap on a <b>lid of the cup's size</b>, add a <b>straw</b>, then drag the drink up to the tray.",
       ],
     },
     {
@@ -264,7 +265,7 @@ function sections(): Sec[] {
         <span class="stack">${icon("cup-stack")}<b>Stack refilled</b></span>
       </div>`,
       points: [
-        "Turn round to the wire rack, grab a sleeve of cups or cartons and tear it open on the stack of the same size.",
+        "The shelf has cups down the left and paper boats down the right. Grab a sleeve, hold it over the Drinks or Fryer tab, and tear it open on the empty stack of the same size.",
         "Whatever's left <b>carries over</b> to the next day, so restock in a quiet moment, not mid-rush.",
       ],
     },

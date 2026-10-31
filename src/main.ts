@@ -1558,7 +1558,7 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
           b.down = !b.down;
           if (b.down) sfx.sizzleHit();
           else sfx.whoosh();
-          if (b.down) hintOnce("fries-ding", "Watch the bar: lift them in the gold zone. The fryer chimes at perfect.", 3.5);
+          if (b.down) hintOnce("fries-ding", "Watch the meter on the fryer: it beeps at perfect until you lift the basket.", 3.5);
           else hintOnce("fries-drag", "Drag the fries into a carton on the pad.", 2.5);
         }
       }

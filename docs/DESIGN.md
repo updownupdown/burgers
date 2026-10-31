@@ -369,7 +369,7 @@ In numbers, a profile sets base traffic, how much prices put people off, how muc
 - **Fries:** three cook zones (under 0–0.5, done 0.5–0.95, over 0.95–1.3, burnt past that). Happiness depends on the zone and the spot in it, peaking at the middle of the done zone, which the meter marks with a line. Baskets stay up until tapped down; pips show scoops. Salt is optional; plain fries without it lose 15%.
 - **Poutine:** a meal with no burger (12% of orders once the shift is going): a large carton of fries, then cheese curds, then gravy, all from the fryer counter. $8.
 - **Free sides:** a side the customer didn't order, made well, softens a bad review; the worse the meal, the more it helps.
-- **Drinks:** labels sit in a row on the machine; the pour falls from a spout into the back of the cup so it can be seen.
+- **Drinks:** labels sit in a row on the machine (now the push buttons themselves, §15); the pour falls from a spout into the back of the cup so it can be seen.
 - **Service bell:** a 3D bell beside the plates; ring twice to serve.
 
 ## 11. The line, the bell and fame
@@ -391,7 +391,7 @@ Open: the Day Ledger / pre-open redesign (separate thread) should take over the 
 James's picks from the Kitchen Bench study (`/mnt/project-files/kitchen-study/`), built on the study's machines (`src/render/machines/`, one game unit = 15 cm).
 
 - **Window line.** Every counter faces the serving window, so the player stands with their back to the street side wall. **Grill** is the prep unit and lamp shelf: a stepped 3 x 3 cold prep unit on the left with the sauce caddy in front of it, the griddle (warm zone behind a rail on its right) and a warm shelf over the griddle's back edge. **Fryer** is a front pass: freezer bin, two wells on a hang rail, the topping station, carton stacks and pack pads along the front. **Drinks** is the ice and drink tower (cup tubes S/M/L, ice lever) beside the low fountain, lids and straws in front. **Supplies** is the wire rack behind the player, holding only what restocks something: one bay per cup and carton size.
-- **Camera: half stops.** One zoom for every counter (about 1.35 m across). The fryer line is wider than the screen, so it has two stops: tap its tab again, swipe along the bar, or carry something to the screen's edge and rest there. Pips on its tab show which end you're at. Supplies is reached by turning round on the spot. `STOPS` in `src/scenes/counter.ts`.
+- **Camera: half stops** (replaced after build #36 by one stop per counter, see §15). One zoom for every counter (about 1.35 m across). The fryer line is wider than the screen, so it has two stops: tap its tab again, swipe along the bar, or carry something to the screen's edge and rest there. Pips on its tab show which end you're at. Supplies is reached by turning round on the spot. `STOPS` in `src/scenes/counter.ts`.
 - **Low pass tray.** The tray band is the window ledge: plates on a steel pass shelf seen nearly side on, with sides beside each burger.
 - **Sauce in hand.** Tap a bottle in the caddy to lift it; it stays in hand. Drawing over a burger (on the tray or on the warm shelf) squeezes; tapping the caddy puts it back. While it's out the rest of the kitchen dims, and counter changes, tabs and tickets wait. Scoring is as before (a stroke of 1.1 or longer is a full squeeze).
 - **Warm shelf.** No bulbs or orange glow; each plate gets a slim vertical bar that drains as the food dries out (green while it keeps, amber once it starts drying after `HOLD_GRACE`, red near `HOLD_RUIN`).
@@ -416,3 +416,20 @@ From the Day Cycle Study (this thread). A day is now two halves on one map, and 
 **Reviews** have their own screen off both docks: reputation and popularity up top, then every review and press clipping with filters (All, Critics, 3★, 1★, this town).
 
 Code: `src/game/day.ts` (time of day, gear, sleep, projection), `src/game/travel.ts` (range legs), `src/screens/day.ts` + `day.css` (the screens), `src/screens/map.ts` (night and lit roads).
+
+## 15. After build #36: drinks, fryer, supplies and the line
+
+James's build #36 notes on the other three counters and on the truck as a whole, as built (`src/scenes/counter.ts`, `src/render/machines/{drinks,fryer,supplies}.ts`, `src/main.ts`).
+
+- **One stop per counter, no turning round.** The truck is drawn wider than it could be so all four counters face the window: Drinks, Grill, Fryer, Supplies, left to right, one camera stop each (`STOPS`, `PAGE_CX`). The fryer's second stop, its edge carry and the tab pips are gone, and so is the turn to the back wall.
+- **Stainless everywhere.** The counter top is brushed stainless (`counterTop` in `src/render/wear.ts`).
+- **One trash slot.** A single chute runs along the front edge of the whole line, at the same depth on every counter; each counter's stretch lights up when a drop would bin something (`buildTrash`, `TRASH`).
+- **Drinks.** The ice bin and the fountain share the back wall at the same size; the middle of the counter is open. Cups stand in nested stacks in the front row (S, M, L), beside a lid stack for each cup size and the straws. An empty cup can be put down **anywhere** on the open counter or straight under a nozzle, and any cup, full or not, can be picked up and moved (`cups`, `placeCup`). A cup under a nozzle pours from the drink's **push button** on top of the fountain: a cap with the short name (Fizz, Pink, Cola, Water, Tea) that presses in while it pours. The first pour gives an empty cup its flavour; a cup with another drink in it won't take a second one. Lids must match the cup size. Soda is paid for as it pours, so moving cups is free.
+- **Level bar.** While pouring, a big bar fades in down the left of the counter with the cup's level, the full band shaded and a **Perfect** line at 90% (`DRINK_FILL`); it fades out on release. Scoring is unchanged: from 78% is a full cup.
+- **Spills** can spread to twice the old size, and the hint no longer mentions what they cost (the cost still shows in the day's takings).
+- **Fryer on one screen.** A bigger potato freezer at the back left; the fryer beside it **drops into the counter** (only its deck, wells and a low back panel show); the toppings stand in a column down the right, gravy, curds and salt from the back; carton stacks and the two pads along the front. The 3D panel meters are gone: each loaded basket's UI meter sits in its window on the fryer's back panel, so there's one meter, not two.
+- **Beeps.** A basket in the oil beeps from perfect on (faster once it's overdone) until it's lifted (`events.beep`, `sfx.beep`).
+- **Proportional fries.** One scoop is 17 fries everywhere: in hand, in the basket (a mound from the middle out, so a small scoop looks small), and in the boats (S one scoop, M two, L three). `FRIES_PER_SCOOP`, `makeBasketFries`.
+- **Shake to salt.** Hold the shaker over fries in a carton (on a pad or on a tray) and shake: each change of direction is one shake, `SALT.shake` (0.1). The level bar shows the salt with the Perfect line at 0.6 and the good band 0.35 to 0.9. `Fries.salt` is now that level: none costs 15% as before, a little under costs 7% ("could use more salt"), over 0.9 costs 20% ("too salty"); it tops out at 1.2.
+- **Supplies.** A shelf of shallow steel bins on the counter: cup sleeves down the left, paper-boat sleeves down the right, small at the back to large at the front. Each bin has a die-cut **sticker** on its sloped front rail with a cup or fry-boat drawing, the word and a big size badge (`stickerTex`). The wire rack and the rag are gone.
+

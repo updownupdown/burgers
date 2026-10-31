@@ -1,6 +1,6 @@
 import { avgCook, bunToast, friesQuality, friesZone, FRIES_ZONE, isMelted, DRINK_FILL, SALT } from "./cooking";
 import type { Drink, ExpectedLayer, Fries, Layer, Order, Piece, Plate } from "./types";
-import { COUNTED, DONENESS_TARGET, KIND_LABEL, SIZE_LABEL } from "./types";
+import { COUNTED, DONENESS_TARGET, KIND_LABEL, SAUCE_RADIUS, SIZE_LABEL } from "./types";
 
 export interface ScoreResult {
   /** 0..100 */
@@ -66,12 +66,57 @@ export function countQuality(want: number, got: number, kind: string): [number, 
   return [1, null];
 }
 
-export function strokeLength(p: Piece): number {
-  const s = p.stroke;
-  if (!s || s.length < 2) return 0;
-  let len = 0;
-  for (let k = 1; k < s.length; k++) len += Math.hypot(s[k].x - s[k - 1].x, s[k].z - s[k - 1].z);
-  return len;
+/**
+ * Sauce is judged by how much of the patty it covers: the share of the middle of the bun (out to
+ * 85% of its radius) that lies under the line. A quarter to a half is just right.
+ */
+export const SAUCE_BAND = { stingy: 0.12, lo: 0.25, hi: 0.5, drown: 0.66 };
+const COV_N = 40;
+const COV_INNER = 0.85;
+const COV_CELL = 2 / COV_N;
+const covInner: number[] = [];
+for (let j = 0; j < COV_N; j++)
+  for (let i = 0; i < COV_N; i++) {
+    const x = -1 + (i + 0.5) * COV_CELL;
+    const z = -1 + (j + 0.5) * COV_CELL;
+    if (x * x + z * z <= COV_INNER * COV_INNER) covInner.push(j * COV_N + i);
+  }
+
+export function sauceCoverage(stroke: { x: number; z: number }[] | undefined): number {
+  if (!stroke || !stroke.length) return 0;
+  const grid = new Uint8Array(COV_N * COV_N);
+  const r = SAUCE_RADIUS;
+  const dab = (x: number, z: number) => {
+    const i0 = Math.max(0, Math.floor((x - r + 1) / COV_CELL));
+    const i1 = Math.min(COV_N - 1, Math.floor((x + r + 1) / COV_CELL));
+    const j0 = Math.max(0, Math.floor((z - r + 1) / COV_CELL));
+    const j1 = Math.min(COV_N - 1, Math.floor((z + r + 1) / COV_CELL));
+    for (let j = j0; j <= j1; j++)
+      for (let i = i0; i <= i1; i++) {
+        const cx = -1 + (i + 0.5) * COV_CELL - x;
+        const cz = -1 + (j + 0.5) * COV_CELL - z;
+        if (cx * cx + cz * cz <= r * r) grid[j * COV_N + i] = 1;
+      }
+  };
+  dab(stroke[0].x, stroke[0].z);
+  for (let k = 1; k < stroke.length; k++) {
+    const a = stroke[k - 1];
+    const b = stroke[k];
+    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / (r * 0.5)));
+    for (let t = 1; t <= n; t++) dab(a.x + ((b.x - a.x) * t) / n, a.z + ((b.z - a.z) * t) / n);
+  }
+  let hit = 0;
+  for (const c of covInner) hit += grid[c];
+  return hit / covInner.length;
+}
+
+export type SauceWord = "stingy" | "light" | "perfect" | "heavy" | "drowning";
+/** How a coverage reads to the customer, 0..1, with a word for the live score. */
+export function sauceVerdict(cov: number): { q: number; word: SauceWord } {
+  const b = SAUCE_BAND;
+  if (cov < b.lo) return { q: 0.35 + (0.65 * cov) / b.lo, word: cov < b.stingy ? "stingy" : "light" };
+  if (cov <= b.hi) return { q: 1, word: "perfect" };
+  return { q: Math.max(0.4, 1 - (cov - b.hi) * 2.2), word: cov > b.drown ? "drowning" : "heavy" };
 }
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -122,10 +167,10 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
     }
     case "ketchup":
     case "mustard": {
-      const len = strokeLength(piece);
-      if (len >= 1.1) return [1, null];
-      if (len >= 0.5) return [0.65, `stingy ${exp.kind}`];
-      return [0.35, `barely any ${exp.kind}`];
+      const { q, word } = sauceVerdict(sauceCoverage(piece.stroke));
+      if (word === "stingy") return [q, `stingy with the ${exp.kind}`];
+      if (word === "drowning") return [q, `drowning in ${exp.kind}`];
+      return [q, null];
     }
     case "cheese":
       if (exp.melted && !isMelted(piece)) return [0.55, "cheese not melted"];

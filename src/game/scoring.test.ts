@@ -14,9 +14,11 @@ function piece(kind: Kind, cook: [number, number] = [0, 0]): Piece {
   p.cook = cook;
   if (kind === "ketchup" || kind === "mustard") {
     p.stroke = [
-      { x: -0.5, z: 0 },
-      { x: 0.5, z: 0.1 },
-      { x: -0.5, z: 0.2 },
+      { x: -0.6, z: -0.45 },
+      { x: 0.6, z: -0.3 },
+      { x: -0.6, z: -0.05 },
+      { x: 0.6, z: 0.15 },
+      { x: -0.6, z: 0.4 },
     ];
   }
   return p;
@@ -48,6 +50,21 @@ function perfectPlate(): Plate {
     drink: null,
   };
 }
+
+describe("sauce coverage", () => {
+  it("scores a zigzag across the patty as perfect", async () => {
+    const { sauceCoverage, sauceVerdict } = await import("./scoring");
+    const cov = sauceCoverage(piece("ketchup").stroke);
+    expect(sauceVerdict(cov).word).toBe("perfect");
+  });
+  it("calls a dab stingy and a flood drowning", async () => {
+    const { sauceCoverage, sauceVerdict } = await import("./scoring");
+    expect(sauceVerdict(sauceCoverage([{ x: 0, z: 0 }, { x: 0.2, z: 0 }])).word).toBe("stingy");
+    const flood: { x: number; z: number }[] = [];
+    for (let z = -0.9; z <= 0.9; z += 0.12) flood.push({ x: -0.9, z }, { x: 0.9, z });
+    expect(sauceVerdict(sauceCoverage(flood)).word).toBe("drowning");
+  });
+});
 
 describe("alignLayers", () => {
   it("matches identical stacks one to one", () => {

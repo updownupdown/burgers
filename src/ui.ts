@@ -339,7 +339,7 @@ function sideRows(order: Order, plate: Plate): string {
   if (order.fries && order.layers.length) {
     const f = plate.fries;
     const state = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy ? "done" : "wrong";
-    out.push(section("fries", "#c8472e"), `<div class="sd ${state}"><span class="sl"><i class="sz">${order.friesSize}</i><span class="dn">Fries</span></span></div>`);
+    out.push(`<div class="sg">${section("fries", "#c8472e")}<div class="sd ${state}"><span class="sl"><i class="sz">${order.friesSize}</i><span class="dn">Fries</span></span></div></div>`);
   }
   if (order.drink) {
     const d = plate.drink;
@@ -348,8 +348,7 @@ function sideRows(order: Order, plate: Plate): string {
     const state = !d ? "" : wrong ? "wrong" : d.lid && d.straw ? "done" : "";
     const ice = order.ice === true ? modBox("ice", "Ice") : order.ice === false ? modBox("noice", "No ice") : "";
     out.push(
-      section("drink", DRINK_COLOR[order.drink]),
-      `<div class="sd ${state}"><span class="sl"><i class="sz">${order.drinkSize}</i><span class="dn">${DRINK_LABEL[order.drink]}</span></span>${ice ? `<span class="sm">${ice}</span>` : ""}</div>`,
+      `<div class="sg">${section("drink", DRINK_COLOR[order.drink])}<div class="sd ${state}"><span class="sl"><i class="sz">${order.drinkSize}</i><span class="dn">${DRINK_LABEL[order.drink]}</span></span>${ice ? `<span class="sm">${ice}</span>` : ""}</div></div>`,
     );
   }
   return out.join("");

@@ -79,11 +79,11 @@ function sections(): Sec[] {
       chip: "Basics",
       icon: "sparkle",
       title: "The basics",
-      lede: "Customers queue at the window. Cook what's on their receipt, stack it on their plate, swipe it up to them.",
+      lede: "Customers queue at the window. Cook what's on their receipt, stack it on their tray, swipe it up to them.",
       fig: `<ol class="hw-steps">
         <li>${icon("receipt")}<b>Read</b><span>the receipt</span></li>
         <li>${icon("grill")}<b>Cook</b><span>the food</span></li>
-        <li>${icon("burger")}<b>Stack</b><span>on the plate</span></li>
+        <li>${icon("burger")}<b>Stack</b><span>on the tray</span></li>
         <li>${icon("arrow-up")}<b>Swipe up</b><span>to serve</span></li>
       </ol>
       <div class="hw-tabs" aria-hidden="true">
@@ -91,8 +91,8 @@ function sections(): Sec[] {
       </div>
       <p class="hw-cap">${icon("swap")}Tap a counter in the bottom bar, or swipe along the bar to move between them. The fryer is wide: tap its tab again for the other end.</p>`,
       points: [
-        "<b>Customers and plates stay put</b> while you switch counters, so you never lose an order.",
-        "Most things are a <b>drag</b>: from a bin, the grill or a counter up to a plate.",
+        "<b>Customers and trays stay put</b> while you switch counters, so you never lose an order.",
+        "Most things are a <b>drag</b>: from a bin, the grill or a counter up to a tray.",
         "People wait in a <b>line</b> outside. When the window is empty the first steps up by themselves; otherwise <b>ring the bell twice</b> to call the next one. Serving more at once earns more, if you can keep up.",
       ],
     },
@@ -126,9 +126,10 @@ function sections(): Sec[] {
         <span class="mood fuming">${face("fuming")}<b>Fuming</b></span>
       </div>`,
       points: [
-        "<b>Tap a receipt</b> (or its plate) to make that order the active one. Tap it again to see every layer.",
+        "<b>Tap a receipt</b> (or its tray) to make that order the active one. Tap it again to see every layer.",
         "The face is their patience: <b>calm, worried, then fuming</b>. Fuming customers walk off without paying.",
-        "Lines in paprika are changes: <b>No onion</b>, <b>Extra cheese</b>, <b>+ Bacon</b>. Items tick off as they land on the plate.",
+        "Lines in paprika are changes: <b>No onion</b>, <b>Extra cheese</b>, <b>+ Bacon</b>. Items tick off as they land on the tray.",
+        "Now and then someone wants <b>just a drink or just fries</b>. Their tray has no plate: no burger needed.",
       ],
     },
     {
@@ -147,11 +148,12 @@ function sections(): Sec[] {
         <p class="hw-cap">Same colour, same word. The bar fills as the patty moves through a level: take it off around the middle.</p>
       </div>`,
       points: [
-        "Drag a patty onto the grill. <b>Tap it to flip</b>: each side cooks on its own, so cook both.",
+        "Drag a patty onto a hot part of the grill. <b>Swipe up on it to flip</b>: each side cooks on its own, so cook both.",
+        "The grill has <b>three zones</b>, each with a button on the front: tap it to go <b>off, warm, hot</b>. The strip along the front shows it in blue, orange or red. A shift starts hot, hot, off.",
         "<b>Smash:</b> press and hold a fresh patty to flatten it. Smashed patties cook fast and are always well done.",
         "<b>Melt:</b> drop a cheese slice on a patty while it's on the grill. They come off together.",
         "<b>Toast</b> buns face down. Bacon, eggs and pineapple grill too.",
-        "The <b>Warm</b> end of the grill barely cooks: park finished food there.",
+        "A <b>warm</b> zone barely cooks and keeps food hot: park finished food there. Food on an off zone doesn't cook at all.",
       ],
     },
     {
@@ -159,21 +161,21 @@ function sections(): Sec[] {
       chip: "Stacking",
       icon: "burger",
       title: "Stacking",
-      lede: "Build on the customer's plate, from the bottom bun up.",
+      lede: "Build on the customer's tray, from the bottom bun up. A plate on the tray means they ordered a burger.",
       fig: `<div class="hw-stack">
         ${stackArt(EXAMPLE)}
         <ol class="hw-layers" reversed>${[...EXAMPLE.layers].reverse().map((k, i) => `<li><span class="bv-mono">${EXAMPLE.layers.length - i}</span><i class="swc" style="--c:${KIND_COLOR[k]}"></i>${KIND_LABEL[k]}${COUNTED.has(k) ? ` <b class="bv-mono">×${count(k)}</b>` : ""}</li>`).join("")}</ol>
         <span class="hw-up">${icon("arrow-up")}<small>Build up</small></span>
       </div>
       <div class="hw-lamp">
-        <span class="lampic">${icon("warming-lamp")}</span>
-        <div><b>Warm shelf</b><span>Fine for about ${HOLD_GRACE} s, then it slowly dries out: the bar by each plate shows it</span><i class="q" aria-hidden="true"></i></div>
+        <span class="lampic">${icon("clock")}</span>
+        <div><b>Waiting on the tray</b><span>Cooked food keeps for about ${HOLD_GRACE} s, then goes cold: the bar along the tray shows it</span><i class="q" aria-hidden="true"></i></div>
       </div>`,
       points: [
-        "<b>Drag</b> ingredients up onto the active plate, or <b>flick</b> them up to toss them on.",
-        "<b>Sauce:</b> tap a bottle in the caddy to pick it up, then draw on a burger to squeeze. Tap the caddy to put it back; the rest of the kitchen waits until you do.",
-        "Wrong layer? <b>Swipe down</b> on the plate to take the top one off. Mistakes go down the garbage chute.",
-        "The <b>warm shelf</b> over the grill lets you build ahead or hold a patty. Food there slowly loses quality.",
+        "<b>Drag</b> ingredients up onto the active tray, or <b>flick</b> them up to toss them on.",
+        "<b>Sauce:</b> press a bottle in the caddy and drag it up onto a burger on the tray. The view zooms in; keep moving to squeeze and watch the bar on the right for Perfect. Let go and the bottle goes back.",
+        "Wrong layer? <b>Swipe down</b> on the tray to take the top one off. Mistakes go down the garbage chute.",
+        "Cooking ahead? Leave finished food on a <b>warm</b> grill zone rather than on the tray, where it goes cold.",
       ],
     },
     {
@@ -185,7 +187,7 @@ function sections(): Sec[] {
       fig: `<ul class="hw-counts">${counted
         .map((k) => `<li><i class="swc" style="--c:${KIND_COLOR[k]}"></i><span>${KIND_LABEL[k]}</span><span class="pcs ${k}" style="--c:${KIND_COLOR[k]}">${"<b></b>".repeat(count(k))}</span><b class="bv-mono">×${count(k)}</b></li>`)
         .join("")}</ul>
-      <p class="hw-cap">The standard count. Some recipes differ: check Today's menu.</p>
+      <p class="hw-cap">The standard count. Some recipes differ: check the Menu.</p>
       <div class="hw-scale">
         <div class="lo"><b>Fewer</b><span>Saves money. May cost a review.</span></div>
         <div class="std"><b>Standard</b><span>Exactly right.</span></div>
@@ -274,7 +276,7 @@ function sections(): Sec[] {
       chip: "Serving",
       icon: "arrow-up",
       title: "Serving",
-      lede: "Swipe a plate up to hand it to the customer above it.",
+      lede: "Swipe a tray up to hand it to the customer above it.",
       fig: `<div class="hw-serve">
         <div class="plates"><i></i><i class="on"></i><i></i></div>
         <div class="hw-swipe">${icon("arrow-up")}</div>
@@ -286,7 +288,7 @@ function sections(): Sec[] {
       </ol>`,
       points: [
         "Check the receipt first: a forgotten side or drink costs stars.",
-        "To fix a burger, <b>drag it down</b> off the plate onto a plate on the warm shelf, then <b>swipe down</b> on it to peel layers off one at a time.",
+        "To fix a burger, <b>drag down</b> off its tray to lift the top layer: drop it in the trash slot, back on the grill, or on another tray.",
         "Held items light up the <b>trash slot</b> red when a drop would bin them.",
         "<b>Unordered extras</b>, like fries or a drink they didn't ask for, can soften a bad review, and nobody ever turns down a freebie. They cost you, so save them for rescues.",
         "The bell shows how many are in line. Waiting has its own patience: the back of the line drifts off first, and people nearly at the window almost never leave. An order's patience only starts once they've ordered.",
@@ -354,10 +356,10 @@ function sections(): Sec[] {
     },
     {
       id: "biz",
-      chip: "Business",
+      chip: "Complexity",
       icon: "chart",
-      title: "Business mode",
-      lede: "Optional: run the books as well as the grill.",
+      title: "Complexity",
+      lede: "Simple cooks and serves. Balanced and Complex run the books as well as the grill.",
       fig: `<div class="hw-biz">
         <span class="bv-eyebrow">Ingredients</span>
         <div class="bv-seg compact" aria-hidden="true"><button tabindex="-1">Budget</button><button tabindex="-1" aria-pressed="true">Standard</button><button tabindex="-1">Premium</button></div>
@@ -365,16 +367,16 @@ function sections(): Sec[] {
         <div class="bv-seg compact" aria-hidden="true"><button tabindex="-1">Low</button><button tabindex="-1" aria-pressed="true">Fair</button><button tabindex="-1">High</button></div>
       </div>`,
       points: [
-        "Before each shift, pick <b>ingredient quality</b>, <b>prices</b> and <b>today's menu</b>.",
+        "At <b>Balanced</b> or <b>Complex</b>, pick <b>ingredient quality</b>, <b>prices</b> and <b>today's menu</b> on the Prep screen before each shift. Complex opens the ledger too.",
         "Better food rates higher; higher prices bring fewer, pickier customers. Premium at high prices rates like standard at fair.",
         "Ingredients, cups and spills all cost money, so waste shows in your profit.",
-        "Reviews build a <b>reputation</b> that follows the truck from town to town. Switch the mode in General & Settings.",
+        "Reviews build a <b>reputation</b> that follows the truck from town to town. Change complexity any time in Settings; stepping down keeps your reputation and upgrades for later.",
       ],
     },
   ];
 }
 
-/** The last section: today's recipes with their counts, as in Today's menu. */
+/** The last section: today's recipes with their counts, as in the Menu. */
 function menuSec(): Sec {
   const d = getDeps();
   const town = d?.town();

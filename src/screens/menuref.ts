@@ -1,10 +1,12 @@
 /**
- * "Today's menu": every recipe the current town serves, how each one is built, and what the
- * sides, drinks and extras cost. Opens from the game menu, in the truck or not.
+ * The menu: every burger on the road, how each one is built, and what the sides, drinks and
+ * extras cost. The current town's dishes come first; the other towns' follow, with a line on
+ * what opens each locked one. Opens from the map's dock and from the pause menu.
  */
 import * as gameMenu from "../game/menu";
 import { ADD_PRICE, DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "../game/menu";
-import { recipeCount, townById, type Recipe, type Stop } from "../game/stops";
+import { recipeCount, STOPS, townById, type Recipe, type Stop } from "../game/stops";
+import { openedBy, SHIFTS_TO_UNLOCK, unlockProgress } from "../game/travel";
 import { COUNTED, DRINK_COLOR, DRINK_LABEL, DRINKS, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, SIZE_LABEL, type Kind, type Size } from "../game/types";
 import { icon } from "../ui/icons";
 import { openHowTo } from "./howto";
@@ -40,7 +42,7 @@ function layerLabel(r: Recipe, k: Kind): string {
   return base;
 }
 
-export function recipeHtml(r: Recipe, mult: number, special: boolean): string {
+export function recipeHtml(r: Recipe, mult: number, special: boolean, locked = false): string {
   const tags: string[] = [];
   if (special) tags.push(`<span class="bv-chip pill add">${icon("sparkle")}Event special</span>`);
   if (r.toasted) tags.push(`<span class="bv-chip pill">${icon("toast")}Toasted bun</span>`);
@@ -48,7 +50,7 @@ export function recipeHtml(r: Recipe, mult: number, special: boolean): string {
   if (r.melt) tags.push(`<span class="bv-chip pill">${icon("cheese")}Melted cheese</span>`);
   if (r.layers.includes("pineapple")) tags.push(`<span class="bv-chip pill">${icon("flame")}Grilled pineapple</span>`);
   const flow = r.layers.map((k) => `<li><i class="swc" style="--c:${KIND_COLOR[k]}"></i><span>${layerLabel(r, k)}</span></li>`).join("");
-  return `<article class="mref-item">
+  return `<article class="mref-item ${locked ? "locked" : ""}">
     ${stackArt(r)}
     <div class="mref-main">
       <div class="mref-top"><h4 class="mref-name">${esc(r.name)}</h4><span class="mref-price bv-mono">${price(Math.round(r.price * mult))}</span></div>
@@ -67,7 +69,42 @@ function poutinePrice(): number | null {
   return typeof p === "number" ? p : null;
 }
 
-export function menuRefHtml(town: Stop, mult = 1): string {
+/** Where the road stands, for the dishes served elsewhere. */
+export interface RoadProgress {
+  unlocked: string[];
+  shiftsIn: Record<string, number>;
+}
+
+/** The other towns' burgers, grouped by town, each with whether its road is open and what opens it. */
+function elsewhereHtml(town: Stop, seen: Set<string>, prog: RoadProgress | null): string {
+  const groups: string[] = [];
+  for (const t of STOPS) {
+    if (t.id === town.id) continue;
+    const dishes = t.menu.filter((r) => !seen.has(r.name));
+    if (!dishes.length) continue;
+    for (const r of dishes) seen.add(r.name);
+    const open = !prog || prog.unlocked.includes(t.id);
+    let gate = "";
+    if (!open && prog) {
+      const gates = openedBy(t.id).map((g) => ({ t: townById(g), ...unlockProgress(prog.shiftsIn, g) }));
+      const near = gates.filter((g) => prog.unlocked.includes(g.t.id));
+      const list = (near.length ? near : gates).map((g) => `${esc(g.t.name)} (${g.done}/${g.need})`).join(" or ");
+      gate = list ? `Opens after ${SHIFTS_TO_UNLOCK} passed shifts in ${list}` : "Opens later on the trip";
+    }
+    groups.push(`<div class="mref-town ${open ? "" : "locked"}">
+      <div class="mref-townhead">${icon(open ? "road" : "lock")}<b>${esc(t.name)}</b><span>${open ? (prog && prog.shiftsIn[t.id] ? `${prog.shiftsIn[t.id]} shift${prog.shiftsIn[t.id] === 1 ? "" : "s"} there` : "Road open") : gate}</span></div>
+      ${dishes.map((r) => recipeHtml(r, 1, false, !open)).join("")}
+    </div>`);
+  }
+  if (!groups.length) return "";
+  return `<section class="mref-sec" data-sec="road">
+    <h3 class="menu-h">${icon("map")}Down the road <span>${groups.length} towns</span></h3>
+    <p class="mref-note">Every town has its own burgers. Greyed dishes are served in towns whose road hasn't opened yet.</p>
+    ${groups.join("")}
+  </section>`;
+}
+
+export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = null): string {
   const base = new Set(townById(town.id).menu.map((r) => r.name));
   const scoops = (s: Size) => Math.round(FRIES_PORTION[s] / FRIES_SCOOP);
   const poutine = poutinePrice();
@@ -79,16 +116,18 @@ export function menuRefHtml(town: Stop, mult = 1): string {
   return `
   <nav class="menu-chips" aria-label="Sections">
     <button class="bv-chip pill" data-jump="burgers">${icon("burger")}Burgers</button>
+    <button class="bv-chip pill" data-jump="road">${icon("map")}Down the road</button>
     <button class="bv-chip pill" data-jump="sides">${icon("fries")}Sides</button>
     <button class="bv-chip pill" data-jump="drinks">${icon("drink")}Drinks</button>
     <button class="bv-chip pill" data-jump="extras">${icon("plus")}Extras</button>
   </nav>
-  ${mult !== 1 ? `<p class="bv-callout mref-biz">${icon("tag")}<span>Business mode: today's prices are ${mult > 1 ? "raised" : "lowered"} (×${mult.toFixed(2).replace(/0$/, "")}).</span></p>` : ""}
+  ${mult !== 1 ? `<p class="bv-callout mref-biz">${icon("tag")}<span>Your prices: today's are ${mult > 1 ? "raised" : "lowered"} (×${mult.toFixed(2).replace(/0$/, "")}).</span></p>` : ""}
   <section class="mref-sec" data-sec="burgers">
-    <h3 class="menu-h">${icon("burger")}Burgers <span>${town.menu.length}</span></h3>
+    <h3 class="menu-h">${icon("burger")}Burgers in ${esc(town.name)} <span>${town.menu.length}</span></h3>
     <p class="mref-note">Patties are cooked the way each customer asks (rare, medium or well), unless the recipe says smashed.</p>
     ${town.menu.map((r) => recipeHtml(r, mult, !base.has(r.name))).join("")}
   </section>
+  ${elsewhereHtml(town, new Set(town.menu.map((r) => r.name)), prog)}
   <section class="mref-sec" data-sec="sides">
     <h3 class="menu-h">${icon("fries")}Sides</h3>
     <table class="bv-table mref-table">
@@ -121,9 +160,8 @@ export function menuRefHtml(town: Stop, mult = 1): string {
 }
 
 /**
- * Open "Today's menu" for a town. With no town it uses the game's current one (main.ts's
- * deps), which in a shift is the town as played today: event specials and business-mode
- * picks included.
+ * Open the menu for a town. With no town it uses the game's current one (main.ts's deps),
+ * which in a shift is the town as played today: event specials and the day's picks included.
  */
 export function openMenuRef(town?: Stop, opts: { priceMult?: number } = {}): void {
   const d = getDeps();
@@ -131,16 +169,17 @@ export function openMenuRef(town?: Stop, opts: { priceMult?: number } = {}): voi
   if (!t) return;
   const mult = opts.priceMult ?? (town ? 1 : (d?.priceMult?.() ?? 1));
   const stacked = modalDepth() > 0;
+  const prog = d?.progress?.() ?? null;
   const card = pushModal({
     key: "menuref",
-    label: `Today's menu, ${t.name}`,
+    label: `Menu, ${t.name}`,
     cls: "mref",
     html: `<header class="menu-head">
         ${stacked ? `<button class="bv-btn icon sm ghost menu-back" data-m="close" aria-label="Back">${icon("back")}</button>` : ""}
-        <div class="menu-headtext"><span class="bv-eyebrow">Today's menu</span><h2 class="bv-title">${esc(t.name)}</h2></div>
+        <div class="menu-headtext"><span class="bv-eyebrow">Menu</span><h2 class="bv-title">${esc(t.name)}</h2></div>
         ${stacked ? "" : `<button class="bv-btn icon sm ghost menu-x" data-m="close" aria-label="Close">${icon("close")}</button>`}
       </header>
-      <div class="menu-body menu-scroll">${menuRefHtml(t, mult)}</div>`,
+      <div class="menu-body menu-scroll">${menuRefHtml(t, mult, prog)}</div>`,
   });
   const body = card.querySelector<HTMLElement>(".menu-body")!;
   wireJumpChips(body);

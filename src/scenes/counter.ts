@@ -48,7 +48,7 @@ export const GRILL_SCALE = FOOD_SCALE;
  * grillable pans in a row behind it, the cold toppings (cheese included) in a rail down the left
  * and the sauce caddy in the front left corner. Burgers are built on the trays above.
  */
-const GRIDDLE = { x: 1.12, z: 0.85 };
+const GRIDDLE = { x: 1.12, z: 0.62 };
 /** The row of grillable pans behind the griddle, and the cold rail of everything else. */
 const GRILL_PANS = { x: 1.12, z: -2.45 };
 const SIDE_PANS = { x: -3.0, z: -1.05 };
@@ -61,7 +61,8 @@ const GRILL_BOUNDS = {
   x0: GRIDDLE.x + GRIDDLE_SURFACE.x0 + 0.4,
   x1: GRIDDLE.x + GRIDDLE_SURFACE.x1 - 0.4,
   z0: GRIDDLE.z + GRIDDLE_SURFACE.z0 + 0.4,
-  z1: GRIDDLE.z + GRIDDLE_SURFACE.z1 - 0.35,
+  // Kept well back from the front edge, so a front patty's tag clears the zone buttons.
+  z1: GRIDDLE.z + GRIDDLE_SURFACE.z1 - 0.5,
 };
 /** The three grill zones, page-local x, left to right. */
 export const GRILL_ZONES = GRIDDLE_SPOTS.zones.map((z) => ({ x0: GRIDDLE.x + z.x0, x1: GRIDDLE.x + z.x1 }));
@@ -968,8 +969,26 @@ export class CounterView {
   liftSauce(kind: SauceKind | null): void {
     this.inHand = kind;
     for (const k of ["ketchup", "mustard"] as SauceKind[]) this.bottles[k].visible = k !== kind;
+    this.pointSauce(null);
   }
   inHand: SauceKind | null = null;
+  private handBottle: THREE.Object3D | null = null;
+
+  /** The bottle in hand over a world point on the counter (while it's dragged up to the trays), or out of view. */
+  pointSauce(world: THREE.Vector3 | null): void {
+    if (this.handBottle && (!world || this.handBottle.userData.kind !== this.inHand)) {
+      this.scene.remove(this.handBottle);
+      disposeObject(this.handBottle);
+      this.handBottle = null;
+    }
+    if (!world || !this.inHand) return;
+    if (!this.handBottle) {
+      this.handBottle = this.sauceBottle(this.inHand);
+      this.handBottle.userData.kind = this.inHand;
+      this.scene.add(this.handBottle);
+    }
+    this.handBottle.position.copy(world);
+  }
 
   /** A sauce bottle hanging nozzle down, its origin at the nozzle tip. */
   sauceBottle(kind: SauceKind): THREE.Object3D {
@@ -1013,6 +1032,9 @@ export class CounterView {
     this.zonePush[i] = 0;
     return this.zones[i];
   }
+
+  /** A grill item's tag hangs below it, but never further forward than this (world z), so it clears the zone buttons. */
+  readonly grillTagZ = GRIDDLE.z + GRIDDLE_SURFACE.z1 - 0.45;
 
   /** Places for a patty down the middle of a zone, back to front, page-local (for the playtest bot). */
   zoneSpots(i: number): { x: number; z: number }[] {

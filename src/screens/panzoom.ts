@@ -20,6 +20,8 @@ export interface PanZoomOptions {
   onTap?: (target: Element, x: number, y: number) => void;
   /** Pointers that start here (buttons, sheets over the map) are left alone. */
   ignore?: (target: Element) => boolean;
+  /** Called whenever the view moves or zooms, with the new scale. */
+  onChange?: (scale: number) => void;
 }
 
 interface Ptr {
@@ -239,5 +241,6 @@ export class PanZoom {
       this.settle = window.setTimeout(() => (c.style.transition = ""), 560);
     }
     c.style.transform = `translate3d(${this.x.toFixed(2)}px, ${this.y.toFixed(2)}px, 0) scale(${this.scale.toFixed(4)})`;
+    this.o.onChange?.(this.scale);
   }
 }

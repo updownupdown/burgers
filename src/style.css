@@ -579,6 +579,7 @@ html, body {
 }
 .gtag.hot { background: var(--bv-paprika); }
 .gtag.warm { background: var(--bv-amber); color: var(--bv-night); }
+.gtag.off { background: #5aa3d8; }
 .gtag[hidden] { display: none; }
 .gtag.stack.low { background: var(--bv-amber); color: var(--bv-night); }
 .gtag.supply { background: var(--bv-olive); }
@@ -635,24 +636,6 @@ html, body {
 }
 @keyframes tilt { 0%, 30% { transform: rotate(-90deg); } 60%, 100% { transform: rotate(0); } }
 
-/* Grill zone switch and assembly-spot freshness. */
-.zone {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  pointer-events: auto;
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--bv-paper);
-  color: var(--bv-paprika);
-  display: grid;
-  place-items: center;
-  padding: 0;
-  box-shadow: var(--bv-shadow-2), inset 0 0 0 1.5px var(--bv-rule-2);
-}
-.zone .bv-icon { width: 22px; height: 22px; }
-.zone.on { background: var(--bv-amber); color: var(--bv-night); box-shadow: var(--bv-shadow-2), inset 0 0 0 1.5px rgb(42 38 34 / 0.25); }
 .gtag.hold { background: var(--bv-olive); }
 
 /* Business mode: planning screen, reviews */
@@ -725,13 +708,13 @@ html, body {
 .pind { display: grid; gap: 2px; justify-items: center; }
 .pind .dpill { min-width: 44px; font-size: 10px; box-shadow: 0 1px 3px rgb(0 0 0 / 0.35), inset 0 -1.5px 0 rgb(0 0 0 / 0.18); }
 
-/* Staleness bars beside the warm-shelf plates: drains from full as the food dries out. The notch
+/* Staleness bars along the trays' front lips: drains from full as cooked food goes cold. The notch
    marks where it stops keeping well. */
 .stale {
   position: absolute;
-  transform: translate(-50%, -100%);
-  width: 8px;
-  height: 38px;
+  transform: translate(-50%, -50%);
+  width: 46px;
+  height: 7px;
   border-radius: 4px;
   background: rgb(42 38 34 / 0.45);
   box-shadow: 0 0 0 1.5px var(--bv-paper), var(--bv-shadow-1);
@@ -740,14 +723,13 @@ html, body {
   z-index: 1;
 }
 .stale[hidden] { display: none; }
-.stale > i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--bv-olive); transition: height 0.2s linear; }
+.stale > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bv-olive); transition: width 0.2s linear; }
 .stale[data-state="drying"] > i { background: var(--bv-amber); }
 .stale[data-state="dry"] > i { background: var(--bv-paprika); }
-.stale::after { content: ""; position: absolute; left: 0; right: 0; bottom: var(--g); height: 1.5px; background: var(--bv-paper); }
-.zone[hidden] { display: none; }
+.stale::after { content: ""; position: absolute; top: 0; bottom: 0; left: var(--g); width: 1.5px; background: var(--bv-paper); }
 
-/* A sauce in hand: the kitchen dims around the tray, the caddy and the warm shelf (main.ts cuts the
-   holes as intersecting mask layers), and nothing under it takes a tap. */
+/* A sauce in hand: the kitchen dims around the trays and the caddy (main.ts cuts the holes as
+   intersecting mask layers), and nothing under it takes a tap. */
 .sauce-mask {
   position: absolute;
   inset: 0;

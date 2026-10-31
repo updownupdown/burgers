@@ -135,9 +135,12 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
   }
 }
 
-/** Food keeps well under the heat lamp for about 25 seconds, then dries out over the next 35. */
-export const HOLD_GRACE = 25;
-export const HOLD_RUIN = 60;
+/**
+ * Cooked food waiting on a tray keeps well for about 40 seconds, then goes cold and dry over the
+ * next minute. (`Piece.held` counts the seconds; the warm grill zone is where to park food instead.)
+ */
+export const HOLD_GRACE = 40;
+export const HOLD_RUIN = 100;
 export function heldPenalty(piece: Piece): number {
   return clamp01(((piece.held ?? 0) - HOLD_GRACE) / (HOLD_RUIN - HOLD_GRACE)) * 0.45;
 }
@@ -229,10 +232,12 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
   const sides = sideParts ? sideScore / sideParts : act.length ? 1 : 0;
 
   let total: number;
-  if (order.poutine && exp.length === 0) {
-    // A poutine meal: the poutine is the meal, a drink is the side.
+  if (exp.length === 0) {
+    // No burger ordered. A poutine is the meal with a drink on the side; otherwise it's just a
+    // drink and/or fries, each counting the same. A burger nobody asked for is a mild surprise.
     if (act.length) notes.push("didn't order a burger");
-    total = (order.drink ? 0.75 * friesQ + 0.25 * drinkQ : friesQ) * (act.length ? 0.8 : 1);
+    const sidesQ = order.poutine ? (order.drink ? 0.75 * friesQ + 0.25 * drinkQ : friesQ) : sideParts ? sideScore / sideParts : 0;
+    total = sidesQ * (act.length ? 0.8 : 1);
   } else {
     const burger = structure * (0.25 + 0.75 * quality) * (0.85 + 0.15 * presentation);
     total = burger * 0.85 + sides * 0.15;

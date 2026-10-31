@@ -35,14 +35,13 @@ import { SCALE } from "./render/units";
 import { dressCup } from "./render/cup";
 import { makeCarton, makeCup, makeFood, makeFries, sliceSpot, stackBases } from "./render/food";
 import { disposeObject } from "./render/materials";
-import { CounterView, CUP_IN_HAND, EMPTY_PACK, STOPS, GRILL_SCALE, HOME_PAGE, PAGES, GRILL_TOP, SLEEVE, type GrillItem, type Hit } from "./scenes/counter";
+import { CounterView, CUP_IN_HAND, EMPTY_PACK, STOPS, GRILL_SCALE, HOME_PAGE, PAGES, GRILL_TOP, SLEEVE, ZONE_START, type GrillItem, type Hit } from "./scenes/counter";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
 import "./ui/components.css";
 import "./style.css";
 import { mountHome, refreshHome } from "./screens/home";
 import { closeBoxes, closingHtml, nightHtml, prepHtml, reviewsHtml, suppliesHtml, toggleBox, type ReviewFilter } from "./screens/day";
-import { icon } from "./ui/icons";
 import { buildUi, donenessPill, patienceMood, ticketHtml } from "./ui";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 import { closeAll, initMenu, openHowTo, openMenu, openMenuRef } from "./screens/menu";
@@ -510,7 +509,7 @@ function sendBack(i: number, note: string): void {
   showBubble(i, `Can you fix it? ${capitalise(note)}.${took ? ` I'll keep the ${took}!` : ""}`, false);
   sfx.grumble();
   buzz([30, 40, 30]);
-  hintOnce("sent-back", "Sent back: fix the plate and swipe it up again. Drag the burger down to a prep spot to take layers off.", 4);
+  hintOnce("sent-back", "Sent back: fix the tray and swipe it up again. Drag down off the tray to take the top layer off.", 4);
 }
 
 /** Really wrong: they won't take it and leave without paying (but keep any freebies). */
@@ -563,7 +562,10 @@ function coinPop(i: number, amount: number): void {
 }
 
 function syncTray(i: number, animate: boolean): void {
-  trayView.plates[i].sync(game.slots[i].plate, animate, () => sfx.plop());
+  const s = game.slots[i];
+  // A plate on the tray means a burger is expected; drinks-only and fries-only orders get a bare tray.
+  trayView.plates[i].setDish(!!s.order && s.order.layers.length > 0);
+  trayView.plates[i].sync(s.plate, animate, () => sfx.plop());
 }
 
 // ---------------------------------------------------------------------------
@@ -647,8 +649,8 @@ function tutorialHint(): string | null {
 // Input
 
 type Payload =
-  | { type: "piece"; piece: Piece; fromGrill: { x: number; z: number } | null; fromHold?: number }
-  | { type: "stack"; layers: Layer[]; from: number; grill?: { x: number; z: number }; fromPlate?: number }
+  | { type: "piece"; piece: Piece; fromGrill: { x: number; z: number } | null; fromPlate?: number }
+  | { type: "stack"; layers: Layer[]; grill?: { x: number; z: number } }
   | { type: "fries"; cook: number; basket: number | null; amount: number }
   | { type: "carton"; size: FriesSize; cook: number; fill: number; pack: number; salt: boolean; curds: boolean; gravy: boolean }
   | { type: "salt" }
@@ -677,15 +679,14 @@ interface Pointer {
   x: number;
   y: number;
   band: ReturnType<typeof bandAt>;
-  mode: "none" | "swipe" | "held" | "grill" | "basket" | "pour" | "sauce" | "plate" | "hold" | "wipe";
+  mode: "none" | "swipe" | "held" | "grill" | "basket" | "pour" | "sauce" | "plate" | "wipe";
   /** Tap whose spill is being wiped. */
   wipe: number;
   hit: Hit | null;
   held: Held | null;
   sauce: SauceKind | null;
-  /** The plate (tray slot) or hold plate a squeeze started on; the other is -1. */
+  /** The tray a squeeze started on. */
   drawSlot: number;
-  drawHold: number;
   plate: number;
   samples: { x: number; y: number; t: number }[];
   moved: boolean;
@@ -835,7 +836,7 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
     return false;
   }
   if (payload.type === "stack") {
-    // A burger built (or food kept) under the heat lamp goes on top of whatever's on the plate.
+    // A cheesed patty off the grill goes on as one piece.
     for (const l of payload.layers) s.plate.layers.push(l);
     syncTray(slot, true);
     trayView.plates[slot].kick(0.4);
@@ -921,7 +922,6 @@ function finishHold(pt: Pointer): void {
     const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3);
     // The griddle's plate stands well above the counter, so drops there are matched at its height.
     const gTop = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), GRILL_TOP);
-    const hold = counter.page === HOME_PAGE ? counter.overHold(ndcIn(bands.counter, pt.x, pt.y)) : -1;
     const station = payload.type === "empty" || payload.type === "sleeve" || payload.type === "carton" || payload.type === "drink" || payload.type === "ice" || payload.type === "lid" || payload.type === "straw" || payload.type === "salt" || payload.type === "curds" || payload.type === "gravy" || (payload.type === "fries" && payload.basket !== null);
     if (station) done = dropAtStation(payload, g, ndcIn(bands.counter, pt.x, pt.y));
     if (!done && counter.overTrash(g)) {
@@ -931,20 +931,6 @@ function finishHold(pt: Pointer): void {
       done = true;
     } else if (station) {
       // Missed the station: it goes back where it came from below.
-    } else if (hold >= 0 && (payload.type === "piece" || payload.type === "stack")) {
-      // Build a burger ahead (or park food) under the heat lamp.
-      const spot = counter.holds[hold];
-      const add = payload.type === "piece" ? [landing(spot.layers, payload.piece, 0.06)] : payload.layers;
-      if (spot.layers.length + add.length > 9) showHint("That stack's tall enough.", 1.5);
-      else {
-        spot.layers.push(...add);
-        counter.syncHold(hold, true);
-        sfx.plop();
-        hintOnce("hold", "Food under the heat lamp stays hot but slowly dries out. Drag the stack to a plate when it's ready.", 4);
-        done = true;
-      }
-    } else if (hold >= 0) {
-      showHint("Fries and drinks go straight on the tray.", 1.5);
     } else if (payload.type === "stack") {
       // A single grill item can go back on the grill.
       const over = counter.overGrill(gTop);
@@ -953,6 +939,7 @@ function finishHold(pt: Pointer): void {
       if (over && fits && GRILLABLE.has(base.kind)) {
         counter.addGrillItem(base, over.x, over.z, top);
         sfx.sizzleHit();
+        zoneHint(over.x);
         done = true;
       }
     } else if (payload.type === "piece") {
@@ -968,6 +955,7 @@ function finishHold(pt: Pointer): void {
         counter.addGrillItem(payload.piece, over.x, over.z);
         if (!payload.fromGrill) sfx.sizzleHit();
         else sfx.thud();
+        zoneHint(over.x);
         done = true;
       } else if (fast && !payload.fromGrill) {
         // Flicked up from a bin: toss it onto the active plate, a little less neatly.
@@ -1000,19 +988,14 @@ function finishHold(pt: Pointer): void {
   if (!done) {
     // Put things back where they came from.
     if (payload.type === "piece" && payload.fromGrill) counter.addGrillItem(payload.piece, payload.fromGrill.x, payload.fromGrill.z);
-    if (payload.type === "piece" && payload.fromHold !== undefined) {
-      counter.holds[payload.fromHold].layers.push({ piece: payload.piece, offX: 0, offZ: 0 });
-      counter.syncHold(payload.fromHold, false);
+    if (payload.type === "piece" && payload.fromPlate !== undefined) {
+      // Lifted off a tray and dropped nowhere useful: it goes back on top.
+      game.slots[payload.fromPlate].plate.layers.push({ piece: payload.piece, offX: 0, offZ: 0 });
+      syncTray(payload.fromPlate, false);
     }
     if (payload.type === "stack" && payload.grill) {
       const [base, top] = payload.layers.map((l) => l.piece);
       counter.addGrillItem(base, payload.grill.x, payload.grill.z, top);
-    } else if (payload.type === "stack" && payload.fromPlate !== undefined) {
-      game.slots[payload.fromPlate].plate.layers.push(...payload.layers);
-      syncTray(payload.fromPlate, false);
-    } else if (payload.type === "stack" && payload.from >= 0) {
-      counter.holds[payload.from].layers.push(...payload.layers);
-      counter.syncHold(payload.from, false);
     }
     if (payload.type === "fries" && payload.basket !== null) {
       const b = counter.baskets[payload.basket];
@@ -1034,6 +1017,13 @@ function finishHold(pt: Pointer): void {
       counter.syncStack(counter.stacks[payload.stack]);
     }
   }
+}
+
+/** Something just went down on a grill zone that's off or only warm: say so, once each. */
+function zoneHint(x: number): void {
+  const heat = counter.zones[counter.zoneAt(x)];
+  if (heat === "off") showHint("That part of the grill is off. Tap its button on the front to heat it.", 2.5);
+  else if (heat === "warm") hintOnce("zone-warm", "Warm keeps food hot without cooking it much. Park finished food here.", 3);
 }
 
 /** Salt, curds or gravy onto fries in a carton (on a pad or a plate). False if it's already on. */
@@ -1178,8 +1168,8 @@ function holdSauce(kind: SauceKind | null): void {
 }
 
 /**
- * The mask over the kitchen while a sauce is in hand: everything dims except the tray, the caddy
- * (to put it back) and any burger on the warm shelf. Each hole is its own mask layer, and the
+ * The mask over the kitchen while a sauce is in hand: everything dims except the trays and the
+ * caddy (to put it back). Each hole is its own mask layer, and the
  * layers intersect, so the dim shows only where every layer agrees.
  */
 const sauceMask = document.createElement("div");
@@ -1208,7 +1198,6 @@ function updateSauceMask(): void {
     layers.push(`radial-gradient(circle at ${x}px ${y}px, transparent ${r}px, #000 ${r + 10}px)`);
   };
   hole(counter.caddyPoint(), 48);
-  counter.holds.forEach((h, i) => h.layers.length && hole(counter.holdPoint(i), 40));
   const t = bands.tray;
   layers.push(`linear-gradient(#000 ${t.y}px, transparent ${t.y}px, transparent ${t.y + t.h}px, #000 ${t.y + t.h}px)`);
   const mask = layers.join(", ");
@@ -1229,7 +1218,7 @@ function sauceBlocked(): void {
   buzz(10);
 }
 
-/** Start squeezing over whatever is under the finger: a plate on the tray or a burger on a hold plate. */
+/** Start squeezing over the burger on the tray under the finger. */
 function startSqueeze(pt: Pointer): void {
   if (pt.band === "tray") {
     const slot = trayView.pick(ndcIn(bands.tray, pt.x, pt.y));
@@ -1243,9 +1232,7 @@ function startSqueeze(pt: Pointer): void {
       holdSauce(null);
       return;
     }
-    if (hit?.type !== "hold") return sauceBlocked();
-    if (!counter.holds[hit.idx].layers.length) return void showHint("Start that burger with a bun first.", 1.5);
-    pt.drawHold = hit.idx;
+    return sauceBlocked();
   }
   pt.mode = "sauce";
   pt.sauce = counter.inHand;
@@ -1255,9 +1242,8 @@ function startSqueeze(pt: Pointer): void {
 /** Squeeze a line of sauce where the finger is, over the burger the squeeze started on. */
 function squeeze(pt: Pointer): void {
   const kind = pt.sauce!;
-  const onHold = pt.drawHold >= 0;
-  if (bandAt(pt.y) !== (onHold ? "counter" : "tray")) return;
-  const layers = onHold ? counter.holds[pt.drawHold].layers : game.slots[pt.drawSlot].plate.layers;
+  if (bandAt(pt.y) !== "tray") return;
+  const layers = game.slots[pt.drawSlot].plate.layers;
   let top = layers[layers.length - 1];
   // Lifting the finger and carrying on keeps drawing the same squiggle rather than adding a layer.
   if (top.piece.kind !== kind || !top.piece.stroke) {
@@ -1266,18 +1252,14 @@ function squeeze(pt: Pointer): void {
     layers.push({ piece: p, offX: top.offX * 0.5, offZ: top.offZ * 0.5 });
     top = layers[layers.length - 1];
   }
-  const q = onHold ? counter.holdDrawPoint(ndcIn(bands.counter, pt.x, pt.y), pt.drawHold) : trayView.drawPoint(ndcIn(bands.tray, pt.x, pt.y), pt.drawSlot);
-  if (onHold) counter.pointSauceAt(pt.drawHold, q);
-  else {
-    trayView.showGhost(pt.drawSlot, trayBottle);
-    trayView.ghostOver(q);
-  }
+  const q = trayView.drawPoint(ndcIn(bands.tray, pt.x, pt.y), pt.drawSlot);
+  trayView.showGhost(pt.drawSlot, trayBottle);
+  trayView.ghostOver(q);
   const stroke = top.piece.stroke!;
   const last = stroke[stroke.length - 1];
   if (!last || Math.hypot(q.x - top.offX - last.x, q.z - top.offZ - last.z) > 0.07) {
     stroke.push({ x: q.x - top.offX, z: q.z - top.offZ });
-    if (onHold) counter.syncHold(pt.drawHold, false);
-    else syncTray(pt.drawSlot, false);
+    syncTray(pt.drawSlot, false);
     const now = performance.now();
     if (now - lastSquirt > 70) {
       sfx.squirt();
@@ -1310,7 +1292,6 @@ canvas.addEventListener("pointerdown", (e) => {
     held: null,
     sauce: null,
     drawSlot: -1,
-    drawHold: -1,
     plate: -1,
     samples: [{ x, y, t: e.timeStamp }],
     moved: false,
@@ -1334,7 +1315,13 @@ canvas.addEventListener("pointerdown", (e) => {
       startHold(pt, { type: "piece", piece: newPiece(hit.kind), fromGrill: null });
     }
     else if (hit.type === "grillItem") pt.mode = "grill";
-    else if (hit.type === "hold") pt.mode = "hold";
+    else if (hit.type === "zone") {
+      const heat = counter.cycleZone(hit.idx);
+      sfx.flip();
+      buzz(10);
+      hintOnce("zones", "Each button cycles its zone: off, warm, hot. The strip along the front shows it: blue, orange, red.", 3.5);
+      if (heat === "warm") hintOnce("zone-warm", "Warm keeps food hot without cooking it much. Park finished food here.", 3);
+    }
     else if (hit.type === "bottle") holdSauce(hit.sauce); else if (hit.type === "friesBin") startHold(pt, { type: "fries", cook: 0, basket: null, amount: FRIES_SCOOP });
     else if (hit.type === "stack") {
       const s = counter.stacks[hit.idx];
@@ -1440,39 +1427,22 @@ canvas.addEventListener("pointermove", (e) => {
           counter.removeGrillItem(item);
           const at = { x: item.x, z: item.z };
           // A cheesed patty comes off the grill as a little stack.
-          if (item.topping) startHold(pt, { type: "stack", layers: [item.piece, item.topping.piece].map((piece) => ({ piece, offX: 0, offZ: 0 })), from: -1, grill: at });
+          if (item.topping) startHold(pt, { type: "stack", layers: [item.piece, item.topping.piece].map((piece) => ({ piece, offX: 0, offZ: 0 })), grill: at });
           else startHold(pt, { type: "piece", piece: item.piece, fromGrill: at });
         }
       }
       break;
     case "plate": {
-      // Drag a burger down off its plate to a prep spot under the heat lamp, to fix it there.
+      // Drag down off a tray to peel the top layer off: drop it in the trash, on the grill or on another tray.
       const s = pt.plate >= 0 ? game.slots[pt.plate] : null;
       if (s && s.plate.layers.length && bandAt(pt.y) === "counter") {
-        const layers = s.plate.layers.splice(0);
+        const top = s.plate.layers.pop()!;
         syncTray(pt.plate, false);
-        if (counter.page !== HOME_PAGE) goToPage(HOME_PAGE);
-        startHold(pt, { type: "stack", layers, from: -1, fromPlate: pt.plate });
-        hintOnce("to-prep", "Drop it on a prep spot, then swipe down on it to take layers off.", 3);
+        startHold(pt, { type: "piece", piece: top.piece, fromGrill: null, fromPlate: pt.plate });
+        hintOnce("peel", "Peeled off the top layer. Drop it in the trash slot, on the grill, or on another tray.", 3);
       }
       break;
     }
-    case "hold":
-      // Swipe down on a prep spot to peel the top layer off; drag any other way to move the whole stack.
-      if (pt.moved && pt.hit?.type === "hold") {
-        const spot = counter.holds[pt.hit.idx];
-        if (spot.layers.length && dy > 0 && dy > Math.abs(dx) * 1.2) {
-          const top = spot.layers.pop()!;
-          counter.syncHold(pt.hit.idx, false);
-          startHold(pt, { type: "piece", piece: top.piece, fromGrill: null, fromHold: pt.hit.idx });
-          hintOnce("peel", "Peeled off. Drop it in the trash slot, back on a stack, or on the grill.", 3);
-        } else if (spot.layers.length) {
-          const layers = spot.layers.splice(0);
-          counter.syncHold(pt.hit.idx, false);
-          startHold(pt, { type: "stack", layers, from: pt.hit.idx });
-        } else pt.mode = "swipe";
-      }
-      break;
     case "basket":
       if (pt.moved && pt.hit?.type === "basket" && (now - pt.t0 > 400 || dy > 0 || Math.abs(dx) > Math.abs(dy) || bandAt(pt.y) !== "counter")) {
         const b = counter.baskets[pt.hit.idx];
@@ -1540,14 +1510,7 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       break;
     case "sauce":
       // Done squeezing: the bottle stays in hand, back over the active plate.
-      counter.pointSauce(null);
       trayView.ghostOver(null);
-      break;
-    case "hold":
-      if (!cancelled && !pt.moved && pt.hit?.type === "hold") {
-        if (counter.holds[pt.hit.idx].layers.length) showHint("Drag the stack to a plate. It stays warm here, but slowly dries out.", 2.5);
-        else showHint("Build a burger here ahead of time, or park cooked food.", 2.5);
-      }
       break;
     case "plate":
       if (cancelled || pt.plate < 0) break;
@@ -1915,11 +1878,7 @@ function startShift(plan: Plan | null = null): void {
     syncTray(i, false);
   }
   for (const g of [...counter.grillItems]) counter.removeGrillItem(g);
-  counter.holds.forEach((h, i) => {
-    h.layers = [];
-    counter.syncHold(i, false);
-  });
-  counter.warm = false;
+  counter.zones = [...ZONE_START];
   for (const b of counter.baskets) Object.assign(b, { loaded: false, cook: 0, down: false, goldenRung: false, amount: 0 });
   counter.resetStations(save.stock);
   game.town = save.town;
@@ -2266,12 +2225,11 @@ function tick(dt: number): void {
       }
     });
 
-    // Food under the heat lamp slowly dries out.
-    for (const h of counter.holds)
-      h.layers.forEach((l, i) => {
-        l.piece.held = (l.piece.held ?? 0) + dt;
-        // Cheese sitting on a hot patty softens slowly under the lamp too.
-        if (l.piece.kind === "cheese" && h.layers[i - 1]?.piece.kind === "patty") l.piece.melt = Math.min(1, (l.piece.melt ?? 0) + MELT_RATE.lamp * dt);
+    // Cooked food waiting on a tray slowly goes cold and dry; cheese on a hot patty softens a little.
+    for (const s of game.slots)
+      s.plate.layers.forEach((l, i) => {
+        if (GRILLABLE.has(l.piece.kind) && Math.max(...l.piece.cook) > 0.15) l.piece.held = (l.piece.held ?? 0) + dt;
+        if (l.piece.kind === "cheese" && s.plate.layers[i - 1]?.piece.kind === "patty" && (l.piece.melt ?? 0) > 0) l.piece.melt = Math.min(1, (l.piece.melt ?? 0) + MELT_RATE.lamp * 0.5 * dt);
       });
 
     if (!game.hintsShown.has("melt-order") && game.slots[game.active]?.order?.layers.some((l) => l.melted))
@@ -2385,7 +2343,7 @@ function updateUi(): void {
   stopPips.forEach((pips, page) => pips.forEach((el, k) => el.classList.toggle("on", page === counter.page && counter.stopsOf(page)[k] === counter.stop)));
   updateGrillTags();
   updateFryTags();
-  updateHoldUi();
+  updateStaleUi();
   updateStationUi();
   updateSauceMask();
   // Labels are as wide as one tap, so they line up edge to edge along the machine.
@@ -2464,9 +2422,8 @@ function itemTag(p: Piece): string {
   }
 }
 /**
- * Staleness bars beside the warm-shelf plates: a slim vertical bar that drains as the food on
- * the plate dries out (the heat comes from under the shelf, so there's nothing to see on the
- * food itself). It's green while the food keeps well, amber once it starts drying, red near the end.
+ * Staleness bars beside the trays: a slim vertical bar that drains as the cooked food on the tray
+ * goes cold and dry. It's green while the food keeps well, amber once it starts drying, red near the end.
  */
 const holdTags: HTMLElement[] = [0, 1, 2].map(() => {
   const el = document.createElement("div");
@@ -2519,46 +2476,24 @@ function updateStationUi(): void {
   });
 }
 
-const zoneBtn = document.createElement("button");
-zoneBtn.className = "zone";
-zoneBtn.hidden = true;
-ui.root.appendChild(zoneBtn);
-zoneBtn.addEventListener("click", () => {
-  counter.warm = !counter.warm;
-  sfx.flip();
-  if (counter.warm) hintOnce("warm", "The right end of the grill is on low: food there barely cooks.", 3);
-});
-function updateHoldUi(): void {
-  const onGrill = game.phase === "playing" && counter.page === HOME_PAGE && counter.settled;
-  counter.holds.forEach((h, i) => {
+function updateStaleUi(): void {
+  const playing = game.phase === "playing";
+  game.slots.forEach((s, i) => {
     const el = holdTags[i];
-    el.hidden = !onGrill || !h.layers.length;
+    const held = Math.max(0, ...s.plate.layers.map((l) => l.piece.held ?? 0));
+    el.hidden = !playing || !s.order || held <= 0;
     if (el.hidden) return;
-    const held = Math.max(0, ...h.layers.map((l) => l.piece.held ?? 0));
     const left = Math.max(0, 1 - held / HOLD_RUIN);
-    (el.firstElementChild as HTMLElement).style.height = `${(left * 100).toFixed(1)}%`;
+    (el.firstElementChild as HTMLElement).style.width = `${(left * 100).toFixed(1)}%`;
     const state = held < HOLD_GRACE ? "fresh" : held < (HOLD_GRACE + HOLD_RUIN) / 2 ? "drying" : "dry";
     if (el.dataset.state !== state) {
       el.dataset.state = state;
-      el.setAttribute("aria-label", state === "fresh" ? "Fresh" : state === "drying" ? "Drying" : "Dried out");
+      el.setAttribute("aria-label", state === "fresh" ? "Fresh" : state === "drying" ? "Drying" : "Gone cold");
     }
-    const v = counter.holdBarPoint(i).project(counter.camera);
-    el.style.left = `${((v.x + 1) / 2) * bands.counter.w}px`;
-    el.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
+    const v = trayView.staleBarPoint(i).project(trayView.camera);
+    el.style.left = `${((v.x + 1) / 2) * bands.tray.w}px`;
+    el.style.top = `${bands.tray.y + ((1 - v.y) / 2) * bands.tray.h}px`;
   });
-  zoneBtn.hidden = !onGrill;
-  if (zoneBtn.hidden) return;
-  // The right end of the grill: full heat (a flame) or turned down to keep things warm (a lamp).
-  const label = counter.warm ? "Warm zone on" : "Warm zone off";
-  if (zoneBtn.getAttribute("aria-label") !== label) {
-    zoneBtn.setAttribute("aria-label", label);
-    zoneBtn.title = label;
-    zoneBtn.innerHTML = icon(counter.warm ? "warming-lamp" : "flame");
-  }
-  zoneBtn.classList.toggle("on", counter.warm);
-  const v = counter.warmSwitchPoint().project(counter.camera);
-  zoneBtn.style.left = `${((v.x + 1) / 2) * bands.counter.w}px`;
-  zoneBtn.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
 }
 
 /**
@@ -2631,8 +2566,10 @@ function updateGrillTags(): void {
     if (patty) (el.firstElementChild as HTMLElement).style.transform = it.flipT >= 0 ? `scaleY(${Math.cos(Math.PI * Math.min(1, it.flipT)).toFixed(3)})` : "";
     el.classList.toggle("pt", patty);
     const burning = Math.max(it.piece.cook[0], it.piece.cook[1]) >= (it.piece.kind === "patty" || it.piece.kind === "bacon" ? 0.92 : 0.95);
-    el.classList.toggle("hot", burning && !counter.isWarm(it));
-    el.classList.toggle("warm", counter.isWarm(it));
+    const heat = counter.heatOf(it);
+    el.classList.toggle("hot", burning && heat === "hot");
+    el.classList.toggle("warm", heat === "warm");
+    el.classList.toggle("off", heat === "off");
     el.style.left = `${x}px`;
     el.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
   });

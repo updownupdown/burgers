@@ -27,7 +27,7 @@ export interface Piece {
   smashed?: boolean;
   /** Cheese only: 0 is a cold slice, 1 is fully melted over a hot patty. */
   melt?: number;
-  /** Seconds spent under the heat lamp; long waits dry food out. */
+  /** Seconds a cooked piece has waited on a tray; long waits leave it cold and dry. */
   held?: number;
   /** Sauce stroke, in plate-local units (x, z), for ketchup/mustard layers. */
   stroke?: { x: number; z: number }[];

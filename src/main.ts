@@ -2618,7 +2618,9 @@ function placeTag(el: HTMLElement, world: THREE.Vector3, text: string, cls?: [st
   if (el.textContent !== text) el.textContent = text;
   if (cls) el.classList.toggle(cls[0], cls[1]);
   const v = world.project(counter.camera);
-  el.style.left = `${((v.x + 1) / 2) * bands.counter.w}px`;
+  // Keep the whole tag on screen (they're centred on their point).
+  const half = el.offsetWidth / 2 + 4;
+  el.style.left = `${Math.min(bands.counter.w - half, Math.max(half, ((v.x + 1) / 2) * bands.counter.w))}px`;
   el.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
 }
 function updateStationUi(): void {

@@ -252,6 +252,13 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
   },
 };
 
+/** The heap for one kind on its own, without the pan, in game units with the pan's base at y = 0. */
+export function heapParts(kind: Kind): Parts {
+  const parts = new Parts();
+  HEAPS[kind]?.(parts, rng(kind.length * 977 + kind.charCodeAt(0)));
+  return parts;
+}
+
 const cache = new Map<Kind, Baked>();
 
 function heapGeometry(kind: Kind): Baked {

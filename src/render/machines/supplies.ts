@@ -119,7 +119,7 @@ export function makeWireRack(o: { w?: number } = {}): WireRackObject {
       }
       sleeves.push(list);
       // Label on the shelf lip, tipped back toward the steep camera.
-      const d = textDecal(`${kind === "cup" ? "CUP" : "BOAT"} ${size}`, 0.3, { up: false, bg: kind === "cup" ? "#e4f1f6" : "#dfe8f7", color: "#3b2a3a", fs: 52 });
+      const d = textDecal(`${kind === "cup" ? "CUP" : "BOAT"} ${size}`, 0.44, { up: false, bg: kind === "cup" ? "#e4f1f6" : "#dfe8f7", color: "#3b2a3a", fs: 60, weight: 800 });
       d.position.set(x, t.y + 0.12, t.z + TD / 2 + 0.04);
       d.rotation.x = -0.9;
       st.add(d);

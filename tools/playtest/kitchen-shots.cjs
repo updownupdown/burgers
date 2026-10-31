@@ -44,7 +44,7 @@ const sizes = (process.env.SIZES || '390x844,360x740,430x932').split(',').map((s
       ];
       plates.forEach((ks, i) => {
         const s = g.slots[i];
-        s.plate = { layers: ks.map((k) => pc(k)), fries: i === 1 ? { cook: 0.72, size: 'M', fill: 1, salt: true } : null, drink: i === 1 ? { flavor: 'pink', fill: 0.9, size: 'M', ice: true, lid: true, straw: true } : null };
+        s.plate = { layers: ks.map((k) => pc(k)), fries: i === 1 ? { cook: 0.72, size: 'M', fill: 1, salt: 0.6 } : null, drink: i === 1 ? { flavor: 'pink', fill: 0.9, size: 'M', ice: true, lid: true, straw: true } : null };
         window.__bv.trayView.plates[i].sync(s.plate, false, () => {});
       });
       g.active = +(window.__shotActive || 0);

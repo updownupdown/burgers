@@ -71,6 +71,18 @@ export function friesQuality(t: number): number {
   return 0.1;
 }
 
+/**
+ * How full a drink should be: from `full` it counts as a full cup, and `perfect` is the line the
+ * pour bar marks to aim for. Past 1 it overflows.
+ */
+export const DRINK_FILL = { full: 0.78, perfect: 0.9 };
+
+/**
+ * Salt on fries, shaken on a little at a time: each shake adds SALT.shake. Under `low` they taste
+ * flat, `perfect` is the line to aim for, over `high` is too salty, and it can't go past `max`.
+ */
+export const SALT = { shake: 0.1, low: 0.35, perfect: 0.6, high: 0.9, max: 1.2 };
+
 export function friesLabel(t: number): string {
   if (t < 0.25) return "Frozen";
   if (t < FRIES_ZONE.done) return "Soggy";

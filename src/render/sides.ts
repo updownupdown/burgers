@@ -41,8 +41,13 @@ export const CARTON_SIZE: Record<FriesSize, [number, number]> = { S: [BOAT_K.S, 
 export const CARTON_NEST = 0.04;
 const WALL = 0.018;
 const FLOOR = 0.02;
-/** Sticks in a full boat. */
-const FRY_COUNT: Record<FriesSize, number> = { S: 30, M: 38, L: 46 };
+/**
+ * Sticks per scoop. A scoop from the freezer, a third of a basket and a small boat all show the
+ * same number of fries, so the amount in hand, in the basket and in the boat match up.
+ */
+export const FRIES_PER_SCOOP = 17;
+/** Sticks in a full boat: one, two or three scoops. */
+const FRY_COUNT: Record<FriesSize, number> = { S: FRIES_PER_SCOOP, M: FRIES_PER_SCOOP * 2, L: FRIES_PER_SCOOP * 3 };
 /** Where the top of a full boat's fries sits, for toppings. */
 const FRIES_TOP = 0.22;
 
@@ -214,11 +219,13 @@ function handful(n: number): Baked {
   if (b) return b;
   const r = rng(31);
   const parts = new Parts();
+  // A bigger handful spreads wider as well as heaping higher.
+  const spread = Math.sqrt(Math.max(1, n) / FRIES_PER_SCOOP);
   for (let i = 0; i < n; i++) {
     const a = i * 2.39996;
-    const rr = Math.sqrt((i + 0.5) / 16);
+    const rr = Math.sqrt((i + 0.5) / n);
     parts.add(FRY_STICK, "#ffffff", {
-      p: [Math.cos(a) * rr * 0.24, 0.06 + (1 - rr) * 0.16 + (i % 3) * 0.03, Math.sin(a) * rr * 0.18],
+      p: [Math.cos(a) * rr * 0.24 * spread, 0.06 + (1 - rr) * 0.16 * spread + (i % 3) * 0.03, Math.sin(a) * rr * 0.18 * spread],
       r: [(r() - 0.5) * 0.4, r() * Math.PI, Math.PI / 2 + (r() - 0.5) * 0.5],
       s: [1, 0.4 + r() * 0.2, 1],
       ink: 0.011,
@@ -246,10 +253,11 @@ function friesGroup(baked: Baked | null): FriesObject {
  * Fries in a paper boat of `size`, or a loose handful without one. `fill` (0..1) shows part of
  * a boat's fries, or part of a basket's handful. Bottom at y = 0, carton units.
  */
-export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1, top?: { salt?: boolean; curds?: boolean; gravy?: boolean }): FriesObject {
+export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1, top?: { salt?: number; curds?: boolean; gravy?: boolean }): FriesObject {
   const f = Math.min(1, Math.max(0, fill));
   if (!withCarton) {
-    const n = Math.round(16 * f);
+    // A loose handful: `fill` is the share of a full basket (three scoops).
+    const n = Math.round(FRIES_PER_SCOOP * 3 * f);
     return friesGroup(n ? handful(n) : null);
   }
   const n = Math.round(FRY_COUNT[size] * f);
@@ -257,7 +265,7 @@ export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1, 
   g.add(makeCarton(size));
   if (n && top) {
     const { w, d } = boatSize(size);
-    const t = friesToppings((w - 0.06) * 0.8, (d - 0.05) * 0.8, FRIES_TOP - (1 - f) * 0.1, !!top.salt, !!top.curds, !!top.gravy);
+    const t = friesToppings((w - 0.06) * 0.8, (d - 0.05) * 0.8, FRIES_TOP - (1 - f) * 0.1, top.salt ?? 0, !!top.curds, !!top.gravy);
     if (t) g.add(t);
   }
   return g;
@@ -304,6 +312,35 @@ export function makeFryPile(w: number, d: number, layers: number, seed: number, 
   return g;
 }
 
+/**
+ * Fries in a fryer basket, `w` × `d` game units: a full basket is three scoops of sticks. They
+ * heap from the middle out, so `setAmount(a)` shows a third of a basket as a small mound in the
+ * middle rather than a thin layer over the whole floor. Each basket owns its geometry.
+ */
+export function makeBasketFries(w: number, d: number, seed: number): FriesObject {
+  const r = rng(seed);
+  const parts = new Parts();
+  const total = FRIES_PER_SCOOP * 3;
+  for (let i = 0; i < total; i++) {
+    const a = i * 2.39996 + r() * 0.3;
+    const rr = Math.sqrt((i + 0.5) / total);
+    parts.add(FRY_STICK, "#ffffff", {
+      p: [Math.cos(a) * rr * w * 0.36, 0.05 + (1 - rr) * 0.22 + r() * 0.05, Math.sin(a) * rr * d * 0.36],
+      r: [(r() - 0.5) * 0.4, r() * Math.PI, Math.PI / 2 + (r() - 0.5) * 0.4],
+      s: [1.25, 0.5 + r() * 0.25, 1.25],
+      ink: 0.009,
+    });
+  }
+  const baked = parts.bake();
+  const g = friesGroup(baked);
+  g.userData.setAmount = (amt) => {
+    const count = Math.round(total * Math.min(1, Math.max(0, amt))) * FRY_VERTS;
+    baked.geo.setDrawRange(0, count);
+    baked.hull?.setDrawRange(0, count);
+  };
+  return g;
+}
+
 /** Cheese curds: squeaky off-white lumps. */
 export const CURD = "#f5edcf";
 export const GRAVY = "#6e4020";
@@ -324,13 +361,16 @@ export function curdLumps(p: Parts, n: number, rx: number, rz: number, y: number
 }
 
 /**
- * Toppings on fries: a sprinkle of salt, curds and a pour of gravy, in carton units around the
- * top of the fries at height `top` (half-width `rx`, half-depth `rz`).
+ * Toppings on fries: a sprinkle of salt (more grains the more it's been shaken), curds and a pour
+ * of gravy, in carton units around the top of the fries at height `top` (half-width `rx`, half-depth `rz`).
  */
 const TOPPED = new Map<string, Baked>();
-export function friesToppings(rx: number, rz: number, top: number, salt: boolean, curds: boolean, gravy: boolean): THREE.Mesh | null {
+export function friesToppings(rx: number, rz: number, top: number, saltLevel: number, curds: boolean, gravy: boolean): THREE.Mesh | null {
+  // Grains in steps of five, so a carton being shaken reuses a few baked meshes.
+  const grains = Math.min(60, Math.round((saltLevel * 50) / 5) * 5);
+  const salt = grains > 0;
   if (!salt && !curds && !gravy) return null;
-  const key = `${rx.toFixed(2)}|${rz.toFixed(2)}|${top.toFixed(2)}|${+salt}${+curds}${+gravy}`;
+  const key = `${rx.toFixed(2)}|${rz.toFixed(2)}|${top.toFixed(2)}|${grains}${+curds}${+gravy}`;
   let b = TOPPED.get(key);
   if (!b) {
     const p = new Parts();
@@ -345,7 +385,7 @@ export function friesToppings(rx: number, rz: number, top: number, salt: boolean
     if (curds) curdLumps(p, 9, rx * 0.9, rz * 1.1, top + 0.02, 23, 0.75);
     if (salt) {
       const grain = new THREE.BoxGeometry(0.018, 0.018, 0.018);
-      for (let i = 0; i < 30; i++) p.add(grain, "#ffffff", { p: [(r() - 0.5) * rx * 1.7, top + 0.03 + r() * 0.05, (r() - 0.5) * rz * 1.7], ink: false });
+      for (let i = 0; i < grains; i++) p.add(grain, "#ffffff", { p: [(r() - 0.5) * rx * 1.7, top + 0.03 + r() * 0.05, (r() - 0.5) * rz * 1.7], ink: false });
     }
     b = bakeShared(p);
     TOPPED.set(key, b);

@@ -135,7 +135,7 @@ function shellHtml(save: Save): string {
   return `<div class="home bv bv-night">
     <header class="home-top">
       <div class="home-brand">
-        <span class="home-logo" aria-label="Bun Voyage">${icon("logo", { class: "mark" })}<span class="w1">Bun</span><span class="w2">Voyage</span></span>${save.trips > 0 ? `<span class="bv-eyebrow">Trip ${save.trips + 1}</span>` : ""}
+        <span class="home-logo" aria-label="Bun Voyage"><img class="mark" src="./logo.svg" alt="" width="30" height="30" /><span class="w1">Bun</span><span class="w2">Voyage</span></span>${save.trips > 0 ? `<span class="bv-eyebrow">Trip ${save.trips + 1}</span>` : ""}
       </div>
       <div class="home-actions">
         <button class="bv-btn icon" data-home="howto" aria-label="How to play" title="How to play">${icon("help")}</button>

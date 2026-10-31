@@ -31,6 +31,7 @@ const DOT = (cx: number, cy: number) => `<circle cx="${cx}" cy="${cy}" r="0.6" f
 
 export const ICONS: Record<string, IconDef> = {
   /* ---- system ------------------------------------------------------- */
+  logo: { group: "system", svg: P("M12 6a7 7 0 0 1 7 7v2H5v-2a7 7 0 0 1 7-7zM4 18h16") + `<circle cx="12" cy="3.6" r="1.4" fill="currentColor" stroke="none"/>`, tags: "bun voyage mark cloche burger knob" },
   menu: { group: "system", svg: P("M4 7h16M4 12h16M4 17h16"), tags: "hamburger lines" },
   close: { group: "system", svg: P("M6 6l12 12M18 6L6 18"), tags: "x dismiss" },
   back: { group: "system", svg: P("M15 5l-7 7 7 7"), tags: "chevron left arrow" },

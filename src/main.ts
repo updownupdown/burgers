@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { buzz, Sfx } from "./audio";
-import { avgCook, bunToast, FRIES_PERFECT, friesZone, FRIES_ZONE, MELT_RATE, pattyLabel } from "./game/cooking";
+import { avgCook, bunToast, FRIES_PERFECT, friesZone, FRIES_ZONE, pattyLabel } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { gearBlocker, gearById, projectShift, sleep, solarSaving, RUNNING_COST, type GearId } from "./game/day";
 import { freshSave, loadSave, passed, passTown, upgradeChoices, UPGRADES, writeSave, type Closing, type UpgradeId } from "./game/progress";
@@ -2197,12 +2197,9 @@ function tick(dt: number): void {
       }
     });
 
-    // Cooked food waiting on a tray slowly goes cold and dry; cheese on a hot patty softens a little.
+    // Cooked food waiting on a tray slowly goes cold and dry (the warm grill zone is the place to hold it).
     for (const s of game.slots)
-      s.plate.layers.forEach((l, i) => {
-        if (GRILLABLE.has(l.piece.kind) && Math.max(...l.piece.cook) > 0.15) l.piece.held = (l.piece.held ?? 0) + dt;
-        if (l.piece.kind === "cheese" && s.plate.layers[i - 1]?.piece.kind === "patty" && (l.piece.melt ?? 0) > 0) l.piece.melt = Math.min(1, (l.piece.melt ?? 0) + MELT_RATE.lamp * 0.5 * dt);
-      });
+      for (const l of s.plate.layers) if (GRILLABLE.has(l.piece.kind) && Math.max(...l.piece.cook) > 0.15) l.piece.held = (l.piece.held ?? 0) + dt;
 
     if (!game.hintsShown.has("melt-order") && game.slots[game.active]?.order?.layers.some((l) => l.melted))
       hintOnce("melt-order", "This one wants melted cheese: drop the slice on the patty while it's on the grill.", 4.5);

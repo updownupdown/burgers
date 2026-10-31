@@ -29,11 +29,12 @@ import {
   type Review,
 } from "./game/business";
 import type { DrinkId, FriesSize, Layer, Order, Piece, Plate, SauceKind, Size } from "./game/types";
-import { COUNTED, FRIES_PORTION, FRIES_SCOOP, GRILLABLE, KIND_LABEL, newPiece } from "./game/types";
+import { COUNTED, FRIES_PORTION, FRIES_SCOOP, GRILLABLE, KIND_LABEL, newPiece, SIZE_LABEL } from "./game/types";
+import { SCALE } from "./render/units";
 import { dressCup } from "./render/cup";
 import { makeCarton, makeCup, makeFood, makeFries, sliceSpot, stackBases } from "./render/food";
 import { disposeObject } from "./render/materials";
-import { CounterView, EMPTY_PACK, GRILL_SCALE, HOME_PAGE, PAGES, pageX, GRILL_TOP, SLEEVE, WARM_X0, type GrillItem, type Hit } from "./scenes/counter";
+import { CounterView, CUP_IN_HAND, EMPTY_PACK, STOPS, GRILL_SCALE, HOME_PAGE, PAGES, GRILL_TOP, SLEEVE, type GrillItem, type Hit } from "./scenes/counter";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
 import "./ui/components.css";
@@ -651,7 +652,7 @@ type Payload =
   | { type: "lid" }
   | { type: "straw" }
   | { type: "empty"; kind: "cup" | "carton"; size: Size; stack: number }
-  | { type: "sleeve"; kind: "cup" | "carton" };
+  | { type: "sleeve"; kind: "cup" | "carton"; size: Size };
 
 interface Held {
   payload: Payload;
@@ -675,7 +676,9 @@ interface Pointer {
   hit: Hit | null;
   held: Held | null;
   sauce: SauceKind | null;
+  /** The plate (tray slot) or hold plate a squeeze started on; the other is -1. */
   drawSlot: number;
+  drawHold: number;
   plate: number;
   samples: { x: number; y: number; t: number }[];
   moved: boolean;
@@ -683,8 +686,9 @@ interface Pointer {
 
 let ptr: Pointer | null = null;
 let lastGesture: unknown = null;
-let armedSauce: SauceKind | null = null;
 let lastSquirt = 0;
+/** The sauce in hand, drawn over the tray: it bobs over the active plate, or sits where it squeezes. */
+let trayBottle: THREE.Object3D | null = null;
 
 /** A burger (or part of one) as a single object to carry around. */
 function stackVisual(layers: Layer[]): THREE.Object3D {
@@ -695,7 +699,7 @@ function stackVisual(layers: Layer[]): THREE.Object3D {
     o.position.set(l.offX, bases[i], l.offZ);
     g.add(o);
   });
-  g.scale.setScalar(0.6);
+  g.scale.setScalar(SCALE.burger);
   return g;
 }
 
@@ -722,12 +726,13 @@ function payloadVisual(p: Payload): THREE.Object3D {
   }
   if (p.type === "empty") {
     const o = p.kind === "cup" ? makeCup(null, false, p.size) : makeCarton(p.size as FriesSize);
-    o.scale.multiplyScalar(p.kind === "cup" ? 0.9 : 1.2);
+    o.scale.multiplyScalar(p.kind === "cup" ? CUP_IN_HAND : SCALE.fries);
     return o;
   }
-  if (p.type === "sleeve") return counter.sleeveMesh(p.kind);
+  if (p.type === "sleeve") return counter.sleeveMesh(p.kind, p.size);
   if (p.type === "ice" || p.type === "lid" || p.type === "straw") return counter.extraMesh(p.type);
   const c = makeCup(p.flavor, p.lid, p.size);
+  c.scale.multiplyScalar(CUP_IN_HAND);
   c.userData.setFill(p.fill);
   dressCup(c, p);
   return c;
@@ -829,7 +834,7 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
     return true;
   }
   if (payload.type === "fries") {
-    showHint("Fries go in a carton first. Grab one from the stacks behind the fryer.", 2.5);
+    showHint("Fries go in a carton first. Grab one from the carton stacks, front left.", 2.5);
     return false;
   }
   if (payload.type === "empty" || payload.type === "sleeve") {
@@ -888,7 +893,9 @@ function finishHold(pt: Pointer): void {
     if (done && slot >= 0) setActive(slot);
   } else if (band === "counter") {
     const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3);
-    const hold = counter.page === HOME_PAGE ? counter.overHold(g) : -1;
+    // The griddle's plate stands well above the counter, so drops there are matched at its height.
+    const gTop = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), GRILL_TOP);
+    const hold = counter.page === HOME_PAGE ? counter.overHold(ndcIn(bands.counter, pt.x, pt.y)) : -1;
     const station = payload.type === "empty" || payload.type === "sleeve" || payload.type === "carton" || payload.type === "drink" || payload.type === "ice" || payload.type === "lid" || payload.type === "straw" || payload.type === "salt" || payload.type === "curds" || payload.type === "gravy" || (payload.type === "fries" && payload.basket !== null);
     if (station) done = dropAtStation(payload, g);
     if (!done && counter.overTrash(g)) {
@@ -914,7 +921,7 @@ function finishHold(pt: Pointer): void {
       showHint("Fries and drinks go straight on the tray.", 1.5);
     } else if (payload.type === "stack") {
       // A single grill item can go back on the grill.
-      const over = counter.overGrill(g);
+      const over = counter.overGrill(gTop);
       const [base, top] = payload.layers.map((l) => l.piece);
       const fits = payload.layers.length === 1 || (payload.layers.length === 2 && base.kind === "patty" && top.kind === "cheese");
       if (over && fits && GRILLABLE.has(base.kind)) {
@@ -923,8 +930,8 @@ function finishHold(pt: Pointer): void {
         done = true;
       }
     } else if (payload.type === "piece") {
-      const over = counter.overGrill(g);
-      const under = over && payload.piece.kind === "cheese" ? counter.grillItemAt(g) : null;
+      const over = counter.overGrill(gTop);
+      const under = over && payload.piece.kind === "cheese" ? counter.grillItemAt(gTop) : null;
       if (under && counter.addTopping(under, payload.piece)) {
         sfx.plop();
         hintOnce("melt", "The cheese melts on the hot patty. Drag them up together when it slumps.", 3.5);
@@ -1088,6 +1095,7 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
     const s = counter.stacks[si];
     if (!s) return false;
     if (s.kind !== payload.kind) showHint(payload.kind === "cup" ? "Those are cups." : "Those are cartons.", 1.5);
+    else if (s.size !== payload.size) showHint(`That's a ${SIZE_LABEL[payload.size].toLowerCase()} sleeve. It goes on the ${SIZE_LABEL[payload.size].toLowerCase()} stack.`, 2);
     else if (s.count > 0 || s.sleeve) showHint("Use up the ones that are there first.", 1.5);
     else {
       Object.assign(s, { sleeve: true, tear: 0 });
@@ -1126,30 +1134,124 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
   return false;
 }
 
-function sauceAt(pt: Pointer, kind: SauceKind): void {
-  const slot = trayView.pick(ndcIn(bands.tray, pt.x, pt.y));
-  const target = slot >= 0 ? slot : game.active;
-  const plate = game.slots[target].plate;
-  if (plate.layers.length === 0) {
-    showHint("Start with a bun before adding sauce.", 2);
-    return;
+/**
+ * Lift a sauce from the caddy, or put the one in hand back (null). While a sauce is out, the rest
+ * of the kitchen is masked off and counters and tabs stay put until it goes back.
+ */
+function holdSauce(kind: SauceKind | null): void {
+  if (counter.inHand === kind) return;
+  counter.liftSauce(kind);
+  trayView.showGhost(-1, null);
+  trayView.ghostOver(null);
+  disposeObject(trayBottle);
+  trayBottle = kind ? counter.sauceBottle(kind) : null;
+  ui.root.classList.toggle("sauce-in-hand", !!kind);
+  if (!kind && hintText === SAUCE_BLOCKED) hintUntil = 0;
+  sfx.pop();
+  if (kind) hintOnce("sauce-hand", `${capitalise(kind)} in hand. Draw on a burger to squeeze, then tap the caddy to put it back.`, 4);
+}
+
+/**
+ * The mask over the kitchen while a sauce is in hand: everything dims except the tray, the caddy
+ * (to put it back) and any burger on the warm shelf. Each hole is its own mask layer, and the
+ * layers intersect, so the dim shows only where every layer agrees.
+ */
+const sauceMask = document.createElement("div");
+sauceMask.className = "sauce-mask";
+sauceMask.hidden = true;
+sauceMask.innerHTML = "<span></span>";
+ui.root.appendChild(sauceMask);
+let lastMask = "";
+
+function updateSauceMask(): void {
+  const kind = game.phase === "playing" ? counter.inHand : null;
+  sauceMask.hidden = !kind;
+  if (!kind) return;
+  // The tray's plates have sauce drawn straight on them; float the bottle over the one in focus.
+  if (trayBottle && ptr?.mode !== "sauce") {
+    const ok = game.active >= 0 && game.slots[game.active].plate.layers.length > 0;
+    trayView.showGhost(ok ? game.active : -1, ok ? trayBottle : null);
+    trayView.ghostOver(null);
   }
-  let top = plate.layers[plate.layers.length - 1];
+  const c = bands.counter;
+  const layers: string[] = [];
+  const hole = (p: THREE.Vector3, r: number): void => {
+    const v = p.project(counter.camera);
+    const x = Math.round(((v.x + 1) / 2) * c.w);
+    const y = Math.round(c.y + ((1 - v.y) / 2) * c.h);
+    layers.push(`radial-gradient(circle at ${x}px ${y}px, transparent ${r}px, #000 ${r + 10}px)`);
+  };
+  hole(counter.caddyPoint(), 48);
+  counter.holds.forEach((h, i) => h.layers.length && hole(counter.holdPoint(i), 40));
+  const t = bands.tray;
+  layers.push(`linear-gradient(#000 ${t.y}px, transparent ${t.y}px, transparent ${t.y + t.h}px, #000 ${t.y + t.h}px)`);
+  const mask = layers.join(", ");
+  if (mask !== lastMask) {
+    sauceMask.style.setProperty("mask-image", mask);
+    sauceMask.style.setProperty("-webkit-mask-image", mask);
+    lastMask = mask;
+  }
+  const note = `${capitalise(kind)} in hand · tap the caddy to put it back`;
+  const span = sauceMask.firstElementChild as HTMLElement;
+  if (span.textContent !== note) span.textContent = note;
+}
+
+/** Something else was touched with a sauce in hand. */
+const SAUCE_BLOCKED = "Put the sauce back in the caddy first.";
+function sauceBlocked(): void {
+  showHint(SAUCE_BLOCKED, 1.6);
+  buzz(10);
+}
+
+/** Start squeezing over whatever is under the finger: a plate on the tray or a burger on a hold plate. */
+function startSqueeze(pt: Pointer): void {
+  if (pt.band === "tray") {
+    const slot = trayView.pick(ndcIn(bands.tray, pt.x, pt.y));
+    if (slot < 0) return;
+    if (!game.slots[slot].plate.layers.length) return void showHint("Start with a bun before adding sauce.", 2);
+    pt.drawSlot = slot;
+    setActive(slot);
+  } else {
+    const hit = counter.hit(ndcIn(bands.counter, pt.x, pt.y));
+    if (hit?.type === "bottle") {
+      holdSauce(null);
+      return;
+    }
+    if (hit?.type !== "hold") return sauceBlocked();
+    if (!counter.holds[hit.idx].layers.length) return void showHint("Start that burger with a bun first.", 1.5);
+    pt.drawHold = hit.idx;
+  }
+  pt.mode = "sauce";
+  pt.sauce = counter.inHand;
+  squeeze(pt);
+}
+
+/** Squeeze a line of sauce where the finger is, over the burger the squeeze started on. */
+function squeeze(pt: Pointer): void {
+  const kind = pt.sauce!;
+  const onHold = pt.drawHold >= 0;
+  if (bandAt(pt.y) !== (onHold ? "counter" : "tray")) return;
+  const layers = onHold ? counter.holds[pt.drawHold].layers : game.slots[pt.drawSlot].plate.layers;
+  let top = layers[layers.length - 1];
   // Lifting the finger and carrying on keeps drawing the same squiggle rather than adding a layer.
   if (top.piece.kind !== kind || !top.piece.stroke) {
     const p = newPiece(kind);
     p.stroke = [];
-    plate.layers.push({ piece: p, offX: top.offX * 0.5, offZ: top.offZ * 0.5 });
-    top = plate.layers[plate.layers.length - 1];
-    pt.drawSlot = target;
-    setActive(target);
+    layers.push({ piece: p, offX: top.offX * 0.5, offZ: top.offZ * 0.5 });
+    top = layers[layers.length - 1];
   }
-  const q = trayView.drawPoint(ndcIn(bands.tray, pt.x, pt.y), target);
+  const q = onHold ? counter.holdDrawPoint(ndcIn(bands.counter, pt.x, pt.y), pt.drawHold) : trayView.drawPoint(ndcIn(bands.tray, pt.x, pt.y), pt.drawSlot);
+  if (onHold) counter.pointSauceAt(pt.drawHold, q);
+  else {
+    trayView.showGhost(pt.drawSlot, trayBottle);
+    trayView.ghostOver(q);
+  }
   const stroke = top.piece.stroke!;
   const last = stroke[stroke.length - 1];
-  if (!last || Math.hypot(q.x - last.x, q.z - last.z) > 0.07) {
+  if (!last || Math.hypot(q.x - top.offX - last.x, q.z - top.offZ - last.z) > 0.07) {
     stroke.push({ x: q.x - top.offX, z: q.z - top.offZ });
-    syncTray(target, false);
+    if (onHold) counter.syncHold(pt.drawHold, false);
+    else syncTray(pt.drawSlot, false);
     const now = performance.now();
     if (now - lastSquirt > 70) {
       sfx.squirt();
@@ -1182,6 +1284,7 @@ canvas.addEventListener("pointerdown", (e) => {
     held: null,
     sauce: null,
     drawSlot: -1,
+    drawHold: -1,
     plate: -1,
     samples: [{ x, y, t: e.timeStamp }],
     moved: false,
@@ -1189,6 +1292,12 @@ canvas.addEventListener("pointerdown", (e) => {
   };
   ptr = pt;
   if (x < 0 || x > bands.counter.w) return;
+  // With a sauce in hand, only burgers (to squeeze on) and the caddy (to put it back) respond.
+  if (counter.inHand) {
+    if (pt.band === "customers") sauceBlocked();
+    else startSqueeze(pt);
+    return;
+  }
 
   if (pt.band === "counter") {
     const hit = counter.hit(ndcIn(bands.counter, x, y));
@@ -1200,11 +1309,7 @@ canvas.addEventListener("pointerdown", (e) => {
     }
     else if (hit.type === "grillItem") pt.mode = "grill";
     else if (hit.type === "hold") pt.mode = "hold";
-    else if (hit.type === "bottle") {
-      pt.mode = "sauce";
-      pt.sauce = hit.sauce;
-      counter.liftBottle(hit.sauce, counter.groundPoint(ndcIn(bands.counter, x, y), 0.3));
-    } else if (hit.type === "friesBin") startHold(pt, { type: "fries", cook: 0, basket: null, amount: FRIES_SCOOP });
+    else if (hit.type === "bottle") holdSauce(hit.sauce); else if (hit.type === "friesBin") startHold(pt, { type: "fries", cook: 0, basket: null, amount: FRIES_SCOOP });
     else if (hit.type === "stack") {
       const s = counter.stacks[hit.idx];
       const what = s.kind === "cup" ? "cups" : "cartons";
@@ -1222,8 +1327,8 @@ canvas.addEventListener("pointerdown", (e) => {
     else if (hit.type === "lids") startHold(pt, { type: "lid" });
     else if (hit.type === "straws") startHold(pt, { type: "straw" });
     else if (hit.type === "supplies") {
-      startHold(pt, { type: "sleeve", kind: hit.kind });
-      hintOnce("carry", `Hold the sleeve over the ${hit.kind === "cup" ? "Drinks" : "Fryer"} tab to carry it there, then drop it on an empty stack.`, 3.5);
+      startHold(pt, { type: "sleeve", kind: hit.kind, size: hit.size });
+      hintOnce("carry", `Hold the sleeve over the ${hit.kind === "cup" ? "Drinks" : "Fryer"} tab to carry it there, then drop it on the empty ${SIZE_LABEL[hit.size].toLowerCase()} stack.`, 3.5);
     }
     else if (hit.type === "pack") {
       const p = counter.packs[hit.idx];
@@ -1231,7 +1336,7 @@ canvas.addEventListener("pointerdown", (e) => {
         startHold(pt, { type: "carton", size: p.size, cook: p.cook, fill: p.fill, pack: hit.idx, salt: p.salt, curds: p.curds, gravy: p.gravy });
         Object.assign(p, EMPTY_PACK);
         counter.syncPack(hit.idx);
-      } else showHint(p.size ? "Drag fries from the basket into the carton." : "Grab a carton from the stacks behind the fryer.", 2);
+      } else showHint(p.size ? "Drag fries from the basket into the carton." : "Grab a carton from the stacks, front left.", 2);
     }
     else if (hit.type === "basket") pt.mode = "basket";
     else if (hit.type === "shaker" || hit.type === "curds" || hit.type === "gravy") {
@@ -1258,15 +1363,9 @@ canvas.addEventListener("pointerdown", (e) => {
       } else showHint(t.cup ? "Hold the button above the cup to pour." : "Grab a cup from the stacks below.", 2);
     }
   } else if (pt.band === "tray") {
-    if (armedSauce) {
-      pt.mode = "sauce";
-      pt.sauce = armedSauce;
-      sauceAt(pt, armedSauce);
-    } else {
-      pt.mode = "plate";
-      pt.plate = trayView.pick(ndcIn(bands.tray, x, y));
-      if (pt.plate >= 0) setActive(pt.plate);
-    }
+    pt.mode = "plate";
+    pt.plate = trayView.pick(ndcIn(bands.tray, x, y));
+    if (pt.plate >= 0) setActive(pt.plate);
   } else if (pt.band === "customers") {
     setActive(Math.min(2, Math.floor((x / bands.customers.w) * 3)));
   }
@@ -1359,10 +1458,7 @@ canvas.addEventListener("pointermove", (e) => {
       }
       break;
     case "sauce":
-      if (bandAt(pt.y) === "tray") {
-        counter.liftBottle(pt.sauce!, null);
-        sauceAt(pt, pt.sauce!);
-      } else if (bandAt(pt.y) === "counter") counter.liftBottle(pt.sauce!, counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3));
+      squeeze(pt);
       break;
   }
 });
@@ -1417,22 +1513,9 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       for (const t of counter.taps) t.pouring = false;
       break;
     case "sauce":
-      counter.liftBottle(pt.sauce!, null);
-      if (!cancelled && !pt.moved && pt.band === "counter") {
-        armedSauce = armedSauce === pt.sauce ? null : pt.sauce;
-        if (armedSauce) showHint(`Draw ${armedSauce} on a plate. Tap the bottle again to stop.`, 3);
-      } else if (!cancelled && pt.moved && bandAt(pt.y) === "counter") {
-        // Dropping the bottle on an assembly spot gives that burger a squiggle of sauce.
-        const hold = counter.overHold(counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.35));
-        const spot = counter.holds[hold];
-        if (spot?.layers.length) {
-          const p = newPiece(pt.sauce!);
-          p.stroke = [-0.5, -0.25, 0, 0.25, 0.5].map((x, k) => ({ x, z: k % 2 ? 0.18 : -0.18 }));
-          spot.layers.push({ piece: p, offX: 0, offZ: 0 });
-          counter.syncHold(hold, false);
-          sfx.squirt();
-        } else if (hold >= 0) showHint("Start that burger with a bun first.", 1.5);
-      }
+      // Done squeezing: the bottle stays in hand, back over the active plate.
+      counter.pointSauce(null);
+      trayView.ghostOver(null);
       break;
     case "hold":
       if (!cancelled && !pt.moved && pt.hit?.type === "hold") {
@@ -1471,10 +1554,16 @@ function removeTop(slot: number): void {
 }
 
 function goToPage(p: number): void {
-  const before = counter.page;
+  const before = counter.stop;
   counter.setPage(p);
-  if (counter.page !== before) sfx.whoosh();
-  armedSauce = null;
+  if (counter.stop !== before) sfx.whoosh();
+}
+
+/** Step along the camera stops (the fryer line has two). */
+function goToStop(s: number): void {
+  const before = counter.stop;
+  counter.setStop(s);
+  if (counter.stop !== before) sfx.whoosh();
 }
 
 // Swipe along the tab bar to move between counters (the counters themselves don't swipe).
@@ -1492,7 +1581,8 @@ function goToPage(p: number): void {
     if (Math.abs(dx) > 36) {
       swiped = true;
       sfx.unlock();
-      goToPage(counter.page + (dx < 0 ? 1 : -1));
+      if (counter.inHand) sauceBlocked();
+      else goToStop(counter.stop + (dx < 0 ? 1 : -1));
     }
   });
   const end = () => (sx = -1);
@@ -1511,14 +1601,16 @@ function goToPage(p: number): void {
 ui.tabs.forEach((t, i) =>
   t.addEventListener("click", () => {
     sfx.unlock();
-    goToPage(i);
+    if (counter.inHand) sauceBlocked();
+    else goToPage(i);
   }),
 );
 // Touching a stub brings that order into focus, as touching its plate does.
 ui.tickets.forEach((t, i) => {
   t.addEventListener("pointerdown", () => {
     sfx.unlock();
-    setActive(i);
+    if (counter.inHand) sauceBlocked();
+    else setActive(i);
   });
   // Scroll events don't bubble; listen in the capture phase for the list inside.
   t.addEventListener("scroll", (e) => (e.target as HTMLElement).classList?.toggle("up", (e.target as HTMLElement).scrollTop > 0), true);
@@ -1732,7 +1824,7 @@ try {
 
 function startShift(plan: Plan | null = null): void {
   cancelPointer();
-  armedSauce = null;
+  holdSauce(null);
   for (let i = 0; i < 3; i++) {
     const s = game.slots[i];
     if (s.fig) customersView.leave(i, () => {});
@@ -1868,6 +1960,7 @@ function showTitle(): void {
 }
 
 function endShift(): void {
+  holdSauce(null);
   game.phase = "summary";
   save.day++;
   const popBefore = save.popularity;
@@ -2159,6 +2252,7 @@ function updateUi(): void {
   updateFryTags();
   updateHoldUi();
   updateStationUi();
+  updateSauceMask();
   // Labels are as wide as one tap, so they line up edge to edge along the machine.
   const tapPx = ((counter.drinkLabelPoint(1).project(counter.camera).x - counter.drinkLabelPoint(0).project(counter.camera).x) / 2) * bands.counter.w;
   ui.drinkLabels.forEach((el, i) => {
@@ -2234,11 +2328,18 @@ function itemTag(p: Piece): string {
       return "";
   }
 }
-/** Freshness tags over the assembly spots, and the grill's Hot/Warm switch. */
+/**
+ * Staleness bars beside the warm-shelf plates: a slim vertical bar that drains as the food on
+ * the plate dries out (the heat comes from under the shelf, so there's nothing to see on the
+ * food itself). It's green while the food keeps well, amber once it starts drying, red near the end.
+ */
 const holdTags: HTMLElement[] = [0, 1, 2].map(() => {
   const el = document.createElement("div");
-  el.className = "gtag hold";
+  el.className = "stale";
   el.hidden = true;
+  el.style.setProperty("--g", `${(1 - HOLD_GRACE / HOLD_RUIN) * 100}%`);
+  el.innerHTML = "<i></i>";
+  el.setAttribute("role", "img");
   ui.root.appendChild(el);
   return el;
 });
@@ -2252,7 +2353,7 @@ const stationTag = (cls: string): HTMLElement => {
 };
 const stackTags = counter.stacks.map(() => stationTag("stack"));
 const puddleTags = counter.taps.map(() => stationTag("hot"));
-const supplyTags = [0, 1].map(() => stationTag("stack"));
+const supplyTags = counter.supplyAt.map(() => stationTag("stack"));
 function placeTag(el: HTMLElement, world: THREE.Vector3, text: string, cls?: [string, boolean]): void {
   el.hidden = false;
   if (el.textContent !== text) el.textContent = text;
@@ -2262,20 +2363,20 @@ function placeTag(el: HTMLElement, world: THREE.Vector3, text: string, cls?: [st
   el.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
 }
 function updateStationUi(): void {
-  const playing = game.phase === "playing" && counter.dragOffset === 0;
-  const on = (page: number) => playing && Math.abs(counter.page - page) < 1;
+  const playing = game.phase === "playing" && counter.settled;
+  const on = (page: number) => playing && counter.page === page;
   counter.stacks.forEach((s, i) => {
     const page = s.kind === "cup" ? 0 : 2;
     if (!on(page)) return void (stackTags[i].hidden = true);
-    const text = s.sleeve ? "Tap to unwrap" : s.count ? `${s.size} · ${s.count}` : `${s.size} · empty`;
-    placeTag(stackTags[i], new THREE.Vector3(s.x, 0, s.z + 0.6), text, ["low", !s.sleeve && s.count <= 1]);
+    // The tower's tubes stand close together and print their own size, so their tags carry only the count.
+    const text = s.sleeve ? (s.tube ? "Unwrap" : "Tap to unwrap") : s.tube ? (s.count ? `${s.count}` : "empty") : s.count ? `${s.size} · ${s.count}` : `${s.size} · empty`;
+    placeTag(stackTags[i], s.obj.position.clone().add(new THREE.Vector3(0, 0, s.tube ? 0.75 : 0.6)), text, ["low", !s.sleeve && s.count <= 1]);
   });
-  // Supplies counter: each crate's label lists how full the stacks it restocks are.
-  (["cup", "carton"] as const).forEach((kind, k) => {
-    if (!on(3)) return void (supplyTags[k].hidden = true);
-    const st = counter.stacks.filter((x) => x.kind === kind);
-    const text = `${kind === "cup" ? "Cups" : "Cartons"}: ${st.map((x) => `${x.size} ${x.sleeve ? "sleeve" : x.count}`).join(" · ")}`;
-    placeTag(supplyTags[k], counter.supplyAt[kind].clone().add(new THREE.Vector3(0, 0, 1.55)), text, ["low", st.some((x) => !x.sleeve && x.count <= 1)]);
+  // Supplies: a bay shows how its stack is doing once that stack runs low, so you know which sleeve to take.
+  counter.supplyAt.forEach((b, k) => {
+    const st = counter.stacks.find((x) => x.kind === b.kind && x.size === b.size);
+    if (!on(3) || !st || st.sleeve || st.count > 2) return void (supplyTags[k].hidden = true);
+    placeTag(supplyTags[k], b.at.clone().add(new THREE.Vector3(0, 0.9, 0)), st.count ? `${st.count} left` : "Empty!", ["low", true]);
   });
   counter.taps.forEach((t, i) => {
     if (!on(0) || t.puddle < 0.01) return void (puddleTags[i].hidden = true);
@@ -2293,16 +2394,20 @@ zoneBtn.addEventListener("click", () => {
   if (counter.warm) hintOnce("warm", "The right end of the grill is on low: food there barely cooks.", 3);
 });
 function updateHoldUi(): void {
-  const onGrill = game.phase === "playing" && Math.abs(counter.page - HOME_PAGE) < 1 && counter.dragOffset === 0;
+  const onGrill = game.phase === "playing" && counter.page === HOME_PAGE && counter.settled;
   counter.holds.forEach((h, i) => {
     const el = holdTags[i];
-    const held = Math.max(0, ...h.layers.map((l) => l.piece.held ?? 0));
     el.hidden = !onGrill || !h.layers.length;
     if (el.hidden) return;
-    const text = held < HOLD_GRACE ? "Fresh" : held < (HOLD_GRACE + HOLD_RUIN) / 2 ? "Drying" : "Dried out";
-    if (el.textContent !== text) el.textContent = text;
-    el.classList.toggle("hot", held >= (HOLD_GRACE + HOLD_RUIN) / 2);
-    const v = new THREE.Vector3(pageX(1) + h.x, 0.3, h.z + 0.5).project(counter.camera);
+    const held = Math.max(0, ...h.layers.map((l) => l.piece.held ?? 0));
+    const left = Math.max(0, 1 - held / HOLD_RUIN);
+    (el.firstElementChild as HTMLElement).style.height = `${(left * 100).toFixed(1)}%`;
+    const state = held < HOLD_GRACE ? "fresh" : held < (HOLD_GRACE + HOLD_RUIN) / 2 ? "drying" : "dry";
+    if (el.dataset.state !== state) {
+      el.dataset.state = state;
+      el.setAttribute("aria-label", state === "fresh" ? "Fresh" : state === "drying" ? "Drying" : "Dried out");
+    }
+    const v = counter.holdBarPoint(i).project(counter.camera);
     el.style.left = `${((v.x + 1) / 2) * bands.counter.w}px`;
     el.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
   });
@@ -2316,7 +2421,7 @@ function updateHoldUi(): void {
     zoneBtn.innerHTML = icon(counter.warm ? "warming-lamp" : "flame");
   }
   zoneBtn.classList.toggle("on", counter.warm);
-  const v = new THREE.Vector3(pageX(1) + WARM_X0 + 0.95, GRILL_TOP, 2.6).project(counter.camera);
+  const v = counter.warmSwitchPoint().project(counter.camera);
   zoneBtn.style.left = `${((v.x + 1) / 2) * bands.counter.w}px`;
   zoneBtn.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
 }
@@ -2334,14 +2439,14 @@ function friesMeter(cook: number): string {
 const fryTags: HTMLElement[] = [];
 /** Meters over each loaded basket and each filled carton on the packing pads. */
 function updateFryTags(): void {
-  const on = game.phase === "playing" && counter.page === 2;
+  const on = game.phase === "playing" && counter.page === 2 && counter.settled;
   const spots: { at: THREE.Vector3; html: string }[] = [];
   if (on) {
-    for (const b of counter.baskets) {
+    for (const [i, b] of counter.baskets.entries()) {
       if (!b.loaded) continue;
       const scoops = Math.round(b.amount / FRIES_SCOOP);
       const pips = [0, 1, 2].map((k) => `<b class="${k < scoops ? "on" : ""}"></b>`).join("");
-      spots.push({ at: new THREE.Vector3(b.obj.position.x, 1.3, b.obj.position.z - 1.3), html: `${friesMeter(b.cook)}<span class="scoops" aria-label="${scoops} of 3 scoops">${pips}</span>` });
+      spots.push({ at: counter.fryTagPoint(i), html: `${friesMeter(b.cook)}<span class="scoops" aria-label="${scoops} of 3 scoops">${pips}</span>` });
     }
     for (const p of counter.packs) {
       if (!p.size || p.fill <= 0) continue;
@@ -2453,6 +2558,8 @@ window.addEventListener("blur", cancelPointer);
   startShift,
   serve,
   goToPage,
+  goToStop,
+  stops: STOPS.length,
   ring: ringBell,
   callNext,
   gesture: () => lastGesture,

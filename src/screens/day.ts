@@ -340,7 +340,9 @@ export function closingHtml(c: Closing, save: Save): string {
               ? "Serve at least half the customers with a 1★ average and the day counts toward the road."
               : left > 0 && town.roads.length
                 ? `${left === 1 ? "One more good shift opens" : `${left} more good shifts open`} the road on.`
-                : "The roads out of here are open."
+                : town.roads.length
+                  ? "The roads out of here are open."
+                  : "Nothing further opens from here: it's a side road."
       }</span></div>`,
   });
 

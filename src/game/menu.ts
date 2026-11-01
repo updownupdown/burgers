@@ -1,6 +1,6 @@
 import type { DrinkId, ExpectedLayer, FriesSize, Kind, Modifier, Order, Size } from "./types";
-import { COUNTED, DRINK_LABEL, DRINKS, extraCount } from "./types";
-import { recipeCount, type Recipe, type Stop } from "./stops";
+import { COUNTED, DRINK_LABEL, extraCount } from "./types";
+import { fountainFor, recipeCount, type Recipe, type Stop } from "./stops";
 
 export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, M: 3, L: 4 };
 export const DRINK_PRICE: Record<Size, number> = { S: 1, M: 2, L: 3 };
@@ -13,8 +13,13 @@ export const POUTINE_PRICE = 8;
 /** Share of orders, once the shift is going, that are a poutine instead of a burger. */
 const POUTINE_CHANCE = 0.12;
 
-function poutineOrder(id: number, rng: Rng, level: number): Order {
-  const drink = rng() < 0.2 + level * 0.4 ? DRINKS[Math.floor(rng() * DRINKS.length)] : null;
+/** Any of the drinks on this town's fountain. */
+function anyDrink(drinks: readonly DrinkId[], rng: Rng): DrinkId {
+  return drinks[Math.floor(rng() * drinks.length)];
+}
+
+function poutineOrder(id: number, rng: Rng, level: number, drinks: readonly DrinkId[]): Order {
+  const drink = rng() < 0.2 + level * 0.4 ? anyDrink(drinks, rng) : null;
   const r = rng();
   const drinkSize: Size = r < 0.3 ? "S" : r < 0.7 ? "M" : "L";
   const order: Order = { id, name: "Poutine", price: POUTINE_PRICE + (drink ? DRINK_PRICE[drinkSize] : 0), mods: [], layers: [], fries: true, friesSize: "L", drink, drinkSize, poutine: true };
@@ -31,11 +36,11 @@ export const TOAST_CHANCE = 0.05;
 /** Share of orders, once the shift is going, from someone who only wants a drink or fries: rare, but it happens. */
 export const SIDES_ONLY_CHANCE = 0.06;
 
-/** Just a drink (most often), just fries, or both, and no burger. */
-export function sidesOrder(id: number, rng: Rng): Order {
+/** Just a drink (most often), just fries, or both, and no burger. Drinks come from the town's fountain. */
+export function sidesOrder(id: number, rng: Rng, drinks: readonly DrinkId[] = fountainFor("mountains")): Order {
   const r = rng();
   const fries = r >= 0.55;
-  const drink = r < 0.55 || r >= 0.85 ? DRINKS[Math.floor(rng() * DRINKS.length)] : null;
+  const drink = r < 0.55 || r >= 0.85 ? anyDrink(drinks, rng) : null;
   const f = rng();
   const friesSize: FriesSize = f < 0.35 ? "S" : f < 0.75 ? "M" : "L";
   const d = rng();
@@ -169,11 +174,13 @@ export function pickRecipe(menu: readonly Recipe[], level: number, rng: Rng): Re
  * come with sides.
  */
 export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Order {
-  if (level >= 0.15 && rng() < POUTINE_CHANCE) return poutineOrder(id, rng, level);
-  if (level >= 0.15 && rng() < SIDES_ONLY_CHANCE) return sidesOrder(id, rng);
+  const drinks = fountainFor(stop.region);
+  // Towns without poutine still roll for it, so the rest of the order stream stays the same.
+  if (level >= 0.15 && rng() < POUTINE_CHANCE && stop.poutine) return poutineOrder(id, rng, level, drinks);
+  if (level >= 0.15 && rng() < SIDES_ONLY_CHANCE) return sidesOrder(id, rng, drinks);
   const recipe = pickRecipe(stop.menu, level, rng);
   const fries = rng() < 0.25 + level * 0.4;
-  const drink = rng() < 0.2 + level * 0.5 ? DRINKS[Math.floor(rng() * DRINKS.length)] : null;
+  const drink = rng() < 0.2 + level * 0.5 ? anyDrink(drinks, rng) : null;
   // Modifiers keep tickets short: a known recipe plus "no pickles" rather than a new list.
   const mods = level < 0.1 ? [] : pickMods(recipe, stop.pantry, rng, level);
   // Now and then someone wants their bun toasted on a burger that doesn't usually come that way.

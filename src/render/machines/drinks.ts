@@ -1,8 +1,9 @@
 import * as THREE from "three";
-import { DRINKS, type DrinkId, type Size } from "../../game/types";
+import type { DrinkId, Size } from "../../game/types";
 import { bakedMesh, Parts, rng } from "../bake";
+import { toon } from "../materials";
 import { STUDY } from "../units";
-import { box, C, cached, cyl, lathe, machine, rbox, tor } from "./kit";
+import { box, C, cached, cyl, lathe, machine, rbox, studySpace, tor } from "./kit";
 
 /*
  * Drinks counter machines: the low fountain from the study (option a, at true height) with a
@@ -11,7 +12,21 @@ import { box, C, cached, cyl, lathe, machine, rbox, tor } from "./kit";
  */
 
 /** Button, label and stream colours: a shade stronger than the drink itself so they read on the machine. */
-export const DRINK_TINT: Record<DrinkId, string> = { pine: "#6aa877", pink: "#ea8ea6", cola: "#4a2522", water: "#8ec6dc", tea: "#b4651e" };
+export const DRINK_TINT: Record<DrinkId, string> = {
+  pine: "#6aa877",
+  pink: "#ea8ea6",
+  cola: "#4a2522",
+  water: "#8ec6dc",
+  tea: "#b4651e",
+  cucumber: "#8fc477",
+  hibiscus: "#a8243f",
+  lime: "#a7cc45",
+  cider: "#d49a2c",
+  bramble: "#5e2454",
+};
+
+/** Push buttons on the fountain: the three house drinks and the area's two. */
+const TAPS = 5;
 
 /** Real cup sizes at x1.1, in study units (the cup models use the same numbers). */
 const CUP_R: Record<Size, number> = { S: 0.4, M: 0.5, L: 0.55 };
@@ -20,12 +35,13 @@ const CUP_H: Record<Size, number> = { S: 1.21, M: 1.6, L: 1.93 };
 // ---- low fountain -------------------------------------------------------------
 
 const PITCH = 1.2;
-const FW = DRINKS.length * PITCH + 0.4;
+const FW = TAPS * PITCH + 0.4;
 /** Cabinet height: raised from the study's 2.6 so a large cup at x1.1 clears the nozzles. */
 const FH = 2.75;
 /** Everything sits 0.5 forward of the study's model so the footprint is centred. */
 const FZ = 0.5;
-const fx = (i: number) => (i - (DRINKS.length - 1) / 2) * PITCH;
+const fx = (i: number) => (i - (TAPS - 1) / 2) * PITCH;
+const TAP_LIST = Array.from({ length: TAPS }, (_, i) => i);
 /** The push buttons stand along the front of the top, one over each nozzle. */
 const BTN = { z: -0.95, w: PITCH - 0.14, d: 0.9 };
 
@@ -38,12 +54,12 @@ const fountainBody = cached(() => {
   const tw = FW - 0.2;
   p.add(rbox(tw, 0.16, 2.1, 0.05), "#3a3f41", { p: [0, 0.08, 0.55 + FZ] });
   for (let i = 0; i < Math.round(tw / 0.22); i++) p.add(box(0.06, 0.02, 2.1 - 0.25), "#5a6164", { p: [-tw / 2 + 0.2 + i * 0.22, 0.17, 0.55 + FZ], ink: false });
-  DRINKS.forEach((f, i) => {
+  TAP_LIST.forEach((i) => {
     const x = fx(i);
     // A dark well for each push button (the button cap with its name is drawn over it as UI),
-    // a tint strip behind it, then the valve and nozzle over the drip tray.
+    // then the valve and nozzle over the drip tray. The tint strip behind the button is its
+    // own mesh (see makeFountain), since the drinks change with the area.
     p.add(rbox(BTN.w, 0.12, BTN.d, 0.05), "#2d3336", { p: [x, FH + 0.18, BTN.z + FZ] });
-    p.add(rbox(BTN.w - 0.1, 0.05, 0.4, 0.03), DRINK_TINT[f], { p: [x, FH + 0.19, BTN.z - 0.75 + FZ], ink: false });
     p.add(rbox(0.36, 0.24, 1.2, 0.05), "#8c9496", { p: [x, FH - 0.25, -0.2 + FZ] });
     p.add(cyl(0.09, 0.07, 0.16, 10), "#6f7779", { p: [x, FH - 0.44, 0.0 + FZ] });
   });
@@ -56,8 +72,10 @@ export interface FountainObject extends THREE.Group {
   userData: {
     footprint: { w: number; d: number };
     h: number;
+    /** Paint the tint strips behind the buttons for these drinks, left to right. */
+    setDrinks: (drinks: readonly DrinkId[]) => void;
     spots: {
-      /** Cup base under each nozzle, in DRINKS order. */
+      /** Cup base under each nozzle, left to right. */
       cups: P3[];
       /** Where each pour stream starts (the spout tip). */
       nozzles: P3[];
@@ -71,12 +89,22 @@ export interface FountainObject extends THREE.Group {
 export function makeFountain(): FountainObject {
   const g = new THREE.Group() as FountainObject;
   g.add(bakedMesh(fountainBody()));
+  const strips = studySpace();
+  const stripGeo = rbox(BTN.w - 0.1, 0.05, 0.4, 0.03);
+  const meshes = TAP_LIST.map((i) => {
+    const m = new THREE.Mesh(stripGeo, toon("#888888"));
+    m.position.set(fx(i), FH + 0.19, BTN.z - 0.75 + FZ);
+    strips.add(m);
+    return m;
+  });
+  g.add(strips);
   const S = STUDY;
   machine(g, FW, 4.2, FH + 0.3, {
-    cups: DRINKS.map((_, i) => ({ x: fx(i) * S, y: 0.18 * S, z: (0.15 + FZ) * S })),
-    nozzles: DRINKS.map((_, i) => ({ x: fx(i) * S, y: (FH - 0.52) * S, z: FZ * S })),
-    buttons: DRINKS.map((_, i) => ({ x: fx(i) * S, y: (FH + 0.24) * S, z: (BTN.z + FZ) * S })),
+    cups: TAP_LIST.map((i) => ({ x: fx(i) * S, y: 0.18 * S, z: (0.15 + FZ) * S })),
+    nozzles: TAP_LIST.map((i) => ({ x: fx(i) * S, y: (FH - 0.52) * S, z: FZ * S })),
+    buttons: TAP_LIST.map((i) => ({ x: fx(i) * S, y: (FH + 0.24) * S, z: (BTN.z + FZ) * S })),
   });
+  g.userData.setDrinks = (drinks) => meshes.forEach((m, i) => (m.material = toon(DRINK_TINT[drinks[i]] ?? "#888888")));
   return g;
 }
 
@@ -207,6 +235,8 @@ export interface LidStrawCaddyObject extends THREE.Group {
   userData: {
     footprint: { w: number; d: number };
     h: number;
+    /** Paint the tint strips behind the buttons for these drinks, left to right. */
+    setDrinks: (drinks: readonly DrinkId[]) => void;
     spots: { lids: P3; straws: P3 };
   };
 }

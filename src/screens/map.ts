@@ -1,8 +1,8 @@
 import { mix } from "./ink";
 import { truckGroup } from "./truckart";
 import type { Look } from "../game/looks";
-import { eventOn, REGIONS, STOPS, townById, type RegionId } from "../game/stops";
-import { unlockProgress } from "../game/travel";
+import { eventOn, LINKS, REGIONS, STOPS, townById, type RegionId } from "../game/stops";
+import { MILES_PER_UNIT, unlockProgress } from "../game/travel";
 import "./map.css";
 
 /**
@@ -14,14 +14,17 @@ import "./map.css";
  * coloured with a beach band, dune stipple and marsh marks at the river mouths. The desert is an
  * ochre wash with sand stipple, mesas drawn as cliff-edged plateaus and dry washes as dashed
  * blue lines. Towns get a few building blocks around them, fields a faint patchwork, and the
- * roads run as thin cased lines (highways a little wider, with a centre line). Locked regions
- * fade under a paper veil with a light survey hatch.
+ * roads run as thin cased lines (highways a little wider, with a centre line). Orchard Isle,
+ * across the causeway, is orchards in rows of dots, vineyards and hedged fields. Area names sit
+ * on the land in spaced small caps; seas, sounds and the lake are named in italics on the water.
+ * Shut highways are dashed with a barrier and a short note. Locked areas fade under a paper
+ * veil with a light survey hatch.
  *
- * Everything is in map units: towns live on a 0..100 by 0..140 grid (stops.ts) and the drawing
- * extends ten units past it on every side for sea.
+ * Everything is in map units: the whole sheet, sea included, is 120 by 170 (about two miles a
+ * unit), and towns sit on it where the region study's sketch put them (stops.ts).
  */
 
-export const VIEW = { x: -10, y: -10, w: 120, h: 160 };
+export const VIEW = { x: 0, y: 0, w: 120, h: 170 };
 
 type Pt = [number, number];
 
@@ -47,10 +50,16 @@ const RELIEF = "#6b5a4b";
 const ROOF = "#8a5a48";
 const CORAL = "#ff8a70";
 const MUSTARD = "#f3c45a";
+/** Orchard Isle: a dusty plum wash with greener patches, fruit trees and vines. */
+const ORCH = "#dcc8d3";
+const ORCH_GREEN = "#cdd5a8";
+const ORCH_TREE = "#c9d4a4";
+const VINE = "#7d5a78";
 const REGION_WASH: Record<RegionId, [string, string]> = {
   mountains: [FOREST, FOREST_DEEP],
   coast: [SAND, SAND_DEEP],
   desert: [DESERT, DESERT_DEEP],
+  orchard: [ORCH, ORCH_GREEN],
 };
 
 // ---------------------------------------------------------------------------
@@ -152,93 +161,210 @@ function resample(pts: Pt[], step: number): { p: Pt; tx: number; ty: number }[] 
 // The land
 
 /**
- * Coastline, clockwise from the north-west. Hand placed so it reads like real country: a
- * river mouth between the hills and the coast, Saltwater Bay biting into the north shore, the
- * Gull Point headland, a little harbour notch under Harbor City, and the desert's cape.
+ * Coastlines, clockwise, traced from the region study's sketch. The main island: the Pines'
+ * peninsula in the north-east with Saltwater Bay under it, the Gull Point headland, Harbor
+ * City's harbour notch, the long south shore where the causeway leaves. Orchard Isle sits off
+ * the south-east across Lantern Sound.
  */
 const ISLAND: Pt[] = [
-  [17, -4], [29, -6.5], [41, -5], [51, -1.5], [57, 5], [59.5, 14], [58, 23], [59.5, 31], [57, 37], [53, 39.5],
-  [55.5, 43.5], [61, 44.5], [67, 43], [72.5, 44.5], [77, 47.5], [81.5, 48.5], [86, 46.5], [90, 43], [96, 43.5], [101, 48.5],
-  [103.5, 56], [104, 62], [108, 64.5], [111, 68.5], [108.5, 73.5], [104.5, 76], [103.5, 83], [99.5, 89.5], [94, 94],
-  [88.5, 97], [85, 95], [81.5, 97.5], [75, 96.5], [67, 98.5], [61, 102.5], [57.5, 110], [55.5, 119], [54, 128],
-  [50, 135.5], [43, 140.5], [37.5, 146.5], [31, 145], [24.5, 147], [17, 144.5], [11, 139], [6.5, 131], [3, 122],
-  [1.5, 113], [2.5, 104], [5.5, 96], [6.5, 89], [3.5, 81], [1.5, 71], [3, 62], [0.5, 54], [3.5, 48.5], [1, 41],
-  [0, 31], [1.5, 20], [4, 10], [9.5, 1.5],
+  [14, 16], [20, 10.5], [27, 8.5], [35, 9.5], [43, 7], [51, 8], [57, 11], [63, 9.5], [68.5, 13.5], [71.5, 19.5], [76.5, 24.5],
+  [80, 30.5], [77.5, 34.5], [72, 35.5], [67, 38.5], [64, 43.5], [66, 48], [71, 50], [77, 49], [83, 50.5], [89, 52], [95, 52.5],
+  [101, 54.5], [105.5, 57.5], [103.5, 62], [98.5, 63], [97.5, 67], [100.5, 72], [101.5, 78], [99.5, 84], [97.5, 90], [94.5, 95],
+  [92, 100], [88.5, 103], [86, 106.5], [82.5, 107.5], [79.5, 105.5], [77, 108.5], [72.5, 111], [68.5, 114.5], [66, 119.5],
+  [64.5, 126], [63.5, 133], [62.5, 140], [60.5, 145], [55.5, 148.5], [50, 151], [44, 153], [37, 152], [30, 154.5], [23, 152.5],
+  [17, 148.5], [13, 142], [11.5, 135], [12.5, 128], [10, 121], [11.5, 114], [17, 110.5], [13.5, 105], [9.5, 98], [10.5, 90],
+  [12.5, 84], [10, 77], [11, 70], [9, 63], [10.5, 56], [8, 49], [10, 42], [9, 35], [11, 28], [11.5, 21],
 ];
+const ISLE: Pt[] = [
+  [76, 127], [83, 123], [91.5, 121], [96, 122.5], [99.5, 122], [103.5, 124], [108, 128], [111.5, 134.5], [113, 142.5],
+  [110.5, 150.5], [104.5, 156.5], [96.5, 160.5], [87.5, 161.5], [80.5, 158.5], [75.5, 153], [73.5, 146.5], [74.5, 139.5], [74, 132.5],
+];
+const LANDS = [ISLAND, ISLE];
+const onLand = (p: Pt) => LANDS.some((l) => inPoly(p, l));
+const coastDist = (p: Pt) => Math.min(...LANDS.map((l) => polyDist(p, l)));
+
+/** Rough extent of each area, for its veil while locked and for scattering its marks. */
 const REGION_SHAPE: Record<RegionId, Pt[]> = {
-  mountains: [[-12, -12], [66, -12], [66, 32], [60, 40], [48, 54], [30, 61], [10, 58], [-12, 52]],
-  coast: [[57, 46], [80, 40], [114, 48], [116, 82], [106, 102], [84, 106], [64, 104], [53, 90], [51, 64]],
-  desert: [[-12, 83], [14, 79], [36, 83], [52, 95], [61, 112], [58, 136], [40, 152], [8, 152], [-12, 132]],
-};
-/** Where each region's name sits, out in the sea like a cartographer would. */
-const REGION_LABEL: Record<RegionId, { x: number; y: number; anchor: "start" | "end" }> = {
-  mountains: { x: 63, y: 30, anchor: "start" },
-  coast: { x: 104, y: 110, anchor: "end" },
-  desert: { x: 60, y: 128, anchor: "start" },
+  mountains: [[0, 0], [88, 0], [84, 36], [68, 40], [62, 50], [52, 60], [34, 64], [22, 72], [0, 76]],
+  coast: [[62, 42], [82, 44], [114, 48], [114, 104], [96, 112], [80, 114], [68, 108], [63, 92], [64, 72], [58, 60]],
+  desert: [[0, 80], [22, 76], [44, 84], [62, 92], [68, 112], [68, 166], [0, 166]],
+  orchard: [[70, 116], [118, 116], [118, 166], [70, 166]],
 };
 
-/** The river that feeds Cedar Falls' lake and runs out to sea at the inlet. */
-const RIVER: Pt[] = [[46.5, 1.5], [47.5, 6], [49.8, 10.5], [50.2, 15], [51.4, 18]];
-const RIVER_OUT: Pt[] = [[52.6, 22.6], [54.2, 27], [53.6, 31.5], [54.8, 35.5], [54, 39.6]];
-const LAKE = { x: 51.6, y: 20.2, rx: 3.9, ry: 2.7, rot: -18 };
+/** Area names sit on the land, in spaced small caps over each wash. */
+const AREA_LABEL: Record<RegionId, { x: number; y: number; rot: number; size: number }> = {
+  mountains: { x: 35.5, y: 35.6, rot: -7, size: 3.3 },
+  coast: { x: 75, y: 78.4, rot: 70, size: 2.9 },
+  desert: { x: 44, y: 117.6, rot: -4, size: 3.3 },
+  orchard: { x: 90, y: 136.6, rot: -9, size: 2.4 },
+};
 
-/** Ridge crests in the highlands and the desert, west to east, for the hachures. `reach` is how far the slopes fall. */
+/** Water bodies, named in italics on the water (Mirror Lake beside its lake). */
+const WATER_LABEL: { name: string; x: number; y: number; rot: number; size: number; halo?: boolean }[] = [
+  { name: "Westering Sea", x: 5, y: 84, rot: -90, size: 2.9 },
+  { name: "Morning Sea", x: 113.5, y: 88, rot: 90, size: 2.9 },
+  { name: "Saltwater Bay", x: 72.5, y: 43.2, rot: -14, size: 1.9 },
+  { name: "Lantern Sound", x: 69.2, y: 129, rot: -81, size: 2.1 },
+  { name: "the Shallows", x: 65.4, y: 152.4, rot: 0, size: 1.7 },
+  { name: "Mirror Lake", x: 59.6, y: 16, rot: 0, size: 1.6, halo: true },
+];
+
+/** The river that feeds Mirror Lake by Cedar Falls and runs out into Saltwater Bay. */
+const RIVER: Pt[] = [[49.5, 9], [51.6, 13], [52.4, 16.4], [53.2, 18.6]];
+const RIVER_OUT: Pt[] = [[57.6, 21.8], [59.4, 27], [60.4, 32.5], [62.2, 38], [64.6, 43.6]];
+const LAKE = { x: 54.6, y: 20.4, rx: 4.3, ry: 2.5, rot: -18 };
+/** Sun Valley's creek: a spring by the oasis, out to the south shore. */
+const CREEK: Pt[] = [[26, 133], [28, 138], [29.6, 144], [29.8, 149], [29.6, 154.6]];
+
+/** Ridge crests, for the hachures. `reach` is how far the slopes fall. */
 const RIDGES: { pts: Pt[]; reach: number; region: RegionId }[] = [
-  { pts: [[29, -1.5], [34, 1], [38.5, 0.5], [43, -1.5], [48, -3]], reach: 4.2, region: "mountains" },
-  { pts: [[32, 7], [36, 9], [40, 7.5]], reach: 2.6, region: "mountains" },
-  { pts: [[3, 13], [5.5, 18.5], [7, 24.5]], reach: 3.2, region: "mountains" },
-  { pts: [[3.5, 37.5], [7.5, 41.5], [12, 44.5]], reach: 3, region: "mountains" },
-  { pts: [[39, 40.5], [44, 39], [49, 36]], reach: 2.8, region: "mountains" },
-  { pts: [[3, 93], [7, 96.5], [12, 97.5]], reach: 2.2, region: "desert" },
-  { pts: [[38, 138], [43, 136.5], [47, 133.5]], reach: 2.4, region: "desert" },
+  { pts: [[18, 14.2], [24, 13.2], [30, 15.2], [36, 13.6], [41, 12.4]], reach: 3.2, region: "mountains" },
+  { pts: [[11.8, 28], [13.2, 32.5], [14.6, 36.4]], reach: 2.2, region: "mountains" },
+  { pts: [[51.5, 29.5], [54, 33.5], [55.6, 37.6]], reach: 2.3, region: "mountains" },
+  { pts: [[11.2, 58], [11.6, 63.5], [11.3, 68.5]], reach: 1.5, region: "mountains" },
 ];
 /** The highest summits get a peak mark. */
-const PEAKS: Pt[] = [[36, -0.5], [43.5, -2.3], [5.5, 18], [8, 41.5]];
+const PEAKS: Pt[] = [[29.8, 14.4], [36.2, 13], [13.2, 31.6]];
 /** Mesas: flat plateaus with a cliff edge, drawn as a loop with ticks on the sunny side. */
 const MESAS: { x: number; y: number; rx: number; ry: number; rot: number }[] = [
-  { x: 36, y: 88.5, rx: 3.6, ry: 2.1, rot: -12 },
-  { x: 8, y: 122.5, rx: 3, ry: 2.2, rot: 15 },
-  { x: 49, y: 124, rx: 2.6, ry: 1.7, rot: -20 },
-  { x: 15, y: 139, rx: 2.2, ry: 1.5, rot: 8 },
+  { x: 46, y: 109.5, rx: 3.6, ry: 2, rot: -10 },
+  { x: 28, y: 90.5, rx: 2.6, ry: 1.6, rot: 12 },
+  { x: 51, y: 125, rx: 2.8, ry: 1.7, rot: -22 },
+  { x: 16.5, y: 127, rx: 2.2, ry: 1.4, rot: 8 },
+  { x: 38.5, y: 113.5, rx: 1.6, ry: 1, rot: 0 },
 ];
 /** Dry washes: where water runs after a storm, drawn as dashed blue lines. */
 const WASHES: Pt[][] = [
-  [[3, 111], [5, 117.5], [4.5, 124], [7.5, 130.5]],
-  [[49, 131], [46.5, 136.5], [43, 141.5]],
-  [[27, 86], [31, 84], [37, 82.5]],
+  [[30, 105.5], [32, 110], [31, 114.2]],
+  [[56.5, 128], [54.6, 133], [56, 138.5]],
+  [[58, 106], [55, 111.5]],
 ];
-/** Marsh at the river mouth and in the shallows south of Harbor City. */
-const MARSH: Pt[] = [[57, 46], [59.5, 48.5], [55.5, 49.5], [90.5, 91.5], [93.5, 89], [88, 93.5]];
+/** Marsh at the river mouth on Saltwater Bay and in Harbor City's notch. */
+const MARSH: Pt[] = [[62.6, 45.6], [65.6, 47.2], [80.2, 104.2], [77.8, 105.6]];
+/** Orchard Isle: blocks of fruit trees in rows, vineyards, and hedged fields (centre, size, turn). */
+const ORCHARDS: { x: number; y: number; w: number; h: number; rot: number }[] = [
+  { x: 85.5, y: 130.8, w: 6, h: 3.2, rot: -14 },
+  { x: 89.6, y: 143.2, w: 5, h: 2.8, rot: -12 },
+  { x: 84.5, y: 154.2, w: 5.5, h: 2.8, rot: 10 },
+  { x: 107.4, y: 146.4, w: 4, h: 3.2, rot: 30 },
+];
+const VINEYARDS: { x: number; y: number; w: number; h: number; rot: number }[] = [
+  { x: 106.8, y: 136.6, w: 4.5, h: 6, rot: 10 },
+  { x: 102.6, y: 152, w: 6, h: 3.4, rot: -25 },
+  { x: 79.6, y: 133.4, w: 3.8, h: 3.6, rot: 0 },
+];
+const HEDGED: { x: number; y: number; rot: number }[] = [
+  { x: 96, y: 141.2, rot: -6 },
+  { x: 78.4, y: 152.2, rot: 14 },
+];
 
 const towns = STOPS.map((t) => [t.x, t.y] as Pt);
 /** Towns whose event flag goes on the left, clear of the lake. */
 const FLAG_LEFT = new Set(["cedarfalls"]);
 
-// ---------------------------------------------------------------------------
-// Roads: each road is a smooth curve through a few points that bow and sway off the straight
-// line, seeded by the pair of towns so the map is the same every time and a road looks the same
-// whichever way it's driven. Roads between regions are highways, drawn a little heavier.
+/**
+ * Where each town's name sits: under the node unless a road, the coast or a flag is in the way.
+ * `left`/`right` put it beside the node; `at` is a hand offset (map units, text anchor).
+ */
+type LabelAt = "below" | "above" | "left" | "right" | { dx: number; dy: number; anchor: "start" | "middle" | "end" };
+const LABEL_AT: Record<string, LabelAt> = {
+  pinecrest: "left",
+  elkpass: "right",
+  summit: "left",
+  gullpoint: "above",
+  driftwood: "left",
+  harbor: { dx: -2.6, dy: 5, anchor: "end" },
+  cactus: { dx: 2, dy: 5, anchor: "start" },
+  sunvalley: "left",
+  portamber: "left",
+};
 
-const ROADS: [string, string][] = STOPS.flatMap((t) => t.roads.map((r) => [t.id, r] as [string, string]));
+/** The name's offset from the node and its anchor, for a node of radius `r`. */
+function labelPlace(id: string, r: number): { dx: number; dy: number; anchor: "start" | "middle" | "end"; side: string } {
+  const at = LABEL_AT[id] ?? "below";
+  if (typeof at === "object") return { ...at, side: "custom" };
+  if (at === "above") return { dx: 0, dy: -r - 1.6, anchor: "middle", side: at };
+  if (at === "left") return { dx: -r - 1.4, dy: 1, anchor: "end", side: at };
+  if (at === "right") return { dx: r + 1.4, dy: 1, anchor: "start", side: at };
+  return { dx: 0, dy: r + 3.7, anchor: "middle", side: at };
+}
+
+/** The box a town's name covers on the map at natural marker size (x0, y0, x1, y1). */
+function labelBox(t: { id: string; name: string; x: number; y: number; capital?: boolean }): [number, number, number, number] {
+  const r = t.capital ? 3.1 : 2.5;
+  const p = labelPlace(t.id, r);
+  const w = t.name.length * (t.capital ? 1.75 : 1.55);
+  const x0 = p.anchor === "start" ? t.x + p.dx : p.anchor === "end" ? t.x + p.dx - w : t.x + p.dx - w / 2;
+  return [x0 - 0.6, t.y + p.dy - 2.6, x0 + w + 0.6, t.y + p.dy + 0.8];
+}
+const LABEL_BOXES = STOPS.map(labelBox);
+
+/** On an area's name (a rotated box along its baseline), so trees and stipple leave it clear. */
+function onAreaName(p: Pt): boolean {
+  return REGIONS.some((r) => {
+    const l = AREA_LABEL[r.id];
+    const a = (l.rot * Math.PI) / 180;
+    const dx = p[0] - l.x;
+    const dy = p[1] - l.y;
+    const u = dx * Math.cos(a) + dy * Math.sin(a);
+    const v = -dx * Math.sin(a) + dy * Math.cos(a);
+    const half = (r.name.length * l.size * 1.1) / 2;
+    // Glyphs rise above the baseline; marks drawn upward from their foot need room below it too.
+    return Math.abs(u) < half && v > -l.size * 1.2 && v < l.size * 0.9;
+  });
+}
+const inLabel = (p: Pt, pad = 0) => LABEL_BOXES.some(([x0, y0, x1, y1]) => p[0] > x0 - pad && p[0] < x1 + pad && p[1] > y0 - pad && p[1] < y1 + pad);
+
+// ---------------------------------------------------------------------------
+// Roads: each road follows a hand-drawn line through a few points (traced from the region
+// study's sketch), drawn as a smooth curve. Roads between areas are highways, drawn a little
+// heavier; the three gated highways, the Old Pass road and the ferry show a barrier and a note
+// until they open.
+
+interface RoadDef {
+  a: string;
+  b: string;
+  /** Late link (the Old Pass road, the ferry): drivable once both towns are open, opens nothing. */
+  link?: boolean;
+  ferry?: boolean;
+}
+const ROADS: RoadDef[] = [
+  ...STOPS.flatMap((t) => t.roads.map((r): RoadDef => ({ a: t.id, b: r }))),
+  ...LINKS.map((l): RoadDef => ({ a: l.a, b: l.b, link: true, ferry: l.ferry })),
+];
 const roadKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
-/** Hand-tuned bends (fractions of the road's length): `bow` swings the middle, `s` makes an S. */
-const ROAD_TUNE: Record<string, { bow: number; s: number }> = {
-  [roadKey("summit", "saltwater")]: { bow: 0.07, s: -0.05 },
-  [roadKey("harbor", "redmesa")]: { bow: -0.1, s: 0.04 },
-  [roadKey("pinecrest", "cedarfalls")]: { bow: -0.12, s: 0.03 },
-  [roadKey("pinecrest", "elkpass")]: { bow: 0.08, s: -0.06 },
-  [roadKey("elkpass", "summit")]: { bow: 0.1, s: 0.05 },
-  [roadKey("cedarfalls", "summit")]: { bow: -0.07, s: -0.06 },
-  [roadKey("saltwater", "gullpoint")]: { bow: -0.11, s: 0.03 },
-  [roadKey("saltwater", "driftwood")]: { bow: 0.1, s: -0.04 },
-  [roadKey("gullpoint", "harbor")]: { bow: -0.09, s: -0.05 },
-  [roadKey("driftwood", "harbor")]: { bow: 0.06, s: 0.07 },
-  [roadKey("redmesa", "cactus")]: { bow: 0.12, s: 0.02 },
-  [roadKey("redmesa", "dustbowl")]: { bow: -0.08, s: 0.06 },
-  [roadKey("cactus", "sunvalley")]: { bow: 0.11, s: -0.05 },
-  [roadKey("dustbowl", "sunvalley")]: { bow: -0.1, s: 0.04 },
+/** The line each road takes, from the first town to the second (by roadKey order is not needed). */
+const ROUTE: Record<string, Pt[]> = {
+  [roadKey("pinecrest", "cedarfalls")]: [[30, 24], [35, 21.6], [41, 22.8], [46, 22.5]],
+  [roadKey("pinecrest", "elkpass")]: [[30, 24], [27.5, 27], [25.6, 30.6], [22.2, 32], [23.4, 35.2], [19.6, 38.2], [17, 43]],
+  [roadKey("cedarfalls", "summit")]: [[46, 22.5], [47.4, 28], [45.6, 34], [43.2, 40], [41, 46], [38, 52]],
+  [roadKey("summit", "saltwater")]: [[38, 52], [45, 55.2], [52, 56.6], [60, 56.2], [66, 55.2], [72, 54]],
+  [roadKey("saltwater", "gullpoint")]: [[72, 54], [78, 56], [85, 56.6], [92, 57.6], [99, 59]],
+  [roadKey("gullpoint", "driftwood")]: [[99, 59], [97.2, 64.2], [96, 70.5], [95, 77]],
+  [roadKey("driftwood", "harbor")]: [[95, 77], [95.2, 84], [93.2, 90.5], [89.4, 96], [85, 100]],
+  [roadKey("harbor", "redmesa")]: [[85, 100], [78, 99.2], [70, 99.6], [62, 98.2], [56, 96.2], [52, 95]],
+  [roadKey("redmesa", "cactus")]: [[52, 95], [41, 97.8], [30, 100.6], [21, 103]],
+  [roadKey("cactus", "sunvalley")]: [[21, 103], [21, 112], [23.4, 121], [27.4, 129.4], [33, 137]],
+  [roadKey("sunvalley", "applecross")]: [[33, 137], [40, 141], [48, 143.4], [55.5, 144.8], [61, 145.4], [67.5, 145.9], [74, 146], [77, 145.5], [80, 145]],
+  [roadKey("applecross", "larkvale")]: [[80, 145], [85, 147.2], [89, 151], [93, 152]],
+  [roadKey("larkvale", "portamber")]: [[93, 152], [98.6, 148], [102, 141.5], [101.8, 134.5], [100.2, 130], [98, 127]],
+  [roadKey("elkpass", "cactus")]: [[17, 43], [14.2, 49], [15.4, 56], [13.6, 63], [15.4, 71], [14.6, 80], [17, 89], [19.2, 96], [21, 103]],
+  [roadKey("portamber", "harbor")]: [[98, 127], [97.6, 123.6], [94, 117.5], [88.5, 111.5], [84.4, 107.6], [84.6, 103], [85, 100]],
 };
+
+/**
+ * Gates: a barrier `t` of the way along the road from `a`, and a short note at `at` while the
+ * road is shut. The note only shows once one end of the road is open, so it reads as the next
+ * thing to aim for rather than clutter.
+ */
+const GATES: { a: string; b: string; t: number; note: string[]; at: Pt; anchor?: "start" | "middle" | "end" }[] = [
+  { a: "summit", b: "saltwater", t: 0.36, note: ["Coast Highway", "opens after Summit City"], at: [52.6, 60.6] },
+  { a: "harbor", b: "redmesa", t: 0.45, note: ["Desert Highway", "opens after Harbor City"], at: [70, 94.6] },
+  { a: "elkpass", b: "cactus", t: 0.33, note: ["Rockfall on the Old Pass:", "clears when you reach", "Cactus Junction"], at: [17.6, 60.6], anchor: "start" },
+  { a: "sunvalley", b: "applecross", t: 0.58, note: ["Causeway works:", "opens after Sun Valley"], at: [52, 138.4] },
+  { a: "portamber", b: "harbor", t: 0.5, note: ["Ferry runs once", "you reach Port Amber"], at: [99.4, 112.6] },
+];
 
 const roadCache = new Map<string, Pt[]>();
 
@@ -248,22 +374,9 @@ export function roadPoints(a: string, b: string): Pt[] {
   let pts = roadCache.get(key);
   if (!pts) {
     const [p, q] = key.split("|").map(townById);
-    const dx = q.x - p.x;
-    const dy = q.y - p.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const nx = -dy / len;
-    const ny = dx / len;
-    const r = seeded(key.split("").reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261));
-    const tune = ROAD_TUNE[key] ?? { bow: (r() - 0.5) * 0.22, s: (r() - 0.5) * 0.1 };
-    const n = Math.max(3, Math.round(len / 6));
-    pts = [];
-    for (let i = 0; i <= n; i++) {
-      const t = i / n;
-      // A gentle bow and S, plus a small hand-drawn sway that fades out at the towns.
-      const sway = i === 0 || i === n ? 0 : (r() - 0.5) * 0.9 * Math.sin(Math.PI * t);
-      const off = len * (tune.bow * Math.sin(Math.PI * t) + tune.s * Math.sin(2 * Math.PI * t)) + sway;
-      pts.push([p.x + dx * t + nx * off, p.y + dy * t + ny * off]);
-    }
+    const drawn = ROUTE[key];
+    // Hand-drawn lines may run either way; store them from the key's first town.
+    pts = drawn ? (Math.hypot(drawn[0][0] - p.x, drawn[0][1] - p.y) < 1 ? drawn : [...drawn].reverse()) : [[p.x, p.y], [q.x, q.y]];
     roadCache.set(key, pts);
   }
   return key.startsWith(a + "|") ? pts : [...pts].reverse();
@@ -273,21 +386,27 @@ export function roadPoints(a: string, b: string): Pt[] {
 export function routePoints(path: readonly string[]): Pt[] {
   const out: Pt[] = [];
   for (let h = 1; h < path.length; h++) {
-    const pts = roadPoints(path[h - 1], path[h]);
-    const at = (i: number) => pts[Math.max(0, Math.min(pts.length - 1, i))];
-    for (let i = 0; i < pts.length - 1; i++) {
-      const [p0, p1, p2, p3] = [at(i - 1), at(i), at(i + 1), at(i + 2)];
-      for (let k = h > 1 && i === 0 ? 1 : 0; k < 4; k++) {
-        // Uniform Catmull-Rom, the same curve smooth() draws.
-        const t = k / 4;
-        const t2 = t * t;
-        const t3 = t2 * t;
-        const c = (a: number, b: number, c2: number, d: number) => 0.5 * (2 * b + (c2 - a) * t + (2 * a - 5 * b + 4 * c2 - d) * t2 + (3 * b - a - 3 * c2 + d) * t3);
-        out.push([c(p0[0], p1[0], p2[0], p3[0]), c(p0[1], p1[1], p2[1], p3[1])]);
-      }
-    }
-    out.push(pts[pts.length - 1]);
+    const pts = curvePoints(roadPoints(path[h - 1], path[h]));
+    out.push(...(h > 1 ? pts.slice(1) : pts));
   }
+  return out;
+}
+
+/** The Catmull-Rom curve smooth() draws through `pts`, as points (four per span). */
+function curvePoints(pts: Pt[]): Pt[] {
+  const out: Pt[] = [];
+  const at = (i: number) => pts[Math.max(0, Math.min(pts.length - 1, i))];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [p0, p1, p2, p3] = [at(i - 1), at(i), at(i + 1), at(i + 2)];
+    for (let k = 0; k < 4; k++) {
+      const t = k / 4;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      const c = (a: number, b: number, c2: number, d: number) => 0.5 * (2 * b + (c2 - a) * t + (2 * a - 5 * b + 4 * c2 - d) * t2 + (3 * b - a - 3 * c2 + d) * t3);
+      out.push([c(p0[0], p1[0], p2[0], p3[0]), c(p0[1], p1[1], p2[1], p3[1])]);
+    }
+  }
+  out.push(pts[pts.length - 1]);
   return out;
 }
 
@@ -296,17 +415,48 @@ export function roadPath(a: string, b: string): string {
   return smooth(roadPoints(a, b), false);
 }
 
-/** Roads between regions: the highways. */
+/** Roads between areas: the highways. */
 const isHighway = (a: string, b: string) => townById(a).region !== townById(b).region;
 
+/** The point `t` of the way along a polyline, with the direction there in degrees. */
+function along(pts: Pt[], t: number): { p: Pt; deg: number } {
+  const lens = pts.slice(1).map((q, i) => Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1]));
+  let d = lens.reduce((a, b) => a + b, 0) * t;
+  for (let i = 0; i < lens.length; i++) {
+    if (d <= lens[i] || i === lens.length - 1) {
+      const k = Math.min(1, d / (lens[i] || 1));
+      const [a, b] = [pts[i], pts[i + 1]];
+      return { p: [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k], deg: (Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI };
+    }
+    d -= lens[i];
+  }
+  return { p: pts[0], deg: 0 };
+}
+
+/** Stretches of a road that run over water (not the ferry), as point runs: drawn as bridges. */
+function bridgeRuns(pts: Pt[]): Pt[][] {
+  const runs: Pt[][] = [];
+  let cur: Pt[] = [];
+  for (const s of resample(curvePoints(pts), 0.4)) {
+    if (!onLand(s.p)) cur.push(s.p);
+    else if (cur.length) {
+      runs.push(cur);
+      cur = [];
+    }
+  }
+  if (cur.length) runs.push(cur);
+  // A run gets a little landfall at each end, so the bridge sits on the shore.
+  return runs.filter((r) => r.length > 1);
+}
+
 function nearRoad(p: Pt, pad: number): boolean {
-  for (const [a, b] of ROADS) if (lineDist(p, roadPoints(a, b)) < pad) return true;
+  for (const r of ROADS) if (lineDist(p, roadPoints(r.a, r.b)) < pad) return true;
   return false;
 }
 
-/** Near a town's node, or the name under it. */
+/** Near a town's node, or its name. */
 function nearTown(p: Pt, pad: number): boolean {
-  return towns.some((t) => Math.hypot(t[0] - p[0], t[1] - p[1]) < pad || (Math.abs(p[0] - t[0]) < 9 && p[1] > t[1] && p[1] < t[1] + 8));
+  return towns.some((t) => Math.hypot(t[0] - p[0], t[1] - p[1]) < pad) || inLabel(p, 0.8);
 }
 
 function inLake(p: Pt, pad: number): boolean {
@@ -314,14 +464,19 @@ function inLake(p: Pt, pad: number): boolean {
 }
 
 function nearRiver(p: Pt, pad: number): boolean {
-  return lineDist(p, RIVER) < pad || lineDist(p, RIVER_OUT) < pad;
+  return lineDist(p, RIVER) < pad || lineDist(p, RIVER_OUT) < pad || lineDist(p, CREEK) < pad;
 }
 
 function nearRidge(p: Pt, pad: number): boolean {
   return RIDGES.some((r) => lineDist(p, r.pts) < r.reach + pad) || MESAS.some((m) => Math.hypot(p[0] - m.x, p[1] - m.y) < m.rx + pad);
 }
 
-/** Spots for little marks: inside `poly` (and the island when `land`), clear of towns, roads and each other. */
+/** Inside one of the isle's planted plots. */
+function inPlot(p: Pt, pad: number): boolean {
+  return [...ORCHARDS, ...VINEYARDS].some((o) => Math.hypot(p[0] - o.x, p[1] - o.y) < Math.max(o.w, o.h) / 2 + pad) || HEDGED.some((h) => Math.hypot(p[0] - h.x, p[1] - h.y) < 4 + pad);
+}
+
+/** Spots for little marks: inside `poly` (and on land when `land`), clear of towns, roads and each other. */
 function scatter(poly: Pt[], n: number, seed: number, land: boolean, gap: number, extra?: (p: Pt) => boolean): Pt[] {
   const r = seeded(seed);
   const xs = poly.map((p) => p[0]);
@@ -335,9 +490,9 @@ function scatter(poly: Pt[], n: number, seed: number, land: boolean, gap: number
     const p: Pt = [x0 + r() * (x1 - x0), y0 + r() * (y1 - y0)];
     if (!inPoly(p, poly)) continue;
     if (land) {
-      if (!inPoly(p, ISLAND) || polyDist(p, ISLAND) < 2.2) continue;
-      if (nearTown(p, 6.5) || nearRoad(p, 2.2) || inLake(p, 1.6) || nearRiver(p, 1.6)) continue;
-    } else if (inPoly(p, ISLAND) || polyDist(p, ISLAND) < 4) continue;
+      if (!onLand(p) || coastDist(p) < 2.2) continue;
+      if (nearTown(p, 6.5) || nearRoad(p, 2.2) || inLake(p, 1.6) || nearRiver(p, 1.6) || onAreaName(p)) continue;
+    } else if (onLand(p) || coastDist(p) < 4) continue;
     if (extra && !extra(p)) continue;
     if (out.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < gap)) continue;
     out.push(p);
@@ -443,20 +598,21 @@ function mesa(m: { x: number; y: number; rx: number; ry: number; rot: number }, 
 }
 
 /** Building blocks for a town's outskirts: tiny rotated squares, the way a survey map marks houses. */
+/** Building blocks for a town's outskirts: tiny rotated squares, the way a survey map marks houses. */
 function blocks(): Record<RegionId, string> {
-  const out: Record<RegionId, string> = { mountains: "", coast: "", desert: "" };
+  const out: Record<RegionId, string> = { mountains: "", coast: "", desert: "", orchard: "" };
   for (const t of STOPS) {
     const r = seeded(t.x * 131 + t.y * 7);
     const want = t.capital ? 9 : 4;
     const placed: Pt[] = [];
-    for (let tries = 0; tries < 240 && placed.length < want; tries++) {
+    for (let tries = 0; tries < 300 && placed.length < want; tries++) {
       const ang = r() * Math.PI * 2;
       const dist = (t.capital ? 4.4 : 3.9) + r() * (t.capital ? 3.6 : 2.2);
       const p: Pt = [t.x + Math.cos(ang) * dist, t.y + Math.sin(ang) * dist * 0.85];
-      // Keep the name (below the node) and the flag/lock (above) clear.
-      if (Math.abs(p[0] - t.x) < 8 && p[1] > t.y + 1.5 && p[1] < t.y + 9.5) continue;
+      // Keep the name and the flag/lock (above the node) clear.
+      if (inLabel(p, 0.6)) continue;
       if (Math.abs(p[0] - t.x) < 4 && p[1] < t.y - 2 && p[1] > t.y - 8) continue;
-      if (!inPoly(p, ISLAND) || polyDist(p, ISLAND) < 1.8 || inLake(p, 0.8) || nearRiver(p, 1.2) || nearRoad(p, 1.5)) continue;
+      if (!onLand(p) || coastDist(p) < 1.8 || inLake(p, 0.8) || nearRiver(p, 1.2) || nearRoad(p, 1.5)) continue;
       if (towns.some((o) => (o[0] !== t.x || o[1] !== t.y) && Math.hypot(o[0] - p[0], o[1] - p[1]) < 9)) continue;
       if (placed.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 1.5)) continue;
       placed.push(p);
@@ -477,6 +633,31 @@ const field = (x: number, y: number, rot: number, fill: string, w: number, h: nu
   `<g transform="translate(${f(x)} ${f(y)}) rotate(${f(rot)})"><rect x="${f(-w / 2)}" y="${f(-h / 2)}" width="${f(w)}" height="${f(h)}" fill="${fill}" stroke="${INK}" stroke-width="0.14" stroke-opacity="0.3"/>${[-1, 0, 1]
     .map((i) => `<path d="M${f(-w / 2 + 0.4)} ${f((i * h) / 4)}H${f(w / 2 - 0.4)}" stroke="${INK}" stroke-width="0.1" opacity="0.2"/>`)
     .join("")}</g>`;
+
+/** An orchard: fruit trees in straight rows, each a small round crown on a pencil dot. */
+function orchard(o: { x: number; y: number; w: number; h: number; rot: number }): string {
+  const trees: string[] = [];
+  for (let y = -o.h / 2 + 0.5; y <= o.h / 2 - 0.4; y += 1.05)
+    for (let x = -o.w / 2 + 0.5; x <= o.w / 2 - 0.4; x += 1.2) trees.push(`M${f(x + 0.34)} ${f(y)}a0.34 0.34 0 1 0 -0.68 0a0.34 0.34 0 1 0 0.68 0`);
+  return `<g transform="translate(${f(o.x)} ${f(o.y)}) rotate(${f(o.rot)})"><path d="${trees.join("")}" fill="${ORCH_TREE}" stroke="${TREE}" stroke-width="0.12"/></g>`;
+}
+
+/** A vineyard: close rows of short dashes, the way a survey map marks vines. */
+function vineyard(o: { x: number; y: number; w: number; h: number; rot: number }): string {
+  const rows: string[] = [];
+  for (let x = -o.w / 2; x <= o.w / 2 + 0.01; x += 0.72) rows.push(`M${f(x)} ${f(-o.h / 2)}v${f(o.h)}`);
+  return `<g transform="translate(${f(o.x)} ${f(o.y)}) rotate(${f(o.rot)})"><path d="${rows.join("")}" stroke="${VINE}" stroke-width="0.14" stroke-dasharray="0.5 0.24" opacity="0.85"/></g>`;
+}
+
+/** Hedged fields: a little patchwork with dotted hedgerows between the plots. */
+function hedged(h: { x: number; y: number; rot: number }, i: number): string {
+  const fills = [mix(LAND, ORCH_GREEN, 0.55), mix(LAND, MUSTARD, 0.2), mix(LAND, ORCH, 0.45), mix(LAND, ORCH_GREEN, 0.3)];
+  const plots = [[-2, -1.4, 3.6, 2.6], [1.8, -1.6, 3.8, 3], [-1.8, 1.4, 4, 2.8], [2, 1.6, 3.4, 2.4]]
+    .map(([x, y, w, hh], k) => `<rect x="${f(x - w / 2)}" y="${f(y - hh / 2)}" width="${f(w)}" height="${f(hh)}" fill="${fills[(k + i) % fills.length]}"/>`)
+    .join("");
+  const hedges = `<path d="M-4 -3H4M-4 0H4M-4 3H4M0 -3V3M-4 -3V3M4 -3V3" fill="none" stroke="${TREE}" stroke-width="0.32" stroke-dasharray="0.05 0.42" stroke-linecap="round" opacity="0.75"/>`;
+  return `<g transform="translate(${f(h.x)} ${f(h.y)}) rotate(${f(h.rot)})">${plots}${hedges}</g>`;
+}
 
 const lighthouse = (x: number, y: number) =>
   g(x, y, 1, `<path d="M-0.55 1.6L-0.32 -1.1H0.32L0.55 1.6Z" fill="${PAPER}" stroke="${INK}" stroke-width="0.24" stroke-linejoin="round"/><path d="M-0.42 -1.1h0.84M-0.3 0.4h0.6" stroke="${INK}" stroke-width="0.24"/><circle cy="-1.45" r="0.3" fill="${MUSTARD}" stroke="${INK}" stroke-width="0.2"/><path d="M0.6 -1.75L2.6 -2.5M0.6 -1.2L2.6 -0.6" stroke="${MUSTARD}" stroke-width="0.26" opacity="0.7"/>`);
@@ -502,10 +683,11 @@ function scaleBar(x: number, y: number): string {
     x,
     y,
     1,
-    `<path d="M0 0h20" stroke="${INK}" stroke-width="0.3"/><path d="M0 -0.9v1.8M5 -0.6v1.2M10 -0.9v1.8M15 -0.6v1.2M20 -0.9v1.8" stroke="${INK}" stroke-width="0.26"/><rect x="0" y="-0.45" width="5" height="0.9" fill="${INK}" opacity="0.75"/><rect x="10" y="-0.45" width="5" height="0.9" fill="${INK}" opacity="0.75"/><text x="10" y="3.4" class="scale">60 mi</text>`,
+    `<path d="M0 0h20" stroke="${INK}" stroke-width="0.3"/><path d="M0 -0.9v1.8M5 -0.6v1.2M10 -0.9v1.8M15 -0.6v1.2M20 -0.9v1.8" stroke="${INK}" stroke-width="0.26"/><rect x="0" y="-0.45" width="5" height="0.9" fill="${INK}" opacity="0.75"/><rect x="10" y="-0.45" width="5" height="0.9" fill="${INK}" opacity="0.75"/><text x="10" y="3.4" class="scale">${20 * MILES_PER_UNIT} mi</text>`,
     "home-scale",
   );
 }
+
 
 // ---------------------------------------------------------------------------
 // Static scene (built once per page load)
@@ -527,109 +709,170 @@ function water(): string {
   </g>`;
 }
 
+/** Sun Valley's creek, a thin blue line out to the south shore. */
+function creek(): string {
+  const d = smooth(CREEK, false);
+  return `<path d="${d}" fill="none" stroke="${WATER_LINE}" stroke-width="0.8" stroke-linecap="round" opacity="0.5"/><path d="${d}" fill="none" stroke="${WATER}" stroke-width="0.42" stroke-linecap="round"/>`;
+}
+
 /** Offset rings in the sea along the coast, the way old charts shade the shallows: nearer rings darker. */
-function shallows(island: string): string {
+function shallows(coasts: string): string {
   const rings: [number, number][] = [[8.6, 0.1], [6, 0.16], [3.8, 0.24], [2, 0.36]];
   return rings
-    .map(([d, o]) => `<path d="${island}" fill="none" stroke="${WATER_LINE}" stroke-width="${f(d * 2)}" stroke-linejoin="round" opacity="${o}"/><path d="${island}" fill="none" stroke="${SEA}" stroke-width="${f(d * 2 - 0.32)}" stroke-linejoin="round"/>`)
+    .map(([d, o]) => `<path d="${coasts}" fill="none" stroke="${WATER_LINE}" stroke-width="${f(d * 2)}" stroke-linejoin="round" opacity="${o}"/><path d="${coasts}" fill="none" stroke="${SEA}" stroke-width="${f(d * 2 - 0.32)}" stroke-linejoin="round"/>`)
     .join("");
 }
 
-function buildStatic(): string {
-  const island = smooth(wobble(ISLAND, 0.6, 7));
+/** Both coastlines as one path (the main island, then Orchard Isle). */
+const coastPath = () => smooth(wobble(ISLAND, 0.4, 7)) + " " + smooth(wobble(ISLE, 0.35, 13));
 
-  // Terrain washes: soft overlapping patches, so the regions blend into the open country
-  // instead of meeting at a border. Deeper tints sit where the forest, dunes or badlands are thickest.
+/** A town or area label's text, bent to a rotation. */
+const rotText = (x: number, y: number, rot: number, cls: string, body: string, attrs = "") =>
+  `<text class="${cls}" x="${f(x)}" y="${f(y)}"${rot ? ` transform="rotate(${f(rot)} ${f(x)} ${f(y)})"` : ""}${attrs}>${body}</text>`;
+
+function buildStatic(): string {
+  const coasts = coastPath();
+
+  // Terrain washes: soft overlapping patches, so the areas blend into the open country instead
+  // of meeting at a border. Deeper tints sit where the forest, dunes or badlands are thickest.
   const washes: Record<RegionId, string> = {
     mountains:
-      wash(26, 16, 22, 15, -8, "home-w-mountains") + wash(12, 33, 15, 13, 10, "home-w-mountains") + wash(37, 35, 17, 12, 22, "home-w-mountains") + wash(42, 5, 17, 11, 0, "home-w-mountains") +
-      wash(31, 27, 10, 7, -15, "home-w-mountains-deep") + wash(16, 15, 9, 6, 20, "home-w-mountains-deep") + wash(44, 41, 7, 5, 0, "home-w-mountains-deep"),
+      wash(30, 28, 34, 26, -10, "home-w-mountains") + wash(20, 52, 18, 12, 20, "home-w-mountains") + wash(14, 66, 8, 12, 0, "home-w-mountains") +
+      wash(30, 14, 18, 7, -5, "home-w-mountains-deep") + wash(16, 36, 9, 12, 10, "home-w-mountains-deep") + wash(52, 36, 8, 10, 15, "home-w-mountains-deep"),
     coast:
-      wash(82, 60, 25, 15, 10, "home-w-coast") + wash(72, 80, 21, 17, 0, "home-w-coast") + wash(96, 78, 15, 19, 0, "home-w-coast") +
-      wash(99, 60, 7, 5, 20, "home-w-coast-deep") + wash(88, 91, 7, 4, -10, "home-w-coast-deep") + wash(60, 70, 5, 7, 0, "home-w-coast-deep"),
+      wash(90, 66, 18, 14, 30, "home-w-coast") + wash(94, 88, 12, 16, 10, "home-w-coast") + wash(76, 50, 12, 5, 0, "home-w-coast") + wash(80, 104, 12, 6, 0, "home-w-coast") +
+      wash(99, 60, 6, 4, 20, "home-w-coast-deep") + wash(88, 95, 6, 4, -10, "home-w-coast-deep"),
     desert:
-      wash(22, 112, 27, 21, 0, "home-w-desert") + wash(40, 128, 19, 15, 0, "home-w-desert") + wash(12, 96, 13, 11, 0, "home-w-desert") +
-      wash(10, 123, 11, 9, 0, "home-w-desert-deep") + wash(46, 123, 9, 7, 0, "home-w-desert-deep") + wash(33, 91, 8, 5, -10, "home-w-desert-deep"),
+      wash(34, 118, 30, 34, 0, "home-w-desert") +
+      wash(40, 108, 14, 8, -10, "home-w-desert-deep") + wash(20, 126, 9, 12, 10, "home-w-desert-deep") + wash(50, 126, 9, 7, -20, "home-w-desert-deep") +
+      // Sun Valley: the only green valley in the desert.
+      wash(31, 143, 9, 8, 0, "home-w-oasis"),
+    orchard: wash(93, 141, 22, 21, 0, "home-w-orchard") + wash(84, 134, 9, 7, 0, "home-w-orchard-deep") + wash(102, 148, 8, 6, 0, "home-w-orchard-deep"),
   };
   const regions = REGIONS.map((r) => {
     const shape = smooth(wobble(REGION_SHAPE[r.id], 1.2, 11 + r.id.length));
     return `<g class="home-region" data-region="${r.id}">${washes[r.id]}<path class="veil" d="${shape}"/><path class="fog" d="${shape}"/><path class="bound" d="${shape}"/></g>`;
   }).join("");
 
-  // Marks per region, kept off the towns, roads and water.
-  const deco: Record<RegionId, string> = { mountains: "", coast: "", desert: "" };
+  // Marks per area, kept off the towns, roads and water.
+  const deco: Record<RegionId, string> = { mountains: "", coast: "", desert: "", orchard: "" };
   for (const rd of RIDGES) deco[rd.region] += ridge(rd.pts, rd.reach, rd.pts[0][0] * 31 + rd.pts[0][1]);
   deco.mountains += PEAKS.map(([x, y], i) => peak(x, y, 0.9 + (i % 2) * 0.2)).join("");
   // Forest: thick in the deep green, thinning out toward the open country.
-  const forest = scatter(REGION_SHAPE.mountains, 118, 3, true, 2.4, (p) => !nearRidge(p, 1.2) && PEAKS.every((q) => Math.hypot(p[0] - q[0], p[1] - q[1]) > 3));
+  const forest = scatter(REGION_SHAPE.mountains, 120, 3, true, 2.4, (p) => !nearRidge(p, 1.2) && PEAKS.every((q) => Math.hypot(p[0] - q[0], p[1] - q[1]) > 3));
   deco.mountains += forest.map((p, i) => (i % 5 === 2 ? broadleaf(p[0], p[1], 1 + (i % 3) * 0.15) : conifer(p[0], p[1], 1 + (i % 4) * 0.15))).join("");
   deco.mountains += water();
 
-  // Coast: dune stipple near the shore, marsh in the shallows, the lighthouse and a few palms' worth of scrub.
-  const dunes = scatter(REGION_SHAPE.coast, 150, 5, true, 1.25, (p) => polyDist(p, ISLAND) < 8 && !MARSH.some((m) => Math.hypot(p[0] - m[0], p[1] - m[1]) < 3));
+  // Coast: dune stipple near the shore, marsh at the river mouth, the lighthouse and a little scrub.
+  const dunes = scatter(REGION_SHAPE.coast, 150, 5, true, 1.25, (p) => coastDist(p) < 8 && !MARSH.some((m) => Math.hypot(p[0] - m[0], p[1] - m[1]) < 3));
   deco.coast += `<g class="stipple" fill="${DUNE}" stroke="${DUNE}">${dunes
     .map((p, i) => (i % 7 === 0 ? `<path d="M${f(p[0] - 0.9)} ${f(p[1])}q0.9 -0.35 1.8 0" fill="none" stroke-width="0.16"/>` : `<circle cx="${f(p[0])}" cy="${f(p[1])}" r="0.13" stroke="none"/>`))
     .join("")}</g>`;
   deco.coast += MARSH.map(([x, y], i) => marsh(x, y, 0.9 + (i % 2) * 0.2)).join("");
-  deco.coast += lighthouse(108, 68.6);
-  const scrub = scatter(REGION_SHAPE.coast, 18, 6, true, 4.5, (p) => polyDist(p, ISLAND) > 5 && Math.hypot(p[0] - 108, p[1] - 68) > 6);
+  deco.coast += lighthouse(104, 57.4);
+  const scrub = scatter(REGION_SHAPE.coast, 16, 6, true, 4.5, (p) => coastDist(p) > 5 && Math.hypot(p[0] - 104, p[1] - 57) > 6 && !nearRidge(p, 1));
   deco.coast += scrub.map((p, i) => (i % 2 ? broadleaf(p[0], p[1], 1.1) : conifer(p[0], p[1], 1.05))).join("");
 
-  // Desert: sand stipple everywhere, mesas, dry washes and a few cacti.
-  const sand = scatter(REGION_SHAPE.desert, 150, 9, true, 1.7, (p) => !nearRidge(p, 0.8) && WASHES.every((w) => lineDist(p, w) > 1.6));
+  // Red Rock: sand stipple everywhere, mesas, dry washes and a few cacti; trees round the oasis.
+  const oasis = (p: Pt) => Math.hypot(p[0] - 31, p[1] - 143) < 8 || Math.hypot(p[0] - 27, p[1] - 146.6) < 5;
+  const sand = scatter(REGION_SHAPE.desert, 150, 9, true, 1.7, (p) => !nearRidge(p, 0.8) && WASHES.every((w) => lineDist(p, w) > 1.6) && !oasis(p));
   deco.desert += `<g class="stipple" fill="${MESA}">${sand.map((p) => `<circle cx="${f(p[0])}" cy="${f(p[1])}" r="0.12"/>`).join("")}</g>`;
   deco.desert += MESAS.map((m, i) => mesa(m, 40 + i)).join("");
   deco.desert += WASHES.map((w) => `<path d="${smooth(w, false)}" fill="none" stroke="${WATER_LINE}" stroke-width="0.3" stroke-dasharray="0.9 0.6" stroke-linecap="round" opacity="0.7"/>`).join("");
-  const cacti = scatter(REGION_SHAPE.desert, 12, 10, true, 5, (p) => !nearRidge(p, 1.5) && WASHES.every((w) => lineDist(p, w) > 2.5));
+  const cacti = scatter(REGION_SHAPE.desert, 12, 10, true, 5, (p) => !nearRidge(p, 1.5) && WASHES.every((w) => lineDist(p, w) > 2.5) && !oasis(p));
   deco.desert += cacti.map((p, i) => cactus(p[0], p[1], 0.9 + (i % 3) * 0.12)).join("");
+  deco.desert += creek();
+  const palms = scatter(REGION_SHAPE.desert, 9, 12, true, 2.2, (p) => oasis(p));
+  deco.desert += palms.map((p, i) => broadleaf(p[0], p[1], 0.95 + (i % 2) * 0.15)).join("");
+
+  // Orchard Isle: orchards in rows, vineyards, hedged fields, and a few stray trees.
+  deco.orchard += HEDGED.map(hedged).join("") + ORCHARDS.map(orchard).join("") + VINEYARDS.map(vineyard).join("");
+  const isleTrees = scatter(REGION_SHAPE.orchard, 14, 14, true, 3, (p) => !inPlot(p, 1));
+  deco.orchard += isleTrees.map((p, i) => broadleaf(p[0], p[1], 0.9 + (i % 3) * 0.12)).join("");
 
   // Building blocks around each town.
   const houses = blocks();
   for (const r of REGIONS) deco[r.id] += houses[r.id];
 
-  // Farmland in the open country between the regions: a few small patchworks.
-  const open = (p: Pt) => REGIONS.every((r) => !inPoly(p, REGION_SHAPE[r.id]) && polyDist(p, REGION_SHAPE[r.id]) > 4) && polyDist(p, ISLAND) > 6;
+  // Farmland in the open country between the areas: small hand-placed patchworks, with any plot
+  // that would sit on a road, a town or the coast left out.
   const farms = [mix(LAND, FOREST_DEEP, 0.3), mix(LAND, MUSTARD, 0.22), mix(LAND, FOREST, 0.35), mix(LAND, DESERT_DEEP, 0.22)];
-  const fields = scatter(ISLAND, 4, 17, true, 12, open)
-    .map((p, i) => {
-      const rot = ((i * 53) % 44) - 22;
-      const a = (rot * Math.PI) / 180;
-      const cols = 2 + (i % 2);
-      const rows = i % 3 === 1 ? 1 : 2;
-      const plots: string[] = [];
-      for (let c = 0; c < cols; c++)
-        for (let rr = 0; rr < rows; rr++) {
-          const u = (c - (cols - 1) / 2) * 3.7;
-          const v = (rr - (rows - 1) / 2) * 2.8;
-          plots.push(field(p[0] + Math.cos(a) * u - Math.sin(a) * v, p[1] + Math.sin(a) * u + Math.cos(a) * v, rot, farms[(i + c * 2 + rr) % farms.length], 3.7, 2.8));
-        }
-      return plots.join("");
-    })
-    .join("");
-
-  // Sea: faint water lines, two boats, the compass and the scale.
-  const seaBox: Pt[] = [[VIEW.x, VIEW.y], [VIEW.x + VIEW.w, VIEW.y], [VIEW.x + VIEW.w, VIEW.y + VIEW.h], [VIEW.x, VIEW.y + VIEW.h]];
-  const ripples = scatter(seaBox, 34, 21, false, 7, (p) => polyDist(p, ISLAND) > 9 && polyDist(p, ISLAND) < 40 && Math.hypot(p[0] - 94, p[1] - 138) > 9)
-    .map((p, i) => `<path d="M${f(p[0] - 1.4 - (i % 3) * 0.3)} ${f(p[1])}q0.7 -0.3 1.4 0t1.4 0t1.4 0" fill="none" stroke="${WATER_LINE}" stroke-width="0.2" opacity="0.3"/>`)
-    .join("");
-
-  const labels = REGIONS.map((r) => {
-    const l = REGION_LABEL[r.id];
-    return `<text class="rname" data-region="${r.id}" x="${l.x}" y="${l.y}" text-anchor="${l.anchor}">${r.name}</text>`;
+  const FIELDS: [number, number, number][] = [[60, 70, -12], [65, 83, 8], [28.5, 64.5, -20], [46, 70.5, 14], [52.5, 80, -4], [37.5, 77.6, 22], [27, 146.6, 6]];
+  const fields = FIELDS.map(([x, y, rot], i) => {
+    const a = (rot * Math.PI) / 180;
+    const cols = 2 + (i % 2);
+    const rows = i % 3 === 1 ? 1 : 2;
+    const plots: string[] = [];
+    for (let c = 0; c < cols; c++)
+      for (let rr = 0; rr < rows; rr++) {
+        const u = (c - (cols - 1) / 2) * 3.4;
+        const v = (rr - (rows - 1) / 2) * 2.6;
+        const p: Pt = [x + Math.cos(a) * u - Math.sin(a) * v, y + Math.sin(a) * u + Math.cos(a) * v];
+        if (!onLand(p) || coastDist(p) < 2.5 || nearRoad(p, 2.4) || nearTown(p, 5) || nearRiver(p, 2)) continue;
+        plots.push(field(p[0], p[1], rot, farms[(i + c * 2 + rr) % farms.length], 3.4, 2.6));
+      }
+    return plots.join("");
   }).join("");
 
+  // Sea: faint water lines, two boats, the shoal the causeway crosses, the compass and the scale.
+  const seaBox: Pt[] = [[VIEW.x, VIEW.y], [VIEW.x + VIEW.w, VIEW.y], [VIEW.x + VIEW.w, VIEW.y + VIEW.h], [VIEW.x, VIEW.y + VIEW.h]];
+  const quiet = (p: Pt) => WATER_LABEL.every((w) => Math.hypot(p[0] - w.x, p[1] - w.y) > 10) && Math.hypot(p[0] - 110, p[1] - 14) > 8;
+  const ripples = scatter(seaBox, 34, 21, false, 7, (p) => coastDist(p) > 7 && coastDist(p) < 40 && quiet(p))
+    .map((p, i) => `<path d="M${f(p[0] - 1.4 - (i % 3) * 0.3)} ${f(p[1])}q0.7 -0.3 1.4 0t1.4 0t1.4 0" fill="none" stroke="${WATER_LINE}" stroke-width="0.2" opacity="0.3"/>`)
+    .join("");
+  const shoal = `<path d="M60 146.6C64 148.8 70 148.6 75 147.4" fill="none" stroke="#d3e2e6" stroke-width="4" stroke-linecap="round" opacity="0.9"/>`;
+
+  const areaNames = REGIONS.map((r) => {
+    const l = AREA_LABEL[r.id];
+    return rotText(l.x, l.y, l.rot, "rname", r.name.toUpperCase(), ` data-region="${r.id}" style="font-size:${l.size}px"`);
+  }).join("");
+  // Seas are named on the sea, under the land; the lake's name sits on the land beside it.
+  const waterName = (w: (typeof WATER_LABEL)[number]) => rotText(w.x, w.y, w.rot, `wname${w.halo ? " halo" : ""}`, w.name, ` style="font-size:${w.size}px"`);
+
   return `
-    <g class="home-sea">${ripples}${shallows(island)}${boat(94, 24, 1)}${boat(68, 136, 0.9, true)}${compassRose(94, 138)}${scaleBar(70, 146)}</g>
-    <path class="home-land" d="${island}" fill="${LAND}"/>
+    <g class="home-sea">${ripples}${shallows(coasts)}${shoal}${boat(94, 24, 1)}${boat(44, 163, 0.9, true)}${compassRose(110, 14)}${scaleBar(5, 164)}</g>
+    ${WATER_LABEL.filter((w) => !w.halo).map(waterName).join("")}
+    <path class="home-land" d="${coasts}" fill="${LAND}"/>
     <g clip-path="url(#home-island)">
       ${regions}
-      <g clip-path="url(#home-coast)"><path d="${island}" fill="none" stroke="${PAPER}" stroke-width="2.2" stroke-linejoin="round" opacity="0.8"/><path d="${island}" fill="none" stroke="${DUNE}" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="0.25 0.7" opacity="0.28"/></g>
+      <g clip-path="url(#home-coast)"><path d="${coasts}" fill="none" stroke="${PAPER}" stroke-width="2.2" stroke-linejoin="round" opacity="0.8"/><path d="${coasts}" fill="none" stroke="${DUNE}" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="0.25 0.7" opacity="0.28"/></g>
       <rect x="${VIEW.x}" y="${VIEW.y}" width="${VIEW.w}" height="${VIEW.h}" fill="url(#home-grain)"/>
     </g>
-    <path d="${island}" fill="none" stroke="${INK}" stroke-width="0.42" stroke-linejoin="round" opacity="0.75"/>
+    <path d="${coasts}" fill="none" stroke="${INK}" stroke-width="0.42" stroke-linejoin="round" opacity="0.75"/>
     <g class="home-fields">${fields}</g>
     ${REGIONS.map((r) => `<g class="home-deco" data-region="${r.id}">${deco[r.id]}</g>`).join("")}
-    ${labels}`;
+    ${areaNames}
+    ${WATER_LABEL.filter((w) => w.halo).map(waterName).join("")}`;
+}
+
+/** A road barrier: a striped board on two posts, set across the road. */
+const barrier = (p: Pt, deg: number) =>
+  `<g class="barrier" transform="translate(${f(p[0])} ${f(p[1])}) rotate(${f(deg + 90)})"><path class="post" d="M-1.5 0.55v0.8M1.5 0.55v0.8"/><rect x="-1.9" y="-0.55" width="3.8" height="1.1" rx="0.2"/><path class="stripe" d="M-1.4 0.5l0.9 -1M-0.3 0.5l0.9 -1M0.8 0.5l0.9 -1"/></g>`;
+
+/** Bridges are part of the drawing: where a road crosses water it runs on a cased deck with ticks. */
+let bridgeSvg: string | null = null;
+function bridges(): string {
+  const out: string[] = [];
+  for (const r of ROADS) {
+    if (r.ferry) continue;
+    for (const run of bridgeRuns(roadPoints(r.a, r.b))) {
+      // Run the deck a little onto each shore.
+      const [a, b] = [run[0], run[1]];
+      const [c, d] = [run[run.length - 2], run[run.length - 1]];
+      const ext = (p: Pt, q: Pt): Pt => {
+        const l = Math.hypot(p[0] - q[0], p[1] - q[1]) || 1;
+        return [p[0] + ((p[0] - q[0]) / l) * 0.8, p[1] + ((p[1] - q[1]) / l) * 0.8];
+      };
+      const deck = [ext(a, b), ...run, ext(d, c)];
+      const line = `M${deck.map((p) => `${f(p[0])} ${f(p[1])}`).join("L")}`;
+      const ticks = resample(deck, 1.8)
+        .slice(1)
+        .map(({ p, tx, ty }) => `M${f(p[0] - ty * 1.05)} ${f(p[1] + tx * 1.05)}l${f(-ty * 0.55)} ${f(tx * 0.55)}M${f(p[0] + ty * 1.05)} ${f(p[1] - tx * 1.05)}l${f(ty * 0.55)} ${f(-tx * 0.55)}`)
+        .join("");
+      out.push(`<path class="bridge-case" d="${line}"/><path class="bridge-deck" d="${line}"/><path class="bridge-tick" d="${ticks}"/>`);
+    }
+  }
+  return out.join("");
 }
 
 // ---------------------------------------------------------------------------
@@ -660,18 +903,47 @@ export function townPoint(id: string): Pt {
 /** Whole map as an <svg> in map units; the pan/zoom layer scales it. */
 export function renderMap(st: MapState): string {
   staticScene ??= buildStatic();
+  bridgeSvg ??= bridges();
   const open = (id: string) => st.unlocked.includes(id);
   const regionOpen = (r: RegionId) => STOPS.some((t) => t.region === r && open(t.id));
   const lockedRegions = REGIONS.filter((r) => !regionOpen(r.id)).map((r) => r.id);
 
-  // Casings first, so where roads meet at a town they join cleanly.
-  const lit = ROADS.filter(([a, b]) => open(a) && open(b));
-  const dark = ROADS.filter(([a, b]) => !(open(a) && open(b)));
-  const cls = (a: string, b: string) => (isHighway(a, b) ? " hw" : "");
+  // Casings first, so where roads meet at a town they join cleanly. A shut road that has a gate
+  // is drawn dashed with its barrier; other shut roads are a faint dotted line.
+  const isOpen = (r: RoadDef) => open(r.a) && open(r.b);
+  const gateOf = (r: RoadDef) => GATES.find((g) => roadKey(g.a, g.b) === roadKey(r.a, r.b));
+  const land = ROADS.filter((r) => !r.ferry);
+  const lit = land.filter(isOpen);
+  const dark = land.filter((r) => !isOpen(r));
+  const cls = (r: RoadDef) => (isHighway(r.a, r.b) ? " hw" : "");
   const roads =
-    dark.map(([a, b]) => `<path class="road locked${cls(a, b)}" d="${roadPath(a, b)}"/>`).join("") +
-    lit.map(([a, b]) => `<path class="road-case${cls(a, b)}" d="${roadPath(a, b)}"/>`).join("") +
-    lit.map(([a, b]) => `<path class="road${cls(a, b)}" d="${roadPath(a, b)}"/><path class="road-dash${cls(a, b)}" d="${roadPath(a, b)}"/>`).join("");
+    dark.map((r) => `<path class="road ${gateOf(r) ? "gated" : "locked"}${cls(r)}" d="${roadPath(r.a, r.b)}"/>`).join("") +
+    lit.map((r) => `<path class="road-case${cls(r)}" d="${roadPath(r.a, r.b)}"/>`).join("") +
+    lit.map((r) => `<path class="road${cls(r)}" d="${roadPath(r.a, r.b)}"/><path class="road-dash${cls(r)}" d="${roadPath(r.a, r.b)}"/>`).join("");
+  // The ferry: a dashed line across the water, with a little boat once it runs.
+  const ferries = ROADS.filter((r) => r.ferry)
+    .map((r) => {
+      const pts = roadPoints(r.a, r.b);
+      const mid = along(pts, 0.5);
+      const runs = isOpen(r);
+      const flip = Math.cos((mid.deg * Math.PI) / 180) < 0;
+      return `<path class="ferry ${runs ? "runs" : "shut"}" d="${smooth(pts, false)}"/>${runs ? g(mid.p[0] + 1.6, mid.p[1] - 0.4, 0.8, `<g${flip ? ' transform="scale(-1 1)"' : ""}><path d="M-1.3 -0.1h2.6l-0.5 0.8h-1.6z" fill="${PAPER}" stroke="#3f5f6b" stroke-width="0.22" stroke-linejoin="round"/><path d="M-0.3 -0.1v-0.8h0.9v0.8" fill="${PAPER}" stroke="#3f5f6b" stroke-width="0.2"/></g>`, "ferry-boat") : ""}`;
+    })
+    .join("");
+  // Barriers and notes on the roads still shut.
+  const gates = GATES.filter((gt) => !(open(gt.a) && open(gt.b)))
+    .map((gt) => {
+      const ferry = ROADS.some((r) => r.ferry && roadKey(r.a, r.b) === roadKey(gt.a, gt.b));
+      const at = along(roadPoints(gt.a, gt.b), gt.t);
+      const bar = ferry ? "" : barrier(at.p, at.deg);
+      // The note only once one end of the road is reachable: it's the next thing to aim for.
+      const note =
+        open(gt.a) || open(gt.b)
+          ? `<text class="gnote" x="${f(gt.at[0])}" y="${f(gt.at[1])}" text-anchor="${gt.anchor ?? "middle"}">${gt.note.map((l, i) => `<tspan x="${f(gt.at[0])}" dy="${i ? 2.3 : 0}">${l}</tspan>`).join("")}</text>`
+          : "";
+      return bar + note;
+    })
+    .join("");
 
   const townsSvg = STOPS.map((t) => {
     const isOpen = open(t.id);
@@ -682,14 +954,18 @@ export function renderMap(st: MapState): string {
     const classes = ["home-town", isOpen ? "open" : "locked", here ? "here" : "", t.id === st.selected ? "sel" : "", t.capital ? "capital" : "", lit ? "lit" : ""].filter(Boolean).join(" ");
     const ev = eventOn(t.id, st.day);
     const soon = !ev && [1, 2].some((d) => eventOn(t.id, st.day + d));
+    const place = labelPlace(t.id, r);
     // The event flag flies to the upper right, or the upper left where water is in the way.
     const side = FLAG_LEFT.has(t.id) ? -1 : 1;
     const flag = ev || soon ? `<path class="flag ${ev ? "today" : "soon"}" transform="translate(${f(side * (r + 0.6))} ${f(-r - 0.2)}) scale(${side} 1)" d="M0 0.6V-4.2M0 -4.2h3.2l-0.9 1.2 0.9 1.2H0"/>` : "";
-    const lock = !isOpen ? `<path class="lock" transform="translate(0 ${f(-r - 2.4)})" d="M-1.3 -0.2h2.6v2.4h-2.6zM-0.75 -0.2v-0.9a0.75 0.75 0 0 1 1.5 0v0.9"/>` : "";
-    // Pips show the shifts worked toward opening this town's roads.
+    // The padlock sits over the node, or under it when the name is above.
+    const lockY = place.side === "above" ? r + 1.3 : -r - 2.4;
+    const lock = !isOpen ? `<path class="lock" transform="translate(0 ${f(lockY)})" d="M-1.3 -0.2h2.6v2.4h-2.6zM-0.75 -0.2v-0.9a0.75 0.75 0 0 1 1.5 0v0.9"/>` : "";
+    // Pips show the shifts worked toward opening this town's roads: under the name, or under the node.
+    const pipY = place.side === "below" ? r + 6.1 : r + 2;
     const pips =
       isOpen && t.roads.length && done < need
-        ? `<g class="pips" transform="translate(0 ${f(r + 6.1)})">${[0, 1, 2].map((i) => `<circle class="pip ${i < done ? "on" : ""}" cx="${f((i - 1) * 1.7)}" r="0.55"/>`).join("")}</g>`
+        ? `<g class="pips" transform="translate(0 ${f(pipY)})">${[0, 1, 2].map((i) => `<circle class="pip ${i < done ? "on" : ""}" cx="${f((i - 1) * 1.7)}" r="0.55"/>`).join("")}</g>`
         : "";
     const label = t.capital ? t.name.toUpperCase() : t.name;
     const prize = isOpen && st.bonusHere.includes(t.id) ? `<path class="prize" transform="translate(${f(-r - 1.3)} ${f(-r - 0.6)})" d="M0 -1.25L1 0L0 1.25L-1 0Z"/>` : "";
@@ -701,7 +977,7 @@ export function renderMap(st: MapState): string {
         ${t.capital ? `<circle class="ring" r="${f(r + 1.2)}"/>` : ""}
         <circle class="node" r="${r}"/>
         ${t.capital ? `<circle class="core" r="1.1"/>` : ""}
-        <text class="tname" y="${f(r + 3.7)}">${label}</text>
+        <text class="tname" x="${f(place.dx)}" y="${f(place.dy)}" style="text-anchor:${place.anchor}">${label}</text>
         ${pips}${flag}${lock}${prize}
       </g>
     </g>`;
@@ -717,14 +993,15 @@ export function renderMap(st: MapState): string {
     `<radialGradient id="${id}"><stop offset="0" stop-color="${c}" stop-opacity="${peak}"/><stop offset="0.35" stop-color="${c}" stop-opacity="${f(peak * 0.8)}"/><stop offset="0.7" stop-color="${c}" stop-opacity="${f(peak * 0.3)}"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient>`;
   return `<svg class="home-svg" viewBox="${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Road map">
     <defs>
-      <clipPath id="home-island"><path d="${smooth(wobble(ISLAND, 0.6, 7))}"/></clipPath>
+      <clipPath id="home-island"><path d="${coastPath()}"/></clipPath>
       <clipPath id="home-coast"><path d="${smooth(REGION_SHAPE.coast)}"/></clipPath>
       ${REGIONS.map((r) => grad(`home-w-${r.id}`, REGION_WASH[r.id][0]) + grad(`home-w-${r.id}-deep`, REGION_WASH[r.id][1], 0.5)).join("")}
+      ${grad("home-w-oasis", FOREST, 0.85)}
       <pattern id="home-grain" width="7" height="7" patternUnits="userSpaceOnUse" fill="${INK}" opacity="0.07"><circle cx="4.31" cy="5.10" r="0.07"/><circle cx="6.42" cy="5.08" r="0.08"/><circle cx="0.39" cy="3.27" r="0.08"/><circle cx="4.48" cy="6.15" r="0.04"/><circle cx="3.30" cy="1.83" r="0.06"/><circle cx="3.99" cy="0.29" r="0.04"/><circle cx="2.04" cy="6.25" r="0.07"/><circle cx="1.25" cy="5.46" r="0.04"/><circle cx="4.28" cy="1.04" r="0.04"/><circle cx="5.95" cy="1.58" r="0.04"/><circle cx="6.68" cy="5.96" r="0.04"/><circle cx="6.55" cy="3.76" r="0.06"/><circle cx="1.55" cy="6.41" r="0.06"/><circle cx="6.58" cy="6.10" r="0.04"/></pattern>
       <pattern id="home-hatch" width="2.4" height="2.4" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)"><path d="M0 1.2h2.4" stroke="${INK}" stroke-width="0.3" opacity="0.1"/></pattern>
     </defs>
     <g class="home-static ${lockedRegions.map((r) => `lock-${r}`).join(" ")}">${staticScene}</g>
-    <g class="home-roads">${roads}</g>
+    <g class="home-roads">${bridgeSvg}${ferries}${roads}${gates}</g>
     <rect class="home-night" x="${VIEW.x - 50}" y="${VIEW.y - 50}" width="${VIEW.w + 100}" height="${VIEW.h + 100}"/>
     ${litRoads}
     <path class="home-route" d=""/>
@@ -738,3 +1015,4 @@ function truckSvg(look: Look, night: boolean): string {
   return `<ellipse class="shadow" cx="0.3" cy="-0.6" rx="5.6" ry="0.9"/>
   <g class="truck-body"><g transform="translate(0 -1) scale(0.056) translate(-108 -116)">${truckGroup(look, { mini: true, night })}</g></g>`;
 }
+

@@ -1,5 +1,5 @@
 import type { TimeOfDay } from "./day";
-import { STOPS, townById } from "./stops";
+import { LINKS, STOPS, townById } from "./stops";
 
 /**
  * Driving between towns on the road map.
@@ -10,25 +10,27 @@ import { STOPS, townById } from "./stops";
  * map, with no shift that day. In the evening a longer drive has to wait for the morning.
  *
  * Unlocking: working three passed shifts in a town opens the roads out of it. A region's big
- * city opens the next region the same way.
+ * city opens the next region the same way. The late links (the Old Pass road and the ferry,
+ * LINKS in stops.ts) open nothing: they can be driven once both their towns are open.
  */
 
 /** Passed shifts in a town before its roads open. */
 export const SHIFTS_TO_UNLOCK = 3;
-/** For the map's distance labels only: one map unit is about three miles. */
-export const MILES_PER_UNIT = 3;
+/** One map unit is about two miles (the map is 120 by 170 units); the range is set in miles (day.ts). */
+export const MILES_PER_UNIT = 2;
 
 let adjacency: Map<string, string[]> | null = null;
 
-/** Towns joined to `id` by a road, in either direction. */
+/** Towns joined to `id` by a road or a late link, in either direction. */
 export function neighbours(id: string): string[] {
   if (!adjacency) {
     adjacency = new Map(STOPS.map((t) => [t.id, [] as string[]]));
-    for (const t of STOPS)
-      for (const r of t.roads) {
-        adjacency.get(t.id)!.push(r);
-        adjacency.get(r)?.push(t.id);
-      }
+    const join = (a: string, b: string) => {
+      adjacency!.get(a)?.push(b);
+      adjacency!.get(b)?.push(a);
+    };
+    for (const t of STOPS) for (const r of t.roads) join(t.id, r);
+    for (const l of LINKS) join(l.a, l.b);
   }
   return adjacency.get(id) ?? [];
 }

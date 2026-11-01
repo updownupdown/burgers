@@ -1,7 +1,8 @@
 import type { Order, Plate } from "./game/types";
 import { COOK_SCALE, cookZone, type Cookable } from "./game/cooking";
 import { collapseCounted, layerQuality, PATTY_OFF } from "./game/scoring";
-import { COUNTED, DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, DRINKS, extraCount, KIND_COLOR, KIND_LABEL } from "./game/types";
+import { COUNTED, DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, extraCount, KIND_COLOR, KIND_LABEL, type DrinkId } from "./game/types";
+import { fountainFor } from "./game/stops";
 import { icon } from "./ui/icons";
 
 
@@ -15,6 +16,8 @@ export interface Ui {
   money: HTMLElement;
   rail: HTMLElement;
   tickets: HTMLElement[];
+  /** The Ticket rail's early ticket: the next customer's order, peeking out under the bell. */
+  peek: HTMLElement;
   /** "Sent back" notes, one over each customer. */
   sentBack: HTMLElement[];
   drinkLabels: HTMLElement[];
@@ -77,9 +80,10 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   </div>
   <div class="rail" data-r="rail"></div>
   ${[0, 1, 2].map((i) => `<div class="ticket" data-r="ticket" data-slot="${i}" hidden></div>`).join("")}
+  <div class="ticket stub peek" data-r="peek" aria-label="Next in line" hidden></div>
   ${[0, 1, 2].map(() => `<div class="sentback" data-r="sentback" hidden></div>`).join("")}
   <div class="hint" data-r="hint" role="status" hidden><span data-r="hintText"></span><button class="hint-x" data-r="hintClose" aria-label="Dismiss tip">${icon("close")}</button></div>
-  ${DRINKS.map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_SHORT[d]}</div>`).join("")}
+  ${fountainFor("mountains").map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_SHORT[d]}</div>`).join("")}
   <nav class="cnav" aria-label="Counters">
     ${pages.map((p, i) => `<button class="cbtn" data-r="tab" data-page="${i}" data-lamp="off" aria-label="${p}" title="${p}">${TAB_ART[p] ? tabArt(p) : icon("box")}</button>`).join("")}
   </nav>
@@ -101,6 +105,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     money: q("money"),
     rail: q("rail"),
     tickets: [...root.querySelectorAll<HTMLElement>('[data-r="ticket"]')],
+    peek: q("peek"),
     sentBack: [...root.querySelectorAll<HTMLElement>('[data-r="sentback"]')],
     drinkLabels: [...root.querySelectorAll<HTMLElement>('[data-r="dlabel"]')],
     hint: q("hint"),
@@ -162,28 +167,35 @@ function moodFace(mood: "neutral" | "sad" | "angry", critic = false): string {
   return `<svg class="face" viewBox="0 0 16 16" aria-label="${mood}"><circle cx="8" cy="8" r="7.2"/><g><circle cx="5.9" cy="7.6" r="1"/><circle cx="10.1" cy="7.6" r="1"/>${brows}<path d="${mouth}"/></g>${critic ? `<circle class="cdot" cx="13.6" cy="2.6" r="2.6"><title>Food critic</title></circle>` : ""}</svg>`;
 }
 
+/** Name the fountain's push-button caps for the drinks it pours, left to right. */
+export function setDrinkLabels(ui: Ui, drinks: readonly DrinkId[]): void {
+  ui.drinkLabels.forEach((el, i) => {
+    const d = drinks[i];
+    if (!d) return;
+    el.textContent = DRINK_SHORT[d];
+    el.style.setProperty("--c", DRINK_COLOR[d]);
+    // Clearing the width makes the kitchen refit the type to the new name.
+    el.style.width = "";
+  });
+}
+
 /** Kitchen shorthand for a collapsed ticket, the way a cook calls it across the line. */
 const SHORT_NAME: Record<string, string> = {
-  "Plain Jane": "Plain J",
   "Trailhead Classic": "Trail C",
-  "Cheesy Switchback": "Chz Sw",
   "Sunrise Summit": "Sunrise",
+  "Campfire Melt": "Camp M",
+  "Summit Smash": "Smash",
   "Lumberjack Stack": "Lumber",
+  // phase 1 placeholder burgers for the Coast, Red Rock and Orchard Isle
   "Boardwalk Basic": "Brdwlk",
   "Luau Stack": "Luau",
   "Low Tide": "Lo Tide",
-  "Big Kahuna": "Kahuna",
-  "Sandy Pickle": "Sandy P",
   Tumbleweed: "Tumble",
-  "Mesa Smash": "Mesa Sm",
   Rattlesnake: "Rattler",
-  "Sunset Double": "Sun Dbl",
   "Ranch Breakfast": "Ranch B",
-  "Campfire Melt": "Camp M",
-  "Harbor Classic": "Harb C",
-  "Sun Valley Supreme": "SV Sup",
-  "Rodeo Double": "Rodeo D",
-  Wipeout: "Wipeout",
+  "Cheesy Switchback": "Chz Sw",
+  "Sandy Pickle": "Sandy P",
+  "Sunset Double": "Sun Dbl",
   Poutine: "Poutine",
 };
 
@@ -429,6 +441,14 @@ export function exceptions(order: Order): string[] {
  * stubs: patience, a short name, doneness and how much is left. `fold` squeezes a long build by
  * folding the layers already stacked into one line.
  */
+/** The Ticket rail's early ticket: no patience bar yet, just who's next and what they'll want. */
+export function peekHtml(order: Order): string {
+  const ex = exceptions(order);
+  return `<div class="nx">Next up</div>
+    <div class="name"><span class="l">${esc(shortName(order.name))}</span>${nameMarks(order)}</div>
+    ${ex.length ? `<ul class="ex">${ex.map((e) => `<li>${e}</li>`).join("")}</ul>` : ""}`;
+}
+
 export function ticketHtml(order: Order, plate: Plate, patience: number, focused: boolean, fold = false): string {
   const pct = Math.max(0, Math.min(1, patience));
   const mood = patienceMood(pct);

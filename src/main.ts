@@ -6,7 +6,7 @@ import { expectedCustomers, sleep } from "./game/day";
 import { greatShift, townBonus, type BonusId } from "./game/bonus";
 import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, validShift, type ShiftWindow } from "./game/shift";
 import { freshSave, loadSave, passed, passTown, writeSave, type Closing } from "./game/progress";
-import { eventOn, townById, withEvent, type TownEvent } from "./game/stops";
+import { eventOn, fountainFor, townById, withEvent, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
 import { joinChance, lineDrain, linePatience, WINDOW, wordOfMouth } from "./game/line";
@@ -31,7 +31,7 @@ import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
 import { closingHtml, prepHtml, reviewsHtml, syncRange, toggleBox, toggleIngredients, type ReviewFilter } from "./screens/day";
-import { buildUi, cookMeter, patienceMood, ticketHtml } from "./ui";
+import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, ticketHtml } from "./ui";
 import { DRINK_TINT } from "./render/machines";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 import { scrollShadows } from "./screens/modal";
@@ -112,6 +112,8 @@ interface Waiting {
   seed: number;
   patience: number;
   maxPatience: number;
+  /** With the Ticket rail, the front of the line has already ordered: this is their ticket. */
+  order?: Order;
 }
 
 const game = {
@@ -298,10 +300,9 @@ function ndcIn(r: Rect, x: number, y: number): THREE.Vector2 {
 // ---------------------------------------------------------------------------
 // Orders and customers
 
-function spawnCustomer(slotIdx: number, seed: number): void {
+function spawnCustomer(slotIdx: number, seed: number, early?: Order): void {
   const s = game.slots[slotIdx];
-  const level = Math.min(1, game.time / game.shiftLength);
-  let order = makeOrder(game.orderSeq++, game.rng, level, shopStop());
+  let order = early ?? nextOrder();
   // The very first order of the trip is the simplest burger, with no sides.
   if (game.tutorial && game.ordered === 0) order = orderFromRecipe(order.id, stop().menu[0], false, null);
   s.order = order;
@@ -326,6 +327,12 @@ function spawnCustomer(slotIdx: number, seed: number): void {
   syncTray(slotIdx, false);
 }
 
+/** A fresh order, as hard as this point in the shift. */
+function nextOrder(): Order {
+  const level = Math.min(1, game.time / game.shiftLength);
+  return makeOrder(game.orderSeq++, game.rng, level, shopStop());
+}
+
 /**
  * A tap on the bell calls the next person up. Taps within this many seconds of the last one only
  * ring (a quick double ring is still one customer); after a pause the next tap calls again.
@@ -338,7 +345,7 @@ function callNext(): boolean {
   const atWindow = game.slots.filter((s) => s.order || s.fig).length;
   if (free < 0 || !game.line.length || atWindow >= WINDOW[game.pacing]) return false;
   const w = game.line.shift()!;
-  spawnCustomer(free, w.seed);
+  spawnCustomer(free, w.seed, w.order);
   return true;
 }
 
@@ -425,7 +432,8 @@ function serve(i: number): void {
   game.comped += compValue(s.order, plate.fries, plate.drink, r.perks.includes("extra toppings"));
   if (s.order.critic) criticVerdict(r.stars, r.notes);
   const { pay, tip: baseTip } = payout(s.order, r.score, s.patience / s.maxPatience);
-  // The meal deal sign: a burger with fries and a drink tips half again.
+  // The meal deal sign: a main (whatever the middle counter makes: anything built in layers) with
+  // a side and a drink tips half again.
   const meal = has("combo") && s.order.layers.length > 0 && !!s.order.fries && !!s.order.drink;
   const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1) * (meal ? 1.5 : 1) * CROWD[stop().crowd].tips);
   game.money += pay;
@@ -1878,6 +1886,25 @@ function placeTickets(): void {
   });
 }
 
+/** The Ticket rail's early ticket hangs under the bell, faded, until its customer steps up. */
+function updatePeek(): void {
+  const next = game.line[0]?.order;
+  const show = !!next && has("rail") && (game.phase === "playing" || game.phase === "paused");
+  ui.peek.hidden = !show;
+  if (!show || !next) return;
+  if (ui.peek.dataset.id !== String(next.id)) {
+    ui.peek.dataset.id = String(next.id);
+    ui.peek.innerHTML = peekHtml(next);
+  }
+  const host = ui.peek.offsetParent?.getBoundingClientRect();
+  const bell = ui.bell.getBoundingClientRect();
+  if (!host || !bell.width) return;
+  const right = Math.round(host.right - bell.right);
+  const top = Math.round(bell.bottom - host.top + 7);
+  if (ui.peek.style.right !== `${right}px`) ui.peek.style.right = `${right}px`;
+  if (ui.peek.style.top !== `${top}px`) ui.peek.style.top = `${top}px`;
+}
+
 /**
  * Fits the focused receipt to the room under the rail: rows tighten first, then the layers already
  * stacked fold into one line; whatever still doesn't fit scrolls inside the list.
@@ -2225,6 +2252,7 @@ function startShift(): void {
   // Maybe a critic in today's line, never the very first customer.
   game.criticAt = has("press") || game.rng() < criticChance(stop().crowd, game.event) ? 1 + Math.floor(game.rng() * Math.max(1, Math.min(game.customers, 8) - 2)) : -1;
   counter.fryBoost = has("turbo") ? 1.35 : 1;
+  // Hot plate (the old Searing plate): the main counter cooks faster, whatever it is.
   counter.grillBoost = has("sear") ? 1.25 : 1;
   counter.autoStopPour = has("autostop");
   counter.setPage(HOME_PAGE);
@@ -2241,6 +2269,10 @@ function startShift(): void {
 function applyStop(): void {
   const st = stop();
   counter.setPantry(st.pantry);
+  // The fountain pours the area's two local drinks beside the three house ones.
+  const drinks = fountainFor(st.region);
+  counter.setDrinks(drinks);
+  setDrinkLabels(ui, drinks);
   customersView.setBackdrop(st.backdrop);
   customersView.setLook(save.look);
 }
@@ -2569,6 +2601,8 @@ function tick(dt: number): void {
         if (!game.tutorial) hintOnce("left-line", "Someone gave up waiting in line. Ring the bell to call people up sooner.", 4);
       }
     }
+    // The Ticket rail: whoever is first in line has their ticket up already (see updatePeek).
+    if (has("rail") && game.line[0] && !game.line[0].order) game.line[0].order = nextOrder();
     // An empty window calls the first in line up by itself after a beat; otherwise it's the bell.
     if (game.slots.some((s) => s.order || s.fig)) game.emptySince = game.time;
     else if (game.line.length && game.time - game.emptySince >= 0.7) callNext();
@@ -2595,6 +2629,9 @@ function tick(dt: number): void {
 
     if (!game.hintsShown.has("melt-order") && game.slots[game.active]?.order?.layers.some((l) => l.melted))
       hintOnce("melt-order", "This one wants melted cheese: drop the slice on the patty while it's on the grill.", 4.5);
+    // Elk Pass is a side road, so the first smash order may turn up in Summit City untaught.
+    else if (!game.hintsShown.has("smash-order") && game.slots[game.active]?.order?.layers.some((l) => l.smashed))
+      hintOnce("smash-order", "This one's a smash burger: press and hold a fresh patty on the grill to flatten it.", 4.5);
 
     // Press and hold a fresh patty to smash it (at stops that serve smash burgers).
     if (ptr && ptr.mode === "grill" && !ptr.moved && ptr.hit?.type === "grillItem" && game.time - ptr.gt0 > 0.45 && stop().menu.some((r) => r.smash)) {
@@ -2628,6 +2665,10 @@ counter.events.spill = () => {
   sfx.splash();
   buzz(80);
   showHint("It's overflowing! Let go, and wipe up the mess.", 2.5);
+};
+// Kitchen timer (bonus): a soft tick when anything on the grill or in the fryer reaches done.
+counter.events.done = () => {
+  if (game.phase === "playing" && has("timer")) sfx.tick();
 };
 counter.events.burning = () => {
   if (counter.page !== HOME_PAGE) showHint("Something's burning on the grill! ←", 2.5);
@@ -2665,6 +2706,7 @@ function updateUi(dt = 0): void {
   ui.bell.classList.toggle("empty", !game.line.length);
   ui.bell.classList.toggle("full", game.line.length > 0 && game.slots.filter((s) => s.order || s.fig).length >= WINDOW[game.pacing]);
   placeTickets();
+  updatePeek();
   game.slots.forEach((s, i) => {
     const t = ui.tickets[i];
     const show = !!s.order && !s.leaving && game.phase !== "title";
@@ -2734,7 +2776,13 @@ function updateUi(dt = 0): void {
     const visible = game.phase === "playing" && counter.page === 0 && x > 10 && x < bands.counter.w - 10;
     el.hidden = !visible;
     if (!visible) return;
-    el.style.width = `${Math.round(tapPx - 5)}px`;
+    const wpx = `${Math.round(tapPx - 5)}px`;
+    if (el.style.width !== wpx) {
+      // Longer local names (Cucumber, Hibiscus) step the type down until they fit the cap.
+      el.style.width = wpx;
+      el.style.fontSize = "";
+      for (let fs = 10; el.scrollWidth > el.clientWidth && fs >= 8; fs--) el.style.fontSize = `${fs}px`;
+    }
     el.style.left = `${x}px`;
     el.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
     el.classList.toggle("down", counter.taps[i].pouring);

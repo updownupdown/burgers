@@ -5,9 +5,9 @@
  */
 import * as gameMenu from "../game/menu";
 import { ADD_PRICE, DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "../game/menu";
-import { recipeCount, STOPS, townById, type Recipe, type Stop } from "../game/stops";
+import { fountainFor, recipeCount, STOPS, townById, type Recipe, type Stop } from "../game/stops";
 import { openedBy, SHIFTS_TO_UNLOCK, unlockProgress } from "../game/travel";
-import { COUNTED, DRINK_COLOR, DRINK_LABEL, DRINKS, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, SIZE_LABEL, type Kind, type Size } from "../game/types";
+import { COUNTED, DRINK_COLOR, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, SIZE_LABEL, type Kind, type Size } from "../game/types";
 import { icon } from "../ui/icons";
 import { openHowTo } from "./howto";
 import { esc, getDeps, modalDepth, modalHead, modalOpen, price, pushModal, popModal, wireJumpChips } from "./modal";
@@ -133,14 +133,14 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
     <table class="bv-table mref-table">
       <thead><tr><th>Fries</th><th>Scoops</th><th class="num">Price</th></tr></thead>
       <tbody>${fries}
-      ${poutine != null ? `<tr class="mref-poutine"><td colspan="2"><b>Poutine</b><small>Fries, cheese curds, gravy</small></td><td class="num">${price(poutine)}</td></tr>` : ""}
+      ${poutine != null && town.poutine ? `<tr class="mref-poutine"><td colspan="2"><b>Poutine</b><small>Fries, cheese curds, gravy</small></td><td class="num">${price(poutine)}</td></tr>` : ""}
       </tbody>
     </table>
     <p class="mref-note">Salted unless you skip it. Cartons come from the stacks by the fryer.</p>
   </section>
   <section class="mref-sec" data-sec="drinks">
     <h3 class="menu-h">${icon("drink")}Drinks</h3>
-    <ul class="mref-flavours">${DRINKS.map((d) => `<li><i class="swc" style="--c:${DRINK_COLOR[d]}"></i>${DRINK_LABEL[d]}</li>`).join("")}</ul>
+    <ul class="mref-flavours">${fountainFor(town.region).map((d) => `<li><i class="swc" style="--c:${DRINK_COLOR[d]}"></i>${DRINK_LABEL[d]}</li>`).join("")}</ul>
     <table class="bv-table mref-table">
       <thead><tr><th>Size</th><th></th><th class="num">Price</th></tr></thead>
       <tbody>${SIZES.map((s) => `<tr><td><span class="bv-chip size">${s}</span> ${SIZE_LABEL[s]}</td><td class="mref-cup">${cup(s)}</td><td class="num">${price(DRINK_PRICE[s])}</td></tr>`).join("")}</tbody>

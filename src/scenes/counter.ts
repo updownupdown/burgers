@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { cookLevel, COOK_SCALE, DRINK_FILL, FRIES_PERFECT, FRIES_ZONE, FRY_RATE, GRILL_RATE, MARK_RATE, MELT_RATE, type Cookable } from "../game/cooking";
 import type { DrinkId, FriesSize, Kind, Piece, SauceKind, Size } from "../game/types";
-import { CUP_SPEED, DRINKS, GRILLABLE } from "../game/types";
+import { CUP_SPEED, GRILLABLE } from "../game/types";
+import { fountainFor } from "../game/stops";
 import { counterTop, wallPanels } from "../render/wear";
 import { CUP_DIMS, cupSurfaceY, makeCarton, makeCartonStack, makeCup, makeFood, makeBasketFries, makeFries, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { dressCup } from "../render/cup";
@@ -10,7 +11,7 @@ import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { makeGriddle, ZONE_HEATS, type GriddleObject, type ZoneHeat } from "../render/machines/griddle";
 import { makeColdRail } from "../render/machines/coldRail";
 import { makeSauceBottle, makeSauceCaddy, type SauceCaddyObject } from "../render/machines/sauces";
-import { DRINK_TINT, makeCupStack, makeFountain, makeFryBasket, makeFryer, makeIceWell, makeLidStackSized, makePackPad, makeTrashChute, FRY_BASKET, type FryerObject } from "../render/machines";
+import { DRINK_TINT, makeCupStack, makeFountain, type FountainObject, makeFryBasket, makeFryer, makeIceWell, makeLidStackSized, makePackPad, makeTrashChute, FRY_BASKET, type FryerObject } from "../render/machines";
 import { applyKitchenLight, KITCHEN_BG, type KitchenLight } from "../render/lighting";
 import { COUNTER_FOOD, SCALE } from "../render/units";
 
@@ -273,6 +274,8 @@ export interface CounterEvents {
   beep: () => void;
   spill: () => void;
   burning: () => void;
+  /** Something cooking just reached its done zone (the Kitchen timer bonus ticks). */
+  done: () => void;
 }
 
 /**
@@ -330,6 +333,7 @@ export class CounterView {
   /** Where to grab frozen fries from (the middle of the potato freezer), in world units. */
   friesBinAt = new THREE.Vector3();
   taps: Tap[] = [];
+  private fountain: FountainObject | null = null;
   /** Cups standing on the drinks counter. */
   cups: DrinkCup[] = [];
   stacks: Stack[] = [];
@@ -341,7 +345,7 @@ export class CounterView {
   private puffs: THREE.Mesh[] = [];
   private held: THREE.Object3D | null = null;
   private time = 0;
-  events: CounterEvents = { golden: () => {}, beep: () => {}, spill: () => {}, burning: () => {} };
+  events: CounterEvents = { golden: () => {}, beep: () => {}, spill: () => {}, burning: () => {}, done: () => {} };
   /** The shadow-casting light, so the graphics setting can soften or disable it. */
   sun: THREE.DirectionalLight;
 
@@ -485,8 +489,11 @@ export class CounterView {
     fountain.scale.setScalar(FOUNTAIN_SCALE);
     fountain.position.copy(at(FOUNTAIN.x, 0, FOUNTAIN.z));
     this.scene.add(fountain);
+    this.fountain = fountain;
     const sp = FOUNTAIN_SPOTS;
-    DRINKS.forEach((flavor, i) => {
+    const start = fountainFor("mountains");
+    fountain.userData.setDrinks(start);
+    start.forEach((flavor, i) => {
       const x = tapX(i);
       const stream = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1, 8), toon(DRINK_TINT[flavor]));
       // Drawn after the cup so the see-through cup wall never hides it.
@@ -649,6 +656,18 @@ export class CounterView {
     this.cups.push(cup);
     if (ti >= 0) this.taps[ti].cup = cup;
     return { cup };
+  }
+
+  /** Put the area's drinks on the fountain's five buttons (left to right): the strips, streams and spills. */
+  setDrinks(drinks: readonly DrinkId[]): void {
+    this.fountain?.userData.setDrinks(drinks);
+    this.taps.forEach((t, i) => {
+      const flavor = drinks[i];
+      if (!flavor || t.flavor === flavor) return;
+      t.flavor = flavor;
+      t.stream.material = toon(DRINK_TINT[flavor]);
+      (t.puddleObj.material as THREE.MeshBasicMaterial).color.set(DRINK_TINT[flavor]);
+    });
   }
 
   /** The first pour into an empty cup gives it its flavour (and the band on the paper). */
@@ -1165,6 +1184,7 @@ export class CounterView {
     // Grill
     const gx = pageX(1);
     let anyBurning = false;
+    let anyDone = false;
     for (const it of this.grillItems) {
       if (it.held) continue;
       const y0 = this.baseY(it);
@@ -1205,6 +1225,7 @@ export class CounterView {
         it.obj.position.set(gx + it.x, y0, it.z);
         const k = it.piece.kind as Cookable;
         if (COOK_SCALE[k] && cookLevel(it.piece) > COOK_SCALE[k].burnt - 0.05 && before <= COOK_SCALE[k].burnt - 0.05) anyBurning = true;
+        if (COOK_SCALE[k] && cookLevel(it.piece) >= COOK_SCALE[k].done && before < COOK_SCALE[k].done) anyDone = true;
       }
       it.squashV += (-160 * it.squash - 12 * it.squashV) * dt;
       it.squash += it.squashV * dt;
@@ -1213,6 +1234,7 @@ export class CounterView {
       it.obj.userData.update(it.piece);
     }
     if (anyBurning) this.events.burning();
+    if (anyDone) this.events.done();
 
     // Smoke: puffs drift up from cooking items; darker when burning.
     const active = this.grillItems.filter((g) => !g.held && !g.below && g.flipT < 0 && this.heatOf(g) === "hot");
@@ -1266,7 +1288,9 @@ export class CounterView {
         bub.rotation.y = Math.sin(this.time * 2.3 + i) * 0.12;
       }
       if (inOil) {
+        const before = b.cook;
         b.cook += FRY_RATE * this.fryBoost * dt;
+        if (before < FRIES_ZONE.done && b.cook >= FRIES_ZONE.done) this.events.done();
         if (!b.goldenRung && b.cook >= FRIES_PERFECT - 0.04) {
           b.goldenRung = true;
           this.events.golden();

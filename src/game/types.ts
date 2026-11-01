@@ -14,8 +14,11 @@ export type Kind =
   | "mustard";
 
 export type Doneness = "rare" | "medium" | "well";
-export type DrinkId = "pine" | "pink" | "cola" | "water" | "tea";
-export const DRINKS: DrinkId[] = ["pine", "pink", "cola", "water", "tea"];
+export type DrinkId = "cola" | "water" | "tea" | "pine" | "pink" | "cucumber" | "hibiscus" | "lime" | "cider" | "bramble";
+/** Every drink in the game. A town's fountain pours five of them (see fountainFor in stops.ts). */
+export const DRINKS: DrinkId[] = ["cola", "water", "tea", "pine", "pink", "cucumber", "hibiscus", "lime", "cider", "bramble"];
+/** On the fountain everywhere; the other two buttons are the area's own. */
+export const HOUSE_DRINKS: DrinkId[] = ["cola", "water", "tea"];
 export type SauceKind = "ketchup" | "mustard";
 
 /** A single physical food item. `cook[0]` is the face currently down on the grill. */
@@ -175,17 +178,39 @@ export const DRINK_LABEL: Record<DrinkId, string> = {
   cola: "Road Cola",
   water: "Water",
   tea: "Iced Tea",
+  cucumber: "Cucumber Cooler",
+  hibiscus: "Hibiscus Cooler",
+  lime: "Lime Agua",
+  cider: "Sparkling Cider",
+  bramble: "Bramble Soda",
 };
 
 /** Short names for the fountain's push buttons. */
-export const DRINK_SHORT: Record<DrinkId, string> = { pine: "Fizz", pink: "Pink", cola: "Cola", water: "Water", tea: "Tea" };
+export const DRINK_SHORT: Record<DrinkId, string> = {
+  pine: "Fizz",
+  pink: "Pink",
+  cola: "Cola",
+  water: "Water",
+  tea: "Tea",
+  cucumber: "Cucumber",
+  hibiscus: "Hibiscus",
+  lime: "Lime",
+  cider: "Cider",
+  bramble: "Bramble",
+};
 
+/** The drink itself, for tickets, swatches and the liquid in the cup. Local pairs are kept apart in hue. */
 export const DRINK_COLOR: Record<DrinkId, string> = {
   pine: "#7dbd8a",
   pink: "#f3a3b8",
   cola: "#3b1d1b",
   water: "#cfe8f2",
   tea: "#c3731f",
+  cucumber: "#c4e3a6",
+  hibiscus: "#b8324f",
+  lime: "#d9ea8c",
+  cider: "#e6b04a",
+  bramble: "#6e2f63",
 };
 
 /** Middle of each patty doneness band (every order wants medium; see pattyDoneness). */

@@ -17,8 +17,11 @@ import { MILES_PER_UNIT } from "./travel";
  */
 export type TimeOfDay = "morning" | "evening";
 
-/** Overnight range in miles: any single road, highways included, is one night's drive. */
-export const RANGE_MI = 175;
+/**
+ * Overnight range in miles: any single road, highways and the Old Pass road (about 120 mi, the
+ * longest) included, is one night's drive, and two ordinary roads usually fit.
+ */
+export const RANGE_MI = 130;
 
 /** Overnight range in map units, which is what roads are measured in. */
 export function rangeUnits(): number {

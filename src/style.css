@@ -299,6 +299,18 @@ html, body {
 .ticket.half .sg + .sg { margin-top: 0; }
 .ticket.half .name .l { font-size: 18px; }
 
+/* The Ticket rail's early ticket: the next order, faded and tilted, clipped under the bell. */
+.ticket.peek {
+  left: auto;
+  width: 92px;
+  opacity: 0.62;
+  transform: rotate(2deg);
+  transform-origin: 80% 0;
+  pointer-events: none;
+  cursor: default;
+  z-index: 1;
+}
+.ticket.peek .nx { font: 600 10px/1 var(--bv-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--bv-mute); }
 /* Stubs: patience, short name, doneness, how much is left. */
 .ticket.stub { padding: 9px 5px 12px; gap: 4px; cursor: pointer; }
 .ticket.stub .bar { min-width: 0; }

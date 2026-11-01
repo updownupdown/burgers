@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { VIEW } from "./study/view";
 import { buzz, Sfx } from "./audio";
 import { cookLevel, COOK_SCALE, cookZone, DRINK_FILL, fireLead, friesZone, FRY_ZONE, isMelted, ovenLead, paleSide, SALT, type Cookable } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
@@ -233,13 +234,24 @@ function layout(): void {
   const tabsH = 0;
   // The customers band holds the window (HUD on top, customers, then the order rail) and the
   // receipts hanging from the rail; it's taller than the tray so the receipts have room.
-  const custH = Math.round(THREE.MathUtils.clamp(H * 0.34, 200, 320));
-  const trayH = Math.round(THREE.MathUtils.clamp(H * 0.14, 96, 140));
+  let custH = Math.round(THREE.MathUtils.clamp(H * 0.34, 200, 320));
+  let trayH = Math.round(THREE.MathUtils.clamp(H * 0.14, 96, 140));
+  const counterFull = H - custH - trayH - tabsH;
+  // View study: the counter shows only a strip of wall; the space saved goes to the window and the trays.
+  let crop = 0;
+  if (VIEW) {
+    counter.studyWallBase = customersView.wallBase();
+    counter.layout(w / counterFull);
+    crop = counter.studyCrop(w, counterFull);
+    const toWin = Math.round(crop * VIEW.toWindow);
+    custH += toWin;
+    trayH += crop - toWin;
+  }
   const hudH = safeT + 42;
-  const railY = Math.round(hudH + (custH - hudH) * 0.42);
+  const railY = Math.round(hudH + (custH - hudH) * (VIEW ? 0.5 : 0.42));
   bands.customers = { x: colX, y: 0, w, h: custH };
   bands.tray = { x: colX, y: custH, w, h: trayH };
-  bands.counter = { x: colX, y: custH + trayH, w, h: H - custH - trayH - tabsH };
+  bands.counter = { x: colX, y: custH + trayH, w, h: counterFull - crop };
   bands.tabs = { x: colX, y: H - tabsH, w, h: tabsH };
 
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, gfx === "low" ? 1 : 1.5));
@@ -248,9 +260,14 @@ function layout(): void {
   // with their toolbars hidden), so taps line up with what's drawn.
   canvas.style.width = `${W}px`;
   canvas.style.height = `${H}px`;
+  customersView.bandPx = custH;
   customersView.layout(w / custH, hudH / custH, railY / custH);
   trayView.layout(w / trayH);
-  counter.layout(w / bands.counter.h);
+  counter.layout(w / counterFull);
+  counter.setCrop(w, counterFull, crop);
+  trayView.studyBand(trayH, customersView.wallBase());
+  const shade = document.querySelector<HTMLElement>(".study-shade");
+  if (shade) Object.assign(shade.style, { left: `${colX}px`, width: `${w}px`, top: `${bands.counter.y}px` });
 
   const st = document.documentElement.style;
   st.setProperty("--gx", `${colX}px`);
@@ -285,6 +302,13 @@ function layout(): void {
     game.phase = "paused";
     openMenu();
   }
+}
+if (VIEW) {
+  // View study: the pass shelf's shadow on the wall just under it.
+  const shade = document.createElement("div");
+  shade.className = "study-shade";
+  Object.assign(shade.style, { position: "fixed", height: "18px", pointerEvents: "none", zIndex: "1", background: `linear-gradient(rgba(30,25,35,${VIEW.shadow}), rgba(30,25,35,0))` });
+  document.body.appendChild(shade);
 }
 window.addEventListener("resize", layout);
 layout();
@@ -3924,6 +3948,8 @@ window.addEventListener("blur", cancelPointer);
   trayView,
   bands,
   startShift,
+  spawnCustomer,
+  customersView,
   serve,
   goToPage,
   goToStop,

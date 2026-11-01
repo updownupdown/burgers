@@ -7,6 +7,8 @@ import { makeCup, makeFood, makeFries, stackBases, type BunRole, type CupObject,
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { relScale } from "../render/units";
+import { VIEW } from "../study/view";
+import { wallColor, wallMaterial } from "../study/walls";
 
 /**
  * One kraft serving tray per customer, lined with paper. A paper plate sits on it only when that
@@ -48,6 +50,7 @@ export function trayStyle(): TrayStyle {
   try {
     const q = new URLSearchParams(location.search).get("tray") ?? localStorage.getItem("bv-tray");
     if (q && (TRAY_STYLES as string[]).includes(q)) return q as TrayStyle;
+    if (VIEW?.tray) return VIEW.tray;
   } catch {
     // No storage: the default look.
   }
@@ -501,7 +504,7 @@ const TRAY_LOOK_Y = 0.85;
 /** The receipts hang over the back of the band down to here (a fraction of its height from the top); burgers fit under it. */
 const RECEIPT_LINE = 0.3;
 /** Where the trays' front edges sit, as a fraction of the band's height from its top. */
-const TRAY_FRONT = 0.94;
+const TRAY_FRONT = VIEW ? 0.86 : 0.94;
 const STEEL = "#c9d0ce";
 
 export class TrayView {
@@ -552,6 +555,7 @@ export class TrayView {
     glow.rotation.x = Math.PI / 2;
     glow.position.set(0, 3.39, -1.4);
     this.scene.add(wall, splash, shelf, lip, lamp, glow);
+    this.study = { wall, splash, shelf, lip };
 
     const flagGeo = faceted(new THREE.BoxGeometry(0.9, 0.22, 0.06));
     for (let i = 0; i < 3; i++) {
@@ -566,6 +570,54 @@ export class TrayView {
     const d = 20;
     this.camera.position.set(0, TRAY_LOOK_Y + d * Math.sin(TRAY_PITCH), d * Math.cos(TRAY_PITCH));
     this.camera.lookAt(0, TRAY_LOOK_Y, 0);
+  }
+
+  private studyFace: THREE.Mesh | null = null;
+  private study!: { wall: THREE.Mesh; splash: THREE.Mesh; shelf: THREE.Mesh; lip: THREE.Mesh };
+  /**
+   * View study: the wall behind the trays in the study's finish (the same wall as round the
+   * window and under the shelf), and the pass shelf with a nose and front face at the band's
+   * bottom edge, so the seam into the counter is the shelf's own edge.
+   */
+  studyBand(bandPx: number, wallBase: string): void {
+    if (!VIEW) return;
+    const v = VIEW;
+    const { wall, splash, shelf, lip } = this.study;
+    const hh = TRAY_VIEW_HALF_H;
+    const upp = (2 * hh) / bandPx;
+    this.scene.background = wallColor(wallBase);
+    const old = wall.material as THREE.Material;
+    wall.material = wallMaterial(v.wallTex, wallBase, 40, 8, upp, upp / Math.cos(TRAY_PITCH));
+    if (old.userData.disposable) old.dispose();
+    splash.visible = false;
+    // Shelf: from the wall to where its nose sits just above the band's bottom edge.
+    const faceH = v.shelf.fascia;
+    const facePx = (faceH * Math.cos(TRAY_PITCH)) / upp;
+    const want = -1 + (2 * (facePx + 1)) / bandPx;
+    // Screen y of a point on the shelf top moves by sin(pitch) per unit of z.
+    const y0 = new THREE.Vector3(0, 0, 0).project(this.camera).y;
+    const front = ((y0 - want) * hh) / Math.sin(TRAY_PITCH);
+    // A shelf a little deeper than the trays, the wall straight behind it.
+    const pg = this.plates[0].group;
+    const back = pg.position.z - (TRAY.d * pg.scale.z) / 2 - 0.45;
+    wall.position.z = back - 0.25;
+    shelf.geometry.dispose();
+    shelf.geometry = faceted(new THREE.BoxGeometry(30, faceH, front - back));
+    shelf.position.set(0, -faceH / 2, (front + back) / 2);
+    shelf.material = toon(v.shelf.top);
+    // The front face in its own colour, and a bright rolled nose along its top edge.
+    if (!this.studyFace) {
+      this.studyFace = new THREE.Mesh(new THREE.BoxGeometry(30, 1, 0.06), new THREE.MeshBasicMaterial({ toneMapped: false }));
+      this.scene.add(this.studyFace);
+    }
+    this.studyFace.scale.y = faceH;
+    this.studyFace.position.set(0, -faceH / 2, front + 0.03);
+    (this.studyFace.material as THREE.MeshBasicMaterial).color.set(v.shelf.nose);
+    lip.geometry.dispose();
+    lip.geometry = new THREE.CylinderGeometry(0.05, 0.05, 30, 10);
+    lip.rotation.z = Math.PI / 2;
+    lip.position.set(0, -0.01, front + 0.02);
+    lip.material = new THREE.MeshBasicMaterial({ color: v.shelf.hl, toneMapped: false });
   }
 
   /** Place plates under the three customer slots for the band's aspect ratio. */

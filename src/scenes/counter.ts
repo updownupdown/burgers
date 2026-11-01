@@ -19,6 +19,8 @@ import { makeGriddle, ZONE_HEATS, type GriddleObject, type ZoneHeat } from "../r
 import { makeColdRail } from "../render/machines/coldRail";
 import { makeSauceBottle, makeSauceCaddy, type SauceCaddyObject } from "../render/machines/sauces";
 import { DRINK_TINT, makeCupStack, makeFountain, type FountainObject, makeFryBasket, makeFryer, makeIceWell, makeLidStackSized, makePackPad, makeTrashChute, FRY_BASKET, type FryerObject } from "../render/machines";
+import { VIEW } from "../study/view";
+import { wallMaterial } from "../study/walls";
 import { applyKitchenLight, KITCHEN_BG, type KitchenLight } from "../render/lighting";
 import { COUNTER_FOOD, SCALE } from "../render/units";
 
@@ -41,8 +43,10 @@ const VIEW_W = 9.0;
 /** Camera stops: one per counter, at the same zoom everywhere so food stays one size. */
 export const STOPS: readonly { page: number; x: number }[] = PAGE_CX.map((x, page) => ({ page, x }));
 /** Camera height and how far behind the look point it hangs. */
-const CAM_H = 12.6;
-const CAM_BACK = 5.3;
+const CAM_DIST = Math.hypot(12.6, 5.3);
+const CAM_PITCH = THREE.MathUtils.degToRad(VIEW?.pitch ?? Math.atan2(12.6, 5.3) * THREE.MathUtils.RAD2DEG);
+const CAM_H = CAM_DIST * Math.sin(CAM_PITCH);
+const CAM_BACK = CAM_DIST * Math.cos(CAM_PITCH);
 /** Where the camera looks on the window line. */
 const LOOK_Z = -0.1;
 
@@ -195,7 +199,7 @@ const STACK_SHOWN = 10;
  */
 /** The fountain is drawn this much bigger than its model, so its buttons are easy to hit. */
 const FOUNTAIN_SCALE = 1.22;
-const FOUNTAIN = { x: 1.1, z: -1.75 };
+const FOUNTAIN = { x: 1.1, z: -1.75 + (VIEW ? 0.9 : 0) };
 /** The ice bin is half the fountain model's width. */
 const ICE_WIDTH = 0.5;
 const ICE = { x: -3.25, z: -2.2 };
@@ -519,16 +523,23 @@ export class CounterView {
     this.sun = this.light.sun;
 
     // The window line's counter top and the steel wall panels under the window.
-    const counter = counterTop(90, 10.6);
+    const counter = counterTop(90, 10.6, VIEW?.counter.color, VIEW?.counter.streaks);
     counter.position.set(7, 0, -0.7);
     this.scene.add(counter);
     const wall = wallPanels(90, 6);
     wall.position.set(7, -0.4, -3.4);
     this.scene.add(wall);
+    this.studyWall = wall;
     // A steel backsplash strip where the counter meets the truck wall.
     const splash = new THREE.Mesh(new THREE.BoxGeometry(90, 0.5, 0.1), toon("#b9d6a2"));
     splash.position.set(7, 0.25, -3.35);
     this.scene.add(splash);
+    if (VIEW) {
+      // Study: a small rolled steel cove where the counter meets the wall, in the counter's steel.
+      splash.geometry = new THREE.BoxGeometry(90, 0.12, 0.14);
+      splash.material = toon(VIEW.counter.color);
+      splash.position.set(7, 0.06, -3.33);
+    }
 
     this.scene.add(this.grillGroup, this.pressGroup, this.comalGroup, this.ovenGroup);
     this.pressGroup.visible = false;
@@ -1513,6 +1524,42 @@ export class CounterView {
     } else fill(makeColdRail({ cols: 2, rows: 3, kinds: cold }), SIDE_PANS);
     this.pantry = group;
     this.scene.add(group);
+  }
+
+  private studyWall!: THREE.Mesh;
+  /**
+   * Study: how many px of the top of a counter band `fullH` px tall to leave out so only
+   * `VIEW.splash` units of wall show above the counter. Also re-skins the wall in the study's finish.
+   */
+  studyCrop(fullW: number, fullH: number): number {
+    if (!VIEW) return 0;
+    const cam = this.camera.clone();
+    cam.clearViewOffset();
+    cam.position.set(0, CAM_H, LOOK_Z + CAM_BACK);
+    cam.lookAt(0, 0, LOOK_Z);
+    cam.updateMatrixWorld();
+    const y = new THREE.Vector3(0, VIEW.splash, -3.37).project(cam).y;
+    const crop = Math.max(0, Math.round(((1 - y) / 2) * fullH));
+    // Wall finish: px per unit across at the wall, foreshortened up it.
+    const a = new THREE.Vector3(0, 0.5, -3.37).project(cam);
+    const b = new THREE.Vector3(1, 0.5, -3.37).project(cam);
+    const c = new THREE.Vector3(0, 1.5, -3.37).project(cam);
+    const uppX = 1 / (((b.x - a.x) / 2) * fullW);
+    const uppY = 1 / (((c.y - a.y) / 2) * fullH);
+    const base = VIEW.wall === "look" ? this.studyWallBase : VIEW.wall;
+    const old = this.studyWall.material as THREE.Material;
+    this.studyWall.material = wallMaterial(VIEW.wallTex, base, 90, 6, uppX, uppY);
+    if (old.userData.disposable) old.dispose();
+    return crop;
+  }
+  /** Study: the wall colour when it follows the truck's paint (set from main). */
+  studyWallBase = "#e8dfd0";
+
+  /** Study: draw only the bottom `fullH - crop` px of a `fullW` x `fullH` view. */
+  setCrop(fullW: number, fullH: number, crop: number): void {
+    if (crop > 0) this.camera.setViewOffset(fullW, fullH, 0, crop, fullW, fullH - crop);
+    else this.camera.clearViewOffset();
+    this.camera.updateProjectionMatrix();
   }
 
   layout(aspect: number): void {

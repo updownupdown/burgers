@@ -3,6 +3,8 @@ import type { Backdrop } from "../game/stops";
 import type { Look } from "../game/looks";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { lookColours } from "../screens/truckart";
+import { VIEW } from "../study/view";
+import { wallMaterial } from "../study/walls";
 
 export type Mood = "neutral" | "happy" | "sad" | "angry";
 
@@ -186,10 +188,28 @@ export class CustomersView {
     wall.position.set(0, -4.6, 4.6);
     this.scene.add(wall);
     this.scene.add(ledge);
+    if (VIEW) {
+      // Study: the inside wall with the window cut into it replaces the sill, paint and wall.
+      ledge.visible = trim.visible = belt.visible = wall.visible = false;
+      this.scene.add(this.frame, this.soffit);
+    }
     for (let i = 0; i < 3; i++) this.slots.push({ fig: null, x: 0, enterT: 0, leaving: false });
   }
 
   private trim: THREE.Mesh;
+  /** Study: the truck's inside wall round the window, its trim, and the awning's underside. */
+  private frame = new THREE.Group();
+  private soffit = new THREE.Group();
+  private lookCols: ReturnType<typeof lookColours> | null = null;
+  private awningKind = "mustard";
+  private hudF = 0.18;
+  private railF = 0.45;
+  /** Study: the wall colour (the truck's paint, lightened, for the enamel option). */
+  wallBase(): string {
+    if (!VIEW) return "#d6cdbf";
+    if (VIEW.wall !== "look") return VIEW.wall;
+    return "#" + new THREE.Color(this.lookCols?.base ?? "#ff8a70").lerp(new THREE.Color("#f6f0e4"), 0.8).getHexString();
+  }
   private belt: THREE.Mesh;
   /** The awning's hem across the top of the window, and any lights on it (see setLook). */
   private valance = new THREE.Group();
@@ -203,6 +223,8 @@ export class CustomersView {
    */
   setLook(look: Look): void {
     const c = lookColours(look);
+    this.lookCols = c;
+    this.awningKind = look.awning;
     this.trim.material = toon(c.base);
     this.belt.material = toon(c.belt);
     const g = this.valance;
@@ -266,8 +288,115 @@ export class CustomersView {
   }
 
   private placeValance(): void {
+    if (VIEW) {
+      this.buildFrame();
+      return;
+    }
     this.valance.position.set(0, this.valanceY - 0.34, CustomersView.VAL_Z);
   }
+
+  /** World point where the ray through a band point (NDC) meets the plane z = `z`. */
+  private at(nx: number, ny: number, z: number): THREE.Vector3 {
+    this.raycaster.setFromCamera(new THREE.Vector2(nx, ny), this.camera);
+    const out = new THREE.Vector3();
+    this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), -z), out);
+    return out;
+  }
+
+  /**
+   * Study: the inside of the truck. A painted wall fills the band except for the window, which
+   * opens just under the HUD and closes at the order rail; a trim runs round the opening. Through
+   * it the awning's underside slopes away from the window head to its hem, which hangs behind the
+   * customers so their heads come in front of it, the way they stand under it.
+   */
+  private buildFrame(): void {
+    const v = VIEW!;
+    const cam = this.camera;
+    if (!cam.aspect) return;
+    disposeObject(this.frame);
+    this.frame.clear();
+    disposeObject(this.soffit);
+    this.soffit.clear();
+    const ZF = 4.8;
+    const T = 0.3;
+    const tl = this.at(-1, 1, ZF);
+    const br = this.at(1, -1, ZF);
+    const upp = (tl.y - br.y) / (this.bandPx || 287);
+    const px = (n: number) => n * upp;
+    // The opening: just under the HUD, down to the order rail, a slim jamb each side.
+    const top = this.at(0, 1 - 2 * this.hudF, ZF).y - px(9);
+    const bot = this.at(0, 1 - 2 * this.railF, ZF).y + px(5);
+    const hw = br.x - px(9);
+    const rad = px(14);
+    const rr = <T extends THREE.Path>(p: T, x0: number, y0: number, x1: number, y1: number, r: number): T => {
+      p.moveTo(x0 + r, y0);
+      p.lineTo(x1 - r, y0);
+      p.quadraticCurveTo(x1, y0, x1, y0 + r);
+      p.lineTo(x1, y1 - r);
+      p.quadraticCurveTo(x1, y1, x1 - r, y1);
+      p.lineTo(x0 + r, y1);
+      p.quadraticCurveTo(x0, y1, x0, y1 - r);
+      p.lineTo(x0, y0 + r);
+      p.quadraticCurveTo(x0, y0, x0 + r, y0);
+      return p;
+    };
+    const base = this.wallBase();
+    const wallMat = wallMaterial(v.wallTex, base, 1, 1, upp);
+    const reveal = toon(new THREE.Color(base).multiplyScalar(0.82));
+    const outer = new THREE.Shape([new THREE.Vector2(tl.x - 4, br.y - 6), new THREE.Vector2(br.x + 4, br.y - 6), new THREE.Vector2(br.x + 4, tl.y + 6), new THREE.Vector2(tl.x - 4, tl.y + 6)]);
+    outer.holes.push(rr(new THREE.Path(), -hw, bot, hw, top, rad));
+    const wall = new THREE.Mesh(new THREE.ExtrudeGeometry(outer, { depth: T, bevelEnabled: false, curveSegments: 6 }), [wallMat, reveal]);
+    wall.position.z = ZF - T;
+    this.frame.add(wall);
+    // Trim round the opening.
+    const trimCol = v.trim === "wood" ? "#a8723f" : v.trim === "look" ? this.lookCols?.base ?? "#ff8a70" : "#c9d0ce";
+    const tw = px(v.trim === "steel" ? 5 : 7);
+    const ring = rr(new THREE.Shape(), -hw - tw, bot - tw, hw + tw, top + tw, rad + tw);
+    ring.holes.push(rr(new THREE.Path(), -hw, bot, hw, top, rad));
+    const trim = mesh(new THREE.ExtrudeGeometry(ring, { depth: px(3), bevelEnabled: false, curveSegments: 6 }), trimCol, { ink: false, shadow: false });
+    trim.position.z = ZF;
+    this.frame.add(trim);
+    // The sill: a ledge along the bottom of the opening that the order rail hangs under.
+    const sill = mesh(faceted(new THREE.BoxGeometry(hw * 2 + tw * 2, px(6), 0.5)), v.trim === "look" ? "#f3efe4" : trimCol, { ink: false, shadow: false });
+    sill.position.set(0, bot - px(3), ZF + 0.1);
+    this.frame.add(sill);
+
+    // The awning: hem behind the customers, just low enough that their heads overlap it.
+    const VZ = -1.5;
+    const headTop = new THREE.Vector3(0, 0.2 + 2.1 * this.figScale, 0).project(cam).y;
+    const hemNdc = Math.min(headTop - 0.06, 1 - 2 * this.hudF - 0.18);
+    const hemY = this.at(0, hemNdc, VZ).y;
+    const k = 1.25;
+    this.valance.scale.setScalar(k);
+    this.valance.position.set(0, hemY + 0.24 * k, VZ);
+    const hemTop = hemY + (0.24 + 0.42) * k;
+    const c = this.lookCols ?? lookColours({ paint: "coral", awning: "mustard" } as Look);
+    // Underside: a slope from the window head to the top of the hem, in the awning's colour in shade.
+    const near = new THREE.Vector3(0, top + 0.2, ZF - T - 0.05);
+    const far = new THREE.Vector3(0, hemTop, VZ);
+    const len = near.distanceTo(far);
+    const under = new THREE.Mesh(
+      new THREE.PlaneGeometry(60, len),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(c.awning).lerp(new THREE.Color("#3b2a3a"), 0.28), side: THREE.DoubleSide }),
+    );
+    under.position.copy(near).add(far).multiplyScalar(0.5);
+    under.rotation.x = Math.atan2(far.y - near.y, near.z - far.z) - Math.PI / 2;
+    this.soffit.add(under);
+    {
+      // Stripes on the underside for the striped canvas.
+      if (this.awningKind === "stripes") {
+        for (let i = -60; i < 60; i += 2) {
+          const st = new THREE.Mesh(new THREE.PlaneGeometry(0.5, len), new THREE.MeshBasicMaterial({ color: new THREE.Color("#faf3e6").lerp(new THREE.Color("#3b2a3a"), 0.22), side: THREE.DoubleSide }));
+          st.position.copy(under.position).add(new THREE.Vector3(i * 0.5 + 0.25, 0, 0));
+          st.rotation.copy(under.rotation);
+          st.position.y -= 0.01;
+          this.soffit.add(st);
+        }
+      }
+    }
+  }
+  /** Band height in CSS px, for pixel-sized trim. */
+  bandPx = 287;
 
   setBackdrop(kind: Backdrop): void {
     this.kind = kind;
@@ -348,6 +477,8 @@ export class CustomersView {
    * so the sill lands on the rail and the customers fill the space above it.
    */
   layout(aspect: number, hudF = 0.18, railF = 0.45): void {
+    this.hudF = hudF;
+    this.railF = railF;
     const sill = 0.3;
     const top = 2.75;
     const hv = (top - sill) / Math.max(0.15, railF - hudF);
@@ -377,6 +508,7 @@ export class CustomersView {
     const s = Math.min(0.95, spacing * 0.3);
     for (const sl of this.slots) if (sl.fig) sl.fig.root.scale.setScalar(s);
     this.figScale = s;
+    if (VIEW) this.buildFrame();
   }
   private figScale = 1;
 

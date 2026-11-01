@@ -8,7 +8,7 @@ import { box, C, machine, rbox, toGame } from "./kit";
 /*
  * The stepped cold rail (the study's topping-bin option b): a stainless refrigerated body with
  * the pans sunk flush, each row further back stepped up so it faces the steep camera, a cold
- * blue line under the pans and the lid hinged open behind. The 3 x 3 block is the grill page's
+ * blue line under the pans. The 3 x 3 block is the grill page's
  * prep unit. Slots without a kind get a steel cover, which is where the sauce caddy can stand.
  * Study units below: a pan is a 1/6 hotel pan, 16 x 17.5 cm.
  */
@@ -80,11 +80,8 @@ function railBody(cols: number, rows: number, filled: boolean[]): Parts {
       p.add(box(PW + 0.06, 0.04, 0.1), "#e3e8e6", { p: [x, y + PH, z + PD / 2], ink: false });
     }
   }
-  // A bright front bevel, and the lid hinged open behind the back row.
+  // A bright front bevel. (No lid behind: James found the open lids read as clutter.)
   p.add(box(W + 0.3, 0.12, 0.08), "#e3e8e6", { p: [0, H + 0.06, zOf(rows - 1) + PZ / 2] });
-  const lz = zOf(0) - PZ / 2;
-  const ly = H + (rows - 1) * STEP;
-  p.add(box(W + 0.3, 0.1, 1.6), "#dfe5e4", { p: [0, ly + 0.8, lz - 0.1], r: [-1.35, 0, 0] });
   return p;
 }
 

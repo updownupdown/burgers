@@ -93,7 +93,7 @@ function sections(): Sec[] {
       points: [
         "<b>Customers and trays stay put</b> while you switch counters, so you never lose an order.",
         "Most things are a <b>drag</b>: from a bin, the grill or a counter up to a tray.",
-        "People wait in a <b>line</b> outside. When the window is empty the first steps up by themselves; otherwise <b>ring the bell twice</b> to call the next one. Serving more at once earns more, if you can keep up.",
+        "People wait in a <b>line</b> outside. When the window is empty the first steps up by themselves; otherwise <b>ring the bell</b> to call the next one (a quick double ring still calls one; pause a moment before calling another). Serving more at once earns more, if you can keep up.",
       ],
     },
     {

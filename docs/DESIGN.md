@@ -556,3 +556,13 @@ Open towns whose bonus is still to unlock carry a small gold diamond on the map,
 **Where looks show.** The road map's truck (the same art, drawn small with thicker lines; it lights up on the evening map), the night card when the truck sleeps (parked under the stars with the window lit, bulbs and neon on, beams sweeping, then dawn), and the Garage. The catalogue page is `looks.html` beside the game. Counters in the kitchen don't show looks yet.
 
 *Build after #58 (James):* the shop dog was retired (owners get $350 back) for the Inflatable slot; the giant burger stopped turning; the neon sign shrank; the hot tub was redrawn; the string lights now hang from the awning; chrome and gold rims got bigger.
+
+## 22. Kitchen polish after build #57
+
+- **Trays** are bare wooden boards (no paper mat, no plates). A dashed ring marks where the burger goes when the order has one, beside the dashed fries and cup outlines; each mark hides once that item is on. The tray being worked on has a rounded blue outline.
+- **Grill marks** show only on a face that has spent 4 s down on the grille (`MARKED` 0.3), and that is also when they count for the bonus.
+- **Patty doneness** is more generous: medium runs 0.38-0.74 (was 0.43-0.67), burnt from 0.97.
+- **Doneness meter**: bigger (56 x 12 px), the done band always green with pale gaps between bands, a faint perfect tick, a bigger caret, and a green glow while the food is in the done band. A fuller indicator study is under way separately.
+- **Grill zones**: each zone has a round power button and two lamps (off: both dark; warm: first orange; hot: both red) in place of the OFF/WARM/HOT caps.
+- **Bell**: one ring calls the next person. Rings within 1.5 s of the last one only ring, so a quick double ring still calls one.
+- **Counters**: the sauce caddy sits centred in the space left of the grill; the cold rails have no open lids behind them; the potato freezer has no lid, and it and the curd tray are deep wells with flanges, food well below the rim. The trash chute stops just short of the outer edges of the drinks and fryer views, bookending the three counters, and a sideways swipe along it with empty hands changes counter.

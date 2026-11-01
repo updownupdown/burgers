@@ -10,18 +10,16 @@ export const GRILL_RATE = 0.08;
 export const FRY_RATE = 0.025;
 
 export function pattyLabel(t: number): string {
-  if (t < 0.18) return "Raw";
-  if (t < 0.43) return "Rare";
-  if (t < 0.67) return "Medium";
-  if (t < 0.92) return "Well done";
-  return "Burnt";
+  return { raw: "Raw", rare: "Rare", medium: "Medium", well: "Well done", burnt: "Burnt" }[pattyDoneness(t)];
 }
 
+/** Patty doneness bands, from the patty's cook scale (medium is the wide middle band). */
 export function pattyDoneness(t: number): Doneness | "raw" | "burnt" {
+  const z = COOK_SCALE.patty;
   if (t < 0.18) return "raw";
-  if (t < 0.43) return "rare";
-  if (t < 0.67) return "medium";
-  if (t < 0.92) return "well";
+  if (t < z.done) return "rare";
+  if (t < z.over) return "medium";
+  if (t < z.burnt) return "well";
   return "burnt";
 }
 
@@ -66,7 +64,8 @@ export interface CookScale {
 export type Cookable = "patty" | "bacon" | "egg" | "bun" | "pineapple" | "fries";
 export const COOK_SCALE: Record<Cookable, CookScale> = {
   // Under: raw and rare. Done: medium. Over: well done, then burnt.
-  patty: { done: 0.43, over: 0.67, burnt: 0.92, perfect: 0.55 },
+  // Medium is generous: about 50% longer than it used to be (0.43-0.67).
+  patty: { done: 0.38, over: 0.74, burnt: 0.97, perfect: 0.56 },
   bacon: { done: 0.4, over: 0.85, burnt: 1.0, perfect: 0.6 },
   egg: { done: 0.35, over: 0.85, burnt: 1.0, perfect: 0.6 },
   bun: { done: 0.35, over: 0.8, burnt: 0.95, perfect: 0.55 },
@@ -101,8 +100,8 @@ export const isFlipped = (p: Piece): boolean => (p.flips ?? 0) % 2 === 1;
 
 /** A patty face seared this hard is charred: flip before the face down gets there. */
 export const CHAR_FACE = 1.05;
-/** Grill marks count once they're this deep (about 8 s face down on a hot grille). */
-export const MARKED = 0.6;
+/** Grill marks show (and count) once a face has spent 4 s down on a hot grille. */
+export const MARKED = 0.3;
 /** Grill marks per second on a hot grille. */
 export const MARK_RATE = 0.075;
 

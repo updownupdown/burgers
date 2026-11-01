@@ -10,8 +10,6 @@ import { relScale } from "../render/units";
  * One kraft serving tray per customer, lined with paper. A paper plate sits on it only when that
  * customer ordered a burger; the tray being worked on gets an outline in the accent colour.
  */
-const PLATE_PAPER = "#f7f4ec";
-const PLATE_RIM = "#e4dccb";
 const TRAY_KRAFT = "#c99a62";
 const TRAY_LINER = "#fbf6ea";
 /** Tray size and where the plate and sides sit on it, in plate radii (tray-local units). */
@@ -121,7 +119,7 @@ function makeTrayBody(style: TrayStyle): THREE.Group {
       break;
     }
     case "board": {
-      // A wooden serving board with well-rounded corners and a soft edge, greaseproof paper on top.
+      // A bare wooden serving board with well-rounded corners and a soft edge.
       const bevel = 0.04;
       const body = new THREE.ExtrudeGeometry(roundRect(new THREE.Shape(), w / 2 - bevel, d / 2 - bevel, 0.38), {
         depth: 0.16 - 2 * bevel,
@@ -140,12 +138,6 @@ function makeTrayBody(style: TrayStyle): THREE.Group {
         grain.position.set(0, 0.131, -d / 2 + 0.2 + i * ((d - 0.4) / 4));
         g.add(grain);
       }
-      const paper = new THREE.ShapeGeometry(roundRect(new THREE.Shape(), (w - 0.7) / 2, (d - 0.665) / 2, 0.22), 6);
-      paper.rotateX(-Math.PI / 2);
-      const l = mesh(faceted(paper), "#f6efdf", { ink: false });
-      l.position.y = 0.137;
-      l.rotation.y = -0.06;
-      g.add(l);
       break;
     }
     case "basket": {
@@ -163,17 +155,18 @@ function makeTrayBody(style: TrayStyle): THREE.Group {
   return g;
 }
 
-/** A dashed outline on the liner where a side goes: a circle for the cup, a boat for the fries. */
-function sideMark(kind: "cup" | "fries"): THREE.Group {
+/** A dashed outline on the board where something goes: a circle for the cup or the burger, a boat for the fries. */
+function sideMark(kind: "cup" | "fries" | "burger"): THREE.Group {
   const g = new THREE.Group();
   const mat = new THREE.MeshBasicMaterial({ color: "#cdb994", transparent: true, opacity: 0.95 });
-  const n = kind === "cup" ? 14 : 18;
+  const n = kind === "cup" ? 14 : kind === "burger" ? 28 : 18;
   for (let i = 0; i < n; i++) {
     const t = i / n;
     let x: number, z: number, a: number;
-    if (kind === "cup") {
+    if (kind !== "fries") {
+      const r = kind === "cup" ? 0.36 : DISH_R * 0.82;
       a = t * Math.PI * 2;
-      [x, z] = [Math.cos(a) * 0.36, Math.sin(a) * 0.36];
+      [x, z] = [Math.cos(a) * r, Math.sin(a) * r];
       a += Math.PI / 2;
     } else {
       // Round a rounded rectangle 0.86 x 0.62.
@@ -239,13 +232,10 @@ export class PlateView {
 
   constructor() {
     const trayBody = makeTrayBody(trayStyle());
-    const plate = mesh(faceted(new THREE.CylinderGeometry(DISH_R, DISH_R * 0.86, 0.08, 28)), PLATE_PAPER);
-    plate.position.y = 0.04;
-    const rim = mesh(faceted(new THREE.TorusGeometry(DISH_R * 0.93, 0.045, 4, 28)), PLATE_RIM, { ink: false });
-    rim.rotation.x = Math.PI / 2;
-    rim.position.y = 0.08;
-    this.dish.add(plate, rim);
-    this.dish.position.set(DISH_AT.x, 0.13, DISH_AT.z);
+    // No plate: a dashed ring on the board shows where the burger goes until it's started.
+    this.dish.add(sideMark("burger"));
+    this.dish.children[0].visible = true;
+    this.dish.position.set(DISH_AT.x, 0.132, DISH_AT.z);
     // The active outline: a frame just outside the tray, flat on the shelf.
     const frame = roundRect(new THREE.Shape(), TRAY.w / 2 + 0.2, TRAY.d / 2 + 0.2, 0.55);
     const hole = roundRect(new THREE.Path(), TRAY.w / 2 + 0.06, TRAY.d / 2 + 0.06, 0.44);
@@ -253,20 +243,20 @@ export class PlateView {
     this.ring = new THREE.Mesh(new THREE.ShapeGeometry(frame, 8), new THREE.MeshBasicMaterial({ color: ACTIVE_RING, transparent: true, opacity: 0.9 }));
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.position.y = 0.02;
-    this.burger.position.set(DISH_AT.x, 0.21, DISH_AT.z);
+    this.burger.position.set(DISH_AT.x, 0.13, DISH_AT.z);
     this.group.add(trayBody, this.dish, this.ring, this.burger, this.friesMark, this.cupMark);
   }
 
-  /** Show the plate (a burger was ordered) or leave the tray bare (drinks or fries only). */
+  /** A burger was ordered: mark its spot (until it's started) and keep the sides beside it. */
+  private hasDish = false;
   setDish(on: boolean): void {
-    this.dish.visible = on;
-    this.burger.position.y = on ? 0.21 : 0.13;
+    this.hasDish = on;
     this.placeSides();
   }
 
   /** Where the fries or the cup stand on this tray (tray units). */
   sideSpot(kind: "cup" | "fries"): { x: number; z: number } {
-    const solo = !this.dish.visible && !this.entries.length;
+    const solo = !this.hasDish && !this.entries.length;
     return kind === "cup" ? (solo ? CUP_SOLO : CUP_AT) : solo ? FRIES_SOLO : FRIES_AT;
   }
 
@@ -281,6 +271,7 @@ export class PlateView {
     this.cupMark.position.set(c.x, 0.132, c.z);
     this.friesMark.visible = this.wants.fries && !this.fries;
     this.cupMark.visible = this.wants.drink && !this.cup;
+    this.dish.visible = this.hasDish && !this.entries.length;
   }
 
   /** Which sides this tray's order wants (their outlines show until they're on). */

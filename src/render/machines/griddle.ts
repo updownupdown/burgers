@@ -1,13 +1,13 @@
 import * as THREE from "three";
 import { bakedMesh, Parts } from "../bake";
-import { mesh } from "../materials";
-import { box, C, cached, cyl, glow, glowMat, machine, rbox, sideProfile, studySpace, textDecal } from "./kit";
+import { faceted, mesh } from "../materials";
+import { box, C, cached, cyl, glow, glowMat, machine, rbox, sideProfile, studySpace } from "./kit";
 import { STUDY } from "../units";
 
 /*
  * The wide stainless griddle (after build #36): one long plate in three identical zones, low
  * splash guards so the pans behind it stay in view, a grease trough, and a control ledge along the
- * front with a chunky push button per zone. Each zone has its own light strip along the front
+ * front with a round power button and two indicator lamps per zone. Each zone has its own light strip along the front
  * edge: blue when it's off, orange on warm, red on hot.
  * Study units below; 8.7 x 6.0 x 1.9 (87 x 60 cm).
  */
@@ -29,7 +29,6 @@ export type ZoneHeat = "off" | "warm" | "hot";
 export const ZONE_HEATS: ZoneHeat[] = ["off", "warm", "hot"];
 /** Button cap, light strip and label colours per setting. */
 export const ZONE_COLOR: Record<ZoneHeat, string> = { off: "#5aa3d8", warm: "#f39a2e", hot: "#e0442e" };
-const ZONE_LABEL: Record<ZoneHeat, string> = { off: "OFF", warm: "WARM", hot: "HOT" };
 /** A faint tint over each zone of the plate, so hot reads warm even without the strip. */
 const ZONE_TINT: Record<ZoneHeat, [string, number]> = { off: ["#9cc9ea", 0.06], warm: ["#ffb04a", 0.08], hot: ["#ff5a2a", 0.13] };
 
@@ -73,17 +72,52 @@ const body = cached(() => {
   return p;
 });
 
-/** A button cap in one colour, with its label on top. Built per setting, so a change is a visibility swap. */
-function cap(heat: ZoneHeat): THREE.Group {
+/** The power symbol (a broken ring and a bar), flat, radius r, in light paint. */
+function powerSymbol(r: number, color: string): THREE.Group {
   const g = new THREE.Group();
-  const top = mesh(rbox(1.5, 0.26, 0.66, 0.09), ZONE_COLOR[heat], { ink: 0.012 });
-  top.position.y = 0.13;
-  const shine = mesh(box(1.2, 0.01, 0.08), "#ffffff", { ink: false, opacity: 0.45, shadow: false });
-  shine.position.set(0, 0.265, -0.2);
-  const lbl = textDecal(ZONE_LABEL[heat], 0.44, { bg: "rgba(0,0,0,0)", color: "#fffdf6", fs: 80, pad: 10, weight: 900 });
-  lbl.position.set(0, 0.268, 0.05);
-  g.add(top, shine, lbl);
+  const t = r * 0.16;
+  const gap = Math.PI / 3;
+  const ringGeo = new THREE.TorusGeometry(r, t, 4, 28, Math.PI * 2 - gap);
+  ringGeo.rotateZ(Math.PI / 2 + gap / 2);
+  ringGeo.rotateX(-Math.PI / 2);
+  const ring = mesh(ringGeo, color, { ink: false, shadow: false });
+  const bar = mesh(box(t * 2, t * 2, r * 1.05), color, { ink: false, shadow: false });
+  bar.position.z = -r * 0.55;
+  g.add(ring, bar);
   return g;
+}
+
+/** A round push-to-cycle power button: a steel bezel round a dark cap with the power symbol. */
+function powerButton(): THREE.Group {
+  const g = new THREE.Group();
+  const bezel = mesh(cyl(0.42, 0.46, 0.1, 28), C.steel, { ink: 0.012 });
+  bezel.position.y = 0.05;
+  const capM = mesh(cyl(0.32, 0.34, 0.2, 28), "#2b3135", { ink: 0.012 });
+  capM.position.y = 0.14;
+  const rim = mesh(cyl(0.3, 0.3, 0.01, 28), "#3b4348", { ink: false, shadow: false });
+  rim.position.y = 0.245;
+  const sym = powerSymbol(0.15, "#e9edef");
+  sym.position.y = 0.255;
+  const shine = mesh(box(0.28, 0.005, 0.05), "#ffffff", { ink: false, opacity: 0.35, shadow: false });
+  shine.position.set(0, 0.252, -0.22);
+  g.add(bezel, capM, rim, sym, shine);
+  return g;
+}
+
+/** Indicator lamps: both off when the zone is off, the first orange on warm, both red on hot. */
+const LAMP_OFF = "#4a5155";
+const LAMPS: Record<ZoneHeat, [string, string]> = { off: [LAMP_OFF, LAMP_OFF], warm: ["#ff9a2a", LAMP_OFF], hot: ["#ff3b25", "#ff3b25"] };
+
+function lamp(): { g: THREE.Group; glass: THREE.Mesh; halo: THREE.Mesh } {
+  const g = new THREE.Group();
+  const bezel = mesh(cyl(0.17, 0.19, 0.08, 20), C.steel, { ink: 0.01 });
+  bezel.position.y = 0.04;
+  const glass = glow(faceted(new THREE.SphereGeometry(0.13, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2)), LAMP_OFF);
+  glass.position.y = 0.08;
+  const halo = glow(cyl(0.28, 0.28, 0.005, 20), "#ff3b25", 0.0);
+  halo.position.y = 0.085;
+  g.add(bezel, glass, halo);
+  return { g, glass, halo };
 }
 
 export interface GriddleObject extends THREE.Group {
@@ -119,12 +153,12 @@ export function makeGriddle(): GriddleObject {
     const tint = glow(box(zoneW - 0.08, 0.004, pd - 0.08), ZONE_TINT.off[0], ZONE_TINT.off[1]);
     tint.position.set(x, TOP + 0.006, (PZ0 + PZ1) / 2);
     tint.renderOrder = 1;
-    const btn = new THREE.Group();
-    btn.position.set(x, LEDGE_Y + 0.02, BTN_Z);
-    const caps = Object.fromEntries(ZONE_HEATS.map((h) => [h, cap(h)])) as Record<ZoneHeat, THREE.Group>;
-    for (const h of ZONE_HEATS) btn.add(caps[h]);
-    st.add(led, tint, btn);
-    return { led, tint, btn, caps };
+    const btn = powerButton();
+    btn.position.set(x - 0.32, LEDGE_Y + 0.02, BTN_Z);
+    const lamps = [lamp(), lamp()];
+    lamps.forEach((l, k) => l.g.position.set(x + 0.18 + k * 0.42, LEDGE_Y + 0.02, BTN_Z));
+    st.add(led, tint, btn, ...lamps.map((l) => l.g));
+    return { led, tint, btn, lamps };
   });
   machine(g, W, D, TOP + 0.5, {
     surface: { y: TOP * STUDY, x0: -PX * STUDY, x1: PX * STUDY, z0: PZ0 * STUDY, z1: PZ1 * STUDY },
@@ -133,12 +167,15 @@ export function makeGriddle(): GriddleObject {
   });
   g.userData.setZone = (i, heat) => {
     const z = zones[i];
-    for (const h of ZONE_HEATS) z.caps[h].visible = h === heat;
+    LAMPS[heat].forEach((c, k) => {
+      z.lamps[k].glass.material = glowMat(c);
+      z.lamps[k].halo.material = glowMat(c, c === LAMP_OFF ? 0 : 0.28);
+    });
     z.led.material = glowMat(ZONE_COLOR[heat]);
     z.tint.material = glowMat(ZONE_TINT[heat][0], ZONE_TINT[heat][1]);
   };
   g.userData.pressButton = (i, t) => {
-    zones[i].btn.position.y = LEDGE_Y + 0.02 - 0.14 * Math.max(0, Math.min(1, t));
+    zones[i].btn.position.y = LEDGE_Y + 0.02 - 0.1 * Math.max(0, Math.min(1, t));
   };
   return g;
 }

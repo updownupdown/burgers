@@ -3,7 +3,7 @@
 // PORT=4175 node tools/playtest/tray-shots.cjs  ->  tools/playtest/out/tray-<style>.png
 const { open, step, out, enterShift } = require('./lib.cjs');
 (async () => {
-  for (const style of ['kraft', 'diner', 'sheet', 'board', 'basket']) {
+  for (const style of (process.env.STYLES || 'kraft,diner,sheet,board,basket').split(',')) {
     const { b, p } = await open({ w: 390, h: 844, dpr: 2, query: `?tray=${style}` });
     await p.evaluate(() => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: 0, tutorialDone: true })));
     await p.reload();

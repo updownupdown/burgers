@@ -32,7 +32,8 @@ const MIN_FIT = 0.55;
  * the lid and straw are what you check before serving.
  */
 export const TRAY_SIDES = 0.6;
-const ACTIVE_RING = "#c8472e";
+/** The "selected" outline: a cool blue that reads against the warm wood and the food. */
+const ACTIVE_RING = "#3f7fd0";
 export const TRAY_VIEW_HALF_H = 2.2;
 
 /**
@@ -50,7 +51,21 @@ export function trayStyle(): TrayStyle {
   } catch {
     // No storage: the default look.
   }
-  return "kraft";
+  return "board";
+}
+
+/** A rounded rectangle centred on the origin (half sizes hw x hd, corner radius r). */
+function roundRect<T extends THREE.Path>(p: T, hw: number, hd: number, r: number): T {
+  p.moveTo(-hw + r, -hd);
+  p.lineTo(hw - r, -hd);
+  p.quadraticCurveTo(hw, -hd, hw, -hd + r);
+  p.lineTo(hw, hd - r);
+  p.quadraticCurveTo(hw, hd, hw - r, hd);
+  p.lineTo(-hw + r, hd);
+  p.quadraticCurveTo(-hw, hd, -hw, hd - r);
+  p.lineTo(-hw, -hd + r);
+  p.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
+  return p;
 }
 
 function makeTrayBody(style: TrayStyle): THREE.Group {
@@ -106,16 +121,31 @@ function makeTrayBody(style: TrayStyle): THREE.Group {
       break;
     }
     case "board": {
-      // A wooden serving board: thick end grain, a handle at one end, greaseproof paper.
-      const b = mesh(faceted(new RoundedBoxGeometry(w, 0.16, d, 3, 0.12)), "#b77b45");
-      b.position.y = 0.05;
+      // A wooden serving board with well-rounded corners and a soft edge, greaseproof paper on top.
+      const bevel = 0.04;
+      const body = new THREE.ExtrudeGeometry(roundRect(new THREE.Shape(), w / 2 - bevel, d / 2 - bevel, 0.38), {
+        depth: 0.16 - 2 * bevel,
+        bevelEnabled: true,
+        bevelThickness: bevel,
+        bevelSize: bevel,
+        bevelSegments: 2,
+        curveSegments: 6,
+      });
+      body.rotateX(-Math.PI / 2);
+      const b = mesh(faceted(body), "#b77b45");
+      b.position.y = 0.05 - 0.08 + bevel;
       g.add(b);
       for (let i = 0; i < 5; i++) {
-        const grain = mesh(faceted(new THREE.BoxGeometry(w - 0.3, 0.004, 0.02)), "#9c6534", { ink: false });
+        const grain = mesh(faceted(new THREE.BoxGeometry(w - 0.9, 0.004, 0.02)), "#9c6534", { ink: false });
         grain.position.set(0, 0.131, -d / 2 + 0.2 + i * ((d - 0.4) / 4));
         g.add(grain);
       }
-      liner("#f6efdf", 0.7, -0.06);
+      const paper = new THREE.ShapeGeometry(roundRect(new THREE.Shape(), (w - 0.7) / 2, (d - 0.665) / 2, 0.22), 6);
+      paper.rotateX(-Math.PI / 2);
+      const l = mesh(faceted(paper), "#f6efdf", { ink: false });
+      l.position.y = 0.137;
+      l.rotation.y = -0.06;
+      g.add(l);
       break;
     }
     case "basket": {
@@ -136,7 +166,7 @@ function makeTrayBody(style: TrayStyle): THREE.Group {
 /** A dashed outline on the liner where a side goes: a circle for the cup, a boat for the fries. */
 function sideMark(kind: "cup" | "fries"): THREE.Group {
   const g = new THREE.Group();
-  const mat = new THREE.MeshBasicMaterial({ color: "#b9a888", transparent: true, opacity: 0.85 });
+  const mat = new THREE.MeshBasicMaterial({ color: "#cdb994", transparent: true, opacity: 0.95 });
   const n = kind === "cup" ? 14 : 18;
   for (let i = 0; i < n; i++) {
     const t = i / n;
@@ -217,14 +247,10 @@ export class PlateView {
     this.dish.add(plate, rim);
     this.dish.position.set(DISH_AT.x, 0.13, DISH_AT.z);
     // The active outline: a frame just outside the tray, flat on the shelf.
-    const frame = new THREE.Shape();
-    const [fw, fd] = [TRAY.w / 2 + 0.2, TRAY.d / 2 + 0.2];
-    frame.moveTo(-fw, -fd).lineTo(fw, -fd).lineTo(fw, fd).lineTo(-fw, fd).lineTo(-fw, -fd);
-    const hole = new THREE.Path();
-    const [hw, hd] = [TRAY.w / 2 + 0.06, TRAY.d / 2 + 0.06];
-    hole.moveTo(-hw, -hd).lineTo(-hw, hd).lineTo(hw, hd).lineTo(hw, -hd).lineTo(-hw, -hd);
+    const frame = roundRect(new THREE.Shape(), TRAY.w / 2 + 0.2, TRAY.d / 2 + 0.2, 0.55);
+    const hole = roundRect(new THREE.Path(), TRAY.w / 2 + 0.06, TRAY.d / 2 + 0.06, 0.44);
     frame.holes.push(hole);
-    this.ring = new THREE.Mesh(new THREE.ShapeGeometry(frame), new THREE.MeshBasicMaterial({ color: ACTIVE_RING, transparent: true, opacity: 0.9 }));
+    this.ring = new THREE.Mesh(new THREE.ShapeGeometry(frame, 8), new THREE.MeshBasicMaterial({ color: ACTIVE_RING, transparent: true, opacity: 0.9 }));
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.position.y = 0.02;
     this.burger.position.set(DISH_AT.x, 0.21, DISH_AT.z);

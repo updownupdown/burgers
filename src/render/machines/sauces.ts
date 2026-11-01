@@ -20,8 +20,8 @@ const BASE_W = 2 * SLOT_X + 0.82;
 /** Height of the nozzle tip in the caddy (hidden inside the base). */
 const SEAT_Y = 0.22;
 
-const COLOR: Record<SauceKind, string> = { ketchup: C.ketchup, mustard: C.mustard };
-const BASE_TINT: Record<SauceKind, string> = { ketchup: "#ffe1d8", mustard: "#fff2c0" };
+const COLOR: Record<SauceKind, string> = { ketchup: C.ketchup, mustard: C.mustard, pesto: "#5f9a3a", aioli: "#efe4c0" };
+const BASE_TINT: Record<SauceKind, string> = { ketchup: "#ffe1d8", mustard: "#fff2c0", pesto: "#d9ecc8", aioli: "#fffaf0" };
 
 const bottleParts = (kind: SauceKind) => () => {
   const p = new Parts();
@@ -37,7 +37,12 @@ const bottleParts = (kind: SauceKind) => () => {
   p.add(cyl(0.2, 0.2, 0.01, 20), BASE_TINT[kind], { p: [0, y0 + BOTTLE_H + 0.006, 0], ink: false });
   return p;
 };
-const BOTTLES: Record<SauceKind, ReturnType<typeof cached>> = { ketchup: cached(bottleParts("ketchup")), mustard: cached(bottleParts("mustard")) };
+const BOTTLES: Record<SauceKind, ReturnType<typeof cached>> = {
+  ketchup: cached(bottleParts("ketchup")),
+  mustard: cached(bottleParts("mustard")),
+  pesto: cached(bottleParts("pesto")),
+  aioli: cached(bottleParts("aioli")),
+};
 
 export interface SauceBottleObject extends THREE.Group {
   userData: {
@@ -81,28 +86,34 @@ export interface SauceCaddyObject extends THREE.Group {
   userData: {
     footprint: { w: number; d: number };
     h: number;
-    spots: { bottles: Record<SauceKind, { x: number; y: number; z: number }> };
+    spots: { bottles: Partial<Record<SauceKind, { x: number; y: number; z: number }>> };
     /** The bottles standing in the caddy; hide one while it's lifted out. */
-    bottles: Record<SauceKind, SauceBottleObject>;
+    bottles: Partial<Record<SauceKind, SauceBottleObject>>;
+    kinds: [SauceKind, SauceKind];
   };
 }
 
-/** The caddy with both bottles, one at each end: about 1.7 x 0.73 game units, 1.53 tall. */
-export function makeSauceCaddy(): SauceCaddyObject {
+/**
+ * The caddy with two bottles, one at each end (ketchup and mustard at the grill; pesto and aioli at
+ * the panini press): about 1.7 x 0.73 game units, 1.53 tall.
+ */
+export function makeSauceCaddy(kinds: [SauceKind, SauceKind] = ["ketchup", "mustard"]): SauceCaddyObject {
   const g = new THREE.Group() as SauceCaddyObject;
   g.add(bakedMesh(caddy()));
-  const spots = {
-    ketchup: { x: -SLOT_X * STUDY, y: SEAT_Y * STUDY, z: 0 },
-    mustard: { x: SLOT_X * STUDY, y: SEAT_Y * STUDY, z: 0 },
+  const spots: Partial<Record<SauceKind, { x: number; y: number; z: number }>> = {
+    [kinds[0]]: { x: -SLOT_X * STUDY, y: SEAT_Y * STUDY, z: 0 },
+    [kinds[1]]: { x: SLOT_X * STUDY, y: SEAT_Y * STUDY, z: 0 },
   };
-  const bottles = {} as Record<SauceKind, SauceBottleObject>;
-  for (const k of ["ketchup", "mustard"] as SauceKind[]) {
+  const bottles: Partial<Record<SauceKind, SauceBottleObject>> = {};
+  for (const k of kinds) {
     const b = makeSauceBottle(k);
-    b.position.set(spots[k].x, spots[k].y, spots[k].z);
+    const sp = spots[k]!;
+    b.position.set(sp.x, sp.y, sp.z);
     g.add(b);
     bottles[k] = b;
   }
   machine(g, BASE_W, 1.1, SEAT_Y + NUB + 0.22 + BOTTLE_H, { bottles: spots });
   g.userData.bottles = bottles;
+  g.userData.kinds = kinds;
   return g;
 }

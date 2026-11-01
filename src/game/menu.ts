@@ -1,5 +1,5 @@
 import type { DrinkId, ExpectedLayer, FriesSize, Kind, Modifier, Order, Size } from "./types";
-import { COUNTED, DRINK_LABEL, extraCount } from "./types";
+import { BREADS, COUNTED, DRINK_LABEL, extraCount, PRESS_CHEESE, PROTEINS } from "./types";
 import { fountainFor, recipeCount, type Recipe, type Stop } from "./stops";
 
 export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, M: 3, L: 4 };
@@ -36,8 +36,11 @@ export const TOAST_CHANCE = 0.05;
 /** Share of orders, once the shift is going, from someone who only wants a drink or fries: rare, but it happens. */
 export const SIDES_ONLY_CHANCE = 0.06;
 
+/** Share of fries orders that want sweet potato fries, where the fryer has them. */
+export const SWEET_CHANCE = 0.4;
+
 /** Just a drink (most often), just fries, or both, and no burger. Drinks come from the town's fountain. */
-export function sidesOrder(id: number, rng: Rng, drinks: readonly DrinkId[] = fountainFor("mountains")): Order {
+export function sidesOrder(id: number, rng: Rng, drinks: readonly DrinkId[] = fountainFor("mountains"), sweetOk = false): Order {
   const r = rng();
   const fries = r >= 0.55;
   const drink = r < 0.55 || r >= 0.85 ? anyDrink(drinks, rng) : null;
@@ -45,9 +48,11 @@ export function sidesOrder(id: number, rng: Rng, drinks: readonly DrinkId[] = fo
   const friesSize: FriesSize = f < 0.35 ? "S" : f < 0.75 ? "M" : "L";
   const d = rng();
   const drinkSize: Size = d < 0.3 ? "S" : d < 0.7 ? "M" : "L";
-  const name = fries && drink ? "Fries & a drink" : fries ? "Fries" : DRINK_LABEL[drink!];
+  const sweet = fries && sweetOk && rng() < SWEET_CHANCE;
+  const friesName = sweet ? "Sweet fries" : "Fries";
+  const name = fries && drink ? `${friesName} & a drink` : fries ? friesName : DRINK_LABEL[drink!];
   const price = (fries ? FRIES_PRICE[friesSize] : 0) + (drink ? DRINK_PRICE[drinkSize] : 0);
-  const order: Order = { id, name, price, mods: [], layers: [], fries, drink, friesSize, drinkSize };
+  const order: Order = { id, name, price, mods: [], layers: [], fries, drink, friesSize, drinkSize, ...(sweet ? { sweet } : {}) };
   if (drink) {
     const i = rng();
     order.ice = i < 0.45 ? true : i < 0.7 ? false : null;
@@ -69,8 +74,11 @@ export function seededRng(seed: number): Rng {
 }
 
 
-/** Recipe layers with modifiers applied, bottom to top. */
-export function applyMods(base: Kind[], mods: Modifier[]): Kind[] {
+/**
+ * Recipe layers with modifiers applied, bottom to top. On a panini an added filling goes on the
+ * protein if there is one, else just under the top slice; on an open-faced toast it goes on top.
+ */
+export function applyMods(base: Kind[], mods: Modifier[], open = false): Kind[] {
   let out = base.slice();
   for (const m of mods) {
     if (m.type === "toast") continue;
@@ -78,6 +86,9 @@ export function applyMods(base: Kind[], mods: Modifier[]): Kind[] {
     else if (m.type === "extra") {
       const i = out.lastIndexOf(m.kind);
       if (i >= 0) out.splice(i + 1, 0, m.kind);
+    } else if (BREADS.has(out[0])) {
+      const i = Math.max(out.lastIndexOf("chicken"), out.lastIndexOf("veggie"));
+      out.splice(open ? out.length : i >= 0 ? i + 1 : out.length - 1, 0, m.kind);
     } else {
       // Added toppings go on the top patty, under anything soft above it.
       const i = out.lastIndexOf("patty");
@@ -99,7 +110,7 @@ export function orderFromRecipe(
   // "Extra pickles" means more pickles in the same layer, not a second layer of them.
   const more = new Set(mods.filter((m) => m.type === "extra" && COUNTED.has(m.kind)).map((m) => m.kind));
   // Leave-offs come out last, so the ticket can show "- Ketchup" where the ketchup would have gone.
-  const full = applyMods(recipe.layers, mods.filter((m) => m.type !== "no" && !(m.type === "extra" && COUNTED.has(m.kind))));
+  const full = applyMods(recipe.layers, mods.filter((m) => m.type !== "no" && !(m.type === "extra" && COUNTED.has(m.kind))), !!recipe.open);
   const nos = new Set(mods.filter((m) => m.type === "no").map((m) => m.kind));
   const removed: { kind: Kind; at: number }[] = [];
   const kinds: Kind[] = [];
@@ -108,6 +119,13 @@ export function orderFromRecipe(
     else if (!removed.some((r) => r.kind === k && r.at === kinds.length)) removed.push({ kind: k, at: kinds.length });
   }
   const layers: ExpectedLayer[] = kinds.map((kind, i) => {
+    if (recipe.panini) {
+      // Panini bread is always pressed golden; cheese inside a closed panini melts; the avocado on
+      // an open-faced toast stays cold.
+      if (BREADS.has(kind)) return { kind, toasted: true };
+      if (PRESS_CHEESE.has(kind) && !recipe.open) return COUNTED.has(kind) ? { kind, melted: true, count: recipeCount(recipe, kind) + (more.has(kind) ? extraCount(kind) : 0) } : { kind, melted: true };
+      if (kind === "avocado" && recipe.open) return { kind, cold: true, count: recipeCount(recipe, kind) + (more.has(kind) ? extraCount(kind) : 0) };
+    }
     if (kind === "patty") return recipe.smash ? { kind, smashed: true } : { kind };
     if (kind === "bun") return { kind, toasted: recipe.toasted || mods.some((m) => m.type === "toast") };
     if (kind === "egg") return recipe.egg === "over" ? { kind, flipped: true } : { kind };
@@ -120,16 +138,20 @@ export function orderFromRecipe(
   return { id, name: recipe.name, price, mods, ...(removed.length ? { removed } : {}), layers, fries, drink, friesSize, drinkSize };
 }
 
-/** Toppings a customer may ask to leave off or double up. Buns and patties are never optional. */
-const OPTIONAL: ReadonlySet<Kind> = new Set<Kind>(["cheese", "lettuce", "tomato", "onion", "pickle", "jalapeno", "pineapple", "bacon", "ketchup", "mustard"]);
-const EXTRA_OK: ReadonlySet<Kind> = new Set<Kind>(["cheese", "bacon", "pickle", "onion", "jalapeno", "tomato"]);
+/** Toppings a customer may ask to leave off or double up. Buns, breads, patties and other proteins are never optional. */
+const OPTIONAL: ReadonlySet<Kind> = new Set<Kind>(["cheese", "lettuce", "tomato", "onion", "pickle", "jalapeno", "pineapple", "bacon", "ketchup", "mustard", "basil", "rocket", "redonion", "pesto", "aioli", "cheddar"]);
+const EXTRA_OK: ReadonlySet<Kind> = new Set<Kind>(["cheese", "bacon", "pickle", "onion", "jalapeno", "tomato", "mozzarella", "avocado", "redonion", "tuna"]);
 const ADD_OK: Kind[] = ["cheese", "bacon", "pickle", "onion", "jalapeno", "pineapple", "egg", "lettuce", "tomato"];
+/** On a panini: avocado is the usual add (and the Veggie Club's favourite), then the cold fillings. */
+const PANINI_ADD: Kind[] = ["avocado", "avocado", "rocket", "tomato", "redonion", "basil"];
 
 export function pickMods(recipe: Recipe, pantry: Kind[], rng: Rng, level: number): Modifier[] {
   const mods: Modifier[] = [];
   const count = rng() < 0.15 + 0.35 * level ? (rng() < 0.25 * level ? 2 : 1) : 0;
-  for (let n = 0; n < count; n++) {
-    const has = new Set(applyMods(recipe.layers, mods));
+  // The Veggie Club's common change: ADD avocado.
+  if (recipe.name === "Veggie Club" && pantry.includes("avocado") && rng() < 0.3 + 0.3 * level) mods.push({ type: "add", kind: "avocado" });
+  for (let n = mods.length; n < count; n++) {
+    const has = new Set(applyMods(recipe.layers, mods, !!recipe.open));
     const roll = rng();
     const pick = <T>(xs: T[]) => (xs.length ? xs[Math.floor(rng() * xs.length)] : null);
     let m: Modifier | null = null;
@@ -140,7 +162,8 @@ export function pickMods(recipe: Recipe, pantry: Kind[], rng: Rng, level: number
       const k = pick([...has].filter((k) => EXTRA_OK.has(k)));
       if (k) m = { type: "extra", kind: k };
     } else {
-      const k = pick(ADD_OK.filter((k) => pantry.includes(k) && !has.has(k)));
+      // An open-faced toast takes nothing that would need pressing.
+      const k = pick((recipe.panini ? PANINI_ADD : ADD_OK).filter((k) => pantry.includes(k) && !has.has(k) && !(recipe.open && (PROTEINS.has(k) || PRESS_CHEESE.has(k)))));
       if (k) m = { type: "add", kind: k };
     }
     if (m && !mods.some((o) => o.kind === m!.kind)) mods.push(m);
@@ -177,7 +200,7 @@ export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Orde
   const drinks = fountainFor(stop.region);
   // Towns without poutine still roll for it, so the rest of the order stream stays the same.
   if (level >= 0.15 && rng() < POUTINE_CHANCE && stop.poutine) return poutineOrder(id, rng, level, drinks);
-  if (level >= 0.15 && rng() < SIDES_ONLY_CHANCE) return sidesOrder(id, rng, drinks);
+  if (level >= 0.15 && rng() < SIDES_ONLY_CHANCE) return sidesOrder(id, rng, drinks, !!stop.sweet);
   const recipe = pickRecipe(stop.menu, level, rng);
   const fries = rng() < 0.25 + level * 0.4;
   const drink = rng() < 0.2 + level * 0.5 ? anyDrink(drinks, rng) : null;
@@ -185,11 +208,15 @@ export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Orde
   const mods = level < 0.1 ? [] : pickMods(recipe, stop.pantry, rng, level);
   // Now and then someone wants their bun toasted on a burger that doesn't usually come that way.
   if (!recipe.toasted && level >= 0.2 && rng() < TOAST_CHANCE) mods.push({ type: "toast", kind: "bun" });
+  const sweet = fries && !!stop.sweet && rng() < SWEET_CHANCE;
   const f = rng();
   const friesSize: FriesSize = f < 0.35 ? "S" : f < 0.75 ? "M" : "L";
   const r = rng();
   const drinkSize: Size = r < 0.3 ? "S" : r < 0.7 ? "M" : "L";
   const order = orderFromRecipe(id, recipe, fries, drink, mods, friesSize, drinkSize);
+  if (sweet) order.sweet = true;
+  // At Harbor City a closed panini goes out cut in half.
+  if (recipe.panini && !recipe.open && stop.press?.slice) order.slice = true;
   if (drink) {
     const i = rng();
     order.ice = i < 0.45 ? true : i < 0.7 ? false : null;

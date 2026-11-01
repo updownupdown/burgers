@@ -3,6 +3,7 @@ import type { Kind } from "../game/types";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
 import { vegParts } from "./food";
 import { paniniParts, rawParts } from "./panini";
+import { fillParts, limeParts, tortillaStackParts } from "./tacos";
 import { faceted } from "./materials";
 
 /**
@@ -326,7 +327,46 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
       }
     }
   },
+  corn: (parts) => {
+    // A stack of corn tortillas in a cloth-lined pan.
+    parts.add(box(1.08, 0.03, 0.92), "#e9e0cc", { p: [0, PAN.floor + 0.015, 0], ink: false });
+    parts.addParts(tortillaStackParts("corn", 9, 1), { p: [0, PAN.floor + 0.03, 0], s: HEAP_S });
+  },
+  flour: (parts) => {
+    parts.add(box(1.08, 0.03, 0.92), "#e9e0cc", { p: [0, PAN.floor + 0.015, 0], ink: false });
+    parts.addParts(tortillaStackParts("flour", 8, 1), { p: [0, PAN.floor + 0.03, 0], s: 0.42 });
+  },
+  pork: (parts) => {
+    parts.addParts(fillParts("pork", 0.95, 0.8, 3, 3.2, 0.03), { p: [0, PAN.floor, 0], s: 0.55 });
+    parts.addParts(fillParts("pork", 0.7, 0.55, 5, 2, 0.03), { p: [0, PAN.floor + 0.07, 0], s: 0.55 });
+    scoop(parts);
+  },
+  beans: (parts) => {
+    parts.addParts(fillParts("beans", 0.98, 0.84, 2, 1.6, 0.03), { p: [0, PAN.floor, 0], s: 0.55 });
+    scoop(parts);
+  },
+  cilantro: (parts) => {
+    parts.addParts(fillParts("cilantro", 0.95, 0.8, 1, 4, 0.03), { p: [0, PAN.floor + 0.02, 0], s: 0.55 });
+    parts.addParts(fillParts("cilantro", 0.7, 0.55, 4, 3, 0.03), { p: [0, PAN.floor + 0.06, 0], s: 0.55 });
+  },
+  lime: (parts, r) => {
+    for (let i = 0; i < 7; i++) {
+      const a = i * 2.399;
+      const rr = Math.sqrt((i + 0.5) / 7);
+      parts.addParts(limeParts(0.03), { p: [Math.cos(a) * rr * 0.36, PAN.floor + 0.05 + (1 - rr) * 0.06, Math.sin(a) * rr * 0.28], r: [0, r() * 6, 0], s: VEG_S });
+    }
+  },
+  jack: (parts) => {
+    parts.addParts(fillParts("jack", 0.95, 0.8, 1, 4, 0.03), { p: [0, PAN.floor + 0.02, 0], s: 0.55 });
+    parts.addParts(fillParts("jack", 0.75, 0.6, 3, 3, 0.03), { p: [0, PAN.floor + 0.07, 0], s: 0.55 });
+  },
 };
+
+/** A steel serving spoon resting in a pan (the pork and bean wells). */
+function scoop(parts: Parts): void {
+  parts.add(faceted(new THREE.SphereGeometry(0.13, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2)), "#c9d1cf", { p: [0.2, PAN.floor + 0.2, 0.1], r: [Math.PI, 0, 0], s: [1, 0.6, 1], ink: 0.014 });
+  parts.add(box(0.5, 0.035, 0.05), "#8e9a98", { p: [0.42, PAN.floor + 0.28, -0.06], r: [0, 0.5, 0.35], ink: 0.012 });
+}
 
 /** Bread in the bin: a wooden board in the pan with slices fanned on it. */
 function breadBin(parts: Parts, r: () => number, kind: "ciabatta" | "sourdough"): void {

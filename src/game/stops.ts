@@ -1,5 +1,5 @@
 import type { CrowdId } from "./business";
-import type { DrinkId, Kind } from "./types";
+import type { DrinkId, FryKind, Kind } from "./types";
 import { HOUSE_DRINKS, STANDARD_COUNT } from "./types";
 
 export interface Recipe {
@@ -22,6 +22,11 @@ export interface Recipe {
   panini?: boolean;
   /** Open-faced: only the bread goes in the press; what goes on top is never heated. */
   open?: boolean;
+  /**
+   * Made on the comal (Red Rock): tacos in the rack (warmed tortillas, then fillings on the tray),
+   * a quesadilla (folded and crisped on the comal), or a tostada (a fried shell built flat).
+   */
+  dish?: "tacos" | "quesadilla" | "tostada";
 }
 
 /** How many pieces of a counted topping go in each of its layers in this recipe. */
@@ -61,13 +66,22 @@ export interface Stop {
    * clamshell bays, and whether the cutting board is out for slicing (Harbor City).
    */
   press?: { bays: number; slice: boolean };
-  /** Sweet potato fries are on the fryer menu here (the coast, from Driftwood). */
-  sweet?: boolean;
+  /**
+   * The middle counter is a comal here (Red Rock), and whether the tortilla press is out (Sun Valley).
+   */
+  comal?: { tpress: boolean };
+  /**
+   * What the fryer makes here, the usual side first: fries in the Pines, sweet potato fries too on
+   * the coast from Driftwood, chips (and churros at Sun Valley) in Red Rock. Missing is just fries.
+   */
+  fryer?: FryKind[];
 }
 
 /** Which middle counter a town cooks on. */
-export type MiddleCounter = "grill" | "press";
-export const middleOf = (t: Pick<Stop, "press">): MiddleCounter => (t.press ? "press" : "grill");
+export type MiddleCounter = "grill" | "press" | "comal";
+export const middleOf = (t: Pick<Stop, "press" | "comal">): MiddleCounter => (t.press ? "press" : t.comal ? "comal" : "grill");
+/** The fryer's kinds in a town (fries unless it says otherwise). */
+export const fryerOf = (t: Pick<Stop, "fryer">): FryKind[] => t.fryer ?? ["fries"];
 
 export type RegionId = "mountains" | "coast" | "desert" | "orchard";
 
@@ -118,9 +132,17 @@ const AVO_TOAST: Recipe = { name: "Avocado Toast", price: 9, layers: ["sourdough
 const TUNA_MELT: Recipe = { name: "Tuna Melt", price: 11, layers: ["sourdough", "tuna", "cheddar", "redonion", "sourdough"], toasted: true, panini: true, melt: true, counts: { tuna: 2, redonion: 2 } };
 const CHICKEN_PESTO: Recipe = { name: "Chicken Pesto", price: 13, layers: ["ciabatta", "pesto", "chicken", "mozzarella", "tomato", "ciabatta"], toasted: true, panini: true, melt: true, counts: { mozzarella: 2, tomato: 2 }, from: 0.15 };
 const VEGGIE_CLUB: Recipe = { name: "Veggie Club", price: 12, layers: ["ciabatta", "aioli", "veggie", "tomato", "rocket", "ciabatta"], toasted: true, panini: true, counts: { tomato: 2 }, from: 0.2 };
-const TUMBLEWEED: Recipe = { name: "Tumbleweed", price: 8, layers: ["bun", "patty", "onion", "ketchup", "bun"], toasted: false };
-const RATTLESNAKE: Recipe = { name: "Rattlesnake", price: 13, layers: ["bun", "patty", "jalapeno", "cheese", "jalapeno", "ketchup", "bun"], toasted: false };
-const RANCH: Recipe = { name: "Ranch Breakfast", price: 14, layers: ["bun", "patty", "bacon", "egg", "bun"], toasted: true, egg: "over", from: 0.15 };
+// Red Rock: tacos and quesadillas on the comal (DESIGN §24, phase 3). Taco tortillas are warmed on
+// the comal and filled in the rack on the tray, one scoop of pork per taco; toppings sprinkle over
+// the whole rack. A quesadilla is built, folded and flipped on the comal. The tostada's shell comes
+// from the fryer and is built flat on the tray.
+const STREET_TACOS: Recipe = { name: "Street Tacos", price: 10, layers: ["corn", "pork", "onion", "cilantro", "lime"], toasted: true, dish: "tacos", counts: { corn: 3, pork: 3, onion: 1 } };
+const QUESADILLA: Recipe = { name: "Quesadilla", price: 9, layers: ["flour", "jack"], toasted: true, dish: "quesadilla", melt: true, counts: { jalapeno: 2, pork: 1 } };
+const PASTOR_TACOS: Recipe = { name: "Pastor Tacos", price: 12, layers: ["corn", "pork", "pineapple", "onion", "greensalsa"], toasted: true, dish: "tacos", counts: { corn: 2, pork: 2, onion: 1 }, from: 0.15 };
+const BEAN_TOSTADA: Recipe = { name: "Bean Tostada", price: 10, layers: ["tostada", "beans", "lettuce", "jack", "crema"], toasted: true, dish: "tostada", counts: { beans: 1 } };
+const BREAKFAST_TACO: Recipe = { name: "Breakfast Taco", price: 11, layers: ["flour", "beans", "egg", "redsalsa"], toasted: true, dish: "tacos", egg: "over", counts: { beans: 1 }, from: 0.15 };
+/** The Rodeo special at Cactus Junction: a platter of four street tacos. */
+const RODEO_PLATTER: Recipe = { name: "Rodeo Platter", price: 15, layers: ["corn", "pork", "onion", "cilantro", "lime"], toasted: true, dish: "tacos", counts: { corn: 4, pork: 4, onion: 1 }, from: 0.1 };
 const SWITCHBACK: Recipe = { name: "Cheesy Switchback", price: 10, layers: ["bun", "patty", "cheese", "pickle", "mustard", "bun"], toasted: false };
 const SANDY_PICKLE: Recipe = { name: "Sandy Pickle", price: 10, layers: ["bun", "pickle", "patty", "cheese", "pickle", "bun"], toasted: false };
 const SUNSET_DOUBLE: Recipe = { name: "Sunset Double", price: 16, layers: ["bun", "patty", "cheese", "patty", "cheese", "jalapeno", "bun"], toasted: true, smash: true, melt: true, from: 0.25 };
@@ -128,7 +150,9 @@ const SUNSET_DOUBLE: Recipe = { name: "Sunset Double", price: 16, layers: ["bun"
 const PINES_PANTRY: Kind[] = ["bun", "patty", "bacon", "egg", "cheese", "lettuce", "tomato", "onion", "pickle"];
 /** The press counter's pans: breads, proteins and the tuna well behind the press, fillings in the cold rail. */
 const COAST_FIRST: Kind[] = ["ciabatta", "sourdough", "mozzarella", "tomato", "basil", "avocado", "rocket"];
-const DESERT_PANTRY: Kind[] = ["bun", "patty", "bacon", "egg", "cheese", "lettuce", "tomato", "onion", "jalapeno"];
+/** The comal counter's pans: tortillas and the steam wells behind the comal, the cold rail on the left, the salsas in the caddy. */
+const DESERT_FIRST: Kind[] = ["corn", "flour", "pork", "onion", "cilantro", "jack", "jalapeno", "lime"];
+const DESERT_MID: Kind[] = [...DESERT_FIRST, "beans", "pineapple", "lettuce", "greensalsa", "crema"];
 const ORCHARD_PANTRY: Kind[] = ["bun", "patty", "bacon", "cheese", "lettuce", "tomato", "onion", "pickle", "jalapeno"];
 
 /**
@@ -258,7 +282,7 @@ export const STOPS: Stop[] = [
     pantry: [...COAST_FIRST, "tuna", "cheddar", "redonion", "chicken"],
     poutine: false,
     press: { bays: 2, slice: false },
-    sweet: true,
+    fryer: ["fries", "sweet"],
     newThing: "New here: Chicken Pesto (press the chicken on its own first, then the whole sandwich) and sweet potato fries, which cook fast.",
     customers: 12,
     shiftLength: 190,
@@ -278,7 +302,7 @@ export const STOPS: Stop[] = [
     pantry: [...COAST_FIRST, "tuna", "cheddar", "redonion", "chicken", "veggie"],
     poutine: false,
     press: { bays: 3, slice: true },
-    sweet: true,
+    fryer: ["fries", "sweet"],
     newThing: "New here: the Veggie Club, a third press bay and the cutting board. Swipe across a pressed panini on the board to cut it in half.",
     customers: 13,
     shiftLength: 210,
@@ -295,12 +319,14 @@ export const STOPS: Stop[] = [
     x: 52,
     y: 95,
     roads: ["cactus"],
-    pantry: DESERT_PANTRY,
-    poutine: true,
+    pantry: DESERT_FIRST,
+    poutine: false,
+    comal: { tpress: false },
+    fryer: ["chips"],
     customers: 11,
     shiftLength: 200,
-    newThing: "New here: jalapeños. Four to a layer, and some like extra.",
-    menu: [TUMBLEWEED, RATTLESNAKE],
+    newThing: "New here: the comal, hot on the left and warm on the right. Warm tortillas until they're soft and spotted. For a quesadilla, lay cheese on a flour tortilla, drag its edge across to fold it, and flip it once.",
+    menu: [STREET_TACOS, QUESADILLA],
   },
   {
     id: "cactus",
@@ -312,12 +338,14 @@ export const STOPS: Stop[] = [
     x: 21,
     y: 103,
     roads: ["sunvalley"],
-    pantry: DESERT_PANTRY,
+    pantry: DESERT_MID,
     poutine: true,
+    comal: { tpress: false },
+    fryer: ["chips"],
     customers: 12,
     shiftLength: 200,
-    newThing: "New here: the Ranch Breakfast. Its egg is flipped once on the grill, over easy.",
-    menu: [TUMBLEWEED, RATTLESNAKE, RANCH],
+    newThing: "New here: Pastor Tacos (char the pineapple on the comal), the Bean Tostada (fry a corn tortilla into a shell) and nachos.",
+    menu: [STREET_TACOS, QUESADILLA, PASTOR_TACOS, BEAN_TOSTADA],
   },
   {
     id: "sunvalley",
@@ -330,11 +358,14 @@ export const STOPS: Stop[] = [
     y: 137,
     roads: ["applecross"],
     capital: true,
-    pantry: DESERT_PANTRY,
+    pantry: [...DESERT_MID, "egg", "redsalsa"],
     poutine: true,
+    comal: { tpress: true },
+    fryer: ["chips", "churros"],
     customers: 14,
     shiftLength: 220,
-    menu: [TUMBLEWEED, RATTLESNAKE, RANCH],
+    newThing: "New here: the Breakfast Taco (crack the egg on the comal, flip it once), churros, and the tortilla press: hold it to flatten a fresh tortilla. Customers pay extra for hand-pressed ones.",
+    menu: [STREET_TACOS, QUESADILLA, PASTOR_TACOS, BEAN_TOSTADA, BREAKFAST_TACO],
   },
   // ---- Orchard Isle: a short chain across the causeway.
   {
@@ -485,6 +516,7 @@ export const EVENTS: TownEvent[] = [
     busy: 1.6,
     longer: 40,
     blurb: "Big appetites. Bigger hats.",
+    special: RODEO_PLATTER,
   },
   {
     id: "chili",

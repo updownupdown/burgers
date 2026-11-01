@@ -1,7 +1,7 @@
 import type { Order, Plate } from "./game/types";
 import { COOK_SCALE, cookZone, type Cookable } from "./game/cooking";
-import { collapseCounted, layerQuality, PATTY_OFF } from "./game/scoring";
-import { BREADS, COUNTED, DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, extraCount, KIND_COLOR, KIND_LABEL, PROTEINS, type DrinkId } from "./game/types";
+import { collapseCounted, dishOrder, layerQuality, PATTY_OFF } from "./game/scoring";
+import { BREADS, COUNTED, DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, extraCount, FRY_LABEL, fryOf, KIND_COLOR, KIND_LABEL, PROTEINS, TORTILLAS, type DrinkId, type FryKind, type Kind } from "./game/types";
 import { fountainFor } from "./game/stops";
 import { icon } from "./ui/icons";
 
@@ -62,6 +62,16 @@ const TAB_ART: Record<string, string> = {
     <path d="M6 20.6h36" fill="none" stroke="#2a2622" stroke-width="3.6" stroke-linecap="round"/>
     <path d="M6 20.6h36" fill="none" stroke="#d8573a" stroke-width="2" stroke-linecap="round"/>
     <circle cx="36.5" cy="28" r="1.6" fill="#ff9a2a" ${INK}/>`,
+  // Red Rock's comal: a long black plate with two tortillas warming on it, flames under the hot end.
+  Comal: `<path d="M5 22h38v7.5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z" fill="#8a8178" ${INK}/>
+    <path d="M6.5 22 9 15.5h30l2.5 6.5z" fill="#33302c" ${INK}/>
+    <ellipse cx="17" cy="18.6" rx="6.2" ry="2.4" fill="#f0cf6a" ${INK}/>
+    <ellipse cx="30.5" cy="18.6" rx="6.6" ry="2.5" fill="#f6ecd2" ${INK}/>
+    <circle cx="15.4" cy="18.2" r=".8" fill="#b0702e"/><circle cx="18.6" cy="19.2" r=".7" fill="#b0702e"/><circle cx="31.6" cy="18" r=".7" fill="#c98a4a"/>
+    <path d="M11 30c-1-1.4.4-2.6 0-4 1.2.8 1.6 1.8 1.2 2.6.6-.4.8-1 .6-1.8 1 1 .8 2.4-.2 3.2z" fill="#ff8a2a"/>
+    <path d="M17 30c-1-1.4.4-2.6 0-4 1.2.8 1.6 1.8 1.2 2.6.6-.4.8-1 .6-1.8 1 1 .8 2.4-.2 3.2z" fill="#ff8a2a"/>
+    <path d="M23 30c-1-1.4.4-2.6 0-4 1.2.8 1.6 1.8 1.2 2.6.6-.4.8-1 .6-1.8 1 1 .8 2.4-.2 3.2z" fill="#ff8a2a"/>
+    <path d="M13 11.5c-1.2-1.6 1.2-2.6 0-4.4M24 10.5c-1.2-1.6 1.2-2.6 0-4.4" fill="none" stroke="#c8472e" stroke-width="1.4" stroke-linecap="round"/>`,
   Fryer: `<path d="M17.5 12.5 16 5M20.5 12.5V3.5M23.5 12.5l1-8M26.5 12.5l1.8-6.6M29.2 12.5l2.4-5.4" fill="none" stroke="#2a2622" stroke-width="3.4" stroke-linecap="round"/>
     <path d="M17.5 12.5 16 5M20.5 12.5V3.5M23.5 12.5l1-8M26.5 12.5l1.8-6.6M29.2 12.5l2.4-5.4" fill="none" stroke="#f0c341" stroke-width="1.6" stroke-linecap="round"/>
     <path d="M7 19h34v11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z" fill="#b9b2a6" ${INK}/>
@@ -210,10 +220,15 @@ const SHORT_NAME: Record<string, string> = {
   "Tuna Melt": "Tuna M",
   "Chicken Pesto": "Chk Pst",
   "Veggie Club": "Veg Clb",
-  // phase 1 placeholder burgers for Red Rock and Orchard Isle
-  Tumbleweed: "Tumble",
-  Rattlesnake: "Rattler",
-  "Ranch Breakfast": "Ranch B",
+  // Red Rock's comal
+  "Street Tacos": "Street",
+  Quesadilla: "Quesa",
+  "Pastor Tacos": "Pastor",
+  "Bean Tostada": "Tostada",
+  "Breakfast Taco": "Bkfst T",
+  "Rodeo Platter": "Rodeo",
+  Nachos: "Nachos",
+  // phase 1 placeholder burgers for Orchard Isle
   "Cheesy Switchback": "Chz Sw",
   "Sandy Pickle": "Sandy P",
   "Sunset Double": "Sun Dbl",
@@ -267,7 +282,28 @@ const ICON_PATH: Record<string, string> = {
   tuna: `<path d="M1.6 9.6c0-3.2 2.8-5.8 6.4-5.8s6.4 2.6 6.4 5.8z"/><g class="hi"><path d="M5 7.2l1.4 1M8.4 6l1.2 1.2M10.6 7.6l.8.8"/></g>`,
   pesto: `<path d="M8 1.2c1.6 2.4 4.2 4.9 4.2 7.1a4.2 4.2 0 0 1-8.4 0c0-2.2 2.6-4.7 4.2-7.1z"/>`,
   aioli: `<path d="M8 1.2c1.6 2.4 4.2 4.9 4.2 7.1a4.2 4.2 0 0 1-8.4 0c0-2.2 2.6-4.7 4.2-7.1z"/>`,
+  // Red Rock's comal.
+  corn: `<ellipse cx="8" cy="6.5" rx="7" ry="4.2"/><g class="hi"><circle cx="5.4" cy="5.6" r=".8"/><circle cx="9.8" cy="7.6" r=".8"/></g>`,
+  flour: `<ellipse cx="8" cy="6.5" rx="7.2" ry="4.4"/><g class="hi"><circle cx="6" cy="7.4" r=".8"/><circle cx="10.4" cy="5.4" r=".7"/></g>`,
+  pork: `<rect x="1.6" y="4.4" width="4.4" height="3.8" rx="1"/><rect x="6" y="2.8" width="4.6" height="4" rx="1"/><rect x="9.4" y="6.2" width="4.8" height="3.8" rx="1"/>`,
+  beans: `<path d="M1.4 9.6c.6-3.4 3.4-5.6 6.6-5.6s6 2.2 6.6 5.6z"/>`,
+  cilantro: `<path d="M8 1.6c2.8 1 3.4 3.6 2.4 5.6 1.8-.6 3.6.4 3.6 2.4-2.6 1.2-4.6.8-6-.6-1.4 1.4-3.4 1.8-6 .6 0-2 1.8-3 3.6-2.4C4.6 5.2 5.2 2.6 8 1.6z"/>`,
+  lime: `<path d="M1.4 9.4A6.6 6.6 0 0 1 14.6 9.4z"/>`,
+  jack: `<path d="M1.6 4.2l5 1.2M3 8.4l5.4-1.4M8.6 3.4l5.6 2M9 9.2l5-1" class="st"/><rect x="2" y="3.6" width="5" height="1.4" rx=".7"/><rect x="3" y="7.2" width="5.4" height="1.4" rx=".7"/><rect x="8.6" y="3.8" width="5.6" height="1.4" rx=".7"/><rect x="9" y="8" width="5" height="1.4" rx=".7"/>`,
+  tostada: `<ellipse cx="8" cy="6.8" rx="7.2" ry="3.6"/>`,
+  redsalsa: `<path d="M8 1.2c1.6 2.4 4.2 4.9 4.2 7.1a4.2 4.2 0 0 1-8.4 0c0-2.2 2.6-4.7 4.2-7.1z"/>`,
+  greensalsa: `<path d="M8 1.2c1.6 2.4 4.2 4.9 4.2 7.1a4.2 4.2 0 0 1-8.4 0c0-2.2 2.6-4.7 4.2-7.1z"/>`,
+  crema: `<path d="M8 1.2c1.6 2.4 4.2 4.9 4.2 7.1a4.2 4.2 0 0 1-8.4 0c0-2.2 2.6-4.7 4.2-7.1z"/>`,
+  chips: `<path d="M1.4 10.4 5 2.2l4 8.2zM7.6 9.8l3.8-7.6 3.4 7.8z"/>`,
+  queso: `<path d="M1.5 6.5c2-1.4 3.6-.4 5-1.6 1.6-1.4 3.6-1 5.2.2 1.3 1 2.3.8 2.8.6v2.6c-1.6 1.6-4.6 2.3-7.5 2.3-2.8 0-4.6-.8-5.5-1.8z"/>`,
 };
+
+/** Compact ticket names for the comal's pieces ("Corn x3" rather than "Corn tortilla x3"). */
+const TICKET_LABEL: Partial<Record<Kind, string>> = { corn: "Corn", flour: "Flour", tostada: "Tostada", greensalsa: "Salsa verde", redsalsa: "Salsa roja" };
+const ticketLabel = (k: Kind) => TICKET_LABEL[k] ?? KIND_LABEL[k];
+/** A side's colour and name on a ticket, by what it's fried from. */
+const FRY_COLOR: Record<FryKind, string> = { fries: "#f3d36b", sweet: "#f08a3a", chips: "#ebbe4a", churros: "#c9843a" };
+const FRY_ICON: Record<FryKind, string> = { fries: "fries", sweet: "fries", chips: "chips", churros: "fries" };
 
 const ticketIcon = (name: string, color: string) =>
   `<svg class="ic" viewBox="0 0 16 12" style="--c:${color}" aria-hidden="true">${ICON_PATH[name] ?? ICON_PATH.patty}</svg>`;
@@ -304,11 +340,14 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
   const rows: TicketRow[] = [];
   if (order.poutine && !order.layers.length) {
     const f = plate.fries;
-    const fryState: RowState = !f ? "" : f.size === order.friesSize ? "done" : "wrong";
+    const fry = fryOf(order);
+    const fryState: RowState = !f ? "" : f.size === order.friesSize && fryOf(f) === fry ? "done" : "wrong";
+    // Nachos (Red Rock): chips, jalapeños and queso where a poutine has fries, curds and gravy.
+    const nachos = fry === "chips";
     const parts: [string, string, string, RowState][] = [
-      ["fries", "#f3d36b", `<i class="sz">${order.friesSize}</i>Fries`, fryState],
-      ["curds", "#f5edcf", "Cheese curds", f?.curds ? (fryState === "wrong" ? "wrong" : "done") : ""],
-      ["gravy", "#6e4020", "Gravy", f?.gravy ? (f.curds && fryState !== "wrong" ? "done" : "wrong") : ""],
+      [FRY_ICON[fry], FRY_COLOR[fry], `<i class="sz">${order.friesSize}</i>${FRY_LABEL[fry]}`, fryState],
+      nachos ? ["jalapeno", KIND_COLOR.jalapeno, "Jalapeños", f?.curds ? (fryState === "wrong" ? "wrong" : "done") : ""] : ["curds", "#f5edcf", "Cheese curds", f?.curds ? (fryState === "wrong" ? "wrong" : "done") : ""],
+      nachos ? ["queso", "#f2b632", "Queso", f?.gravy ? (f.curds && fryState !== "wrong" ? "done" : "wrong") : ""] : ["gravy", "#6e4020", "Gravy", f?.gravy ? (f.curds && fryState !== "wrong" ? "done" : "wrong") : ""],
     ];
     const next = parts.findIndex((p) => !p[3]);
     const wrong = parts.some((p) => p[3] === "wrong");
@@ -320,8 +359,9 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     const f = plate.fries;
     const d = plate.drink;
     if (order.fries) {
-      const state: RowState = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy && !!f.sweet === !!order.sweet ? "done" : "wrong";
-      rows.push({ icon: "fries", color: order.sweet ? "#f08a3a" : "#f3d36b", label: `<i class="sz">${order.friesSize}</i>${order.sweet ? "Sweet fries" : "Fries"}`, tail: "", state, mod: false, next: false });
+      const fry = fryOf(order);
+      const state: RowState = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy && fryOf(f) === fry ? "done" : "wrong";
+      rows.push({ icon: FRY_ICON[fry], color: FRY_COLOR[fry], label: `<i class="sz">${order.friesSize}</i>${FRY_LABEL[fry]}`, tail: fry === "churros" ? modBox("sugar", "Sugar") : "", state, mod: false, next: false });
     }
     if (order.drink) {
       const iceOk = order.ice == null || !!d?.ice === order.ice;
@@ -334,7 +374,8 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     return rows;
   }
   // Runs of counted toppings are one layer; a layer is done once it has its full count.
-  const stacked = collapseCounted(plate.layers);
+  // A taco plate's pieces can go on in any order (dishOrder): tortillas first, then the fillings.
+  const stacked = collapseCounted(dishOrder(order.layers, plate.layers));
   // Which ticket line each add-on or extra changed: the added layer sits highest of its kind.
   const addedAt = new Map<number, "add" | "extra">();
   for (const m of order.mods) {
@@ -376,7 +417,7 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     }
     const k = st.piece.kind;
     const icon = k === "bun" ? (j === 0 ? "bunBottom" : "bunTop") : k;
-    const row: TicketRow = { icon, color: KIND_COLOR[k], label: KIND_LABEL[k] + (st.count > 1 ? countMark(`x${st.count}`) : ""), tail: "", state: "wrong", mod: false, next: false, extra: true };
+    const row: TicketRow = { icon, color: KIND_COLOR[k], label: ticketLabel(k) + (st.count > 1 ? countMark(`x${st.count}`) : ""), tail: "", state: "wrong", mod: false, next: false, extra: true };
     extrasAt.set(below, [row, ...(extrasAt.get(below) ?? [])]);
   });
   // Extras above the top of the build go first in the list.
@@ -384,9 +425,13 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
   for (let i = order.layers.length - 1; i >= 0; i--) {
     const exp = order.layers[i];
     let icon: string = exp.kind;
-    let label = KIND_LABEL[exp.kind];
+    let label = ticketLabel(exp.kind);
     let tail = "";
-    if (exp.kind === "bun") {
+    if (TORTILLAS.has(exp.kind)) {
+      // Warm on the comal; a quesadilla is folded over and flipped once.
+      tail = exp.folded ? modBox("fold", "Fold") + modBox("flip", "Flip") : modBox("toast", "Warm");
+    } else if (exp.kind === "tostada") tail = modBox("toast", "Fry");
+    else if (exp.kind === "bun") {
       icon = i === 0 ? "bunBottom" : "bunTop";
       if (exp.toasted) tail = modBox("toast", "Toast");
     } else if (BREADS.has(exp.kind)) {
@@ -398,7 +443,7 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
       if (exp.smashed) icon = "smashed";
       if (exp.smashed) tail = `<span class="mb smash" title="Smash">${SMASH_SVG}</span>`;
     } else if (exp.kind === "egg") tail = exp.flipped ? modBox("flip", "Flip") : modBox("sunny", "Sunny");
-    else if (exp.kind === "pineapple") tail = modBox("grill", "Grill");
+    else if (exp.kind === "pineapple") tail = modBox("grill", order.layers[0] && TORTILLAS.has(order.layers[0].kind) ? "Char" : "Grill");
     else if (exp.melted) tail = modBox("melt", "Melt");
     // "ADD Bacon", "ADD Tomato x2": an add-on, or the added copy of a doubled layer. A counted
     // topping asked for extra keeps its one line with the full count and says how many are added.
@@ -440,8 +485,9 @@ function sideRows(order: Order, plate: Plate): string {
   if (!order.layers.length && !order.poutine) return "";
   if (order.fries && order.layers.length) {
     const f = plate.fries;
-    const state = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy && !!f.sweet === !!order.sweet ? "done" : "wrong";
-    out.push(`<div class="sg">${section("fries", "#c8472e")}<div class="sd ${state}"><span class="sl"><i class="sz">${order.friesSize}</i><span class="dn">${order.sweet ? "Sweet fries" : "Fries"}</span></span></div></div>`);
+    const fry = fryOf(order);
+    const state = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy && fryOf(f) === fry ? "done" : "wrong";
+    out.push(`<div class="sg">${section(FRY_ICON[fry], "#c8472e")}<div class="sd ${state}"><span class="sl"><i class="sz">${order.friesSize}</i><span class="dn">${FRY_LABEL[fry]}</span></span>${fry === "churros" ? `<span class="sm">${modBox("sugar", "Sugar")}</span>` : ""}</div></div>`);
   }
   if (order.drink) {
     const d = plate.drink;

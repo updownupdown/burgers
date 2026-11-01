@@ -6,3 +6,4 @@ export { makeGriddle, ZONE_COLOR, ZONE_HEATS, type GriddleObject, type ZoneHeat 
 export { makeSauceBottle, makeSauceCaddy, type SauceBottleObject, type SauceCaddyObject } from "./sauces";
 export { makePackPad, makeSleeve, makeSupplyShelf, makeTrashChute, stickerTex, type PackPadObject, type SleeveKind, type SupplyShelfObject } from "./supplies";
 export { makeWarmShelf, type WarmShelfObject } from "./warmShelf";
+export { makeComal, makeTortillaPress, type ComalObject, type TortillaPressObject } from "./comal";

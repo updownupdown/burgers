@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { FriesSize } from "../game/types";
+import type { FriesSize, FryKind } from "../game/types";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
 import { faceted, grade, ramp, shareGeometry, toon } from "./materials";
 
@@ -24,6 +24,23 @@ const sweetRamp = ramp([
   [0.9, "#8a3e14"],
   [1.15, "#3a1c0c"],
 ]);
+/** Tortilla chips: pale corn raw, golden when done, brown after. */
+const chipsRamp = ramp([
+  [0, "#f2e2a2"],
+  [0.5, "#efc95a"],
+  [0.68, "#e6b03c"],
+  [0.9, "#b8782a"],
+  [1.2, "#4a2c12"],
+]);
+/** Churros: pale dough raw, deep golden brown done, dark after. */
+const churrosRamp = ramp([
+  [0, "#f3dfb0"],
+  [0.5, "#dca052"],
+  [0.7, "#c9843a"],
+  [0.95, "#8a4e1c"],
+  [1.25, "#3a200c"],
+]);
+const RAMPS: Record<FryKind, ReturnType<typeof ramp>> = { fries: friesRamp, sweet: sweetRamp, chips: chipsRamp, churros: churrosRamp };
 const tmp = new THREE.Color();
 
 export interface FriesObject extends THREE.Group {
@@ -33,8 +50,8 @@ export interface FriesObject extends THREE.Group {
     sizeScale: number;
     /** Piles made with `makeFryPile(…, own)`: show this share (0..1) of the sticks. */
     setAmount?: (a: number) => void;
-    /** Sweet potato fries: their own colours (call before setCook). */
-    setSweet: (on: boolean) => void;
+    /** What's frying: plain or sweet potato fries, tortilla chips or churros (their colours, and their shapes where the object has them). */
+    setFry: (fry: FryKind) => void;
   };
 }
 
@@ -193,12 +210,47 @@ const FRY_STICK = (() => {
   }
   return shareGeometry(faceted(g));
 })();
-const FRY_VERTS = FRY_STICK.attributes.position.count;
+/**
+ * A tortilla chip lying the way a stick does once placed (see FRY_STICK): a thin wedge whose
+ * length runs along the stick's axis, so the same placement code piles chips.
+ */
+const CHIP = (() => {
+  const sh = new THREE.Shape([new THREE.Vector2(-0.16, -0.32), new THREE.Vector2(0.16, -0.32), new THREE.Vector2(0.02, 0.34)]);
+  const g = new THREE.ExtrudeGeometry(sh, { depth: 0.022, bevelEnabled: false });
+  g.translate(0, 0, -0.011);
+  g.rotateY(Math.PI / 2);
+  // A little curl, so a pile of chips doesn't read as flat paper.
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) p.setX(i, p.getX(i) + 0.05 * p.getZ(i) ** 2 * 8);
+  return shareGeometry(faceted(g));
+})();
+/** A churro: a ridged star-section stick, thicker than a fry. */
+const CHURRO = (() => {
+  const g = new THREE.CylinderGeometry(0.055, 0.055, 1, 12, 1);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const z = p.getZ(i);
+    const a = Math.atan2(z, x);
+    const k = Math.round(((a + Math.PI) / (Math.PI * 2)) * 12) % 2 ? 1.15 : 0.72;
+    if (Math.hypot(x, z) > 0.01) {
+      p.setX(i, x * k);
+      p.setZ(i, z * k);
+    }
+  }
+  return shareGeometry(faceted(g));
+})();
+const STICK: Record<FryKind, THREE.BufferGeometry> = { fries: FRY_STICK, sweet: FRY_STICK, chips: CHIP, churros: CHURRO };
+/** Stick shape and how many to draw per fry, by kind: chips are a few more, churros fewer and longer. */
+const stickOf = (fry: FryKind) => STICK[fry];
+const COUNT_K: Record<FryKind, number> = { fries: 1, sweet: 1, chips: 1.1, churros: 0.4 };
+const LEN_K: Record<FryKind, number> = { fries: 1, sweet: 1, chips: 1, churros: 1.25 };
+const shaped = (fry: FryKind) => fry === "chips" || fry === "churros";
 
 /** `n` of a boat's fries lying in it, bottom layer first, so part-filled boats sit lower. */
 const BOAT_FRIES = new Map<string, Baked>();
-function boatFries(size: FriesSize, n: number): Baked {
-  const key = `${size}${n}`;
+function boatFries(size: FriesSize, n: number, fry: FryKind = "fries"): Baked {
+  const key = `${size}${n}${shaped(fry) ? fry : ""}`;
   let b = BOAT_FRIES.get(key);
   if (b) return b;
   const { w, d } = boatSize(size);
@@ -207,13 +259,16 @@ function boatFries(size: FriesSize, n: number): Baked {
   const total = FRY_COUNT[size];
   const r = rng(41 + size.charCodeAt(0));
   const parts = new Parts();
-  for (let i = 0; i < n; i++) {
-    const l = Math.floor((i / total) * 3);
+  const m = Math.max(n ? 1 : 0, Math.round(n * COUNT_K[fry]));
+  const tot = Math.max(1, Math.round(total * COUNT_K[fry]));
+  for (let i = 0; i < m; i++) {
+    const l = Math.floor((i / tot) * 3);
     const k = 1 - (l / 3) * 0.5;
-    parts.add(FRY_STICK, "#ffffff", {
+    const chip = fry === "chips";
+    parts.add(stickOf(fry), "#ffffff", {
       p: [(r() - 0.5) * pw * 0.86 * k, 0.045 + l * 0.06 + r() * 0.025, (r() - 0.5) * pd * 0.86 * k],
-      r: [(r() - 0.5) * 0.3, r() * Math.PI, Math.PI / 2 + (r() - 0.5) * 0.3],
-      s: [1, 0.35 + r() * 0.2, 1],
+      r: [(r() - 0.5) * (chip ? 1.2 : 0.3), r() * Math.PI, Math.PI / 2 + (r() - 0.5) * (chip ? 0.9 : 0.3)],
+      s: [1, (0.35 + r() * 0.2) * LEN_K[fry], 1],
       ink: 0.009,
     });
   }
@@ -223,26 +278,28 @@ function boatFries(size: FriesSize, n: number): Baked {
 }
 
 /** A loose handful of fries lying across each other (from the freezer or a basket), carton units. */
-const HANDFULS = new Map<number, Baked>();
-function handful(n: number): Baked {
-  let b = HANDFULS.get(n);
+const HANDFULS = new Map<string, Baked>();
+function handful(n0: number, fry: FryKind = "fries"): Baked {
+  const key = `${n0}${shaped(fry) ? fry : ""}`;
+  let b = HANDFULS.get(key);
+  const n = Math.max(1, Math.round(n0 * COUNT_K[fry]));
   if (b) return b;
   const r = rng(31);
   const parts = new Parts();
   // A bigger handful spreads wider as well as heaping higher.
-  const spread = Math.sqrt(Math.max(1, n) / FRIES_PER_SCOOP);
+  const spread = Math.sqrt(Math.max(1, n0) / FRIES_PER_SCOOP);
   for (let i = 0; i < n; i++) {
     const a = i * 2.39996;
     const rr = Math.sqrt((i + 0.5) / n);
-    parts.add(FRY_STICK, "#ffffff", {
+    parts.add(stickOf(fry), "#ffffff", {
       p: [Math.cos(a) * rr * 0.24 * spread, 0.06 + (1 - rr) * 0.16 * spread + (i % 3) * 0.03, Math.sin(a) * rr * 0.18 * spread],
-      r: [(r() - 0.5) * 0.4, r() * Math.PI, Math.PI / 2 + (r() - 0.5) * 0.5],
-      s: [1, 0.4 + r() * 0.2, 1],
+      r: [(r() - 0.5) * (fry === "chips" ? 1.2 : 0.4), r() * Math.PI, Math.PI / 2 + (r() - 0.5) * (fry === "chips" ? 1 : 0.5)],
+      s: [1, (0.4 + r() * 0.2) * LEN_K[fry], 1],
       ink: 0.011,
     });
   }
   b = bakeShared(parts);
-  HANDFULS.set(n, b);
+  HANDFULS.set(key, b);
   return b;
 }
 
@@ -255,16 +312,16 @@ function friesGroup(baked: Baked | null): FriesObject {
     m.receiveShadow = false;
     g.add(m);
   }
-  let sweet = false;
+  let fry: FryKind = "fries";
   let last = 0;
   g.userData = {
     sizeScale: 1,
     setCook: (t) => {
       last = t;
-      mat.color.copy((sweet ? sweetRamp : friesRamp)(t, tmp));
+      mat.color.copy(RAMPS[fry](t, tmp));
     },
-    setSweet: (on) => {
-      sweet = on;
+    setFry: (f) => {
+      fry = f;
       g.userData.setCook(last);
     },
   };
@@ -275,23 +332,31 @@ function friesGroup(baked: Baked | null): FriesObject {
  * Fries in a paper boat of `size`, or a loose handful without one. `fill` (0..1) shows part of
  * a boat's fries, or part of a basket's handful. Bottom at y = 0, carton units.
  */
-export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1, top?: { salt?: number; curds?: boolean; gravy?: boolean; sweet?: boolean }): FriesObject {
+export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1, top?: { salt?: number; curds?: boolean; gravy?: boolean; fry?: FryKind }): FriesObject {
   const f = Math.min(1, Math.max(0, fill));
+  const fry = top?.fry ?? "fries";
   if (!withCarton) {
     // A loose handful: `fill` is the share of a full basket (three scoops).
     const n = Math.round(FRIES_PER_SCOOP * 3 * f);
-    const h = friesGroup(n ? handful(n) : null);
-    if (top?.sweet) h.userData.setSweet(true);
+    const h = friesGroup(n ? handful(n, fry) : null);
+    h.userData.setFry(fry);
     return h;
   }
   const n = Math.round(FRY_COUNT[size] * f);
-  const g = friesGroup(n ? boatFries(size, n) : null);
-  if (top?.sweet) g.userData.setSweet(true);
+  const g = friesGroup(n ? boatFries(size, n, fry) : null);
+  g.userData.setFry(fry);
   g.add(makeCarton(size));
   if (n && top) {
     const { w, d } = boatSize(size);
-    const t = friesToppings((w - 0.06) * 0.8, (d - 0.05) * 0.8, FRIES_TOP - (1 - f) * 0.1, top.salt ?? 0, !!top.curds, !!top.gravy);
+    const t = friesToppings((w - 0.06) * 0.8, (d - 0.05) * 0.8, FRIES_TOP - (1 - f) * 0.1, top.salt ?? 0, !!top.curds, !!top.gravy, fry);
     if (t) g.add(t);
+  }
+  // Chips come with a little cup of salsa tucked in at one end (not on nachos: they're covered).
+  if (fry === "chips" && n && !top?.curds && !top?.gravy) {
+    const { w } = boatSize(size);
+    const cup = bakedMesh(salsaCup());
+    cup.position.set(w * 0.62, FRIES_TOP - 0.04, 0);
+    g.add(cup);
   }
   return g;
 }
@@ -302,21 +367,21 @@ export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1, 
  * the top layers; otherwise it's cached and shared by seed.
  */
 const PILES = new Map<string, Baked>();
-export function makeFryPile(w: number, d: number, layers: number, seed: number, own = false): FriesObject {
-  const key = `${w}|${d}|${layers}|${seed}`;
+export function makeFryPile(w: number, d: number, layers: number, seed: number, own = false, fry: FryKind = "fries"): FriesObject {
+  const key = `${w}|${d}|${layers}|${seed}|${fry}`;
   let baked = own ? null : PILES.get(key) ?? null;
   const parts = new Parts();
   if (!baked) {
     const r = rng(seed);
-    const per = Math.max(3, Math.round((w * d) / 0.05));
+    const per = Math.max(3, Math.round(((w * d) / 0.05) * COUNT_K[fry]));
     for (let l = 0; l < layers; l++) {
       // Upper layers cover less ground, so the pile mounds up in the middle.
       const k = 1 - (l / Math.max(1, layers)) * 0.5;
       for (let i = 0; i < per * k; i++) {
-        parts.add(FRY_STICK, "#ffffff", {
+        parts.add(stickOf(fry), "#ffffff", {
           p: [(r() - 0.5) * w * 0.86 * k, 0.045 + l * 0.07 + r() * 0.025, (r() - 0.5) * d * 0.86 * k],
-          r: [(r() - 0.5) * 0.3, r() * Math.PI, Math.PI / 2 + (r() - 0.5) * 0.3],
-          s: [1.25, 0.5 + r() * 0.25, 1.25],
+          r: [(r() - 0.5) * (fry === "chips" ? 1.2 : 0.3), r() * Math.PI, Math.PI / 2 + (r() - 0.5) * (fry === "chips" ? 1 : 0.3)],
+          s: [1.25, (0.5 + r() * 0.25) * LEN_K[fry], 1.25],
           ink: 0.009,
         });
       }
@@ -325,11 +390,13 @@ export function makeFryPile(w: number, d: number, layers: number, seed: number, 
     if (!own) PILES.set(key, baked);
   }
   const g = friesGroup(baked);
+  g.userData.setFry(fry);
   if (own) {
     const b = baked;
     const total = parts.count;
+    const verts = stickOf(fry).attributes.position.count;
     g.userData.setAmount = (a) => {
-      const count = Math.ceil(total * Math.min(1, Math.max(0, a))) * FRY_VERTS;
+      const count = Math.ceil(total * Math.min(1, Math.max(0, a))) * verts;
       b.geo.setDrawRange(0, count);
       b.hull?.setDrawRange(0, count);
     };
@@ -343,27 +410,77 @@ export function makeFryPile(w: number, d: number, layers: number, seed: number, 
  * middle rather than a thin layer over the whole floor. Each basket owns its geometry.
  */
 export function makeBasketFries(w: number, d: number, seed: number): FriesObject {
-  const r = rng(seed);
-  const parts = new Parts();
-  const total = FRIES_PER_SCOOP * 3;
-  for (let i = 0; i < total; i++) {
-    const a = i * 2.39996 + r() * 0.3;
-    const rr = Math.sqrt((i + 0.5) / total);
-    parts.add(FRY_STICK, "#ffffff", {
-      p: [Math.cos(a) * rr * w * 0.36, 0.05 + (1 - rr) * 0.22 + r() * 0.05, Math.sin(a) * rr * d * 0.36],
-      r: [(r() - 0.5) * 0.4, r() * Math.PI, Math.PI / 2 + (r() - 0.5) * 0.4],
-      s: [1.25, 0.5 + r() * 0.25, 1.25],
-      ink: 0.009,
-    });
-  }
-  const baked = parts.bake();
-  const g = friesGroup(baked);
-  g.userData.setAmount = (amt) => {
-    const count = Math.round(total * Math.min(1, Math.max(0, amt))) * FRY_VERTS;
-    baked.geo.setDrawRange(0, count);
-    baked.hull?.setDrawRange(0, count);
+  const g = new THREE.Group() as FriesObject;
+  const mat = toon("#f6efc9", { unique: true });
+  const shapes = new Map<THREE.BufferGeometry, { mesh: THREE.Mesh; baked: Baked; total: number; verts: number }>();
+  const build = (fry: FryKind) => {
+    const geo = stickOf(fry);
+    let e = shapes.get(geo);
+    if (e) return e;
+    const r = rng(seed);
+    const parts = new Parts();
+    const total = Math.max(3, Math.round(FRIES_PER_SCOOP * 3 * COUNT_K[fry]));
+    for (let i = 0; i < total; i++) {
+      const a = i * 2.39996 + r() * 0.3;
+      const rr = Math.sqrt((i + 0.5) / total);
+      parts.add(geo, "#ffffff", {
+        p: [Math.cos(a) * rr * w * 0.36, 0.05 + (1 - rr) * 0.22 + r() * 0.05, Math.sin(a) * rr * d * 0.36],
+        r: [(r() - 0.5) * (fry === "chips" ? 1.2 : 0.4), r() * Math.PI, Math.PI / 2 + (r() - 0.5) * (fry === "chips" ? 1 : 0.4)],
+        s: [1.25, (0.5 + r() * 0.25) * LEN_K[fry], 1.25],
+        ink: 0.009,
+      });
+    }
+    const baked = parts.bake();
+    const m = bakedMesh(baked, { material: mat });
+    m.receiveShadow = false;
+    g.add(m);
+    e = { mesh: m, baked, total, verts: geo.attributes.position.count };
+    shapes.set(geo, e);
+    return e;
+  };
+  let fry: FryKind = "fries";
+  let cur = build(fry);
+  let last = 0;
+  let amount = 1;
+  const apply = () => {
+    const count = Math.round(cur.total * Math.min(1, Math.max(0, amount))) * cur.verts;
+    cur.baked.geo.setDrawRange(0, count);
+    cur.baked.hull?.setDrawRange(0, count);
+  };
+  g.userData = {
+    sizeScale: 1,
+    setCook: (t) => {
+      last = t;
+      mat.color.copy(RAMPS[fry](t, tmp));
+    },
+    setFry: (f) => {
+      if (f === fry) return;
+      fry = f;
+      cur = build(f);
+      for (const e of shapes.values()) e.mesh.visible = e === cur;
+      apply();
+      g.userData.setCook(last);
+    },
+    setAmount: (a) => {
+      amount = a;
+      apply();
+    },
   };
   return g;
+}
+
+/** A little paper cup of red salsa, carton units, bottom at y = 0. */
+let SALSA_CUP: Baked | null = null;
+function salsaCup(): Baked {
+  if (!SALSA_CUP) {
+    const p = new Parts();
+    p.add(faceted(new THREE.CylinderGeometry(0.075, 0.06, 0.07, 12)), "#f7f3ea", { p: [0, 0.035, 0], ink: 0.009 });
+    p.add(faceted(new THREE.CylinderGeometry(0.066, 0.066, 0.012, 12)), "#c8321f", { p: [0, 0.064, 0], ink: false });
+    p.add(faceted(new THREE.IcosahedronGeometry(0.012, 0)), "#f2e8d2", { p: [0.02, 0.072, 0.01], ink: false });
+    p.add(faceted(new THREE.IcosahedronGeometry(0.012, 0)), "#4f8f2e", { p: [-0.025, 0.072, -0.012], ink: false });
+    SALSA_CUP = bakeShared(p);
+  }
+  return SALSA_CUP;
 }
 
 /** Cheese curds: squeaky off-white lumps. */
@@ -390,27 +507,39 @@ export function curdLumps(p: Parts, n: number, rx: number, rz: number, y: number
  * of gravy, in carton units around the top of the fries at height `top` (half-width `rx`, half-depth `rz`).
  */
 const TOPPED = new Map<string, Baked>();
-export function friesToppings(rx: number, rz: number, top: number, saltLevel: number, curds: boolean, gravy: boolean): THREE.Mesh | null {
+export const QUESO = "#f2b632";
+export const NACHO_JALAPENO = "#3f8f3a";
+const jalRing = shareGeometry(faceted(new THREE.TorusGeometry(0.035, 0.012, 4, 9).rotateX(Math.PI / 2)));
+export function friesToppings(rx: number, rz: number, top: number, saltLevel: number, curds: boolean, gravy: boolean, fry: FryKind = "fries"): THREE.Mesh | null {
+  // Nachos: queso where the gravy goes, jalapeño rings where the curds go; churros get sugar for salt.
+  const nachos = fry === "chips";
   // Grains in steps of five, so a carton being shaken reuses a few baked meshes.
   const grains = Math.min(60, Math.round((saltLevel * 50) / 5) * 5);
   const salt = grains > 0;
   if (!salt && !curds && !gravy) return null;
-  const key = `${rx.toFixed(2)}|${rz.toFixed(2)}|${top.toFixed(2)}|${grains}${+curds}${+gravy}`;
+  const key = `${rx.toFixed(2)}|${rz.toFixed(2)}|${top.toFixed(2)}|${grains}${+curds}${+gravy}${fry}`;
   let b = TOPPED.get(key);
   if (!b) {
     const p = new Parts();
     const r = rng(17);
+    const sauce = nachos ? QUESO : GRAVY;
     if (gravy) {
-      p.add(new THREE.SphereGeometry(1, 14, 7), GRAVY, { p: [0, top - 0.02, 0], s: [rx * 1.15, 0.08, rz * 1.25], ink: 0.012 });
+      p.add(new THREE.SphereGeometry(1, 14, 7), sauce, { p: [0, top - 0.02, 0], s: [rx * (nachos ? 0.95 : 1.15), 0.08, rz * (nachos ? 1.05 : 1.25)], ink: 0.012 });
       for (let i = 0; i < 5; i++) {
         const a = (i / 5) * Math.PI * 2 + 0.4;
-        p.add(new THREE.SphereGeometry(1, 8, 5), GRAVY, { p: [Math.cos(a) * rx * 0.85, top - 0.08, Math.sin(a) * rz * 0.85], s: [0.05, 0.1, 0.05], ink: false });
+        p.add(new THREE.SphereGeometry(1, 8, 5), sauce, { p: [Math.cos(a) * rx * 0.85, top - 0.08, Math.sin(a) * rz * 0.85], s: [0.05, 0.1, 0.05], ink: false });
       }
     }
-    if (curds) curdLumps(p, 9, rx * 0.9, rz * 1.1, top + 0.02, 23, 0.75);
+    if (curds && nachos) {
+      for (let i = 0; i < 9; i++) {
+        const a = i * 2.39996;
+        const rr = Math.sqrt((i + 0.5) / 9);
+        p.add(jalRing, NACHO_JALAPENO, { p: [Math.cos(a) * rr * rx * 0.9, top + 0.05 + r() * 0.02, Math.sin(a) * rr * rz * 1.05], r: [(r() - 0.5) * 0.5, 0, (r() - 0.5) * 0.5], ink: 0.008 });
+      }
+    } else if (curds) curdLumps(p, 9, rx * 0.9, rz * 1.1, top + 0.02, 23, 0.75);
     if (salt) {
       const grain = new THREE.BoxGeometry(0.018, 0.018, 0.018);
-      for (let i = 0; i < grains; i++) p.add(grain, "#ffffff", { p: [(r() - 0.5) * rx * 1.7, top + 0.03 + r() * 0.05, (r() - 0.5) * rz * 1.7], ink: false });
+      for (let i = 0; i < grains; i++) p.add(grain, fry === "churros" ? "#fbf3e0" : "#ffffff", { p: [(r() - 0.5) * rx * 1.7, top + 0.03 + r() * 0.05, (r() - 0.5) * rz * 1.7], ink: false });
     }
     b = bakeShared(p);
     TOPPED.set(key, b);

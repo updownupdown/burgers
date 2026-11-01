@@ -1,5 +1,6 @@
 import type { Review } from "./business";
 import { migrateBonuses, type BonusId } from "./bonus";
+import { DEFAULT_LOOK, LOOKS, validLook, type Look } from "./looks";
 import type { PressPiece } from "./press";
 import type { TimeOfDay } from "./day";
 import { validShift, type ShiftWindow } from "./shift";
@@ -27,7 +28,11 @@ export interface Save {
   passedTowns: string[];
   /** Passed shifts per town; SHIFTS_TO_UNLOCK of them open the town's roads (see travel.ts). */
   shiftsIn: Record<string, number>;
-  /** Bonuses earned by great shifts (see bonus.ts), in the order they came. */
+  /** Savings: every shift's takings go in; bonuses and looks are bought out of it (see garage.ts). */
+  bank: number;
+  /** Bonuses unlocked by a great shift in their town (see bonus.ts), bought or not. */
+  found: BonusId[];
+  /** Bonuses bought, in the order they came. */
   bonuses: BonusId[];
   /** The one bonus brought into the next shift, picked on Prep; null for none. */
   bonus: BonusId | null;
@@ -45,8 +50,9 @@ export interface Save {
   best: Record<string, number>;
   /** Best takings in one shift per stop id. */
   bestTakings: Record<string, number>;
-  /** Towns where a great shift came after every bonus was earned: a ribbon on the map. */
-  ribbons: string[];
+  /** Looks bought in the Garage (free ones aren't listed), and what the truck wears. */
+  looks: string[];
+  look: Look;
   tutorialDone: boolean;
   /** Trips finished (all stops). */
   trips: number;
@@ -90,11 +96,12 @@ export interface Closing {
   opened: string[];
   shiftsHere: number;
   press: PressPiece | null;
-  /** A great shift (see bonus.ts), what it earned, and the bonus that was brought. */
+  /** A great shift (see bonus.ts), the bonus it unlocked here, and the bonus that was brought. */
   great: boolean;
-  earnedBonus: BonusId | null;
-  ribbon: boolean;
+  unlocked: BonusId | null;
   usedBonus: BonusId | null;
+  /** Savings after the takings went in. */
+  bank: number;
   shift: ShiftWindow;
 }
 
@@ -110,6 +117,8 @@ export function freshSave(): Save {
     unlocked: [START_TOWN],
     passedTowns: [],
     shiftsIn: {},
+    bank: 0,
+    found: [],
     bonuses: [],
     bonus: null,
     hidden: [],
@@ -118,7 +127,8 @@ export function freshSave(): Save {
     ratingSum: 0,
     best: {},
     bestTakings: {},
-    ribbons: [],
+    looks: [],
+    look: { ...DEFAULT_LOOK },
     tutorialDone: false,
     trips: 0,
     known: {},
@@ -131,7 +141,7 @@ export function freshSave(): Save {
 }
 
 /** Fields older saves carry that the game no longer uses (money, supplies, business mode). */
-const RETIRED = ["bank", "gear", "simplePlan", "biz", "plan", "ads", "offer", "upgrades", "overnightUsed"] as const;
+const RETIRED = ["ribbons", "gear", "simplePlan", "biz", "plan", "ads", "offer", "upgrades", "overnightUsed"] as const;
 
 /** A stored save brought up to date: missing fields filled in, old shapes converted. */
 export function migrateSave(p: Partial<Save> & Record<string, unknown>): Save {
@@ -154,6 +164,12 @@ export function migrateSave(p: Partial<Save> & Record<string, unknown>): Save {
   // Kitchen upgrades from before bonuses are bonuses now.
   if (!p.bonuses && Array.isArray(p.upgrades)) s.bonuses = migrateBonuses(p.upgrades as string[]);
   s.bonuses = migrateBonuses(s.bonuses);
+  // Whatever is owned was found; an owned bonus never needs unlocking again.
+  s.found = migrateBonuses([...(Array.isArray(s.found) ? s.found : []), ...s.bonuses]);
+  // Old saves kept their gas money; it carries over as savings.
+  s.bank = Math.max(0, Math.round(Number(s.bank) || 0));
+  s.looks = Array.isArray(s.looks) ? s.looks.filter((id) => LOOKS.some((l) => l.id === id && l.price > 0)) : [];
+  s.look = validLook(s.look, s.looks);
   if (s.bonus && !s.bonuses.includes(s.bonus)) s.bonus = null;
   // Business mode kept its menu as the dishes on it; Prep now keeps the ones taken off.
   const plan = p.plan as { menu?: string[] } | null | undefined;
@@ -167,7 +183,7 @@ export function migrateSave(p: Partial<Save> & Record<string, unknown>): Save {
   for (const k of RETIRED) delete bag[k];
   if (s.time !== "morning" && s.time !== "evening") s.time = "morning";
   // A Closing from before takings is dropped rather than half shown.
-  if (s.last && (s.last.town !== s.town || typeof s.last.takings !== "number")) s.last = null;
+  if (s.last && (s.last.town !== s.town || typeof s.last.takings !== "number" || typeof s.last.bank !== "number")) s.last = null;
   return s;
 }
 

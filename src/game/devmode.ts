@@ -5,7 +5,7 @@
  * turned off (or dev mode is).
  */
 import type { Review } from "./business";
-import { BONUSES } from "./bonus";
+import { townBonus, type BonusId } from "./bonus";
 import { freshSave, START_POPULARITY, type Save } from "./progress";
 import { START_TOWN, STOPS, townById } from "./stops";
 import { SHIFTS_TO_UNLOCK } from "./travel";
@@ -108,7 +108,14 @@ export function simulatedSave(level: SimLevel): Save {
   s.ratingSum = Math.round(orders * (1.9 + 0.7 * k));
   s.rep = Number((1.9 + 0.7 * k).toFixed(2));
   s.repWeight = 30;
-  s.bonuses = BONUSES.slice(0, level === 100 ? BONUSES.length : 4).map((b) => b.id);
+  // Great shifts unlocked the bonuses of the towns worked; most are bought; some savings left.
+  s.found = worked.map((id) => townBonus(id)?.id).filter((b): b is BonusId => !!b);
+  s.bonuses = level === 100 ? [...s.found] : s.found.slice(0, 4);
+  s.bank = level === 100 ? 24000 : 640;
+  if (level === 100) {
+    s.looks = ["dusk", "teal", "string", "whitewall", "dog", "canoe"];
+    s.look = { paint: "dusk", awning: "teal", roof: "canoe", lights: "string", wheels: "whitewall", tag: "dog" };
+  }
   s.reviews = worked
     .flatMap((id, i) => SAMPLE_REVIEWS.slice(0, 2 + (i % 3)).map(([stars, text]): Review => ({ stars: Math.min(3, stars + (level === 100 && stars < 3 ? 1 : 0)), text, stop: townById(id).name })))
     .reverse()

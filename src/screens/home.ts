@@ -6,6 +6,10 @@ import { applyTrip, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress,
 import { icon } from "../ui/icons";
 import { simLevel } from "../game/devmode";
 import { dropBack, pushBack } from "./nav";
+import { townBonus } from "../game/bonus";
+import { readyToBuy } from "../game/garage";
+import { truckSvg as truckArt } from "./truckart";
+import { dollars } from "./garage";
 import { renderMap, roadPath, routePoints, SEA, townPoint, VIEW } from "./map";
 import { PanZoom } from "./panzoom";
 import "./home.css";
@@ -26,6 +30,8 @@ export interface HomeDeps {
   openResults(): void;
   openReviews(): void;
   openMenuRef(): void;
+  /** The Garage: savings, bonuses and looks. */
+  openGarage(): void;
   sleep(): void;
   /** The save changed here (a drive, an upgrade picked): persist it and sync the truck's town. */
   commit(): void;
@@ -139,6 +145,7 @@ export function refreshHome(): void {
   // A fresh SVG has no size until fitMap gives it one; without this the map came back as open sea.
   fitMap(true);
   cur.el.querySelector(".home-stats")!.outerHTML = statsHtml(cur.deps.save);
+  cur.el.querySelector(".home-bank")!.outerHTML = bankHtml(cur.deps.save);
   renderDock(cur);
   if (cur.selected) renderSheet(cur, cur.selected);
 }
@@ -150,6 +157,7 @@ function shellHtml(save: Save): string {
         <span class="home-logo" aria-label="Bun Voyage"><img class="mark" src="./logo.svg" alt="" width="30" height="30" /><span class="w1">Bun</span><span class="w2">Voyage</span></span>${save.trips > 0 ? `<span class="bv-eyebrow">Trip ${save.trips + 1}</span>` : ""}${simLevel() !== null ? `<span class="home-dev bv-mono" title="Simulated progress (dev mode, in Settings)">Sim ${simLevel()}%</span>` : ""}
       </div>
       <div class="home-actions">
+        ${bankHtml(save)}
         <button class="bv-btn icon" data-home="howto" aria-label="How to play" title="How to play">${icon("help")}</button>
         <button class="bv-btn icon" data-home="settings" aria-label="Settings" title="Settings">${icon("settings")}</button>
       </div>
@@ -166,6 +174,12 @@ function shellHtml(save: Save): string {
       <div class="home-sheet bv-light" hidden></div>
     </div>
   </div>`;
+}
+
+/** Savings, one tap from the Garage; a dot when an unlocked bonus is affordable. */
+function bankHtml(save: Save): string {
+  const ready = readyToBuy(save);
+  return `<button class="home-bank" data-home="garage" aria-label="Garage: savings ${dollars(save.bank)}${ready ? `, ${ready} bonus${ready > 1 ? "es" : ""} ready to buy` : ""}">${icon("truck")}<b class="bv-mono">${dollars(save.bank)}</b>${ready ? `<i class="dot"></i>` : ""}</button>`;
 }
 
 /**
@@ -214,7 +228,11 @@ function reachable(s: Save): { id: string; path: string[] }[] {
 function renderMapInto(m: Mounted): void {
   const s = m.deps.save;
   const night = s.time === "evening" || m.night;
-  m.world.innerHTML = renderMap({ town: s.town, unlocked: s.unlocked, shiftsIn: s.shiftsIn, day: s.day, selected: m.selected, night, reach: m.night ? [] : reachable(s) });
+  const bonusHere = s.unlocked.filter((id) => {
+    const b = townBonus(id);
+    return b && !s.found.includes(b.id);
+  });
+  m.world.innerHTML = renderMap({ town: s.town, unlocked: s.unlocked, shiftsIn: s.shiftsIn, day: s.day, selected: m.selected, night, reach: m.night ? [] : reachable(s), look: s.look, bonusHere });
   for (const t of m.world.querySelectorAll<SVGGElement>(".home-town")) t.classList.toggle("sel", t.dataset.town === m.selected);
 }
 
@@ -444,9 +462,22 @@ function renderSheet(m: Mounted, id: string): void {
       <div><span class="bv-eyebrow">Best shift</span><b>${best !== undefined ? `${icon("star")}${best.toFixed(1)}` : "–"}</b></div>
       <div><span class="bv-eyebrow">${trip ? "From here" : "Customers"}</span><b>${trip ? `${miles(trip.distance)} mi` : `${icon("people")}~${expectedCustomers({ stop: withEvent(t, ev), popularity: s.popularity, rep: s.rep, hidden: s.hidden, shift: s.shift })}`}</b></div>
     </div>
+    ${bonusRow(s, id)}
     ${open && t.newThing && !(s.shiftsIn[id] ?? 0) ? `<div class="bv-callout new">${icon("new")}<span>${esc(t.newThing)}</span></div>` : ""}
     <div class="home-action">${action}</div>`;
   sheet.hidden = false;
+}
+
+/** The town's bonus on its sheet: what it is and how far along it is. Unknown until the town is open. */
+function bonusRow(s: Save, id: string): string {
+  const b = townBonus(id);
+  if (!b || !s.unlocked.includes(id)) return "";
+  const state = s.bonuses.includes(b.id)
+    ? `<em class="own">${icon("check")}Owned</em>`
+    : s.found.includes(b.id)
+      ? `<em class="sale">${dollars(b.price)} in the Garage</em>`
+      : `<em>${icon("lock")}Great shift to unlock</em>`;
+  return `<div class="home-bonus ${s.found.includes(b.id) ? "found" : ""}"><span class="ic">${icon(b.icon)}</span><span class="t"><span class="bv-eyebrow">Town bonus</span><b>${esc(b.name)}</b><small>${esc(b.text)}</small></span>${state}</div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -482,6 +513,10 @@ function onClick(e: Event): void {
       break;
     case "menuref":
       m.deps.openMenuRef();
+      break;
+    case "garage":
+      m.deps.sfx?.tap();
+      m.deps.openGarage();
       break;
     case "here":
       m.deps.sfx?.tap();
@@ -597,6 +632,7 @@ function playNight(m: Mounted, n: NightShow): void {
   box.innerHTML = `<div class="sky"></div>
     <div class="home-night-c">
       <div class="orb" aria-hidden="true"><i class="moon"></i><i class="sun"></i></div>
+      <div class="home-night-truck" aria-hidden="true">${truckArt(m.deps.save.look, { night: true, cls: "nt" })}</div>
       <span class="bv-eyebrow">Night in ${esc(n.town)}</span>
       <div class="home-dayroll" aria-label="Day ${n.toDay}"><span>Day</span><span class="num"><span class="track"><b>${n.fromDay}</b><b>${n.toDay}</b></span></span></div>
       <div class="home-night-deltas">${
@@ -629,6 +665,7 @@ function playNight(m: Mounted, n: NightShow): void {
     if (!m.night) return;
     m.night = false;
     box.classList.add("dawn");
+    box.querySelector(".home-night-truck .tk")?.classList.remove("night");
     m.el.classList.toggle("evening", m.deps.save.time === "evening");
     renderMapInto(m);
     fitMap(true);

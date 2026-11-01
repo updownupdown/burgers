@@ -3,7 +3,7 @@ import { buzz, Sfx } from "./audio";
 import { cookLevel, COOK_SCALE, DRINK_FILL, friesZone, FRIES_ZONE, SALT, type Cookable } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { expectedCustomers, sleep } from "./game/day";
-import { greatShift, nextBonus, type BonusId } from "./game/bonus";
+import { greatShift, townBonus, type BonusId } from "./game/bonus";
 import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, validShift, type ShiftWindow } from "./game/shift";
 import { freshSave, loadSave, passed, passTown, writeSave, type Closing } from "./game/progress";
 import { eventOn, townById, withEvent, type TownEvent } from "./game/stops";
@@ -27,6 +27,9 @@ import { makeEgg, type EggStage } from "./render/egg";
 import "./ui/components.css";
 import "./style.css";
 import { mountHome, refreshHome, type NightShow } from "./screens/home";
+import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
+import { buyBonus, buyLook, wearLook } from "./game/garage";
+import type { Slot as LookSlot } from "./game/looks";
 import { closingHtml, prepHtml, reviewsHtml, toggleBox, type ReviewFilter } from "./screens/day";
 import { buildUi, cookMeter, patienceMood, ticketHtml } from "./ui";
 import { DRINK_TINT } from "./render/machines";
@@ -165,7 +168,8 @@ const game = {
   criticAt: -1,
   press: null as PressPiece | null,
   /** Which screen is up over the map, so its buttons redraw the right one. */
-  overlay: null as null | "closing" | "reviews",
+  overlay: null as null | "closing" | "reviews" | "garage",
+  garage: { ...GARAGE_START } as GarageView,
   reviewFilter: "all" as ReviewFilter,
 };
 
@@ -422,7 +426,9 @@ function serve(i: number): void {
   game.comped += compValue(s.order, plate.fries, plate.drink, r.perks.includes("extra toppings"));
   if (s.order.critic) criticVerdict(r.stars, r.notes);
   const { pay, tip: baseTip } = payout(s.order, r.score, s.patience / s.maxPatience);
-  const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1) * CROWD[stop().crowd].tips);
+  // The meal deal sign: a burger with fries and a drink tips half again.
+  const meal = has("combo") && s.order.layers.length > 0 && !!s.order.fries && !!s.order.drink;
+  const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1) * (meal ? 1.5 : 1) * CROWD[stop().crowd].tips);
   game.money += pay;
   game.tips += tip;
   game.served++;
@@ -1974,6 +1980,53 @@ ui.root.addEventListener("click", (e) => {
       showPrep();
       break;
     }
+    case "buy-bonus":
+      if (buyBonus(save, btn!.dataset.v as BonusId)) {
+        writeSave(save);
+        sfx.coin();
+        showClosing();
+      }
+      break;
+    case "gar-tab":
+      game.garage.tab = btn!.dataset.v === "looks" ? "looks" : "bonuses";
+      showGarage();
+      break;
+    case "gar-slot":
+      game.garage.slot = btn!.dataset.v as LookSlot;
+      game.garage.preview = null;
+      showGarage();
+      break;
+    case "gar-night":
+      game.garage.night = !game.garage.night;
+      showGarage();
+      break;
+    case "gar-try": {
+      const v = btn!.dataset.v!;
+      game.garage.preview = game.garage.preview === v ? null : v;
+      showGarage();
+      break;
+    }
+    case "gar-wear":
+      if (wearLook(save, btn!.dataset.v!)) {
+        writeSave(save);
+        sfx.pop();
+        showGarage();
+      }
+      break;
+    case "gar-buy-look":
+      if (buyLook(save, btn!.dataset.v!)) {
+        writeSave(save);
+        sfx.coin();
+        showGarage();
+      }
+      break;
+    case "gar-buy-bonus":
+      if (buyBonus(save, btn!.dataset.v as BonusId)) {
+        writeSave(save);
+        sfx.coin();
+        showGarage();
+      }
+      break;
     case "closing-box":
       toggleBox(btn!.dataset.v!);
       showClosing();
@@ -2182,6 +2235,7 @@ function startShift(): void {
   // Maybe a critic in today's line, never the very first customer.
   game.criticAt = has("press") || game.rng() < criticChance(stop().crowd, game.event) ? 1 + Math.floor(game.rng() * Math.max(1, Math.min(game.customers, 8) - 2)) : -1;
   counter.fryBoost = has("turbo") ? 1.35 : 1;
+  counter.grillBoost = has("sear") ? 1.25 : 1;
   counter.autoStopPour = has("autostop");
   counter.setPage(HOME_PAGE);
   const intro = game.event
@@ -2251,6 +2305,15 @@ function showClosing(): void {
   showOverlay("closing", closingHtml(save.last, save));
 }
 
+/** The Garage: savings spent on bonuses and looks (src/screens/garage.ts). */
+function showGarage(): void {
+  const keep = game.overlay === "garage" ? (ui.summary.querySelector<HTMLElement>(".day-scroll")?.scrollTop ?? 0) : 0;
+  if (game.overlay !== "garage") game.garage = { ...GARAGE_START, tab: game.garage.tab, night: save.time === "evening" };
+  showOverlay("garage", garageHtml(save, game.garage));
+  const sc = ui.summary.querySelector<HTMLElement>(".day-scroll");
+  if (sc) sc.scrollTop = keep;
+}
+
 function showReviews(filter: ReviewFilter): void {
   game.reviewFilter = filter;
   showOverlay("reviews", reviewsHtml(save, filter));
@@ -2306,6 +2369,7 @@ function showTitle(night: NightShow | null = null): void {
     },
     openResults: () => showClosing(),
     openReviews: () => showReviews(game.reviewFilter),
+    openGarage: () => showGarage(),
     openMenuRef: () => openMenuRef(withEvent(townById(save.town), eventOn(save.town, save.day))),
     sleep: () => sleepNow(),
     commit: () => {
@@ -2360,19 +2424,15 @@ function endShift(): void {
   save.repWeight = r.weight;
   save.reviews = [...game.reviews.slice().reverse(), ...save.reviews].slice(0, 30);
   save.best[here.id] = Math.max(save.best[here.id] ?? 0, avg);
-  // A great shift earns the next bonus; once they're all earned, a ribbon for the town.
+  // The takings go into savings, for the Garage.
+  save.bank += takings;
+  // A great shift unlocks this town's bonus, for sale in the Garage from now on.
   const great = !game.tutorial && greatShift(game.stars, game.served, game.served + game.lost);
-  let earnedBonus: BonusId | null = null;
-  let ribbon = false;
-  if (great) {
-    const next = nextBonus(save.bonuses);
-    if (next) {
-      earnedBonus = next.id;
-      save.bonuses.push(next.id);
-    } else if (!save.ribbons.includes(here.id)) {
-      ribbon = true;
-      save.ribbons.push(here.id);
-    }
+  let unlocked: BonusId | null = null;
+  const tb = townBonus(here.id);
+  if (great && tb && !save.found.includes(tb.id)) {
+    unlocked = tb.id;
+    save.found.push(tb.id);
   }
   if (ok) {
     const firstTime = !save.passedTowns.includes(here.id);
@@ -2407,9 +2467,9 @@ function endShift(): void {
     shiftsHere: save.shiftsIn?.[here.id] ?? 0,
     press: game.press,
     great,
-    earnedBonus,
-    ribbon,
+    unlocked,
     usedBonus: game.bonus,
+    bank: save.bank,
     shift: game.shift,
   };
   save.last = closing;
@@ -2417,7 +2477,7 @@ function endShift(): void {
   ui.title.hidden = false;
   showClosing();
   sfx.chime();
-  if (earnedBonus || ribbon) setTimeout(() => sfx.coin(), 400);
+  if (unlocked) setTimeout(() => sfx.coin(), 400);
   // A pending update waits until the player leaves this screen (see showTitle).
   if (game.pendingUpdate) {
     ui.updateText.textContent = `Build #${game.pendingUpdate.build} will load when you continue.`;

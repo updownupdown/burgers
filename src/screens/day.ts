@@ -1,5 +1,5 @@
 import { CROWD, MIN_MENU, menuFor } from "../game/business";
-import { BONUSES, bonusById, GREAT, nextBonus } from "../game/bonus";
+import { BONUSES, bonusById, GREAT, townBonus } from "../game/bonus";
 import { expectedCustomers } from "../game/day";
 import { DIFFICULTIES, DIFFICULTY, type Difficulty } from "../game/difficulty";
 import { criticChance, type PressPiece } from "../game/press";
@@ -18,8 +18,8 @@ import "./day.css";
  * - **Prep & Open**, before opening: one scrolling page around one big number, the people to
  *   expect. Under it: the shift window on the day's lunch curve, the menu as recipe cards to
  *   show or hide, pacing, and the one bonus to bring. Everything here is fixed once the window opens.
- * - **Closing**, after the shift: a bonus, when a great shift earned one, then the stars, the
- *   takings, today's reviews, the press and the road.
+ * - **Closing**, after the shift: the town's bonus, when a great shift unlocked it (with a Buy
+ *   button when savings cover it), then the stars, the takings, today's reviews, the press and the road.
  * - **Reviews**, reached from the map.
  */
 
@@ -33,9 +33,6 @@ const openBoxes = new Set<string>(["closing:road"]);
 export function toggleBox(id: string): void {
   if (openBoxes.has(id)) openBoxes.delete(id);
   else openBoxes.add(id);
-}
-export function closeBoxes(prefix: string): void {
-  for (const id of [...openBoxes]) if (id.startsWith(prefix)) openBoxes.delete(id);
 }
 
 interface Box {
@@ -136,7 +133,15 @@ export function prepHtml(p: PrepInput): string {
     .join("");
 
   const owned = BONUSES.filter((b) => save.bonuses.includes(b.id));
-  const next = nextBonus(save.bonuses);
+  const here = townBonus(stop.id);
+  const goal = `a ${GREAT.stars}★ average with ${Math.round(GREAT.served * 100)}% of orders served`;
+  const hereLine = here
+    ? save.bonuses.includes(here.id)
+      ? ""
+      : save.found.includes(here.id)
+        ? `<span class="day-hint">${icon(here.icon)}<span><b>${esc(here.name)}</b> is unlocked here: ${money(here.price)} in the Garage.</span></span>`
+        : `<span class="day-hint">${icon("lock")}<span>A great shift here (${goal}) unlocks <b>${esc(here.name)}</b>: ${esc(here.text.charAt(0).toLowerCase() + here.text.slice(1))}</span></span>`
+    : "";
   const bonusBody = owned.length
     ? `<div class="prep-bonuses">${owned
         .map(
@@ -144,7 +149,7 @@ export function prepHtml(p: PrepInput): string {
           <span class="ic">${icon(b.icon)}</span><b>${esc(b.name)}</b><small>${esc(b.text)}</small><em>${esc(b.best)}</em></button>`,
         )
         .join("")}</div>`
-    : `<span class="day-hint">No bonuses yet. A great shift earns one: a ${GREAT.stars}★ average with ${Math.round(GREAT.served * 100)}% of orders served${next ? `. First up: <b>${esc(next.name)}</b>` : ""}.</span>`;
+    : `<span class="day-hint">No bonuses yet. Each town has one: a great shift there unlocks it, then it's bought in the Garage.</span>`;
 
   return `<div class="day-screen bv prep">
     <header class="day-top">
@@ -189,6 +194,7 @@ export function prepHtml(p: PrepInput): string {
       <section class="prep-sec">
         <h3 class="prep-h">${icon("sparkle")}Bonus <span>${owned.length ? (bonus ? "1 brought" : "Bring one, or none") : "None yet"}</span></h3>
         ${bonusBody}
+        ${hereLine}
       </section>
     </div>
     <footer class="day-foot">
@@ -216,7 +222,8 @@ export function closingHtml(c: Closing, save: Save): string {
             : "A rough day at the grill, but you made it.";
   const row = (dt: string, dd: string, cls = "", sub = "") => `<dt class="${cls}">${dt}${sub ? `<small>${sub}</small>` : ""}</dt><dd class="${cls}">${dd}</dd>`;
   const newBest = c.takings > 0 && (c.bestBefore === null || c.takings > c.bestBefore);
-  const earned = c.earnedBonus ? bonusById(c.earnedBonus) : null;
+  const earned = c.unlocked ? bonusById(c.unlocked) : null;
+  const owns = earned ? save.bonuses.includes(earned.id) : false;
   const boxes: Box[] = [];
   boxes.push({
     id: "closing:take",
@@ -231,6 +238,7 @@ export function closingHtml(c: Closing, save: Save): string {
       ${c.comped ? row("On the house", `−${money(c.comped)}`, "neg", "sides and extras nobody ordered") : ""}
       ${c.spills ? row("Spilled soda", `−${money(c.spills)}`, "neg") : ""}
       ${row("Takings", money(c.takings), "tot")}
+      ${row("Savings", money(save.bank), "", "takings go in; spend them in the Garage")}
     </dl><div class="foot"><span>Best in ${esc(town.name)}</span><b>${newBest ? "New best!" : money(c.bestBefore ?? 0)}</b></div></div>
     ${c.best ? `<span class="day-hint">Best order: ${esc(c.best)}.</span>` : ""}`,
   });
@@ -277,15 +285,24 @@ export function closingHtml(c: Closing, save: Save): string {
   });
 
   const reward = earned
-    ? `<section class="day-reward" aria-label="Bonus earned">
-        <span class="bv-eyebrow">Great shift · bonus earned</span>
+    ? `<section class="day-reward" aria-label="Bonus unlocked">
+        <span class="bv-eyebrow">Great shift · ${esc(town.name)}'s bonus unlocked</span>
         <span class="ic">${icon(earned.icon)}</span>
         <b>${esc(earned.name)}</b>
         <p>${esc(earned.text)}</p>
-        <small>Bring it, or another bonus, from Prep &amp; Open. One per shift.</small>
+        ${
+          owns
+            ? `<small>It's yours. Bring it from Prep &amp; Open, one bonus per shift.</small>`
+            : save.bank >= earned.price
+              ? `<button class="bv-btn primary block" data-act="buy-bonus" data-v="${earned.id}">${icon("coin")}Buy now · ${money(earned.price)}</button><small>Savings ${money(save.bank)}. Or later, in the Garage.</small>`
+              : `<small>${money(earned.price)} in the Garage. Savings ${money(save.bank)}, ${money(earned.price - save.bank)} to go.</small>`
+        }
       </section>`
-    : c.ribbon
-      ? `<section class="day-reward" aria-label="Ribbon earned"><span class="bv-eyebrow">Great shift</span><span class="ic">${icon("trophy")}</span><b>A ribbon for ${esc(town.name)}</b><p>Every bonus is yours already. ${esc(town.name)} gets a ribbon on the map.</p></section>`
+    : "";
+  const tb = townBonus(town.id);
+  const goal =
+    !earned && tb && !save.found.includes(tb.id) && c.outcome !== "failed"
+      ? `<p class="day-goal">${icon("lock")}<span>A great shift here unlocks <b>${esc(tb.name)}</b>: ${GREAT.stars}★ average, ${Math.round(GREAT.served * 100)}% of orders served, at least ${GREAT.min}.</span></p>`
       : "";
 
   return `<div class="day-screen bv closing">
@@ -302,6 +319,7 @@ export function closingHtml(c: Closing, save: Save): string {
         <div class="day-kpi"><span class="bv-eyebrow">Rating</span><b>${c.rep.toFixed(1)}</b><small>${c.rep >= c.repBefore ? "+" : "−"}${Math.abs(c.rep - c.repBefore).toFixed(1)} today</small></div>
         <div class="day-kpi"><span class="bv-eyebrow">Served</span><b>${c.served}</b><small>${c.lost + c.leftLine ? `${c.lost + c.leftLine} left` : "nobody left"}</small></div>
       </div>
+      ${goal}
       ${boxes.map((b) => boxHtml(b, "closing-box")).join("")}
       <p class="day-build">${esc(buildLabel())}</p>
     </div>

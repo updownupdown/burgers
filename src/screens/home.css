@@ -176,7 +176,9 @@
 /* the truck */
 .home-truck { pointer-events: none; }
 .home-truck .shadow { fill: var(--home-ink); opacity: 0.18; }
-.home-truck.west .truck-body { transform: translate(0, -4.6px) scaleX(-1); }
+.home-truck.west .truck-body { transform: scaleX(-1); }
+.home-truck .tk .tk-shadow, .home-truck .tk .tk-pool { display: none; }
+.home-town .prize { fill: #e1b55c; stroke: var(--home-ink); stroke-width: 0.28; stroke-linejoin: round; }
 
 /* ---- zoom buttons ------------------------------------------------------ */
 .home-zoom { position: absolute; right: 10px; top: 118px; display: grid; gap: 6px; }
@@ -379,3 +381,25 @@
 }
 /* Dev mode's progress simulation is on: say so by the logo, so a simulated trip is never mistaken for the real one. */
 .home-dev { align-self: center; padding: 2px 7px; border-radius: var(--bv-r-pill); border: 1px dashed var(--bv-amber); color: var(--bv-amber); font-size: 11px; letter-spacing: 0.02em; }
+
+/* ---- the truck under the stars in the night card, and the savings button ---------------- */
+.home-night-truck { width: min(300px, 78vw); margin: -6px 0 2px; }
+.home-night-truck .tk { width: 100%; height: auto; max-height: 34vh; }
+.home-bank {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px 0 10px;
+  border-radius: var(--bv-r-pill); background: var(--bv-paper-2); color: var(--bv-ink); font-weight: 700;
+}
+.home-bank .bv-icon { font-size: 18px; }
+.home-bank b { font-weight: 500; font-size: 14px; }
+.home-bank .dot { position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--bv-paprika); box-shadow: 0 0 0 2px var(--bv-paper-2); }
+.home-bank:active { background: var(--bv-paper-3); }
+.home-bonus { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 10px; margin-top: 10px; border: 1px solid var(--bv-rule-2); border-radius: var(--bv-r-lg); }
+.home-bonus.found { border-color: var(--bv-amber); background: var(--bv-amber-soft); }
+.home-bonus .ic { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--bv-paper-2); font-size: 18px; }
+.home-bonus .t { display: grid; line-height: 1.25; min-width: 0; }
+.home-bonus .t b { font-size: 14px; }
+.home-bonus .t small { font-size: 11.5px; color: var(--bv-ink-2); font-weight: 600; }
+.home-bonus em { font-style: normal; display: inline-flex; gap: 4px; align-items: center; font-size: 11.5px; font-weight: 700; color: var(--bv-mute); white-space: nowrap; }
+.home-bonus em.sale { font-family: var(--bv-font-mono); font-weight: 500; color: var(--bv-ink); }
+.home-bonus em.own { color: var(--bv-paprika); }
+.home-truck .tk .tk-shade { filter: none; }

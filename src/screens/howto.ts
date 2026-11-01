@@ -295,7 +295,7 @@ function sections(): Sec[] {
       points: [
         "<b>Tips</b> come from good food served before the customer gets worried.",
         "<b>Pass a shift</b> by serving at least half your customers with an average of 1 star or more.",
-        "A <b>great shift</b> (a 2.4★ average with almost everyone served) earns a <b>bonus</b> for the truck.",
+        "A <b>great shift</b> (a 2.4★ average with almost everyone served) unlocks that town's <b>bonus</b>. Every town has its own.",
       ],
     },
     {
@@ -351,7 +351,8 @@ function sections(): Sec[] {
         "A longer <b>menu</b> brings more people and more kinds of order; hide recipes to keep it simple.",
         "Lunch peaks from noon to one. <b>Open early or close late</b> for a few quieter hours either side.",
         "<b>Pacing</b> and your <b>bonus</b> are set here and stay put for the whole shift. Bring one bonus at most.",
-        "<b>Takings</b> are your score for the shift: orders, plus tips for speed, less anything you gave away free.",
+        "<b>Takings</b> are your score for the shift: orders, plus tips for speed, less anything you gave away free. They go into your <b>savings</b>.",
+        "Spend savings in the <b>Garage</b> (the truck button by Settings): unlocked bonuses, and looks for the truck that show on the map and at night.",
       ],
     },
   ];

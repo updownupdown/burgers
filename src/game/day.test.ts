@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { BONUSES, greatShift, migrateBonuses, nextBonus } from "./bonus";
+import { BONUSES, greatShift, migrateBonuses, townBonus } from "./bonus";
+import { buyBonus, buyLook, readyToBuy, wearLook } from "./garage";
+import { DEFAULT_LOOK, LOOKS, SLOTS } from "./looks";
+import { roadOrder } from "./devmode";
 import { expectedCustomers, RANGE_MI, rangeUnits, sleep } from "./day";
 import { migrateSave, freshSave, START_POPULARITY } from "./progress";
 import { arrivalGap, clockAt, crowdShare, DEFAULT_SHIFT, shiftSeconds, validShift } from "./shift";
@@ -76,29 +79,77 @@ describe("the shift window", () => {
 });
 
 describe("bonuses", () => {
-  it("come one at a time, in order, from great shifts only", () => {
-    expect(nextBonus([])!.id).toBe(BONUSES[0].id);
-    expect(nextBonus([BONUSES[0].id])!.id).toBe(BONUSES[1].id);
-    expect(nextBonus(BONUSES.map((b) => b.id))).toBeNull();
+  it("one per town, in road order, getting dearer down the road", () => {
+    expect(new Set(BONUSES.map((b) => b.town)).size).toBe(STOPS.length);
+    for (const t of STOPS) expect(townBonus(t.id)).toBeDefined();
+    const order = roadOrder();
+    const byRoad = [...BONUSES].sort((a, b) => order.indexOf(a.town) - order.indexOf(b.town));
+    for (let i = 1; i < byRoad.length; i++) expect(byRoad[i].price).toBeGreaterThanOrEqual(byRoad[i - 1].price);
+    expect(townBonus("pinecrest")!.id).toBe("bench");
+  });
+
+  it("great shifts ask for stars and most orders served", () => {
     expect(greatShift([3, 3, 2, 3, 2, 3], 6, 6)).toBe(true);
     expect(greatShift([3, 3, 2, 3, 2, 3], 6, 8)).toBe(false);
     expect(greatShift([2, 2, 2, 2, 2, 3], 6, 6)).toBe(false);
     expect(greatShift([3, 3, 3], 3, 3)).toBe(false);
   });
 
+  it("are bought only once unlocked, and only with enough savings", () => {
+    const s = freshSave();
+    s.bank = 1000;
+    expect(buyBonus(s, "bench")).toBe(false);
+    s.found.push("bench");
+    s.bank = 10;
+    expect(buyBonus(s, "bench")).toBe(false);
+    expect(readyToBuy(s)).toBe(0);
+    s.bank = 100;
+    expect(readyToBuy(s)).toBe(1);
+    expect(buyBonus(s, "bench")).toBe(true);
+    expect(s.bank).toBe(100 - townBonus("pinecrest")!.price);
+    expect(s.bonuses).toEqual(["bench"]);
+    expect(buyBonus(s, "bench")).toBe(false);
+  });
+
   it("keeps old kitchen upgrades as bonuses", () => {
-    expect(migrateBonuses(["bench", "tipjar", "nonsense"])).toEqual(["bench", "tipjar"]);
+    expect(migrateBonuses(["bench", "tipjar", "nonsense", "bench"])).toEqual(["bench", "tipjar"]);
+  });
+});
+
+describe("looks", () => {
+  it("every slot has a free default and items unique by id", () => {
+    expect(new Set(LOOKS.map((l) => l.id)).size).toBe(LOOKS.length);
+    for (const s of SLOTS) expect(LOOKS.find((l) => l.id === DEFAULT_LOOK[s.id])!.price).toBe(0);
+  });
+
+  it("are bought with savings, worn on purchase, and souvenirs wait for their town", () => {
+    const s = freshSave();
+    s.bank = 500;
+    expect(buyLook(s, "sage")).toBe(true);
+    expect(s.look.paint).toBe("sage");
+    expect(s.bank).toBe(350);
+    expect(wearLook(s, "coral")).toBe(true);
+    expect(s.look.paint).toBe("coral");
+    expect(wearLook(s, "dusk")).toBe(false);
+    expect(buyLook(s, "canoe")).toBe(false);
+    s.shiftsIn.cedarfalls = 1;
+    s.bank = 500;
+    expect(buyLook(s, "canoe")).toBe(true);
+    expect(buyLook(s, "airship")).toBe(false);
   });
 });
 
 describe("old saves", () => {
-  it("drop money and business mode, and keep upgrades and the menu", () => {
+  it("drop business mode, keep their money as savings, and keep upgrades and the menu", () => {
     const old = { ...freshSave(), bank: 300, gear: ["solar1"], biz: true, simplePlan: true, ads: 1, offer: ["tipjar"], upgrades: ["bench", "turbo"], plan: { quality: "premium", price: "high", menu: ["Pine Classic"] } } as unknown as Parameters<typeof migrateSave>[0];
     delete (old as Record<string, unknown>).bonuses;
     delete (old as Record<string, unknown>).hidden;
     const s = migrateSave(old) as unknown as Record<string, unknown>;
-    for (const k of ["bank", "gear", "biz", "simplePlan", "ads", "offer", "upgrades", "plan"]) expect(s[k]).toBeUndefined();
+    for (const k of ["gear", "biz", "simplePlan", "ads", "offer", "upgrades", "plan"]) expect(s[k]).toBeUndefined();
+    expect(s.bank).toBe(300);
     expect(s.bonuses).toEqual(["bench", "turbo"]);
+    expect(s.found).toEqual(["bench", "turbo"]);
+    expect(s.look).toEqual(DEFAULT_LOOK);
     expect(s.shift).toEqual(DEFAULT_SHIFT);
     expect((s.hidden as string[]).length).toBeGreaterThan(0);
   });

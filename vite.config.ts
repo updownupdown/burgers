@@ -41,7 +41,7 @@ export default defineConfig({
   build: {
     target: "es2020",
     chunkSizeWarningLimit: 900,
-    // ui.html is the component review page (src/ui/library.ts); it ships beside the game at /ui.html.
-    rollupOptions: { input: { main: "index.html", ui: "ui.html" } },
+    // ui.html is the component review page (src/ui/library.ts) and looks.html the bonus and cosmetics catalogue (src/screens/looksreview.ts); both ship beside the game.
+    rollupOptions: { input: { main: "index.html", ui: "ui.html", looks: "looks.html" } },
   },
 });

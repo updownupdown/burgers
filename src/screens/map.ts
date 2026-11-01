@@ -271,7 +271,7 @@ const LABEL_AT: Record<string, LabelAt> = {
   pinecrest: "left",
   elkpass: "right",
   summit: "left",
-  gullpoint: { dx: -2.4, dy: 5.2, anchor: "end" },
+  gullpoint: "above",
   driftwood: "left",
   harbor: { dx: -2.6, dy: 5, anchor: "end" },
   cactus: { dx: 2, dy: 5, anchor: "start" },

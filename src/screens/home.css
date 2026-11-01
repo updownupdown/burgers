@@ -72,7 +72,7 @@
 .home-pill b.bv-mono { font-weight: 500; }
 .home-pill:active { background: var(--bv-paper-3); transform: translateY(1px); }
 .home-pill:disabled { opacity: 0.5; }
-.home-dayline { display: inline-flex; align-items: center; gap: 5px; }
+.home-dayline { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; letter-spacing: .06em; }
 .home-dayline .bv-icon { font-size: 13px; color: var(--bv-paprika); }
 
 /* ---- map -------------------------------------------------------------- */

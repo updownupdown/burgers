@@ -10,7 +10,7 @@ import { HOLD_GRACE } from "../game/scoring";
 import type { Recipe } from "../game/stops";
 import { COUNTED, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, STANDARD_COUNT, type Kind, type Size } from "../game/types";
 import { icon } from "../ui/icons";
-import { getDeps, jumpTo, modalOpen, popModal, price, pushModal, wireJumpChips } from "./modal";
+import { getDeps, jumpTo, modalHead, modalOpen, popModal, price, pushModal, wireJumpChips } from "./modal";
 import { openMenuRef, recipeHtml, stackArt } from "./menuref";
 
 interface Sec {
@@ -421,11 +421,7 @@ export function openHowTo(section?: string): void {
     key: "howto",
     label: "How to Play",
     cls: "howto",
-    html: `<header class="menu-head">
-        ${stacked ? `<button class="bv-btn icon sm ghost menu-back" data-m="close" aria-label="Back">${icon("back")}</button>` : ""}
-        <div class="menu-headtext"><span class="bv-eyebrow">Bun Voyage</span><h2 class="bv-title">How to Play</h2></div>
-        ${stacked ? "" : `<button class="bv-btn icon sm ghost menu-x" data-m="close" aria-label="Close">${icon("close")}</button>`}
-      </header>
+    html: `${modalHead({ icon: "help", title: "How to Play", stacked, eyebrow: "Menu" })}
       <div class="menu-body menu-scroll">${howToHtml()}</div>`,
   });
   const body = card.querySelector<HTMLElement>(".menu-body")!;

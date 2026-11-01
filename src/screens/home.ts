@@ -1,5 +1,5 @@
 import { CROWD } from "../game/business";
-import { expectedCustomers, RANGE_MI, rangeUnits } from "../game/day";
+import { expectedCustomers, rangeUnits } from "../game/day";
 import type { Save } from "../game/progress";
 import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent, type Stop } from "../game/stops";
 import { applyTrip, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Legs, type Trip } from "../game/travel";
@@ -152,6 +152,7 @@ export function refreshHome(): void {
 
 function shellHtml(save: Save): string {
   return `<div class="home bv bv-night">
+    <div class="home-float">
     <header class="home-top">
       <div class="home-brand">
         <span class="home-logo" aria-label="Bun Voyage"><img class="mark" src="./logo.svg" alt="" width="30" height="30" /><span class="w1">Bun</span><span class="w2">Voyage</span></span>${save.trips > 0 ? `<span class="bv-eyebrow">Trip ${save.trips + 1}</span>` : ""}${simLevel() !== null ? `<span class="home-dev bv-mono" title="Simulated progress (dev mode, in Settings)">Sim ${simLevel()}%</span>` : ""}
@@ -162,9 +163,10 @@ function shellHtml(save: Save): string {
         <button class="bv-btn icon" data-home="settings" aria-label="Settings" title="Settings">${icon("settings")}</button>
       </div>
     </header>
+    ${statsHtml(save)}
+    </div>
     <div class="home-map" style="--home-sea:${SEA}">
       <div class="home-world"></div>
-      ${statsHtml(save)}
       <div class="home-zoom">
         <button data-home="zoom-in" aria-label="Zoom in">${icon("plus")}</button>
         <button data-home="zoom-out" aria-label="Zoom out">${icon("minus")}</button>
@@ -191,17 +193,13 @@ function statsHtml(save: Save): string {
   const avg = save.ratingCount ? save.rep : null;
   const evening = save.time === "evening";
   const last = save.last && save.last.town === save.town ? save.last : null;
-  return `<div class="home-stats" role="group" aria-label="Your truck">
-    <div class="home-stat time"><span class="bv-eyebrow">${evening ? "Evening" : "Morning"}</span><b>${icon(evening ? "moon" : "sun")}Day ${save.day}</b></div>
-    <button class="home-fame" data-home="reviews" aria-label="Popularity ${save.popularity}, rating ${avg === null ? "none yet" : avg.toFixed(1)}: see popularity and reviews">
-      <span class="home-stat"><span class="bv-eyebrow">Popularity</span><b>${icon("people")}${save.popularity}</b></span>
-      <span class="home-stat"><span class="bv-eyebrow">Rating</span><b>${icon("star")}${avg === null ? "–" : avg.toFixed(1)}${save.ratingCount ? `<small>· ${save.ratingCount}</small>` : ""}</b></span>
-      <span class="chev">${icon("forward")}</span>
-    </button>
+  return `<div class="home-stats bv-light" role="group" aria-label="Your truck">
+    <button class="home-pill" data-home="reviews" aria-label="Popularity ${save.popularity}: see popularity and reviews">${icon("people")}<span><small>Popularity</small><b class="bv-mono">${save.popularity}</b></span></button>
+    <button class="home-pill" data-home="reviews" aria-label="Rating ${avg === null ? "none yet" : avg.toFixed(1)}: see popularity and reviews">${icon("star")}<span><small>Rating</small><b class="bv-mono">${avg === null ? "–" : avg.toFixed(1)}</b></span></button>
     ${
       evening
-        ? `<button class="home-door" data-home="results" ${last ? "" : "disabled"}>${icon("receipt")}<span>Results</span></button>`
-        : `<button class="home-door" data-home="menuref">${icon("food-menu")}<span>Menu</span></button>`
+        ? `<button class="home-pill" data-home="results" ${last ? "" : "disabled"}>${icon("receipt")}<span><small>Today</small><b>Results</b></span></button>`
+        : `<button class="home-pill" data-home="menuref">${icon("food-menu")}<span><small>Today's</small><b>Menu</b></span></button>`
     }
   </div>`;
 }
@@ -272,7 +270,7 @@ function fitMap(keepView: boolean, lookAt?: string): void {
   svg.setAttribute("height", `${VIEW.h * m.base}`);
   const home = Math.min(3, Math.max(1, DEFAULT_UNIT / m.base));
   // Some slack past the edges, so towns near the coast can still be brought to the middle.
-  m.pz.resize(VIEW.w * m.base, VIEW.h * m.base, 0.9, 5, Math.round(Math.min(w * 0.3, h * 0.18)));
+  m.pz.resize(VIEW.w * m.base, VIEW.h * m.base, 0.6, 5, Math.round(Math.min(w * 0.55, h * 0.4)));
   const dockH = m.el.querySelector<HTMLElement>(".home-sheet:not([hidden])")?.offsetHeight ?? m.el.querySelector<HTMLElement>(".home-dock")?.offsetHeight ?? 0;
   const at = { x: w / 2, y: Math.max(h * 0.35, (h - dockH) / 2) };
   if (prev) m.pz.centerOn((prev.x / prevBase) * m.base, (prev.y / prevBase) * m.base, m.pz.scale, { x: w / 2, y: h / 2 });
@@ -354,7 +352,7 @@ function renderDock(m: Mounted): void {
   dock.innerHTML = `
     <div class="home-dock-row">
       <button class="home-dock-info" data-home="here" aria-label="About ${esc(here.name)}">
-        <span class="bv-eyebrow">${evening ? "Evening in" : "Morning in"}</span>
+        <span class="bv-eyebrow home-dayline">${icon(evening ? "moon" : "sun")}Day ${s.day} · ${evening ? "Evening in" : "Morning in"}</span>
         <b>${esc(here.name)}</b>
         <span class="bv-caption">${evening ? esc(today) : ev ? `${icon("flag")}${esc(ev.name)} today` : shiftsLine(s, here)}</span>
       </button>
@@ -418,19 +416,7 @@ function renderSheet(m: Mounted, id: string): void {
   } else if (trip) {
     const can = trip.when !== "tomorrow";
     const how = trip.when === "now" ? (evening ? "tonight" : "this morning") : trip.when === "day" ? "takes the day" : "tomorrow";
-    const roads = `${trip.hops} road${trip.hops === 1 ? "" : "s"}, ${miles(trip.distance)} mi`;
-    const range = RANGE_MI;
-    const left = Math.max(0, Math.round(range - s.driven * 3));
-    action = `<button class="bv-btn primary lg block" data-home="drive" data-id="${id}" ${can ? "" : "disabled"}>${icon("truck")}Drive here · ${how}</button>
-      <span class="bv-caption">${
-        trip.when === "now"
-            ? evening
-              ? `${roads}. Fits tonight's range (${left} mi left). Wake up there tomorrow.`
-              : `${roads}. Within range, so you're there before the window opens.`
-            : trip.when === "day"
-              ? `${roads}. Further than the ${range} mi range: the drive takes the whole day, no shift today.`
-              : `${roads}. Too far for tonight (${left} mi left of ${range}). Set off in the morning.`
-      }</span>`;
+    action = `<button class="bv-btn primary lg block" data-home="drive" data-id="${id}" ${can ? "" : "disabled"}>${icon("truck")}Drive here · ${how}</button>`;
   } else if (!open) {
     const gates = openedBy(id).map((g) => ({ t: townById(g), ...unlockProgress(s.shiftsIn, g) }));
     const reachable = gates.filter((g) => s.unlocked.includes(g.t.id));

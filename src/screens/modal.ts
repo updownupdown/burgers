@@ -11,6 +11,7 @@ import "./menu.css";
 import type { Stop } from "../game/stops";
 import type { VersionInfo } from "../update";
 import { dropBack, pushBack } from "./nav";
+import { icon } from "../ui/icons";
 
 export type GfxLevel = "high" | "standard" | "low";
 
@@ -125,6 +126,12 @@ function ensureHost(): HTMLElement {
   return host;
 }
 
+/** `sh-top` on `host` while `body` is scrolled down from the top; `sh-bot` while there's more below. */
+export function scrollShadows(host: HTMLElement, body: HTMLElement): void {
+  host.classList.toggle("sh-top", body.scrollTop > 2);
+  host.classList.toggle("sh-bot", body.scrollTop + body.clientHeight < body.scrollHeight - 2);
+}
+
 export interface ModalOpts {
   /** Identifies the layer, so opening the same one twice reuses it. */
   key: string;
@@ -153,10 +160,10 @@ export function pushModal(o: ModalOpts): HTMLElement {
   el.addEventListener("touchmove", (e) => {
     if (!(e.target as HTMLElement).closest(".menu-scroll")) e.preventDefault();
   }, { passive: false });
-  // A hairline under the header once a body has scrolled.
+  // Shadows under the header and over a footer, only while there's more to scroll that way.
   card.addEventListener("scroll", (e) => {
     const t = e.target as HTMLElement;
-    if (t.classList?.contains("menu-body")) t.classList.toggle("scrolled", t.scrollTop > 2);
+    if (t.classList?.contains("menu-body")) scrollShadows(card, t);
   }, true);
   const layer: Layer = { el, card, onDismiss: o.onDismiss, restoreFocus: document.activeElement, key: o.key };
   stack.push(layer);
@@ -166,6 +173,10 @@ export function pushModal(o: ModalOpts): HTMLElement {
   });
   h.appendChild(el);
   card.focus({ preventScroll: true });
+  requestAnimationFrame(() => {
+    const body = card.querySelector<HTMLElement>(".menu-body");
+    if (body) scrollShadows(card, body);
+  });
   return card;
 }
 
@@ -186,6 +197,24 @@ export function closeAllModals(): void {
 
 export const modalOpen = (key?: string): boolean => (key ? stack.some((l) => l.key === key) : stack.length > 0);
 export const modalDepth = (): number => stack.length;
+
+/**
+ * A card's header bar. On its own: the icon and title on the left, a close × on the right. Stacked
+ * over another card (Settings or How to Play from the pause menu): a back chevron, a small line
+ * over the title (where it came from), and no ×.
+ */
+export function modalHead(o: { icon: string; title: string; stacked: boolean; eyebrow?: string; closeLabel?: string }): string {
+  if (o.stacked)
+    return `<header class="menu-head bar stacked">
+      <button class="bv-btn icon sm ghost menu-back" data-m="close" aria-label="Back">${icon("back")}</button>
+      <div class="menu-headtext">${o.eyebrow ? `<span class="bv-eyebrow">${esc(o.eyebrow)}</span>` : ""}<h2 class="bv-title">${esc(o.title)}</h2></div>
+    </header>`;
+  return `<header class="menu-head bar">
+    <span class="menu-head-ic" aria-hidden="true">${icon(o.icon)}</span>
+    <div class="menu-headtext"><h2 class="bv-title">${esc(o.title)}</h2></div>
+    <button class="bv-btn icon sm ghost menu-x" data-m="close" aria-label="${o.closeLabel ?? "Close"}">${icon("close")}</button>
+  </header>`;
+}
 
 export const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 

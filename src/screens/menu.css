@@ -531,3 +531,28 @@
 .pause-confirm p b { font-size: 16px; font-weight: 800; color: var(--bv-ink); line-height: 1.25; }
 .pause-confirm p span { font-size: var(--bv-fs-sm); font-weight: 600; color: var(--bv-mute); }
 .pause-confirm .bv-btn { min-height: 52px; font-size: 15px; }
+
+/* ---- Header bar, grouped cards, scroll shadows (after build #62) ---------------------- */
+/* Every card's header is a darker bar: icon and title, × on the right (or back chevron when stacked). */
+:root { --bv-card-pale: #fbf9f4; --bv-head-bar: #e4ded2; }
+.menu-head.bar { align-items: center; padding: 12px 10px 12px 18px; background: var(--bv-head-bar); position: relative; z-index: 3; transition: box-shadow var(--bv-fast); }
+.menu-head.bar .menu-headtext { padding-top: 0; gap: 2px; }
+.menu-head.bar .bv-title { font-size: 24px; line-height: 1.1; }
+.menu-head.bar.stacked { padding-left: 10px; }
+.menu-head.bar .menu-back { margin-left: 0; }
+.menu-head.bar .bv-btn.icon { margin-top: 0; }
+.menu-head-ic { flex: none; display: grid; place-items: center; width: 34px; height: 34px; margin-right: 2px; border-radius: 10px; background: var(--bv-paper); color: var(--bv-paprika); font-size: 20px; }
+.menu-body.scrolled { border-top-color: transparent; }
+
+/* Settings: the sections are pale rounded cards on a deeper beige page. */
+.menu-body.menu-groups { background: var(--bv-paper-2); padding: 12px 12px 18px; gap: 10px; }
+.menu-group { background: var(--bv-card-pale); border-radius: var(--bv-r-lg); padding: 4px 14px 6px; box-shadow: 0 1px 0 rgb(0 0 0 / 0.04); }
+.menu-group > .menu-h { margin: 10px 0 2px !important; }
+.menu-group > :last-child { border-bottom: 0; }
+.menu-group .menu-dev .menu-field { border-bottom: 0; }
+.menu-groups > .menu-build { margin-top: 8px !important; }
+
+/* Shadows under a fixed header and over a fixed footer, only while there's more to scroll that way. */
+.menu-card.sh-top .menu-head { box-shadow: 0 6px 10px -6px rgb(30 24 16 / 0.28); }
+.pause-foot { position: relative; z-index: 3; border-top-color: transparent; transition: box-shadow var(--bv-fast), border-color var(--bv-fast); }
+.menu-card.sh-bot .pause-foot { box-shadow: 0 -6px 10px -6px rgb(30 24 16 / 0.28); border-top-color: var(--bv-rule); }

@@ -16,7 +16,7 @@
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: 1fr;
   background: var(--bv-night);
   color: var(--bv-ink);
   font-family: var(--bv-font-ui);
@@ -31,11 +31,17 @@
 .home-host { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: var(--bv-night) !important; }
 
 /* ---- top bar ---------------------------------------------------------- */
+/* The top bar and the plate under it float over the map. */
+.home-float { position: absolute; z-index: 5; top: calc(var(--safe-t) + 8px); left: 10px; right: 10px; display: grid; gap: 8px; pointer-events: none; }
+.home-float > * { pointer-events: auto; }
 .home-top {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: calc(var(--safe-t) + 8px) 14px 8px;
+  padding: 7px 8px 7px 12px;
+  border-radius: var(--bv-r-lg);
+  background: var(--bv-night);
+  box-shadow: var(--bv-shadow-3);
 }
 .home-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 /* The wordmark: the logo mark (public/logo.svg, cream cloche, white knob), then two stacked lines of the serif, "Voyage" in butter. */
@@ -49,40 +55,25 @@
 .home-actions .bv-btn .bv-icon { font-size: 19px; }
 .home-brand .bv-eyebrow:empty { display: none; }
 
-/* ---- dashboard card (floats over the top of the map) ------------------ */
-/* One row: the Day tile, popularity and rating as one button, and the menu. Slate on slate. */
+/* ---- the plate under the bar: popularity, rating and the menu, as three buttons ---------- */
 .home-stats {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  right: 10px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  background: var(--bv-paper-2);
-  border-radius: var(--bv-r-lg);
-  box-shadow: var(--bv-shadow-3);
-  overflow: hidden;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 6px;
+  background: var(--bv-paper); border-radius: var(--bv-r-lg); box-shadow: var(--bv-shadow-3);
 }
-.home-stat { display: grid; gap: 1px; padding: 9px 10px; min-width: 0; pointer-events: none; text-align: left; }
-.home-stat .bv-eyebrow { font-size: 9.5px; letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.home-stat b { display: flex; align-items: baseline; gap: 4px; font-family: var(--bv-font-mono); font-weight: 500; font-size: 15px; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
-.home-stat b .bv-icon { align-self: center; font-size: 13px; color: var(--bv-amber); }
-.home-stat small { font-family: var(--bv-font-ui); font-size: 10px; font-weight: 600; color: var(--bv-mute); }
-/* The Day tile is coral: it is the thing that changed since the player last looked. */
-.home-stat.time { background: var(--bv-paprika-2); color: #fff7f2; padding-right: 14px; }
-.home-stat.time .bv-eyebrow { color: #ffd9cc; }
-.home-stat.time b .bv-icon { color: #ffd9cc; }
-.home.evening .home-stat.time { background: #3f4d73; }
-.home.evening .home-stat.time .bv-eyebrow, .home.evening .home-stat.time b .bv-icon { color: #c9d4f2; }
-/* Popularity and rating: two numbers, one door. */
-.home-fame { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; min-width: 0; color: var(--bv-ink); transition: background var(--bv-fast); }
-.home-fame .home-stat + .home-stat { border-left: 1px solid var(--bv-rule); }
-.home-fame .chev { display: grid; place-items: center; padding: 0 8px 0 2px; color: var(--bv-mute); font-size: 16px; }
-.home-fame:active, .home-door:active { background: var(--bv-paper-3); }
-.home-door { display: grid; justify-items: center; align-content: center; gap: 2px; padding: 6px 14px; border-left: 1px solid var(--bv-rule); color: var(--bv-ink); font-size: 12px; font-weight: 700; transition: background var(--bv-fast); }
-.home-door .bv-icon { font-size: 18px; color: var(--bv-amber); }
-.home-door:disabled { color: var(--bv-mute); }
-.home-door:disabled .bv-icon { color: var(--bv-mute); }
+.home-pill {
+  display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 46px; padding: 6px 10px;
+  border: 1px solid var(--bv-rule-2); border-radius: var(--bv-r-md); background: var(--bv-paper-2); color: var(--bv-ink);
+  text-align: left; transition: background var(--bv-fast), transform var(--bv-fast) var(--bv-ease);
+}
+.home-pill > .bv-icon { flex: none; font-size: 18px; color: var(--bv-paprika); }
+.home-pill > span { display: grid; min-width: 0; line-height: 1.1; }
+.home-pill small { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bv-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-pill b { font-size: 16px; font-weight: 600; white-space: nowrap; }
+.home-pill b.bv-mono { font-weight: 500; }
+.home-pill:active { background: var(--bv-paper-3); transform: translateY(1px); }
+.home-pill:disabled { opacity: 0.5; }
+.home-dayline { display: inline-flex; align-items: center; gap: 5px; }
+.home-dayline .bv-icon { font-size: 13px; color: var(--bv-paprika); }
 
 /* ---- map -------------------------------------------------------------- */
 .home-map {
@@ -181,7 +172,7 @@
 .home-town .prize { fill: #e1b55c; stroke: var(--home-ink); stroke-width: 0.28; stroke-linejoin: round; }
 
 /* ---- zoom buttons ------------------------------------------------------ */
-.home-zoom { position: absolute; right: 10px; top: 118px; display: grid; gap: 6px; }
+.home-zoom { position: absolute; right: 10px; top: calc(var(--safe-t) + 150px); display: grid; gap: 6px; }
 .home-zoom button {
   width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
   background: var(--bv-paper-2); color: var(--bv-ink); box-shadow: var(--bv-shadow-2);
@@ -315,7 +306,7 @@
 /* ---- wide screens (desktop, tablets): the map fills the window, chrome floats centred ---- */
 @media (min-width: 720px) {
   .home-top { padding-left: 20px; padding-right: 20px; }
-  .home-stats { left: 50%; right: auto; transform: translateX(-50%); width: min(560px, calc(100% - 24px)); }
+  .home-float { left: 50%; right: auto; transform: translateX(-50%); width: min(560px, calc(100% - 24px)); }
   .home-dock { left: 50%; right: auto; transform: translateX(-50%); width: min(480px, calc(100% - 24px)); bottom: 16px; }
   .home-sheet { left: 50%; right: auto; transform: translateX(-50%); width: min(480px, calc(100% - 24px)); bottom: 16px; border-radius: 14px; max-height: calc(100% - 90px); }
   .home-sheet .grip { display: none; }
@@ -324,8 +315,8 @@
 }
 @media (max-width: 379px) {
   .home-logo { font-size: 17px; }
-  .home-stat { padding: 7px 8px; }
-  .home-stat b { font-size: 13px; }
+  .home-pill { padding: 6px 8px; gap: 6px; }
+  .home-pill b { font-size: 14px; }
   .home-dock-info b { font-size: 20px; }
   .home-sheet-head .bv-title { font-size: 23px; }
 }

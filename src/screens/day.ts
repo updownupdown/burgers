@@ -9,8 +9,9 @@ import { eventOn, townById, type Stop } from "../game/stops";
 import { SHIFTS_TO_UNLOCK } from "../game/travel";
 import { icon } from "../ui/icons";
 import { buildLabel } from "../update";
-import { layerLabel, stackArt } from "./menuref";
-import { KIND_COLOR } from "../game/types";
+import { stackArt } from "./menuref";
+import { COUNTED, KIND_LABEL } from "../game/types";
+import { recipeCount } from "../game/stops";
 import "./day.css";
 
 /**
@@ -133,11 +134,21 @@ export function syncRange(root: HTMLElement, moved: "start" | "end"): ShiftWindo
   return w;
 }
 
-/** Which recipes are opened on Prep. Remembered while the app runs. */
-const openRecipes = new Set<string>();
-export function toggleRecipe(name: string): void {
-  if (openRecipes.has(name)) openRecipes.delete(name);
-  else openRecipes.add(name);
+/** Prep's "Show ingredients" switch. Remembered on this device. */
+let showIngredients = (() => {
+  try {
+    return localStorage.getItem("bv-prep-ing") === "1";
+  } catch {
+    return false;
+  }
+})();
+export function toggleIngredients(): void {
+  showIngredients = !showIngredients;
+  try {
+    localStorage.setItem("bv-prep-ing", showIngredients ? "1" : "0");
+  } catch {
+    // Storage can be unavailable; the switch just won't stick.
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -166,25 +177,20 @@ export function prepHtml(p: PrepInput): string {
     .map((r) => {
       const on = menu.includes(r);
       const locked = on && menu.length <= MIN_MENU;
-      const layers = r.layers.length;
-      const level = layers <= 5 ? 1 : layers <= 7 ? 2 : 3;
-      const open = openRecipes.has(r.name);
-      const chips = [
-        r.toasted ? `<span class="bv-chip pill">${icon("toast")}Toasted bun</span>` : "",
-        r.smash ? `<span class="bv-chip pill">${icon("smash")}Smashed patty</span>` : "",
-        r.melt ? `<span class="bv-chip pill">${icon("cheese")}Melted cheese</span>` : "",
-      ].join("");
-      const flow = r.layers.map((k) => `<li><i class="swc" style="--c:${KIND_COLOR[k]}"></i><span>${layerLabel(r, k)}</span></li>`).join("");
-      return `<div class="prep-row ${on ? "" : "off"} ${open ? "open" : ""}">
-        <button class="pick" data-act="prep-menu" data-v="${esc(r.name)}" aria-pressed="${on}" ${locked ? 'aria-disabled="true"' : ""}>
-          <span class="tick">${on ? icon("check") : ""}</span>
-          ${stackArt(r)}
-          <span class="nm">${esc(r.name)}</span>
-          <span class="dots" aria-label="${["", "Easy", "Medium", "Tall"][level]}">${"<i class=on></i>".repeat(level)}${"<i></i>".repeat(3 - level)}</span>
-        </button>
-        <button class="chev" data-act="prep-recipe" data-v="${esc(r.name)}" aria-expanded="${open}" aria-label="${open ? "Hide" : "Show"} the recipe for ${esc(r.name)}">${icon("down")}</button>
-        <div class="rec" ${open ? "" : "hidden"}>${chips ? `<div class="mref-tags">${chips}</div>` : ""}<span class="bv-eyebrow">Bottom to top</span><ol class="mref-flow">${flow}</ol></div>
-      </div>`;
+      const chips = [r.toasted ? "Toasted bun" : "", r.smash ? "Smashed patty" : "", r.melt ? "Melted cheese" : ""].filter(Boolean);
+      // Between the buns, bottom to top; counted toppings once, with their count.
+      const inner = r.layers.slice(1, -1);
+      const build = inner
+        .filter((k, i) => !COUNTED.has(k) || inner.indexOf(k) === i)
+        .map((k) => (COUNTED.has(k) ? `${KIND_LABEL[k]} ×${recipeCount(r, k)}` : KIND_LABEL[k]))
+        .join(" · ");
+      return `<button class="prep-row ${on ? "" : "off"}" data-act="prep-menu" data-v="${esc(r.name)}" aria-pressed="${on}" ${locked ? 'aria-disabled="true"' : ""}>
+        <span class="tick">${on ? icon("check") : ""}</span>
+        <span class="nm"><b>${esc(r.name)}</b>${
+          showIngredients ? `<span class="build">${esc(build)}</span>${chips.length ? `<small>${chips.join(" · ")}</small>` : ""}` : ""
+        }</span>
+        ${stackArt(r)}
+      </button>`;
     })
     .join("");
 
@@ -202,22 +208,22 @@ export function prepHtml(p: PrepInput): string {
     ? `<div class="prep-bonuses">${owned
         .map(
           (b) => `<button class="prep-bonus" data-act="prep-bonus" data-v="${b.id}" aria-pressed="${b.id === bonus}">
-          <span class="ic">${icon(b.icon)}</span><b>${esc(b.name)}</b><small>${esc(b.text)}</small><em>${esc(b.best)}</em></button>`,
+          <span class="ic">${icon(b.icon)}</span><b>${esc(b.name)}</b><small>${esc(b.text)}</small><span class="tick">${b.id === bonus ? icon("check") : ""}</span></button>`,
         )
         .join("")}</div>`
     : `<span class="day-hint">No bonuses yet. Each town has one: a great shift there unlocks it, then it's bought in the Garage.</span>`;
 
-  return `<div class="day-screen bv prep">
-    <header class="day-top">
-      <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("back")}</button>
-      <div class="where"><span class="bv-eyebrow">Day ${save.day} · Prep &amp; Open</span><b>${esc(stop.name)}</b></div>
+  return `<div class="day-screen bv prep" role="dialog" aria-modal="true" aria-label="Prep and open">
+    <header class="menu-head bar">
+      <span class="menu-head-ic" aria-hidden="true">${icon("bell")}</span>
+      <div class="menu-headtext"><h2 class="bv-title">${esc(stop.name)}: Day ${save.day}</h2></div>
+      <button class="bv-btn icon sm ghost menu-x" data-act="back" aria-label="Back to the map">${icon("close")}</button>
     </header>
     <div class="day-scroll">
-      <section class="prep-expect">
+      <section class="prep-expect prep-card">
         <div class="l">
-          <span class="bv-eyebrow">Expect today</span>
-          <div class="big"><b class="bv-mono">${expect}</b><span>customers</span></div>
-          <span class="bv-chip pill crowd">${icon(CROWD_ICON[stop.crowd] ?? "people")}${crowd.label}</span>
+          <b class="num bv-mono">${expect}</b>
+          <div class="who"><span>expected customers</span><span class="bv-chip pill crowd">${icon(CROWD_ICON[stop.crowd] ?? "people")}${crowd.label}</span></div>
         </div>
         <ul class="r">
           <li>${icon("people")}<span>Popularity</span><b class="bv-mono">${save.popularity}</b></li>
@@ -227,26 +233,26 @@ export function prepHtml(p: PrepInput): string {
         ${ev ? `<div class="bv-callout">${icon("flag")}<span><b>${esc(ev.name)}.</b> ${esc(ev.blurb)}${ev.special ? ` Special: ${esc(ev.special.name)}.` : ""}</span></div>` : ""}
       </section>
 
-      <section class="prep-sec">
-        <h3 class="prep-h">${icon("clock")}Shift <span class="prep-shift-label bv-mono">${shiftLabel(w)}</span></h3>
-        ${rangeHtml(w)}
-        <span class="day-hint">Drag either end. Lunch peaks from noon to one; opening early or closing late adds quieter hours. At least ${MIN_SHIFT} hours.</span>
-      </section>
-
-      <section class="prep-sec">
-        <h3 class="prep-h">${icon("food-menu")}Menu <span>${menu.length} of ${stop.menu.length} shown</span></h3>
-        <div class="prep-rows">${rows}</div>
-        <span class="day-hint">A longer menu brings more people, and more kinds of order. Keep at least ${MIN_MENU}.</span>
-      </section>
-
-      <section class="prep-sec">
-        <h3 class="prep-h">${icon("timer")}Pacing <span>Set for the whole shift</span></h3>
+      <section class="prep-sec prep-card">
+        <h3 class="prep-h">${icon("timer")}Pacing</h3>
         ${seg("prep-pace", pacing, DIFFICULTIES.map((k) => ({ v: k, label: DIFFICULTY[k].label })))}
         <span class="day-hint">${esc(DIFFICULTY[pacing].blurb)}</span>
       </section>
 
-      <section class="prep-sec">
-        <h3 class="prep-h">${icon("sparkle")}Bonus <span>${owned.length ? (bonus ? "1 brought" : "Bring one, or none") : "None yet"}</span></h3>
+      <section class="prep-sec prep-card">
+        <h3 class="prep-h">${icon("clock")}Shift <span class="prep-shift-label bv-mono">${shiftLabel(w)}</span></h3>
+        ${rangeHtml(w)}
+      </section>
+
+      <section class="prep-sec prep-card">
+        <h3 class="prep-h">${icon("food-menu")}Menu
+          <button class="bv-toggle prep-ing" role="switch" aria-checked="${showIngredients}" data-act="prep-ing"><span class="lbl">Show ingredients</span><span class="sw"></span></button>
+        </h3>
+        <div class="prep-rows">${rows}</div>
+      </section>
+
+      <section class="prep-sec prep-card">
+        <h3 class="prep-h">${icon("sparkle")}Bonus</h3>
         ${bonusBody}
         ${hereLine}
       </section>

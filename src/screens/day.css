@@ -220,3 +220,41 @@
 .prep .day-hint:has(> .bv-icon) { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; }
 @keyframes day-reward-in { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .day-reward { animation: none; } }
+
+/* ---- Prep & Open as a card over the map (after build #62) ---------------------------------- */
+.screen.prep-host:has(> .day-screen) { padding: calc(var(--safe-t) + 12px) 12px calc(var(--safe-b) + 12px); place-items: center; }
+.day-screen.prep { width: min(440px, 100%); height: min(100%, 860px); border-radius: 14px; animation: menu-rise var(--bv-mid) var(--bv-ease); }
+.prep .day-scroll { background: var(--bv-paper-2); gap: 10px; padding: 12px; }
+.prep .day-foot { padding-bottom: 12px; box-shadow: none; border-top-color: transparent; position: relative; z-index: 3; transition: box-shadow var(--bv-fast), border-color var(--bv-fast); }
+.prep.sh-top .menu-head { box-shadow: 0 6px 10px -6px rgb(30 24 16 / 0.28); }
+.prep.sh-bot .day-foot { box-shadow: 0 -6px 10px -6px rgb(30 24 16 / 0.28); border-top-color: var(--bv-rule); }
+.prep-card { background: var(--bv-card-pale, #fbf9f4); border-radius: var(--bv-r-lg); padding: 12px 14px 14px; box-shadow: 0 1px 0 rgb(0 0 0 / 0.04); }
+
+/* Expected: one big number, with "expected customers" and the crowd stacked beside it. */
+.prep-expect.prep-card { background: var(--bv-card-pale, #fbf9f4); }
+.prep-expect .l { display: flex; align-items: center; gap: 12px; }
+.prep-expect .num { font-size: 54px; font-weight: 700; line-height: 0.9; letter-spacing: -0.03em; }
+.prep-expect .who { display: grid; gap: 5px; justify-items: start; align-content: center; }
+.prep-expect .who > span:first-child { font-size: 14px; font-weight: 700; color: var(--bv-ink-2); line-height: 1.1; }
+.prep-expect .who .crowd { margin: 0; font-size: 12.5px; background: var(--bv-paper-2); }
+
+/* Menu: a switch for the builds; each dish a row with the tick, the name, and the burger on the right. */
+.prep-h .prep-ing { margin-left: auto; width: auto; min-height: 0; padding: 0; border: 0; gap: 8px; font-size: 12.5px; font-weight: 700; color: var(--bv-ink-2); }
+.prep-h .prep-ing .lbl { flex: none; }
+.prep-rows .prep-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 50px; align-items: center; gap: 12px; padding: 9px 12px; min-height: 62px; text-align: left; width: 100%; border: 1.5px solid var(--bv-ink); color: var(--bv-ink); }
+.prep-row .nm { display: grid; gap: 4px; min-width: 0; font-family: var(--bv-font-ui); }
+.prep-row .nm b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 17px; line-height: 1.15; }
+.prep-row .nm small { font-size: 11.5px; font-weight: 700; color: var(--bv-mute); }
+.prep-row .nm .mref-flow { font-size: 12px; }
+.prep-row .mref-stack { width: 50px; justify-self: end; }
+.prep-row.off > :not(.tick) { opacity: 0.45; filter: grayscale(0.8); }
+.prep-row[aria-disabled="true"] .tick { background: var(--bv-mute); }
+
+/* Bonus: one a row, a tick on the one brought. */
+.prep-bonuses { grid-template-columns: minmax(0, 1fr); }
+.prep-bonus { grid-template-columns: 24px minmax(0, 1fr) 24px; align-items: center; padding: 10px 12px; }
+.prep-bonus .ic { grid-row: span 2; align-self: center; }
+.prep-bonus .tick { grid-column: 3; grid-row: 1 / span 2; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--bv-rule-2); font-size: 13px; }
+.prep-bonus[aria-pressed="true"] .tick { background: var(--bv-paprika); border-color: var(--bv-paprika); color: #fff; }
+.prep-expect .who .crowd { white-space: nowrap; }
+.prep-row .nm .build { font-size: 12.5px; font-weight: 600; color: var(--bv-ink-2); line-height: 1.3; }

@@ -17,7 +17,7 @@ import { buildLabel, CURRENT, reloadTo } from "../update";
 import { icon } from "../ui/icons";
 import { openHowTo } from "./howto";
 import { openMenuRef } from "./menuref";
-import { closeAllModals, esc, getDeps, modalDepth, modalOpen, popModal, price, pushModal, setDeps, type GfxLevel, type MenuDeps, type ShiftSummary } from "./modal";
+import { closeAllModals, esc, getDeps, modalDepth, modalHead, modalOpen, popModal, price, pushModal, setDeps, type GfxLevel, type MenuDeps, type ShiftSummary } from "./modal";
 import { stackArt } from "./menuref";
 import { clockLabel } from "../game/shift";
 import { recipeCount, type Stop } from "../game/stops";
@@ -30,9 +30,9 @@ export { openMenuRef } from "./menuref";
 
 
 const GFX: { id: GfxLevel; label: string; blurb: string }[] = [
-  { id: "high", label: "High", blurb: "Soft shadows. Looks its best." },
-  { id: "standard", label: "Standard", blurb: "Hard shadows. A little lighter on the battery." },
   { id: "low", label: "Low", blurb: "No shadows, for older or slower phones." },
+  { id: "standard", label: "Standard", blurb: "Hard shadows. A little lighter on the battery." },
+  { id: "high", label: "High", blurb: "Soft shadows. Looks its best." },
 ];
 
 /** Register what the menu needs from the game. Call once at startup. */
@@ -64,13 +64,6 @@ const field = (m: string, ic: string, label: string, note: string, opts: { v: st
     <div class="bv-seg compact" role="radiogroup" aria-label="${label}">${opts.map((o) => `<button role="radio" aria-pressed="${o.v === cur}" aria-checked="${o.v === cur}" data-m="${m}" data-v="${o.v}">${o.label}</button>`).join("")}</div>
   </div>`;
 
-function head(eyebrow: string, title: string, stacked: boolean, closeLabel = "Close"): string {
-  return `<header class="menu-head">
-    ${stacked ? `<button class="bv-btn icon sm ghost menu-back" data-m="close" aria-label="Back">${icon("back")}</button>` : ""}
-    <div class="menu-headtext"><span class="bv-eyebrow">${esc(eyebrow)}</span><h2 class="bv-title">${esc(title)}</h2></div>
-    ${stacked ? "" : `<button class="bv-btn icon sm ghost menu-x" data-m="close" aria-label="${closeLabel}">${icon("close")}</button>`}
-  </header>`;
-}
 
 function resolveDeps(over: Partial<MenuDeps>): MenuDeps {
   const base = getDeps();
@@ -107,7 +100,7 @@ export function openMenu(over: Partial<MenuDeps> = {}): void {
     },
     html: inShift
       ? pauseHtml(d, town)
-      : `${head(d.subtitle?.() ?? "Menu", town.name, false)}
+      : `${modalHead({ icon: "menu", title: "Menu", stacked: false })}
       <div class="menu-body menu-scroll menu-general">
         ${row("menuref", "food-menu", "Menu", `${esc(town.name)} · ${town.menu.length} burgers, sides and drinks`)}
         <h3 class="menu-h">${icon("truck")}Bun Voyage</h3>
@@ -267,17 +260,21 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
     key: "settings",
     label: "Settings",
     cls: "tall settings",
-    html: `${head("Bun Voyage", "Settings", stacked)}
-      <div class="menu-body menu-scroll menu-general">
-        <h3 class="menu-h">${icon("settings")}Device</h3>
-        ${toggle("sound", d.sound() ? "sound-on" : "sound-off", "Sound", d.sound())}
-        ${hapticsSupported() ? toggle("haptics", "vibrate", "Vibration", hapticsOn(), "A buzz on flips, dings and burns") : ""}
-        ${field("gfx", "sparkle", "Graphics", GFX.find((g) => g.id === gfx)!.blurb, GFX.map((g) => ({ v: g.id, label: g.label })), gfx)}
-        <h3 class="menu-h">${icon("truck")}App</h3>
-        ${row("update", "update", "Check for updates", "", "")}
-        ${d.canInstall() ? row("install", "pin", "Install the app", "Add Bun Voyage to your home screen and play offline", "") : ""}
-        ${row("newtrip", "flag", "Start a new trip", "Back to the first town. Upgrades and savings reset.", "", 'data-tone="danger"')}
-        ${confirmBox("newtrip", inShift ? "End this shift and wipe the trip? Towns and bonuses reset; best scores are kept." : "Wipe the trip and start again from the first town? Towns and bonuses reset; best scores are kept.", "Start over")}
+    html: `${modalHead({ icon: "settings", title: "Settings", stacked, eyebrow: "Menu" })}
+      <div class="menu-body menu-scroll menu-general menu-groups">
+        <section class="menu-group">
+          <h3 class="menu-h">${icon("settings")}Device</h3>
+          ${toggle("sound", d.sound() ? "sound-on" : "sound-off", "Sound", d.sound())}
+          ${hapticsSupported() ? toggle("haptics", "vibrate", "Vibration", hapticsOn(), "A buzz on flips, dings and burns") : ""}
+          ${field("gfx", "sparkle", "Graphics", GFX.find((g) => g.id === gfx)!.blurb, GFX.map((g) => ({ v: g.id, label: g.label })), gfx)}
+        </section>
+        <section class="menu-group">
+          <h3 class="menu-h">${icon("truck")}App</h3>
+          ${row("update", "update", "Check for updates", "", "")}
+          ${d.canInstall() ? row("install", "pin", "Install the app", "Add Bun Voyage to your home screen and play offline", "") : ""}
+          ${row("newtrip", "flag", "Start a new trip", "Back to the first town. Upgrades and savings reset.", "", 'data-tone="danger"')}
+          ${confirmBox("newtrip", inShift ? "End this shift and wipe the trip? Towns and bonuses reset; best scores are kept." : "Wipe the trip and start again from the first town? Towns and bonuses reset; best scores are kept.", "Start over")}
+        </section>
         ${inShift || !d.simulate ? "" : devHtml()}
         <p class="menu-build bv-mono">${esc(buildLabel())}</p>
       </div>`,
@@ -373,11 +370,13 @@ function devHtml(): string {
   const on = devOn();
   const lvl = simLevel();
   const cur = lvl === null ? "off" : String(lvl);
-  return `<h3 class="menu-h">${icon("spatula")}Developer</h3>
+  return `<section class="menu-group">
+    <h3 class="menu-h">${icon("spatula")}Developer</h3>
     ${toggle("dev", "settings", "Dev mode", on, "Testing tools")}
     <div class="menu-dev" ${on ? "" : "hidden"}>
       ${field("sim", "chart", "Simulate progress", SIM_NOTE[cur], [{ v: "off", label: "Off" }, ...SIM_LEVELS.map((l) => ({ v: String(l), label: `${l}%` }))], cur)}
-    </div>`;
+    </div>
+  </section>`;
 }
 
 function setToggle(btn: HTMLElement, on: boolean): void {

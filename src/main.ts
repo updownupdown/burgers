@@ -30,10 +30,11 @@ import { mountHome, refreshHome, type NightShow } from "./screens/home";
 import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
-import { closingHtml, prepHtml, reviewsHtml, syncRange, toggleBox, toggleRecipe, type ReviewFilter } from "./screens/day";
+import { closingHtml, prepHtml, reviewsHtml, syncRange, toggleBox, toggleIngredients, type ReviewFilter } from "./screens/day";
 import { buildUi, cookMeter, patienceMood, ticketHtml } from "./ui";
 import { DRINK_TINT } from "./render/machines";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
+import { scrollShadows } from "./screens/modal";
 import { closeAll, initMenu, openHowTo, openMenu, openMenuRef, openSettings } from "./screens/menu";
 import { dropBack, pushBack } from "./screens/nav";
 import { simulate, type SimLevel } from "./game/devmode";
@@ -1908,13 +1909,13 @@ ui.root.addEventListener("input", (e) => {
   const el = e.target as HTMLInputElement;
   const end = el.dataset?.range as "start" | "end" | undefined;
   if (!end || !prepOpen) return;
-  syncRange(ui.title, end);
+  syncRange(ui.summary, end);
 });
 ui.root.addEventListener("change", (e) => {
   const el = e.target as HTMLInputElement;
   const end = el.dataset?.range as "start" | "end" | undefined;
   if (!end || !prepOpen) return;
-  save.shift = validShift(syncRange(ui.title, end));
+  save.shift = validShift(syncRange(ui.summary, end));
   writeSave(save);
   showPrep();
 });
@@ -1956,8 +1957,8 @@ ui.root.addEventListener("click", (e) => {
       showPrep();
       break;
     }
-    case "prep-recipe":
-      toggleRecipe(btn!.dataset.v!);
+    case "prep-ing":
+      toggleIngredients();
       showPrep();
       break;
     case "prep-bonus": {
@@ -2026,7 +2027,8 @@ ui.root.addEventListener("click", (e) => {
       showTitle();
       break;
     case "back":
-      closeOverlay();
+      if (prepOpen) closePrep();
+      else closeOverlay();
       break;
     case "reviews":
       showReviews(game.reviewFilter);
@@ -2166,6 +2168,7 @@ function startShift(): void {
   cancelPointer();
   for (const k of ["prep", "overlay"]) dropBack(k);
   prepOpen = false;
+  ui.summary.classList.remove("prep-host");
   shiftGuard();
   for (let i = 0; i < 3; i++) {
     const s = game.slots[i];
@@ -2249,23 +2252,46 @@ function highlights(reviews: Review[]): Review[] {
   return picks.filter((r, i) => picks.findIndex((q) => q.text === r.text) === i);
 }
 
-/** Before opening: who to expect, the menu, the window, pacing and a bonus. */
+/** Before opening: who to expect, the menu, the window, pacing and a bonus. A card over the map. */
 function showPrep(): void {
   game.town = save.town;
   game.event = eventOn(save.town, save.day);
   game.overlay = null;
-  if (!prepOpen) pushBack("prep", () => showTitle());
+  // From the pause menu (Restart) the map isn't up yet: put it under the card.
+  if (game.phase !== "title") showTitle();
+  if (!prepOpen) pushBack("prep", () => closePrep(true));
+  // Redrawing Prep (a dish switched, the window moved) keeps the page where it was.
+  const keep = prepOpen ? (ui.summary.querySelector<HTMLElement>(".prep .day-scroll")?.scrollTop ?? 0) : 0;
   prepOpen = true;
-  // Redrawing Prep (a recipe opened, the window moved) keeps the page where it was.
-  const keep = prepOpen ? (ui.title.querySelector<HTMLElement>(".prep .day-scroll")?.scrollTop ?? 0) : 0;
-  ui.title.innerHTML = prepHtml({ save, stop: stop(), pacing: difficulty });
-  const sc = ui.title.querySelector<HTMLElement>(".prep .day-scroll");
-  if (sc) sc.scrollTop = keep;
-  ui.title.hidden = false;
-  ui.summary.hidden = true;
+  ui.summary.innerHTML = prepHtml({ save, stop: stop(), pacing: difficulty });
+  ui.summary.classList.add("prep-host");
+  const sc = ui.summary.querySelector<HTMLElement>(".prep .day-scroll");
+  const card = ui.summary.querySelector<HTMLElement>(".prep");
+  if (sc && card) {
+    sc.scrollTop = keep;
+    scrollShadows(card, sc);
+    sc.addEventListener("scroll", () => scrollShadows(card, sc), { passive: true });
+  }
+  ui.summary.hidden = false;
 }
 
-/** True while the Prep screen fills the title layer (the home screen is unmounted then). */
+/** Close Prep and go back to the map underneath. */
+function closePrep(fromBack = false): void {
+  if (!prepOpen) return;
+  if (!fromBack) dropBack("prep");
+  prepOpen = false;
+  ui.summary.hidden = true;
+  ui.summary.classList.remove("prep-host");
+  ui.summary.innerHTML = "";
+  refreshHome();
+}
+
+// A tap on the dimmed map around the Prep card closes it.
+ui.summary.addEventListener("click", (e) => {
+  if (prepOpen && e.target === ui.summary && performance.now() - screenShownAt > 450) closePrep();
+});
+
+/** True while the Prep card is up over the map (in the summary layer). */
 let prepOpen = false;
 
 /** A screen over the map (closing, night, reviews) lives in the summary layer. */
@@ -2275,6 +2301,7 @@ function showOverlay(kind: NonNullable<typeof game.overlay>, html: string): void
   // One Back entry for the layer, however many screens replace each other in it.
   if (!game.overlay) pushBack("overlay", () => closeOverlay(true));
   game.overlay = kind;
+  ui.summary.classList.remove("prep-host");
   ui.summary.innerHTML = html;
   ui.summary.hidden = false;
 }
@@ -2345,6 +2372,7 @@ function showTitle(night: NightShow | null = null): void {
   screenShownAt = performance.now();
   ui.title.hidden = false;
   ui.summary.hidden = true;
+  ui.summary.classList.remove("prep-host");
   // Whatever Back was pointing at (a shift, Prep, a screen over the map) is gone now.
   for (const k of ["shift", "prep", "overlay"]) dropBack(k);
   prepOpen = false;

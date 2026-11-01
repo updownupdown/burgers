@@ -10,7 +10,7 @@ import { openedBy, SHIFTS_TO_UNLOCK, unlockProgress } from "../game/travel";
 import { COUNTED, DRINK_COLOR, DRINK_LABEL, DRINKS, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, SIZE_LABEL, type Kind, type Size } from "../game/types";
 import { icon } from "../ui/icons";
 import { openHowTo } from "./howto";
-import { esc, getDeps, modalDepth, modalOpen, price, pushModal, popModal, wireJumpChips } from "./modal";
+import { esc, getDeps, modalDepth, modalHead, modalOpen, price, pushModal, popModal, wireJumpChips } from "./modal";
 
 const SIZES: Size[] = ["S", "M", "L"];
 
@@ -174,11 +174,7 @@ export function openMenuRef(town?: Stop, opts: { priceMult?: number } = {}): voi
     key: "menuref",
     label: `Menu, ${t.name}`,
     cls: "mref",
-    html: `<header class="menu-head">
-        ${stacked ? `<button class="bv-btn icon sm ghost menu-back" data-m="close" aria-label="Back">${icon("back")}</button>` : ""}
-        <div class="menu-headtext"><span class="bv-eyebrow">Menu</span><h2 class="bv-title">${esc(t.name)}</h2></div>
-        ${stacked ? "" : `<button class="bv-btn icon sm ghost menu-x" data-m="close" aria-label="Close">${icon("close")}</button>`}
-      </header>
+    html: `${modalHead({ icon: "menu-book", title: `Menu · ${t.name}`, stacked, eyebrow: "Menu" })}
       <div class="menu-body menu-scroll">${menuRefHtml(t, mult, prog)}</div>`,
   });
   const body = card.querySelector<HTMLElement>(".menu-body")!;

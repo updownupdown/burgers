@@ -5,6 +5,7 @@ import { bakedMesh, bakeShared, Parts } from "./bake";
 import { makeFood, type FoodObject } from "./food";
 import { faceted } from "./materials";
 import { fillMesh, limeParts, SHELL_SIZE, tacoShell, TORTILLA_R } from "./tacos";
+import { INNER_RX, INNER_RZ, makeFlatbread } from "./flatbread";
 
 /*
  * Red Rock's dishes on the tray (DESIGN §24, phase 3). Tacos stand in a steel rack, one slot per
@@ -13,10 +14,11 @@ import { fillMesh, limeParts, SHELL_SIZE, tacoShell, TORTILLA_R } from "./tacos"
  * Ingredient units, bottom at y = 0, like a burger stack.
  */
 
-export type DishMode = "rack" | "quesadilla" | null;
-/** How a plate's layers are drawn: a taco rack, a quesadilla, or (null) as a stack. */
+export type DishMode = "rack" | "quesadilla" | "flatbread" | null;
+/** How a plate's layers are drawn: a taco rack, a quesadilla, a flatbread, or (null) as a stack. */
 export function dishMode(layers: { piece: Piece }[]): DishMode {
   const base = layers[0]?.piece;
+  if (base?.kind === "dough") return "flatbread";
   if (!base || !TORTILLAS.has(base.kind)) return null;
   return base.folded ? "quesadilla" : "rack";
 }
@@ -30,6 +32,20 @@ export interface DishObject {
   rz: number;
   /** Sauce layers, drawn over the dish: [layer index, object]. */
   sauces: [number, FoodObject][];
+  /** Redraw from the plate's pieces (a flatbread draws its own honey as it's drizzled). */
+  update?: (pieces: Piece[]) => void;
+}
+
+/** A flatbread on the tray is drawn a little smaller than on the peel, so the sides fit beside it. */
+const FLATBREAD_ON_TRAY = 0.8;
+/** Orchard Isle's flatbread or calzone on the tray (render/flatbread.ts), honey and all. */
+export function makeFlatbreadDish(pieces: Piece[]): DishObject {
+  const g = new THREE.Group();
+  const fb = makeFlatbread(pieces);
+  fb.scale.setScalar(FLATBREAD_ON_TRAY);
+  g.add(fb);
+  const k = FLATBREAD_ON_TRAY;
+  return { group: g, top: fb.userData.top * k, rx: INNER_RX * k, rz: INNER_RZ * k, sauces: [], update: (ps) => fb.userData.update(ps) };
 }
 
 const RACK_PITCH = 1.0;
@@ -163,6 +179,7 @@ export function makeDish(pieces: Piece[]): DishObject | null {
   const mode = dishMode(pieces.map((piece) => ({ piece })));
   if (mode === "rack") return makeTacoRack(pieces);
   if (mode === "quesadilla") return makeQuesadillaDish(pieces);
+  if (mode === "flatbread") return makeFlatbreadDish(pieces);
   return null;
 }
 

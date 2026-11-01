@@ -1,7 +1,7 @@
 import type { Order, Plate } from "./game/types";
 import { COOK_SCALE, cookZone, type Cookable } from "./game/cooking";
 import { collapseCounted, dishOrder, layerQuality, PATTY_OFF } from "./game/scoring";
-import { BREADS, COUNTED, DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, extraCount, FRY_LABEL, fryOf, KIND_COLOR, KIND_LABEL, PROTEINS, TORTILLAS, type DrinkId, type FryKind, type Kind } from "./game/types";
+import { BREADS, COUNTED, DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, extraCount, FRY_LABEL, fryOf, KIND_COLOR, KIND_LABEL, PROTEINS, SUGARED, TORTILLAS, type DrinkId, type FryKind, type Kind } from "./game/types";
 import { fountainFor } from "./game/stops";
 import { icon } from "./ui/icons";
 
@@ -72,6 +72,15 @@ const TAB_ART: Record<string, string> = {
     <path d="M17 30c-1-1.4.4-2.6 0-4 1.2.8 1.6 1.8 1.2 2.6.6-.4.8-1 .6-1.8 1 1 .8 2.4-.2 3.2z" fill="#ff8a2a"/>
     <path d="M23 30c-1-1.4.4-2.6 0-4 1.2.8 1.6 1.8 1.2 2.6.6-.4.8-1 .6-1.8 1 1 .8 2.4-.2 3.2z" fill="#ff8a2a"/>
     <path d="M13 11.5c-1.2-1.6 1.2-2.6 0-4.4M24 10.5c-1.2-1.6 1.2-2.6 0-4.4" fill="none" stroke="#c8472e" stroke-width="1.4" stroke-linecap="round"/>`,
+  // Orchard Isle's hearth oven: a brick dome with its mouth open, fire glowing inside, a flatbread on the hearth.
+  Oven: `<path d="M24 4.5c-2 1.6-.4 3-1.2 4.4M27.5 5.5c-1.6 1.2-.2 2.6-.9 3.6" fill="none" stroke="#9a948a" stroke-width="1.3" stroke-linecap="round"/>
+    <path d="M6 27V22C6 13 14 8 24 8s18 5 18 14v5z" fill="#c8664a" ${INK}/>
+    <path d="M10.5 18.5c2-4 7.5-6.5 13.5-6.5s11.5 2.5 13.5 6.5M8.5 23.4c2.4-1.4 5-2.2 7-2.4M39.5 23.4c-2.4-1.4-5-2.2-7-2.4" fill="none" stroke="#2a2622" stroke-width="1" opacity=".45"/>
+    <path d="M13 27v-3.2c0-4.4 4.8-7.6 11-7.6s11 3.2 11 7.6V27z" fill="#33302c" ${INK}/>
+    <path d="M16.6 26c-.6-2 1-3.2.6-5 1.8 1 2.4 2.6 1.8 3.6 1-.6 1.2-1.4 1-2.6 1.6 1.4 1.4 3.2.2 4z" fill="#ff8a2a"/>
+    <path d="M5 27h38v3.2a1.6 1.6 0 0 1-1.6 1.6H6.6A1.6 1.6 0 0 1 5 30.2z" fill="#8a8178" ${INK}/>
+    <ellipse cx="27.5" cy="26.4" rx="6.2" ry="2" fill="#e8b25c" ${INK}/>
+    <circle cx="25.5" cy="26.2" r=".8" fill="#c8402a"/><circle cx="29.2" cy="26.6" r=".8" fill="#c8402a"/>`,
   Fryer: `<path d="M17.5 12.5 16 5M20.5 12.5V3.5M23.5 12.5l1-8M26.5 12.5l1.8-6.6M29.2 12.5l2.4-5.4" fill="none" stroke="#2a2622" stroke-width="3.4" stroke-linecap="round"/>
     <path d="M17.5 12.5 16 5M20.5 12.5V3.5M23.5 12.5l1-8M26.5 12.5l1.8-6.6M29.2 12.5l2.4-5.4" fill="none" stroke="#f0c341" stroke-width="1.6" stroke-linecap="round"/>
     <path d="M7 19h34v11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z" fill="#b9b2a6" ${INK}/>
@@ -232,6 +241,13 @@ const SHORT_NAME: Record<string, string> = {
   "Cheesy Switchback": "Chz Sw",
   "Sandy Pickle": "Sandy P",
   "Sunset Double": "Sun Dbl",
+  // Orchard Isle's flatbreads
+  "Harvest Red": "Hvst Red",
+  Mushroom: "Mush",
+  "Fig & Ham": "Fig Ham",
+  "Pear & Blue": "Pear Bl",
+  Calzone: "Calzone",
+  "Harvest Fair": "Fair",
   Poutine: "Poutine",
 };
 
@@ -296,14 +312,26 @@ const ICON_PATH: Record<string, string> = {
   crema: `<path d="M8 1.2c1.6 2.4 4.2 4.9 4.2 7.1a4.2 4.2 0 0 1-8.4 0c0-2.2 2.6-4.7 4.2-7.1z"/>`,
   chips: `<path d="M1.4 10.4 5 2.2l4 8.2zM7.6 9.8l3.8-7.6 3.4 7.8z"/>`,
   queso: `<path d="M1.5 6.5c2-1.4 3.6-.4 5-1.6 1.6-1.4 3.6-1 5.2.2 1.3 1 2.3.8 2.8.6v2.6c-1.6 1.6-4.6 2.3-7.5 2.3-2.8 0-4.6-.8-5.5-1.8z"/>`,
+  // Orchard Isle's hearth oven.
+  dough: `<ellipse cx="8" cy="6.5" rx="7.2" ry="4.6"/><ellipse class="hi" cx="8" cy="6.5" rx="5" ry="2.8"/>`,
+  calzone: `<path d="M1.2 9.6C1.2 5 4.2 2 8 2s6.8 3 6.8 7.6z"/><g class="hi"><path d="M2.6 9.2h10.8"/></g>`,
+  redsauce: `<path d="M8 1.2c1.6 2.4 4.2 4.9 4.2 7.1a4.2 4.2 0 0 1-8.4 0c0-2.2 2.6-4.7 4.2-7.1z"/>`,
+  oil: `<path d="M8 1.2c1.6 2.4 4.2 4.9 4.2 7.1a4.2 4.2 0 0 1-8.4 0c0-2.2 2.6-4.7 4.2-7.1z"/>`,
+  honey: `<path d="M8 1.2c1.6 2.4 4.2 4.9 4.2 7.1a4.2 4.2 0 0 1-8.4 0c0-2.2 2.6-4.7 4.2-7.1z"/>`,
+  mushroom: `<path d="M1.4 7c0-3 3-5 6.6-5s6.6 2 6.6 5z"/><rect x="6" y="6.6" width="4" height="4.4" rx="1.2"/>`,
+  ham: `<path d="M1.6 4c3-1.6 9.8-1.6 12.8 0v4.6c-3 1.6-9.8 1.6-12.8 0z"/><g class="hi"><path d="M4 6.2c2.4-.8 5.6-.8 8 0"/></g>`,
+  fig: `<circle cx="8" cy="6.6" r="4.8"/><g class="hi"><circle cx="8" cy="6.6" r="2.2"/></g>`,
+  pear: `<path d="M2 9.4C4 4.4 8.6 2 14 2.6 12.6 8 8 10.6 2 9.4z"/>`,
+  blue: `<rect x="2" y="4.6" width="4.4" height="4" rx="1"/><rect x="7" y="2.6" width="4.4" height="4" rx="1"/><rect x="9.6" y="6.6" width="4.4" height="4" rx="1"/><g class="hi"><circle cx="4" cy="6.6" r=".7"/><circle cx="9.2" cy="4.6" r=".7"/></g>`,
+  fritters: `<circle cx="5" cy="7" r="3.6"/><circle cx="11" cy="6" r="3.6"/>`,
 };
 
 /** Compact ticket names for the comal's pieces ("Corn x3" rather than "Corn tortilla x3"). */
-const TICKET_LABEL: Partial<Record<Kind, string>> = { corn: "Corn", flour: "Flour", tostada: "Tostada", greensalsa: "Salsa verde", redsalsa: "Salsa roja" };
+const TICKET_LABEL: Partial<Record<Kind, string>> = { corn: "Corn", flour: "Flour", tostada: "Tostada", greensalsa: "Salsa verde", redsalsa: "Salsa roja", redsauce: "Sauce", blue: "Blue", mozzarella: "Mozz" };
 const ticketLabel = (k: Kind) => TICKET_LABEL[k] ?? KIND_LABEL[k];
 /** A side's colour and name on a ticket, by what it's fried from. */
-const FRY_COLOR: Record<FryKind, string> = { fries: "#f3d36b", sweet: "#f08a3a", chips: "#ebbe4a", churros: "#c9843a" };
-const FRY_ICON: Record<FryKind, string> = { fries: "fries", sweet: "fries", chips: "chips", churros: "fries" };
+const FRY_COLOR: Record<FryKind, string> = { fries: "#f3d36b", sweet: "#f08a3a", chips: "#ebbe4a", churros: "#c9843a", zucchini: "#9cc25a", fritters: "#d9964a" };
+const FRY_ICON: Record<FryKind, string> = { fries: "fries", sweet: "fries", chips: "chips", churros: "fries", zucchini: "fries", fritters: "fritters" };
 
 const ticketIcon = (name: string, color: string) =>
   `<svg class="ic" viewBox="0 0 16 12" style="--c:${color}" aria-hidden="true">${ICON_PATH[name] ?? ICON_PATH.patty}</svg>`;
@@ -361,7 +389,7 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     if (order.fries) {
       const fry = fryOf(order);
       const state: RowState = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy && fryOf(f) === fry ? "done" : "wrong";
-      rows.push({ icon: FRY_ICON[fry], color: FRY_COLOR[fry], label: `<i class="sz">${order.friesSize}</i>${FRY_LABEL[fry]}`, tail: fry === "churros" ? modBox("sugar", "Sugar") : "", state, mod: false, next: false });
+      rows.push({ icon: FRY_ICON[fry], color: FRY_COLOR[fry], label: `<i class="sz">${order.friesSize}</i>${FRY_LABEL[fry]}`, tail: SUGARED.has(fry) ? modBox("sugar", "Sugar") : "", state, mod: false, next: false });
     }
     if (order.drink) {
       const iceOk = order.ice == null || !!d?.ice === order.ice;
@@ -427,7 +455,13 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     let icon: string = exp.kind;
     let label = ticketLabel(exp.kind);
     let tail = "";
-    if (TORTILLAS.has(exp.kind)) {
+    if (exp.kind === "dough") {
+      // Baked in the hearth oven and turned (a calzone folded first, turned twice); Port Amber cuts in four.
+      if (exp.folded) icon = "calzone";
+      label = exp.folded ? "Calzone" : "Dough";
+      tail = (exp.folded ? modBox("fold", "Fold") : "") + modBox("toast", "Bake") + modBox("flip", (exp.turns ?? 1) > 1 ? "Turn ×2" : "Turn") + (order.slice ? modBox("cut", "Cut 4") : "");
+    } else if (exp.after) tail = modBox("cold", "After");
+    else if (TORTILLAS.has(exp.kind)) {
       // Warm on the comal; a quesadilla is folded over and flipped once.
       tail = exp.folded ? modBox("fold", "Fold") + modBox("flip", "Flip") : modBox("toast", "Warm");
     } else if (exp.kind === "tostada") tail = modBox("toast", "Fry");
@@ -487,7 +521,7 @@ function sideRows(order: Order, plate: Plate): string {
     const f = plate.fries;
     const fry = fryOf(order);
     const state = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy && fryOf(f) === fry ? "done" : "wrong";
-    out.push(`<div class="sg">${section(FRY_ICON[fry], "#c8472e")}<div class="sd ${state}"><span class="sl"><i class="sz">${order.friesSize}</i><span class="dn">${FRY_LABEL[fry]}</span></span>${fry === "churros" ? `<span class="sm">${modBox("sugar", "Sugar")}</span>` : ""}</div></div>`);
+    out.push(`<div class="sg">${section(FRY_ICON[fry], "#c8472e")}<div class="sd ${state}"><span class="sl"><i class="sz">${order.friesSize}</i><span class="dn">${FRY_LABEL[fry]}</span></span>${SUGARED.has(fry) ? `<span class="sm">${modBox("sugar", "Sugar")}</span>` : ""}</div></div>`);
   }
   if (order.drink) {
     const d = plate.drink;

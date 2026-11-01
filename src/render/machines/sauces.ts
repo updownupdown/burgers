@@ -20,8 +20,8 @@ const BASE_W = 2 * SLOT_X + 0.82;
 /** Height of the nozzle tip in the caddy (hidden inside the base). */
 const SEAT_Y = 0.22;
 
-const COLOR: Record<SauceKind, string> = { ketchup: C.ketchup, mustard: C.mustard, pesto: "#5f9a3a", aioli: "#efe4c0", redsalsa: "#c8321f", greensalsa: "#6c9e2c", crema: "#f4efe2" };
-const BASE_TINT: Record<SauceKind, string> = { ketchup: "#ffe1d8", mustard: "#fff2c0", pesto: "#d9ecc8", aioli: "#fffaf0", redsalsa: "#ffd8cc", greensalsa: "#e2f0c8", crema: "#ffffff" };
+const COLOR: Record<SauceKind, string> = { ketchup: C.ketchup, mustard: C.mustard, pesto: "#5f9a3a", aioli: "#efe4c0", redsalsa: "#c8321f", greensalsa: "#6c9e2c", crema: "#f4efe2", redsauce: "#c8402a", oil: "#b7a83a", honey: "#e9a92a" };
+const BASE_TINT: Record<SauceKind, string> = { ketchup: "#ffe1d8", mustard: "#fff2c0", pesto: "#d9ecc8", aioli: "#fffaf0", redsalsa: "#ffd8cc", greensalsa: "#e2f0c8", crema: "#ffffff", redsauce: "#ffd8cc", oil: "#eef0c0", honey: "#fff0c8" };
 
 const bottleParts = (kind: SauceKind) => () => {
   const p = new Parts();
@@ -45,6 +45,9 @@ const BOTTLES: Record<SauceKind, ReturnType<typeof cached>> = {
   redsalsa: cached(bottleParts("redsalsa")),
   greensalsa: cached(bottleParts("greensalsa")),
   crema: cached(bottleParts("crema")),
+  redsauce: cached(bottleParts("redsauce")),
+  oil: cached(bottleParts("oil")),
+  honey: cached(bottleParts("honey")),
 };
 
 export interface SauceBottleObject extends THREE.Group {

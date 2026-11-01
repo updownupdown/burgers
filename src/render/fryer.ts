@@ -319,7 +319,8 @@ export function makeFryTray(fry: FryKind = "sweet", w = SWEET_TRAY.w, d = SWEET_
   if (w === SWEET_TRAY.w && d === SWEET_TRAY.d) g.add(bakedMesh((trayBaked ??= body())));
   else g.add(bakedMesh(body()));
   const pile = makeFryPile(w - 0.26, d - 0.22, fry === "churros" ? 3 : 2, 23, false, fry);
-  pile.userData.setCook(0);
+  // Zucchini sits raw and green in its tray (cook below 0 draws it uncooked).
+  pile.userData.setCook(fry === "zucchini" ? -1 : 0);
   pile.position.y = 0.04;
   g.add(pile);
   return g;

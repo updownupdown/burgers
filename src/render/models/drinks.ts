@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { DrinkId, Size } from "../../game/types";
+import { DRINK_COLOR, type DrinkId, type Size } from "../../game/types";
 import { bakedMesh, bakeShared, Parts, type Baked } from "../bake";
 import { faceted, grade, lineColor, lineMaterial, mesh, shareGeometry, toon } from "../materials";
 
@@ -46,8 +46,8 @@ const LID_RIDGE = shareGeometry(faceted(new THREE.TorusGeometry(0.29, 0.035, 6, 
 const CUP_PAPER = "#f6f3ec";
 const CUP_INSIDE = "#d9d4c6";
 const ICE = "#e4f5fb";
-/** Drink colours as the study painted them: the band on the cup and the liquid inside. */
-const DRINK_PAINT: Record<DrinkId, string> = { pine: "#7dbd8a", pink: "#f3a3b8", cola: "#3b1d1b", water: "#cfe8f2", tea: "#c3731f" };
+/** Drink colours as the study painted them (the band on the cup and the liquid inside): the drink's own colour, so tickets and cups match. */
+const DRINK_PAINT: Record<DrinkId, string> = DRINK_COLOR;
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const lathe = (pts: [number, number][]) => faceted(new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), SEG));

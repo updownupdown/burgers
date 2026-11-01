@@ -193,6 +193,11 @@ export class Sfx {
     this.tone(1760, 0.07, "square", 0.06);
     this.tone(1760, 0.07, "square", 0.06, undefined, 0.12);
   }
+  /** The kitchen timer: one soft wooden tick when something reaches done. */
+  tick(): void {
+    this.tone(1250, 0.05, "triangle", 0.07, 900);
+    this.burst(3200, 0.03, 0.05, "bandpass");
+  }
   /** One shake of the salt shaker. */
   shake(): void {
     this.burst(6000 + Math.random() * 1500, 0.07, 0.08, "highpass");

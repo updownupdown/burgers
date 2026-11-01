@@ -4,7 +4,7 @@ import { DEFAULT_LOOK, LOOKS, validLook, type Look } from "./looks";
 import type { PressPiece } from "./press";
 import type { TimeOfDay } from "./day";
 import { validShift, type ShiftWindow } from "./shift";
-import { REGION_START_IDS, START_TOWN, STOPS, townById } from "./stops";
+import { FINAL_TOWN, REGION_START_IDS, START_TOWN, STOPS, townById } from "./stops";
 import { SHIFTS_TO_UNLOCK } from "./travel";
 
 /** How well known a brand new truck is (10..100): enough for a few people to stop by. */
@@ -143,6 +143,34 @@ export function freshSave(): Save {
 /** Fields older saves carry that the game no longer uses (money, supplies, business mode). */
 const RETIRED = ["ribbons", "gear", "simplePlan", "biz", "plan", "ads", "offer", "upgrades", "overnightUsed"] as const;
 
+/**
+ * Towns that left the map, and the town that took their place: progress there (shifts, bests,
+ * an unlock) folds into it, and a truck parked there wakes up in it. Dust Bowl Flats went with
+ * the four-region map (DESIGN.md §24); its rodeo moved to Cactus Junction.
+ */
+const RETIRED_TOWNS: Record<string, string> = { dustbowl: "cactus" };
+
+/** Old town ids in a save made current, keeping the best of what each town had. */
+function foldTowns(s: Save): void {
+  const to = (id: string) => RETIRED_TOWNS[id] ?? id;
+  const known = (id: string) => STOPS.some((t) => t.id === id);
+  s.town = to(s.town);
+  s.unlocked = [...new Set(s.unlocked.map(to))].filter(known);
+  s.passedTowns = [...new Set(s.passedTowns.map(to))].filter(known);
+  const fold = (rec: Record<string, number>, pick: (a: number, b: number) => number): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const [id, v] of Object.entries(rec ?? {})) {
+      const k = to(id);
+      out[k] = k in out ? pick(out[k], v) : v;
+    }
+    return out;
+  };
+  // Shifts add up (both towns were worked); bests keep the better one.
+  s.shiftsIn = fold(s.shiftsIn, (a, b) => a + b);
+  s.best = fold(s.best, Math.max);
+  s.bestTakings = fold(s.bestTakings, Math.max);
+}
+
 /** A stored save brought up to date: missing fields filled in, old shapes converted. */
 export function migrateSave(p: Partial<Save> & Record<string, unknown>): Save {
   const s: Save = { ...freshSave(), ...p };
@@ -154,6 +182,7 @@ export function migrateSave(p: Partial<Save> & Record<string, unknown>): Save {
     s.passedTowns = REGION_START_IDS.slice(0, r);
   }
   delete s.stop;
+  foldTowns(s);
   if (!STOPS.some((t) => t.id === s.town)) s.town = START_TOWN;
   if (!s.unlocked.includes(s.town)) s.unlocked.push(s.town);
   if (!p.shiftsIn) {
@@ -161,6 +190,8 @@ export function migrateSave(p: Partial<Save> & Record<string, unknown>): Save {
     s.shiftsIn = {};
     for (const id of s.passedTowns) s.shiftsIn[id] = SHIFTS_TO_UNLOCK;
   }
+  // The roads changed with the map (§24): whatever a fully worked town opens today is open.
+  for (const t of STOPS) if ((s.shiftsIn[t.id] ?? 0) >= SHIFTS_TO_UNLOCK) for (const next of t.roads) if (!s.unlocked.includes(next)) s.unlocked.push(next);
   // Kitchen upgrades from before bonuses are bonuses now.
   if (!p.bonuses && Array.isArray(p.upgrades)) s.bonuses = migrateBonuses(p.upgrades as string[]);
   s.bonuses = migrateBonuses(s.bonuses);
@@ -218,7 +249,7 @@ export function passTown(s: Save, id: string): boolean {
   s.shiftsIn[id] = (s.shiftsIn[id] ?? 0) + 1;
   if (!s.passedTowns.includes(id)) s.passedTowns.push(id);
   if (s.shiftsIn[id] >= SHIFTS_TO_UNLOCK) for (const next of townById(id).roads) if (!s.unlocked.includes(next)) s.unlocked.push(next);
-  return townById(id).roads.length === 0;
+  return id === FINAL_TOWN;
 }
 
 /** A shift counts as passed with an average of at least one star and most customers served. */

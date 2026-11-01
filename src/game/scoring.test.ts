@@ -286,11 +286,29 @@ describe("counted toppings", () => {
 describe("poutine", () => {
   it("turns up now and then once the shift is going, never in the first orders", () => {
     const rng = seededRng(5);
-    const early = Array.from({ length: 200 }, (_, i) => makeOrder(i, rng, 0.1, STOPS[0]));
+    const cedar = townById("cedarfalls");
+    const early = Array.from({ length: 200 }, (_, i) => makeOrder(i, rng, 0.1, cedar));
     expect(early.some((o) => o.poutine)).toBe(false);
-    const later = Array.from({ length: 400 }, (_, i) => makeOrder(i, rng, 0.6, STOPS[0])).filter((o) => o.poutine).length;
+    const later = Array.from({ length: 400 }, (_, i) => makeOrder(i, rng, 0.6, cedar)).filter((o) => o.poutine).length;
     expect(later).toBeGreaterThan(20);
     expect(later).toBeLessThan(90);
+  });
+
+  it("isn't on the menu in the first towns, before the curds are on the counter", () => {
+    const rng = seededRng(5);
+    for (const id of ["pinecrest", "elkpass"]) expect(Array.from({ length: 300 }, (_, i) => makeOrder(i, rng, 0.8, townById(id))).some((o) => o.poutine)).toBe(false);
+  });
+});
+
+describe("local drinks", () => {
+  it("pours each area's own drinks beside the house three", () => {
+    const rng = seededRng(9);
+    const drinks = (id: string) => new Set(Array.from({ length: 400 }, (_, i) => makeOrder(i, rng, 0.8, townById(id)).drink).filter((d) => d));
+    expect([...drinks("pinecrest")].sort()).toEqual(["cola", "pine", "pink", "tea", "water"]);
+    expect(drinks("saltwater").has("cucumber")).toBe(true);
+    expect(drinks("saltwater").has("pine")).toBe(false);
+    expect(drinks("cactus").has("hibiscus")).toBe(true);
+    expect(drinks("larkvale").has("cider")).toBe(true);
   });
 });
 
@@ -404,7 +422,7 @@ describe("the crowd", () => {
   });
 
   it("never lets the menu drop below two recipes", () => {
-    const t = STOPS[0];
+    const t = townById("summit");
     expect(menuFor(t, []).length).toBe(t.menu.length);
     expect(menuFor(t, [t.menu[0].name]).length).toBe(t.menu.length - 1);
     expect(menuFor(t, t.menu.map((r) => r.name)).length).toBe(t.menu.length);
@@ -430,13 +448,20 @@ describe("events", () => {
     expect(nextDay(surf, surf.day + 1)).toBe(surf.day + surf.every);
   });
 
-  it("make a town busier with the event crowd and special", () => {
+  it("make a town busier with the event crowd", () => {
     const rodeo = EVENTS.find((e) => e.id === "rodeo")!;
+    expect(rodeo.town).toBe("cactus");
     const t = townById(rodeo.town);
     const on = withEvent(t, rodeo);
     expect(on.customers).toBeGreaterThan(t.customers);
     expect(on.crowd).toBe(rodeo.crowd);
-    expect(on.menu.some((r) => r.name === rodeo.special!.name)).toBe(true);
+    expect(on.menu).toEqual(t.menu);
+  });
+
+  it("hold a harvest fair at Larkvale", () => {
+    const fair = EVENTS.find((e) => e.id === "harvest")!;
+    expect(fair.town).toBe("larkvale");
+    expect(eventOn("larkvale", fair.day)?.id).toBe("harvest");
   });
 });
 

@@ -1,6 +1,6 @@
 import type { CrowdId } from "./business";
-import type { Kind } from "./types";
-import { STANDARD_COUNT } from "./types";
+import type { DrinkId, Kind } from "./types";
+import { HOUSE_DRINKS, STANDARD_COUNT } from "./types";
 
 export interface Recipe {
   name: string;
@@ -25,7 +25,7 @@ export function recipeCount(recipe: Recipe, kind: Kind): number {
   return recipe.counts?.[kind] ?? STANDARD_COUNT[kind] ?? 1;
 }
 
-export type Backdrop = "mountains" | "beach" | "desert";
+export type Backdrop = "mountains" | "beach" | "desert" | "orchard";
 
 export interface Stop {
   id: string;
@@ -40,254 +40,351 @@ export interface Stop {
   shiftLength: number;
   /** Short line shown when a new mechanic or ingredient appears here. */
   newThing?: string;
-  /** Road map: which region, where on the map (0..100 by 0..140), and the towns a pass opens up. */
+  /** Road map: which region, where on the map (map units, 120 by 170; about two miles each). */
   region: RegionId;
   x: number;
   y: number;
+  /** Towns that three passed shifts here open up. */
   roads: string[];
   /** The region's big city: passing it opens the next region. */
   capital?: boolean;
   /** Who turns up here (see CROWD in business.ts). */
   crowd: CrowdId;
+  /** Poutine is on the fryer menu here (the Pines bring it in at Cedar Falls). */
+  poutine: boolean;
 }
 
-export type RegionId = "mountains" | "coast" | "desert";
+export type RegionId = "mountains" | "coast" | "desert" | "orchard";
 
 export interface Region {
   id: RegionId;
   name: string;
-  /** Land colour on the map, and which top corner holds the region's name. */
+  /** Land colour on the map. */
   color: string;
-  label: "left" | "right";
 }
 
 export const REGIONS: Region[] = [
-  { id: "mountains", name: "The Pines", color: "#8fbf7a", label: "right" },
-  { id: "coast", name: "Sunny Coast", color: "#e9d39a", label: "left" },
-  { id: "desert", name: "Red Rock Desert", color: "#e2a77a", label: "right" },
+  { id: "mountains", name: "The Pines", color: "#8fbf7a" },
+  { id: "coast", name: "Sunny Coast", color: "#e9d39a" },
+  { id: "desert", name: "Red Rock", color: "#e2a77a" },
+  { id: "orchard", name: "Orchard Isle", color: "#c9a3bd" },
 ];
 
-const REGION_STARTS: Stop[] = [
+/**
+ * The soda fountain's five buttons, left to right: the area's two local drinks, then Road Cola,
+ * Water and Iced Tea, which every town pours.
+ */
+const LOCAL_DRINKS: Record<RegionId, [DrinkId, DrinkId]> = {
+  mountains: ["pine", "pink"],
+  coast: ["pink", "cucumber"],
+  desert: ["hibiscus", "lime"],
+  orchard: ["cider", "bramble"],
+};
+
+export function fountainFor(region: RegionId): DrinkId[] {
+  return [...LOCAL_DRINKS[region], ...HOUSE_DRINKS];
+}
+
+// ---------------------------------------------------------------------------
+// The Pines: five burgers, one signature step each (plain, egg, melt, smash, double). The old
+// Plain Jane lives on as a Classic with two NOs.
+
+const CLASSIC: Recipe = { name: "Trailhead Classic", price: 9, layers: ["bun", "ketchup", "patty", "lettuce", "tomato", "bun"], toasted: false };
+const SUNRISE: Recipe = { name: "Sunrise Summit", price: 11, layers: ["bun", "lettuce", "patty", "egg", "bun"], toasted: true, from: 0.15 };
+const CAMPFIRE: Recipe = { name: "Campfire Melt", price: 11, layers: ["bun", "patty", "cheese", "onion", "bun"], toasted: false, melt: true };
+const SMASH: Recipe = { name: "Summit Smash", price: 12, layers: ["bun", "patty", "cheese", "pickle", "mustard", "bun"], toasted: false, smash: true, melt: true };
+const LUMBERJACK: Recipe = { name: "Lumberjack Stack", price: 15, layers: ["bun", "patty", "cheese", "bacon", "patty", "ketchup", "bun"], toasted: true, melt: true, from: 0.3 };
+
+// phase 1 placeholder: the Coast, Red Rock and Orchard Isle keep a short burger menu on the grill
+// until their own counters (panini press, comal, hearth oven) arrive. Three of the cut burgers each.
+const BOARDWALK: Recipe = { name: "Boardwalk Basic", price: 8, layers: ["bun", "patty", "lettuce", "ketchup", "bun"], toasted: false };
+const LUAU: Recipe = { name: "Luau Stack", price: 13, layers: ["bun", "patty", "pineapple", "bacon", "mustard", "bun"], toasted: false };
+const LOW_TIDE: Recipe = { name: "Low Tide", price: 11, layers: ["bun", "lettuce", "tomato", "patty", "cheese", "onion", "bun"], toasted: false, melt: true };
+const TUMBLEWEED: Recipe = { name: "Tumbleweed", price: 8, layers: ["bun", "patty", "onion", "ketchup", "bun"], toasted: false };
+const RATTLESNAKE: Recipe = { name: "Rattlesnake", price: 13, layers: ["bun", "patty", "jalapeno", "cheese", "jalapeno", "ketchup", "bun"], toasted: false };
+const RANCH: Recipe = { name: "Ranch Breakfast", price: 14, layers: ["bun", "patty", "bacon", "egg", "bun"], toasted: true, egg: "over", from: 0.15 };
+const SWITCHBACK: Recipe = { name: "Cheesy Switchback", price: 10, layers: ["bun", "patty", "cheese", "pickle", "mustard", "bun"], toasted: false };
+const SANDY_PICKLE: Recipe = { name: "Sandy Pickle", price: 10, layers: ["bun", "pickle", "patty", "cheese", "pickle", "bun"], toasted: false };
+const SUNSET_DOUBLE: Recipe = { name: "Sunset Double", price: 16, layers: ["bun", "patty", "cheese", "patty", "cheese", "jalapeno", "bun"], toasted: true, smash: true, melt: true, from: 0.25 };
+
+const PINES_PANTRY: Kind[] = ["bun", "patty", "bacon", "egg", "cheese", "lettuce", "tomato", "onion", "pickle"];
+const COAST_PANTRY: Kind[] = ["bun", "patty", "bacon", "pineapple", "cheese", "lettuce", "tomato", "onion", "pickle"];
+const DESERT_PANTRY: Kind[] = ["bun", "patty", "bacon", "egg", "cheese", "lettuce", "tomato", "onion", "jalapeno"];
+const ORCHARD_PANTRY: Kind[] = ["bun", "patty", "bacon", "cheese", "lettuce", "tomato", "onion", "pickle", "jalapeno"];
+
+/**
+ * Every town on the road map, area by area. Each area opens at its first town and ends at its
+ * capital; the menus grow town by town (first town two dishes, a middle town adds one, the
+ * capital has them all). Positions follow the region study's sketch (map space 120 by 170).
+ */
+export const STOPS: Stop[] = [
+  // ---- The Pines: a Y, the valley road up to Summit City and a spur up the pass to Elk Pass.
   {
     id: "pinecrest",
     crowd: "families",
     name: "Pinecrest",
-    blurb: "Pinecrest is a mountain town full of hungry hikers. Keep them fed until closing time.",
+    blurb: "Pinecrest is a valley town full of hungry hikers. Keep them fed until closing time.",
     backdrop: "mountains",
     region: "mountains",
-    x: 24,
-    y: 10,
+    x: 30,
+    y: 24,
     roads: ["elkpass", "cedarfalls"],
-    pantry: ["bun", "patty", "bacon", "egg", "cheese", "lettuce", "tomato", "onion", "pickle"],
+    // The first town: the grill, the egg and the fryer, with a short cold rail.
+    pantry: ["bun", "patty", "egg", "cheese", "lettuce", "tomato"],
+    poutine: false,
     customers: 9,
     shiftLength: 180,
-    menu: [
-      { name: "Plain Jane", price: 6, layers: ["bun", "patty", "bun"], toasted: false },
-      { name: "Trailhead Classic", price: 9, layers: ["bun", "ketchup", "patty", "lettuce", "tomato", "bun"], toasted: false },
-      { name: "Cheesy Switchback", price: 10, layers: ["bun", "patty", "cheese", "pickle", "mustard", "bun"], toasted: false },
-      { name: "Sunrise Summit", price: 11, layers: ["bun", "lettuce", "patty", "egg", "bun"], toasted: true, from: 0.15 },
-      { name: "Lumberjack Stack", price: 15, layers: ["bun", "patty", "cheese", "bacon", "onion", "patty", "ketchup", "bun"], toasted: true, melt: true, from: 0.3 },
-    ],
+    menu: [CLASSIC, SUNRISE],
   },
   {
-    id: "saltwater",
-    crowd: "party",
-    name: "Saltwater Bay",
-    blurb: "Saltwater Bay is a beach town of surfers, lifeguards and one very bold crab.",
-    backdrop: "beach",
-    region: "coast",
-    x: 82,
-    y: 53,
-    roads: ["gullpoint", "driftwood"],
-    pantry: ["bun", "patty", "bacon", "pineapple", "cheese", "lettuce", "tomato", "onion", "pickle"],
-    customers: 10,
-    shiftLength: 190,
-    newThing: "New here: grilled pineapple. Grill one side until it's golden.",
-    menu: [
-      { name: "Boardwalk Basic", price: 8, layers: ["bun", "patty", "lettuce", "ketchup", "bun"], toasted: false },
-      { name: "Luau Stack", price: 13, layers: ["bun", "patty", "pineapple", "bacon", "mustard", "bun"], toasted: false },
-      { name: "Low Tide", price: 11, layers: ["bun", "lettuce", "tomato", "patty", "cheese", "onion", "bun"], toasted: false, melt: true },
-      { name: "Big Kahuna", price: 17, layers: ["bun", "patty", "cheese", "pineapple", "patty", "bacon", "ketchup", "bun"], toasted: true, melt: true, from: 0.3 },
-      { name: "Sandy Pickle", price: 10, layers: ["bun", "pickle", "patty", "cheese", "pickle", "bun"], toasted: false },
-    ],
-  },
-  {
-    id: "redmesa",
-    crowd: "families",
-    name: "Red Mesa",
-    blurb: "Red Mesa is a desert crossroads where the cowhands like it hot.",
-    backdrop: "desert",
-    region: "desert",
-    x: 24,
-    y: 95,
-    roads: ["cactus", "dustbowl"],
-    pantry: ["bun", "patty", "bacon", "egg", "cheese", "lettuce", "tomato", "onion", "jalapeno"],
-    customers: 11,
-    shiftLength: 200,
-    newThing: "New here: smash burgers. Press and hold a fresh patty on the grill to smash it flat. Smashed patties cook fast!",
-    menu: [
-      { name: "Tumbleweed", price: 8, layers: ["bun", "patty", "onion", "ketchup", "bun"], toasted: false },
-      { name: "Mesa Smash", price: 12, layers: ["bun", "patty", "cheese", "onion", "mustard", "bun"], toasted: false, smash: true, melt: true },
-      { name: "Rattlesnake", price: 13, layers: ["bun", "patty", "jalapeno", "cheese", "jalapeno", "ketchup", "bun"], toasted: false },
-      { name: "Sunset Double", price: 16, layers: ["bun", "patty", "cheese", "patty", "cheese", "jalapeno", "bun"], toasted: true, smash: true, melt: true, from: 0.25 },
-      { name: "Ranch Breakfast", price: 14, layers: ["bun", "patty", "bacon", "egg", "bun"], toasted: true, egg: "over", from: 0.15 },
-    ],
-  },
-];
-
-const [PINES, COAST, DESERT] = REGION_STARTS;
-const pick = (from: Stop, names: string[], extra: Recipe[] = []): Recipe[] => [...from.menu.filter((r) => names.includes(r.name)), ...extra];
-
-const CAMPFIRE_MELT: Recipe = { name: "Campfire Melt", price: 11, layers: ["bun", "patty", "cheese", "onion", "bun"], toasted: false, melt: true };
-const HARBOR_CLASSIC: Recipe = { name: "Harbor Classic", price: 12, layers: ["bun", "lettuce", "patty", "cheese", "tomato", "ketchup", "bun"], toasted: false, melt: true };
-const SUN_VALLEY_SUPREME: Recipe = {
-  name: "Sun Valley Supreme",
-  price: 18,
-  layers: ["bun", "patty", "cheese", "bacon", "jalapeno", "egg", "bun"],
-  toasted: true,
-  melt: true,
-  from: 0.3,
-};
-
-/** Every town on the road map, region by region. Each region opens at its first town and ends at its capital. */
-export const STOPS: Stop[] = [
-  PINES,
-  {
-    ...PINES,
     id: "elkpass",
     crowd: "commuters",
     name: "Elk Pass",
-    blurb: "Elk Pass is a highway rest stop. Drivers want food fast and back on the road.",
-    newThing: undefined,
-    x: 14,
-    y: 28,
-    roads: ["summit"],
+    blurb: "Elk Pass is a rest stop up the switchbacks. Drivers want food fast and back on the road.",
+    backdrop: "mountains",
+    region: "mountains",
+    x: 17,
+    y: 43,
+    // A spur: the Old Pass road on to Cactus Junction is shut by rockfall until the desert is reached (LINKS).
+    roads: [],
+    pantry: ["bun", "patty", "egg", "cheese", "lettuce", "tomato", "pickle"],
+    poutine: false,
     customers: 11,
-    menu: pick(PINES, ["Plain Jane", "Trailhead Classic", "Cheesy Switchback", "Lumberjack Stack"]),
+    shiftLength: 180,
+    newThing: "New here: the Summit Smash. Press and hold a fresh patty on the grill to smash it flat. Smashed patties cook fast!",
+    menu: [CLASSIC, SUNRISE, SMASH],
   },
   {
-    ...PINES,
     id: "cedarfalls",
     crowd: "families",
     name: "Cedar Falls",
     blurb: "Cedar Falls is a lakeside campground. Families, fishing rods and very hungry kids.",
-    newThing: "New here: the Campfire Melt. Melt the cheese on the patty while it's on the grill.",
-    x: 43,
-    y: 22,
+    backdrop: "mountains",
+    region: "mountains",
+    x: 46,
+    y: 22.5,
     roads: ["summit"],
+    pantry: ["bun", "patty", "egg", "cheese", "lettuce", "tomato", "onion"],
+    poutine: true,
     customers: 10,
-    menu: pick(PINES, ["Plain Jane", "Trailhead Classic", "Sunrise Summit"], [CAMPFIRE_MELT]),
+    shiftLength: 180,
+    newThing: "New here: the Campfire Melt, and poutine. Melt the cheese on the patty while it's on the grill.",
+    menu: [CLASSIC, SUNRISE, CAMPFIRE],
   },
   {
-    ...PINES,
     id: "summit",
     crowd: "foodies",
     name: "Summit City",
-    blurb: "Summit City is the big town in the hills. Do well here and the coast road opens.",
-    newThing: undefined,
-    x: 29,
-    y: 46,
+    blurb: "Summit City is the market town where the valley opens. Do well here and the Coast Highway opens.",
+    backdrop: "mountains",
+    region: "mountains",
+    x: 38,
+    y: 52,
     roads: ["saltwater"],
     capital: true,
+    pantry: PINES_PANTRY,
+    poutine: true,
     customers: 12,
     shiftLength: 200,
-    menu: [...PINES.menu, CAMPFIRE_MELT],
+    newThing: "New here: the Lumberjack Stack, two patties and bacon. It comes up more later in the day.",
+    menu: [CLASSIC, SUNRISE, CAMPFIRE, SMASH, LUMBERJACK],
   },
-  COAST,
+  // ---- Sunny Coast: a string of towns along the shore.
   {
-    ...COAST,
+    id: "saltwater",
+    crowd: "party",
+    name: "Saltwater Bay",
+    blurb: "Saltwater Bay is a beach town at the head of the bay: surfers, lifeguards and one very bold crab.",
+    backdrop: "beach",
+    region: "coast",
+    x: 72,
+    y: 54,
+    roads: ["gullpoint"],
+    pantry: COAST_PANTRY,
+    poutine: true,
+    customers: 10,
+    shiftLength: 190,
+    newThing: "New here: grilled pineapple. Grill one side until it's golden.",
+    menu: [BOARDWALK, LUAU],
+  },
+  {
     id: "gullpoint",
     crowd: "commuters",
     name: "Gull Point",
-    blurb: "Gull Point is a fishing harbour. Early starts, big appetites, no patience for fuss.",
-    newThing: undefined,
-    x: 98,
-    y: 70,
-    roads: ["harbor"],
+    blurb: "Gull Point is a fishing harbour out on the headland. Early starts, big appetites, no patience for fuss.",
+    backdrop: "beach",
+    region: "coast",
+    x: 99,
+    y: 59,
+    roads: ["driftwood"],
+    pantry: COAST_PANTRY,
+    poutine: true,
     customers: 11,
-    menu: pick(COAST, ["Boardwalk Basic", "Low Tide", "Sandy Pickle", "Big Kahuna"]),
+    shiftLength: 190,
+    menu: [BOARDWALK, LUAU, LOW_TIDE],
   },
   {
-    ...COAST,
     id: "driftwood",
     crowd: "party",
     name: "Driftwood",
-    blurb: "Driftwood is a surf camp. Everyone's sandy, sunburnt and starving.",
-    newThing: undefined,
-    x: 65,
-    y: 67,
+    blurb: "Driftwood is a surf camp a short hop down the shore. Everyone's sandy, sunburnt and starving.",
+    backdrop: "beach",
+    region: "coast",
+    x: 95,
+    y: 77,
     roads: ["harbor"],
+    pantry: COAST_PANTRY,
+    poutine: true,
     customers: 12,
-    menu: pick(COAST, ["Boardwalk Basic", "Luau Stack", "Sandy Pickle"]),
+    shiftLength: 190,
+    menu: [BOARDWALK, LUAU, LOW_TIDE],
   },
   {
-    ...COAST,
     id: "harbor",
     crowd: "foodies",
     name: "Harbor City",
-    blurb: "Harbor City is the coast's big city. Do well here and the desert highway opens.",
-    newThing: "New here: the Harbor Classic, with melted cheese.",
-    x: 80,
-    y: 89,
+    blurb: "Harbor City is the coast's city on a sheltered harbour. Do well here and the Desert Highway opens.",
+    backdrop: "beach",
+    region: "coast",
+    x: 85,
+    y: 100,
     roads: ["redmesa"],
     capital: true,
+    pantry: COAST_PANTRY,
+    poutine: true,
     customers: 13,
     shiftLength: 210,
-    menu: [...COAST.menu, HARBOR_CLASSIC],
+    menu: [BOARDWALK, LUAU, LOW_TIDE],
   },
-  DESERT,
+  // ---- Red Rock: a long triangle, with 64 empty miles between Red Mesa and Cactus Junction.
   {
-    ...DESERT,
+    id: "redmesa",
+    crowd: "families",
+    name: "Red Mesa",
+    blurb: "Red Mesa is a ranch town where the Desert Highway comes down off the coast. The cowhands like it hot.",
+    backdrop: "desert",
+    region: "desert",
+    x: 52,
+    y: 95,
+    roads: ["cactus"],
+    pantry: DESERT_PANTRY,
+    poutine: true,
+    customers: 11,
+    shiftLength: 200,
+    newThing: "New here: jalapeños. Four to a layer, and some like extra.",
+    menu: [TUMBLEWEED, RATTLESNAKE],
+  },
+  {
     id: "cactus",
     crowd: "commuters",
     name: "Cactus Junction",
-    blurb: "Cactus Junction is a truck stop where three highways meet.",
-    newThing: undefined,
-    x: 11,
-    y: 108,
+    blurb: "Cactus Junction is a truck stop where three highways meet. Reaching it clears the Old Pass road home.",
+    backdrop: "desert",
+    region: "desert",
+    x: 21,
+    y: 103,
     roads: ["sunvalley"],
+    pantry: DESERT_PANTRY,
+    poutine: true,
     customers: 12,
-    menu: pick(DESERT, ["Tumbleweed", "Mesa Smash", "Ranch Breakfast"]),
+    shiftLength: 200,
+    newThing: "New here: the Ranch Breakfast. Its egg is flipped once on the grill, over easy.",
+    menu: [TUMBLEWEED, RATTLESNAKE, RANCH],
   },
   {
-    ...DESERT,
-    id: "dustbowl",
-    crowd: "party",
-    name: "Dust Bowl Flats",
-    blurb: "Dust Bowl Flats is a rodeo town. They like their burgers big and their peppers hot.",
-    newThing: undefined,
-    x: 43,
-    y: 111,
-    roads: ["sunvalley"],
-    customers: 11,
-    menu: pick(DESERT, ["Rattlesnake", "Sunset Double", "Tumbleweed", "Ranch Breakfast"]),
-  },
-  {
-    ...DESERT,
     id: "sunvalley",
     crowd: "foodies",
     name: "Sun Valley",
-    blurb: "Sun Valley is the end of the road. Finish here and the trip is complete.",
-    newThing: "New here: the Sun Valley Supreme.",
-    x: 30,
-    y: 130,
-    roads: [],
+    blurb: "Sun Valley is the oasis town in the only green valley. Do well here and the causeway to Orchard Isle opens.",
+    backdrop: "desert",
+    region: "desert",
+    x: 33,
+    y: 137,
+    roads: ["applecross"],
     capital: true,
+    pantry: DESERT_PANTRY,
+    poutine: true,
     customers: 14,
     shiftLength: 220,
-    menu: [...DESERT.menu, SUN_VALLEY_SUPREME],
+    menu: [TUMBLEWEED, RATTLESNAKE, RANCH],
+  },
+  // ---- Orchard Isle: a short chain across the causeway.
+  {
+    id: "applecross",
+    crowd: "families",
+    name: "Applecross",
+    blurb: "Applecross is a farm village at the island end of the causeway. Orchards, hay carts and big lunches.",
+    backdrop: "orchard",
+    region: "orchard",
+    x: 80,
+    y: 145,
+    roads: ["larkvale"],
+    pantry: ORCHARD_PANTRY,
+    poutine: true,
+    customers: 11,
+    shiftLength: 200,
+    menu: [SWITCHBACK, SANDY_PICKLE],
+  },
+  {
+    id: "larkvale",
+    crowd: "party",
+    name: "Larkvale",
+    blurb: "Larkvale is a vineyard valley with a weekly harvest fair. Long tables, loud songs, empty plates.",
+    backdrop: "orchard",
+    region: "orchard",
+    x: 93,
+    y: 152,
+    roads: ["portamber"],
+    pantry: ORCHARD_PANTRY,
+    poutine: true,
+    customers: 12,
+    shiftLength: 210,
+    menu: [SWITCHBACK, SANDY_PICKLE, SUNSET_DOUBLE],
+  },
+  {
+    id: "portamber",
+    crowd: "foodies",
+    name: "Port Amber",
+    blurb: "Port Amber is an old stone harbour, the last town of the trip. The ferry to Harbor City runs from here.",
+    backdrop: "orchard",
+    region: "orchard",
+    x: 98,
+    y: 127,
+    roads: [],
+    capital: true,
+    pantry: ORCHARD_PANTRY,
+    poutine: true,
+    customers: 14,
+    shiftLength: 220,
+    menu: [SWITCHBACK, SANDY_PICKLE, SUNSET_DOUBLE],
   },
 ];
 
+/**
+ * Late links: roads that open nothing new, they only shorten the way back. Each can be driven
+ * once both its towns are open: the Old Pass road clears when Cactus Junction is reached, and
+ * the ferry runs once Port Amber is.
+ */
+export interface Link {
+  a: string;
+  b: string;
+  name: string;
+  ferry?: boolean;
+}
+export const LINKS: Link[] = [
+  { a: "elkpass", b: "cactus", name: "Old Pass road" },
+  { a: "portamber", b: "harbor", name: "Ferry", ferry: true },
+];
+
 export const START_TOWN = "pinecrest";
-export const FINAL_TOWN = "sunvalley";
+export const FINAL_TOWN = "portamber";
 
 export function townById(id: string): Stop {
   return STOPS.find((t) => t.id === id) ?? STOPS[0];
 }
 
 /** First town of each region, in trip order. */
-export const REGION_START_IDS = REGION_STARTS.map((t) => t.id);
+export const REGION_START_IDS = REGIONS.map((r) => STOPS.find((t) => t.region === r.id)!.id);
 
 /** A local event: on its days the town is busier, with its own crowd and sometimes a special. */
 export interface TownEvent {
@@ -338,7 +435,6 @@ export const EVENTS: TownEvent[] = [
     busy: 1.6,
     longer: 40,
     blurb: "Half the coast turns up to watch. Nobody packed lunch.",
-    special: { name: "Wipeout", price: 12, layers: ["bun", "patty", "pineapple", "cheese", "ketchup", "bun"], toasted: false, melt: false },
   },
   {
     id: "seafest",
@@ -354,14 +450,13 @@ export const EVENTS: TownEvent[] = [
   {
     id: "rodeo",
     name: "Rodeo",
-    town: "dustbowl",
+    town: "cactus",
     day: 10,
     every: 6,
     crowd: "party",
     busy: 1.6,
     longer: 40,
     blurb: "Big appetites. Bigger hats.",
-    special: { name: "Rodeo Double", price: 17, layers: ["bun", "patty", "cheese", "bacon", "patty", "onion", "bun"], toasted: true, melt: true },
   },
   {
     id: "chili",
@@ -373,6 +468,17 @@ export const EVENTS: TownEvent[] = [
     busy: 1.4,
     longer: 30,
     blurb: "Everyone's tasting chili all day and craving something else.",
+  },
+  {
+    id: "harvest",
+    name: "Harvest fair",
+    town: "larkvale",
+    day: 15,
+    every: 7,
+    crowd: "families",
+    busy: 1.5,
+    longer: 40,
+    blurb: "Grape stomping, apple bobbing and a very long table under the vines.",
   },
 ];
 

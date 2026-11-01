@@ -96,19 +96,20 @@
 .home-region .fog { fill: none; }
 .home-static.lock-mountains [data-region="mountains"] .fill,
 .home-static.lock-coast [data-region="coast"] .fill,
-.home-static.lock-desert [data-region="desert"] .fill { fill: #d9d3c8; }
+.home-static.lock-desert [data-region="desert"] .fill,
+.home-static.lock-orchard [data-region="orchard"] .fill { fill: #d9d3c8; }
 .home-static.lock-mountains [data-region="mountains"] .edge,
 .home-static.lock-coast [data-region="coast"] .edge,
-.home-static.lock-desert [data-region="desert"] .edge { stroke: var(--home-locked-line); }
+.home-static.lock-desert [data-region="desert"] .edge,
+.home-static.lock-orchard [data-region="orchard"] .edge { stroke: var(--home-locked-line); }
 .home-static.lock-mountains .home-region[data-region="mountains"] .fog,
 .home-static.lock-coast .home-region[data-region="coast"] .fog,
-.home-static.lock-desert .home-region[data-region="desert"] .fog { fill: url(#home-hatch); }
+.home-static.lock-desert .home-region[data-region="desert"] .fog,
+.home-static.lock-orchard .home-region[data-region="orchard"] .fog { fill: url(#home-hatch); }
 .home-static.lock-mountains .home-deco[data-region="mountains"],
 .home-static.lock-coast .home-deco[data-region="coast"],
-.home-static.lock-desert .home-deco[data-region="desert"] { opacity: 0.4; filter: saturate(0.2); }
-.home-static.lock-mountains .rname[data-region="mountains"],
-.home-static.lock-coast .rname[data-region="coast"],
-.home-static.lock-desert .rname[data-region="desert"] { fill: var(--home-locked-label); }
+.home-static.lock-desert .home-deco[data-region="desert"],
+.home-static.lock-orchard .home-deco[data-region="orchard"] { opacity: 0.4; filter: saturate(0.2); }
 
 /* roads: local roads, and heavier highways between regions; a thin tinted casing (Pencil Line) */
 .home-svg .road-case { fill: none; stroke: var(--home-road-line); stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
@@ -160,7 +161,6 @@
 .home.evening .home-town.lit .tname { fill: #fff3d6; stroke: #2a2622; }
 .home.evening .home-town:not(.lit):not(.here) .tname { fill: #e9e1d2; stroke: #1f1c19; }
 .home.evening .home-town.locked .tname { fill: #a59d91; }
-.home.evening .home-svg .rname { fill: #c9d2e6; }
 .home.evening .home-svg .scale, .home.evening .home-svg .compass { fill: #c9d2e6; }
 .home.evening .home-truck .shadow { opacity: 0.5; }
 

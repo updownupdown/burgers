@@ -7,7 +7,7 @@ import { expectedCustomers, RANGE_MI, rangeUnits, sleep } from "./day";
 import { migrateSave, freshSave, START_POPULARITY } from "./progress";
 import { arrivalGap, clockAt, crowdShare, DEFAULT_SHIFT, shiftSeconds, validShift } from "./shift";
 import { distance } from "./travel";
-import { STOPS, townById } from "./stops";
+import { LINKS, STOPS, townById } from "./stops";
 
 describe("sleeping", () => {
   it("turns the day and resets the night's driving", () => {
@@ -18,9 +18,10 @@ describe("sleeping", () => {
 });
 
 describe("range", () => {
-  it("fits any single road, highways included", () => {
-    expect(RANGE_MI).toBe(175);
+  it("fits any single road, highways and late links included", () => {
+    expect(RANGE_MI).toBe(130);
     for (const t of STOPS) for (const r of t.roads) expect(distance(t.id, r)).toBeLessThanOrEqual(rangeUnits());
+    for (const l of LINKS) expect(distance(l.a, l.b)).toBeLessThanOrEqual(rangeUnits());
   });
 });
 
@@ -37,8 +38,9 @@ describe("who turns up", () => {
 
   it("brings fewer people to a short menu and more to a long window", () => {
     const all = expectedCustomers({ ...base, popularity: 70 });
-    const two = expectedCustomers({ ...base, popularity: 70, hidden: stop.menu.slice(2).map((r) => r.name) });
-    expect(two).toBeLessThan(all);
+    const summit = { ...base, stop: townById("summit"), popularity: 70 };
+    const two = expectedCustomers({ ...summit, hidden: summit.stop.menu.slice(2).map((r) => r.name) });
+    expect(two).toBeLessThan(expectedCustomers(summit));
     expect(expectedCustomers({ ...base, popularity: 70, shift: { start: 9, end: 16 } })).toBeGreaterThan(all);
     expect(expectedCustomers({ ...base, popularity: 70, shift: { start: 12, end: 13 } })).toBeLessThan(all);
   });

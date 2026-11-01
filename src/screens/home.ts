@@ -1,7 +1,7 @@
 import { CROWD } from "../game/business";
 import { expectedCustomers, rangeUnits } from "../game/day";
 import type { Save } from "../game/progress";
-import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent, type Stop } from "../game/stops";
+import { EVENTS, eventOn, FINAL_TOWN, nextDay, STOPS, townById, withEvent, type Stop } from "../game/stops";
 import { applyTrip, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Legs, type Trip } from "../game/travel";
 import { icon } from "../ui/icons";
 import { simLevel } from "../game/devmode";
@@ -336,7 +336,7 @@ function pipsHtml(done: number, need: number): string {
 
 function shiftsLine(save: Save, t: Stop): string {
   const n = save.shiftsIn[t.id] ?? 0;
-  if (!t.roads.length) return n ? `${n} shift${n === 1 ? "" : "s"} here` : "Last stop of the trip";
+  if (!t.roads.length) return n ? `${n} shift${n === 1 ? "" : "s"} here` : t.id === FINAL_TOWN ? "Last stop of the trip" : "A side road: nothing further opens from here";
   const { done, need } = unlockProgress(save.shiftsIn, t.id);
   return done >= need ? `${pipsHtml(done, need)} roads open` : `${pipsHtml(done, need)} ${done} of ${need} shifts to open the road`;
 }

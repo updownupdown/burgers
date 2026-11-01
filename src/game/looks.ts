@@ -53,7 +53,7 @@ export const LOOKS: LookItem[] = [
   { id: "herbs", slot: "roof", name: "Herb garden", text: "Planters of basil, thyme and cherry tomatoes.", price: 300 },
   { id: "canoe", slot: "roof", name: "Canoe", text: "A cedar canoe on a roof rack. Sold in Cedar Falls.", price: 450, town: "cedarfalls" },
   { id: "surf", slot: "roof", name: "Surfboards", text: "Two boards, strapped down. Sold in Driftwood.", price: 450, town: "driftwood" },
-  { id: "windmill", slot: "roof", name: "Windmill", text: "A little desert windmill that turns in the breeze. Sold in Dust Bowl Flats.", price: 900, town: "dustbowl" },
+  { id: "windmill", slot: "roof", name: "Windmill", text: "A little desert windmill that turns in the breeze. Sold in Cactus Junction.", price: 900, town: "cactus" },
   { id: "neon", slot: "roof", name: "Neon sign", text: "The cloche in pink neon. Glows after dark.", price: 1500 },
   { id: "burger", slot: "roof", name: "Giant burger", text: "A fibreglass burger on a short, sturdy post.", price: 2500 },
   { id: "hottub", slot: "roof", name: "Rooftop hot tub", text: "Cedar tub, warm water, steam on cold nights.", price: 25000, grand: true },

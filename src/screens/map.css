@@ -10,18 +10,48 @@
 .home-map .home-svg .hach.dark { opacity: 0.4; }
 .home-map .home-svg .stipple { opacity: 0.45; }
 
-/* region names: a cartographer's italic, spaced out, quiet */
-.home-map .home-svg .rname { font-size: 4.6px; letter-spacing: 0.14em; fill: #4a5661; opacity: 0.9; }
+/* area names sit on the land in spaced small caps, tinted for their wash; locked ones go grey */
+.home-map .home-svg .rname {
+  font-family: var(--bv-font-ui); font-style: normal; font-weight: 600; letter-spacing: 0.42em; text-anchor: middle;
+  opacity: 0.85; paint-order: stroke; stroke: #efe6d3; stroke-width: 0.5px; stroke-opacity: 0.6;
+}
+.home-map .home-svg .rname[data-region="mountains"] { fill: #4e6b45; }
+.home-map .home-svg .rname[data-region="coast"] { fill: #8c6a2c; }
+.home-map .home-svg .rname[data-region="desert"] { fill: #97503a; }
+.home-map .home-svg .rname[data-region="orchard"] { fill: #7a5470; letter-spacing: 0.3em; }
+.home-map .home-static[class*="lock-"] .rname { transition: fill 0.3s; }
+.home-map .home-static.lock-mountains .rname[data-region="mountains"],
+.home-map .home-static.lock-coast .rname[data-region="coast"],
+.home-map .home-static.lock-desert .rname[data-region="desert"],
+.home-map .home-static.lock-orchard .rname[data-region="orchard"] { fill: #8a8378; }
+
+/* water names: the old chart's italic, on the water */
+.home-map .home-svg .wname { font-family: var(--bv-font-serif); font-style: italic; fill: #4f7484; letter-spacing: 0.06em; text-anchor: middle; }
+.home-map .home-svg .wname.halo { text-anchor: start; paint-order: stroke; stroke: #efe6d3; stroke-width: 0.75px; stroke-linejoin: round; }
 
 /* roads: thin cased lines; highways wider with a centre line; locked roads dotted */
 .home-map .home-svg .road-case { stroke: #8a7557; stroke-width: 1.25; }
-.home-map .home-svg .road:not(.reach):not(.locked) { stroke: #fbf4e4; stroke-width: 0.8; }
+.home-map .home-svg .road:not(.reach):not(.locked):not(.gated) { stroke: #fbf4e4; stroke-width: 0.8; }
 .home-map .home-svg .road-dash { display: none; }
 .home-map .home-svg .road-case.hw { stroke-width: 1.85; }
-.home-map .home-svg .road.hw:not(.reach):not(.locked) { stroke: #f1d79f; stroke-width: 1.3; }
+.home-map .home-svg .road.hw:not(.reach):not(.locked):not(.gated) { stroke: #f1d79f; stroke-width: 1.3; }
 .home-map .home-svg .road-dash.hw { display: block; stroke: #fff9ea; stroke-width: 0.2; stroke-dasharray: 1.4 1; }
 .home-map .home-svg .road.locked { stroke: #a39a8c; stroke-width: 0.45; stroke-dasharray: 0.6 1.1; stroke-linecap: round; }
 .home-map .home-svg .road.locked.hw { stroke-width: 0.65; }
+/* a shut highway (or the Old Pass road): dashed in ink, with a striped barrier and a short note */
+.home-map .home-svg .road.gated { stroke: #4d4239; stroke-width: 0.8; stroke-dasharray: 1.3 0.9; stroke-linecap: butt; opacity: 0.75; }
+.home-map .home-svg .road.gated.hw { stroke-width: 1.05; }
+.home-map .home-svg .barrier rect { fill: #f6f2ea; stroke: #a8452d; stroke-width: 0.2; }
+.home-map .home-svg .barrier .stripe { stroke: #d8573a; stroke-width: 0.42; }
+.home-map .home-svg .barrier .post { stroke: #a8452d; stroke-width: 0.22; }
+.home-map .home-svg .gnote { font-size: 1.95px; font-style: italic; font-weight: 500; fill: #a8452d; paint-order: stroke; stroke: #efe6d3; stroke-width: 0.75px; stroke-linejoin: round; }
+/* bridges: a cased deck with ticks where a road crosses water (the causeway) */
+.home-map .home-svg .bridge-case { fill: none; stroke: #3f3630; stroke-width: 2.4; }
+.home-map .home-svg .bridge-deck { fill: none; stroke: #e9dfc6; stroke-width: 1.9; }
+.home-map .home-svg .bridge-tick { fill: none; stroke: #3f3630; stroke-width: 0.16; }
+/* the ferry: a dashed sea lane, faint until it runs */
+.home-map .home-svg .ferry { fill: none; stroke: #3f5f6b; stroke-width: 0.34; stroke-dasharray: 1.1 0.8; stroke-linecap: round; }
+.home-map .home-svg .ferry.shut { opacity: 0.4; }
 
 /* locked regions: the terrain fades under a paper veil, a light survey hatch and a dotted limit */
 .home-map .home-region .wash { transition: opacity 0.3s; }
@@ -29,10 +59,13 @@
 .home-map .home-region .bound { fill: none; stroke: #8f8779; stroke-width: 0.35; stroke-dasharray: 0.4 1.1; stroke-linecap: round; opacity: 0; }
 .home-map .home-static.lock-mountains .home-region[data-region="mountains"] .wash,
 .home-map .home-static.lock-coast .home-region[data-region="coast"] .wash,
-.home-map .home-static.lock-desert .home-region[data-region="desert"] .wash { opacity: 0.25; }
+.home-map .home-static.lock-desert .home-region[data-region="desert"] .wash,
+.home-map .home-static.lock-orchard .home-region[data-region="orchard"] .wash { opacity: 0.25; }
 .home-map .home-static.lock-mountains .home-region[data-region="mountains"] .veil,
 .home-map .home-static.lock-coast .home-region[data-region="coast"] .veil,
-.home-map .home-static.lock-desert .home-region[data-region="desert"] .veil { opacity: 0.7; }
+.home-map .home-static.lock-desert .home-region[data-region="desert"] .veil,
+.home-map .home-static.lock-orchard .home-region[data-region="orchard"] .veil { opacity: 0.7; }
 .home-map .home-static.lock-mountains .home-region[data-region="mountains"] .bound,
 .home-map .home-static.lock-coast .home-region[data-region="coast"] .bound,
-.home-map .home-static.lock-desert .home-region[data-region="desert"] .bound { opacity: 0.8; }
+.home-map .home-static.lock-desert .home-region[data-region="desert"] .bound,
+.home-map .home-static.lock-orchard .home-region[data-region="orchard"] .bound { opacity: 0.8; }

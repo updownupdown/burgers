@@ -11,6 +11,7 @@ const HATS: Record<Backdrop, Hat[]> = {
   mountains: ["none", "beanie", "cap", "ranger", "antlers"],
   beach: ["none", "sunhat", "shades", "cap", "shades"],
   desert: ["none", "cowboy", "cowboy", "shades", "bandana"],
+  orchard: ["none", "sunhat", "cap", "beanie", "none"],
 };
 type Hat = "none" | "beanie" | "cap" | "ranger" | "antlers" | "sunhat" | "shades" | "cowboy" | "bandana";
 
@@ -306,6 +307,24 @@ export class CustomersView {
       for (let i = 0; i < 3; i++) {
         const umb = add(new THREE.ConeGeometry(1.2, 0.5, 8), i % 2 ? "#e5432b" : "#f3bd3d", -6 + i * 6, 1.6, -3.5);
         umb.rotation.z = 0.15;
+      }
+    } else if (kind === "orchard") {
+      // Orchard Isle: soft green hills, rows of vines, apple trees and a red barn.
+      this.scene.background = new THREE.Color("#a9d8e6");
+      add(new THREE.BoxGeometry(60, 0.4, 20), "#a8c97a", 0, -0.6, -6);
+      for (const [x, r] of [[-8, 5], [1, 6.5], [9, 5.5]] as const) {
+        const hill = add(new THREE.SphereGeometry(r, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), "#8fb86a", x, -0.6, -13);
+        hill.scale.y = 0.45;
+      }
+      for (let row = 0; row < 3; row++) add(new THREE.BoxGeometry(14, 0.5, 0.35), "#5f8f45", -5 + row * 0.6, 0, -8 - row * 0.9);
+      const barn = add(new THREE.BoxGeometry(2.6, 2, 2), "#b8483a", 7.5, 0.5, -9);
+      barn.rotation.y = -0.3;
+      const roof = add(new THREE.CylinderGeometry(1.5, 1.5, 2.2, 3), "#7a3a32", 7.5, 1.9, -9);
+      roof.rotation.set(Math.PI / 2, 0, Math.PI / 2 - 0.3);
+      for (const [x, z] of [[-8, -5], [-3.5, -6], [2.5, -5.5], [10.5, -6]] as const) {
+        add(new THREE.CylinderGeometry(0.14, 0.2, 1.4, 6), "#7a5434", x, 0.3, z);
+        add(new THREE.SphereGeometry(0.95, 10, 8), "#4f8f45", x, 1.5, z);
+        for (let k = 0; k < 4; k++) add(new THREE.SphereGeometry(0.13, 6, 5), "#d9443a", x + Math.cos(k * 1.7) * 0.75, 1.3 + Math.sin(k * 2.3) * 0.4, z + 0.55);
       }
     } else {
       this.scene.background = new THREE.Color("#f6c48a");

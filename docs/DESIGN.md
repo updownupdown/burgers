@@ -514,7 +514,7 @@ James's build #53 gameplay notes, as built.
 
 James asked (2026-11-01) to strip the money layer back, then picked option C from the study: money is kept as **savings**, spent on bonuses and on looks for the truck.
 
-**Gone:** gas money, Supplies and range upgrades (range is a flat 175 mi a night), the Complexity slider, social media / ads, ingredient-quality and price toggles, running costs and solar, the ledger and the business-mode plan.
+**Gone:** gas money, Supplies and range upgrades (range is a flat 175 mi a night, 130 since §24), the Complexity slider, social media / ads, ingredient-quality and price toggles, running costs and solar, the ledger and the business-mode plan.
 
 **Who comes.** Customers = town trade × crowd traffic × popularity × rating × menu length (0.8 with two recipes to 1.1 from six) × the shift window's share of the lunch curve × the Sandwich board (1.15) ÷ pacing. Popularity and rating are only earned by cooking (`src/game/day.ts` `expectedCustomers`).
 
@@ -544,6 +544,8 @@ James asked (2026-11-01) to strip the money layer back, then picked option C fro
 | Cactus Junction | Shiny tip jar | Tips ×1.3 | $440 |
 | Dust Bowl Flats | Press pass | A critic is sure to come | $500 |
 | Sun Valley | Meal deal sign | Burger + fries + drink orders tip ×1.5 | $600 |
+
+*(Superseded by the 14-town list in §24.)*
 
 Open towns whose bonus is still to unlock carry a small gold diamond on the map, and each town's sheet shows its bonus and how far along it is. In the Garage, bonuses of towns not yet reached show as "?".
 
@@ -630,3 +632,14 @@ Farmers' market (Cedar Falls), County fair (Summit City), Surf contest (Driftwoo
 2. **Sunny Coast:** panini press, breads, fillings, sweet potato fries, steam well, local drinks.
 3. **Red Rock:** comal, tortillas, fold, chips and nachos, churros.
 4. **Orchard Isle:** hearth oven, turn, flatbreads, calzone, fritti and fritters.
+
+### Phase 1 as built
+
+- **Towns and roads** (`src/game/stops.ts`). Unlock roads: Pinecrest to Elk Pass and Cedar Falls; Cedar Falls to Summit City; then one chain Summit, Saltwater Bay, Gull Point, Driftwood, Harbor City, Red Mesa, Cactus Junction, Sun Valley, Applecross, Larkvale, Port Amber (the last town of the trip). Elk Pass is the Y's spur: it opens nothing, so Summit City opens from Cedar Falls only. The Old Pass road and the ferry are `LINKS`: drivable once both ends are open, never needed to unlock anything.
+- **Range** is 130 mi a night (was 175), at two miles a unit: the Old Pass road (about 120 mi) still fits in one night and nothing longer does, so the slow way round stays two nights or more.
+- **Map** (`src/screens/map.ts`): positions, coastlines and roads traced from the study sketch. Gated highways are dashed with a barrier, and their note ("Opens after Summit City") shows only once one end is open. The causeway draws as a bridge; the ferry is a dotted crossing with a boat once it runs. Orchard Isle has orchard rows, vineyards and hedged fields, and its own customers' backdrop (vine rows, a barn, apple trees).
+- **Placeholder menus** (`// phase 1 placeholder`): Coast Boardwalk Basic, Luau Stack, Low Tide; Red Rock Tumbleweed, Rattlesnake, Ranch Breakfast; Orchard Isle Cheesy Switchback, Sandy Pickle, Sunset Double. Two in each first town, three after. Pines: Pinecrest Classic and Sunrise; Elk Pass adds the Smash; Cedar Falls the Campfire Melt (and poutine, which Pinecrest and Elk Pass don't serve); Summit City all five. A smash order shows a press-and-hold tip if the Smash wasn't met at Elk Pass.
+- **Drinks.** Five fountain buttons: the area's two, then Road Cola, Water, Iced Tea. New colours: Cucumber Cooler pale green, Hibiscus Cooler deep red, Lime Agua lime, Sparkling Cider amber, Bramble Soda dark purple.
+- **New bonuses.** Kitchen timer: a soft tick when a patty, egg, bun or fryer basket crosses into its done zone. Ticket rail: the first person in line has already ordered, and their ticket hangs faded under the bell ("Next up"); it becomes their real ticket when they step up.
+- **Events.** Rodeo moves to Cactus Junction and Surf contest stays at Driftwood, both without specials for now; Harvest fair at Larkvale (families, from day 15 every 7 days, 1.5× busier).
+- **Saves.** Dust Bowl Flats folds into Cactus Junction (shifts added, best kept); a truck parked there wakes in Cactus Junction; any town with three passed shifts reopens its roads under the new graph.

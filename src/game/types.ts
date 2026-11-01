@@ -71,41 +71,10 @@ export interface Drink {
   straw?: boolean;
 }
 
-/** Soft-serve flavours: vanilla everywhere, plus one from each region on the machine's other handle. */
-export type FlavorId = "vanilla" | "huckleberry" | "mango" | "pear";
-export const FLAVOR_LABEL: Record<FlavorId, string> = { vanilla: "Vanilla", huckleberry: "Huckleberry", mango: "Mango", pear: "Prickly Pear" };
-/** The soft serve itself (and the shake), as drawn and on the ticket. */
-export const FLAVOR_COLOR: Record<FlavorId, string> = { vanilla: "#f4ead2", huckleberry: "#b38ac8", mango: "#f4b746", pear: "#e46d9e" };
-/** A cone of soft serve, or a shake (soft serve blended in a steel tin, served in a paper cup). */
-export type DessertKind = "cone" | "shake";
-
-/** What a customer asked for from the Cold bar. */
-export interface DessertOrder {
-  kind: DessertKind;
-  flavor: FlavorId;
-}
-
-/** A dessert on a tray. */
-export interface Dessert {
-  kind: DessertKind;
-  flavor: FlavorId;
-  /** Rings of soft serve laid in the cone or tin (one loop of the finger is one ring). */
-  swirl: number;
-  /** How far the swirl leans off centre, 0 straight to about 1 toppling. */
-  lean: number;
-  /** Shakes: how long they spun on the mixer (see BLEND). */
-  blend: number;
-  /** Seconds it has waited on the tray. */
-  melt: number;
-  /** Where each ring sits off centre, for drawing it (see VesselState). */
-  offs?: { x: number; z: number }[];
-}
-
 export interface Plate {
   layers: Layer[];
   fries: Fries | null;
   drink: Drink | null;
-  dessert?: Dessert | null;
 }
 
 export interface ExpectedLayer {
@@ -145,8 +114,6 @@ export interface Order {
   critic?: boolean;
   /** A poutine meal: a large carton of fries with curds and gravy, and no burger. */
   poutine?: boolean;
-  /** Something from the Cold bar. Usually the whole order; now and then with a main. */
-  dessert?: DessertOrder | null;
 }
 
 export const GRILLABLE: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon", "egg", "pineapple"]);

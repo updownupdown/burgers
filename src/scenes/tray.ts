@@ -5,8 +5,6 @@ import { makeCup, makeFood, makeFries, stackBases, type BunRole, type CupObject,
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { relScale } from "../render/units";
-import { makeConeSleeve, makeVessel } from "../render/dessert";
-import { meltLevel } from "../game/dessert";
 
 /**
  * One kraft serving tray per customer, lined with paper. A paper plate sits on it only when that
@@ -26,10 +24,6 @@ const CUP_AT = { x: 1.02, z: -0.42 };
 /** With no burger ordered the sides move to the middle of the tray. */
 const FRIES_SOLO = { x: -0.45, z: 0.3 };
 const CUP_SOLO = { x: 0.45, z: -0.25 };
-/** A cone (in its little stand) or a shake: between the plate and the fries, or left of middle on its own. */
-const DESSERT_AT = { x: 0.42, z: 0.66 };
-const DESSERT_SOLO = { x: -0.45, z: 0.3 };
-const DESSERT_ON_TRAY = 0.8;
 /** The burger never draws smaller than this share of its full size to fit under the receipts. */
 const MIN_FIT = 0.55;
 /**
@@ -72,8 +66,6 @@ export class PlateView {
   friesKey = "";
   cup: CupObject | null = null;
   cupKey = "";
-  dessert: THREE.Group | null = null;
-  dessertKey = "";
   wobble = 0;
   wobbleV = 0;
   /** Whole-stack squish when the top bun is pressed on. */
@@ -137,8 +129,6 @@ export class PlateView {
     const c = solo ? CUP_SOLO : CUP_AT;
     this.fries?.position.set(f.x, 0.13, f.z);
     this.cup?.position.set(c.x, 0.13, c.z);
-    const d = solo ? DESSERT_SOLO : DESSERT_AT;
-    this.dessert?.position.set(d.x, 0.13, d.z);
   }
 
   stackTop(): number {
@@ -245,26 +235,6 @@ export class PlateView {
         this.group.add(this.cup);
       }
       this.cupKey = ck;
-    }
-    const d = p.dessert;
-    const dk = d ? `${d.kind}${d.flavor}${d.swirl.toFixed(2)}${d.blend > 0.3 ? 1 : 0}${Math.round(meltLevel(d) * 8)}` : "";
-    if (dk !== this.dessertKey) {
-      if (this.dessert) {
-        this.group.remove(this.dessert);
-        disposeObject(this.dessert);
-      }
-      this.dessert = null;
-      if (d) {
-        const g = new THREE.Group();
-        const v = makeVessel({ vessel: d.kind === "cone" ? "cone" : "shake", flavor: d.flavor, swirl: d.swirl, offs: d.offs ?? [], blend: d.blend, melt: meltLevel(d) });
-        g.add(v);
-        // A cone stands on its point in a paper sleeve; both are drawn a little smaller than a cup so the swirl stays in the band.
-        if (d.kind === "cone") g.add(makeConeSleeve());
-        g.scale.setScalar(relScale("cup") * TRAY_SIDES * DESSERT_ON_TRAY);
-        this.dessert = g;
-        this.group.add(g);
-      }
-      this.dessertKey = dk;
     }
     this.placeSides();
   }

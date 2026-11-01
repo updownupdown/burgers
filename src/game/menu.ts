@@ -1,7 +1,6 @@
 import type { Doneness, DrinkId, ExpectedLayer, FriesSize, Kind, Modifier, Order, Size } from "./types";
 import { COUNTED, DRINK_LABEL, DRINKS, extraCount } from "./types";
 import { recipeCount, type Recipe, type Stop } from "./stops";
-import { DESSERT_ONLY_CHANCE, DESSERT_PRICE, DESSERT_WITH_MAIN_CHANCE, dessertName, pickDessert } from "./dessert";
 
 export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, M: 3, L: 4 };
 export const DRINK_PRICE: Record<Size, number> = { S: 1, M: 2, L: 3 };
@@ -48,21 +47,7 @@ export function sidesOrder(id: number, rng: Rng): Order {
   return order;
 }
 
-/** Someone who only wants something from the Cold bar, sometimes with a drink. */
-export function dessertOrder(id: number, rng: Rng, stop: Pick<Stop, "region">): Order {
-  const dessert = pickDessert(rng, stop.region);
-  const drink: DrinkId | null = rng() < 0.2 ? DRINKS[Math.floor(rng() * DRINKS.length)] : null;
-  const d = rng();
-  const drinkSize: Size = d < 0.4 ? "S" : d < 0.8 ? "M" : "L";
-  const order: Order = { id, name: dessertName(dessert), price: DESSERT_PRICE[dessert.kind] + (drink ? DRINK_PRICE[drinkSize] : 0), mods: [], layers: [], fries: false, drink, friesSize: "S", drinkSize, dessert };
-  if (drink) {
-    const i = rng();
-    order.ice = i < 0.45 ? true : i < 0.7 ? false : null;
-  }
-  return order;
-}
-
-/** No burger on this order: a poutine, a dessert, or just a drink and/or fries. */
+/** No burger on this order: a poutine, or just a drink and/or fries. */
 export function noBurger(order: Order): boolean {
   return order.layers.length === 0;
 }
@@ -162,7 +147,6 @@ export function pickMods(recipe: Recipe, pantry: Kind[], rng: Rng, level: number
 export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Order {
   if (level >= 0.15 && rng() < POUTINE_CHANCE) return poutineOrder(id, rng, level);
   if (level >= 0.15 && rng() < SIDES_ONLY_CHANCE) return sidesOrder(id, rng);
-  if (level >= 0.1 && rng() < DESSERT_ONLY_CHANCE) return dessertOrder(id, rng, stop);
   let pool = stop.menu.filter((r) => (r.from ?? 0) <= level);
   if (level < 0.25) pool = pool.filter((r) => r.layers.length <= 6);
   if (!pool.length) pool = stop.menu;
@@ -181,11 +165,6 @@ export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Orde
   if (drink) {
     const i = rng();
     order.ice = i < 0.45 ? true : i < 0.7 ? false : null;
-  }
-  // A dessert with a main is rare: most people come back to the window for one on its own.
-  if (level >= 0.3 && rng() < DESSERT_WITH_MAIN_CHANCE) {
-    order.dessert = pickDessert(rng, stop.region);
-    order.price += DESSERT_PRICE[order.dessert.kind];
   }
   return order;
 }

@@ -1,7 +1,6 @@
 import { avgCook, bunToast, friesQuality, friesZone, FRIES_ZONE, isMelted, DRINK_FILL, SALT } from "./cooking";
 import type { Drink, ExpectedLayer, Fries, Layer, Order, Piece, Plate } from "./types";
 import { COUNTED, DONENESS_TARGET, KIND_LABEL, SAUCE_RADIUS, SIZE_LABEL } from "./types";
-import { dessertScore } from "./dessert";
 
 export interface ScoreResult {
   /** 0..100 */
@@ -16,7 +15,7 @@ export interface ScoreResult {
   perks: string[];
   /** Something a customer would hand back whatever the score: a raw or burnt layer, a missing layer, a forgotten or wrong side. */
   faulty: boolean;
-  /** A whole ordered item left off the tray (the burger, the fries, the drink or the dessert), as its note. Always sent back once, even on Chill. */
+  /** A whole ordered item left off the tray (the burger, the fries or the drink), as its note. Always sent back once, even on Chill. */
   missing: string | null;
 }
 
@@ -277,22 +276,14 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
     else drinkQ = drinkScore(order, plate.drink, notes);
     sideScore += drinkQ;
   }
-  let dessertQ = 0;
-  if (order.dessert) {
-    sideParts++;
-    if (!plate.dessert) notes.push(`forgot the ${order.dessert.kind}`);
-    else dessertQ = dessertScore(order.dessert, plate.dessert, notes);
-    sideScore += dessertQ;
-  }
   const sides = sideParts ? sideScore / sideParts : act.length ? 1 : 0;
 
   let total: number;
   if (exp.length === 0) {
-    // No burger ordered. A poutine or a dessert is the meal with a drink on the side; otherwise
-    // it's just a drink and/or fries, each counting the same. A burger nobody asked for is a mild surprise.
+    // No burger ordered. A poutine is the meal with a drink on the side; otherwise it's just a
+    // drink and/or fries, each counting the same. A burger nobody asked for is a mild surprise.
     if (act.length) notes.push("didn't order a burger");
-    const main = order.poutine ? friesQ : order.dessert ? dessertQ : null;
-    const sidesQ = main !== null ? (order.drink ? 0.75 * main + 0.25 * drinkQ : main) : sideParts ? sideScore / sideParts : 0;
+    const sidesQ = order.poutine ? (order.drink ? 0.75 * friesQ + 0.25 * drinkQ : friesQ) : sideParts ? sideScore / sideParts : 0;
     total = sidesQ * (act.length ? 0.8 : 1);
   } else {
     const burger = structure * (0.25 + 0.75 * quality) * (0.85 + 0.15 * presentation);
@@ -313,12 +304,11 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
   };
   if (!order.fries && plate.fries && plate.fries.fill > 0.5) freebie(friesScore({ ...order, poutine: !!plate.fries.curds }, plate.fries, []), plate.fries.curds ? "free poutine" : "free fries");
   if (!order.drink && plate.drink && plate.drink.fill > 0.6) freebie(Math.min(1, plate.drink.fill), "free drink");
-  if (!order.dessert && plate.dessert && plate.dessert.swirl >= 1.5) freebie(dessertScore({ kind: plate.dessert.kind, flavor: plate.dessert.flavor }, plate.dessert, []), plate.dessert.kind === "cone" ? "free ice cream" : "free shake");
 
   const score = Math.round(clamp01(total) * 100);
-  const sideMissing = (order.fries && (!plate.fries || friesQ < 0.35)) || (!!order.drink && (!plate.drink || drinkQ < 0.35)) || (!!order.dessert && (!plate.dessert || dessertQ < 0.35));
+  const sideMissing = (order.fries && (!plate.fries || friesQ < 0.35)) || (!!order.drink && (!plate.drink || drinkQ < 0.35));
   const faulty = (exp.length > 0 && (pairs.length < exp.length || worstLayer < 0.35)) || sideMissing;
-  const missing = order.dessert && !plate.dessert ? `forgot the ${order.dessert.kind}` : order.drink && !plate.drink ? "forgot the drink" : order.fries && !plate.fries ? (order.poutine ? "forgot the poutine" : "forgot the fries") : exp.length > 0 && plate.layers.length === 0 ? "forgot the burger" : null;
+  const missing = order.drink && !plate.drink ? "forgot the drink" : order.fries && !plate.fries ? (order.poutine ? "forgot the poutine" : "forgot the fries") : exp.length > 0 && plate.layers.length === 0 ? "forgot the burger" : null;
   return { score, stars: starsFor(score), structure, quality, presentation, sides, notes, perks, faulty, missing };
 }
 

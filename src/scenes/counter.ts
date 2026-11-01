@@ -1,8 +1,6 @@
 import * as THREE from "three";
 import { DRINK_FILL, FRIES_PERFECT, FRIES_ZONE, FRY_RATE, GRILL_RATE, MELT_RATE } from "../game/cooking";
-import type { DrinkId, FlavorId, FriesSize, Kind, Piece, SauceKind, Size } from "../game/types";
-import { FLAVOR_COLOR } from "../game/types";
-import { BLEND } from "../game/dessert";
+import type { DrinkId, FriesSize, Kind, Piece, SauceKind, Size } from "../game/types";
 import { CUP_SPEED, DRINKS, GRILLABLE } from "../game/types";
 import { counterTop, wallPanels } from "../render/wear";
 import { CUP_DIMS, cupSurfaceY, makeCarton, makeCartonStack, makeCup, makeFood, makeBasketFries, makeFries, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
@@ -13,15 +11,14 @@ import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { makeGriddle, ZONE_HEATS, type GriddleObject, type ZoneHeat } from "../render/machines/griddle";
 import { makeColdRail } from "../render/machines/coldRail";
 import { makeSauceBottle, makeSauceCaddy, type SauceCaddyObject } from "../render/machines/sauces";
-import { DRINK_TINT, makeConeTube, makeCupStack, makeFountain, makeFryBasket, makeFryer, makeIceWell, makeLidStackSized, makeMixer, makePackPad, makeSleeve, makeSoftServe, makeTinStack, makeTrashChute, FRY_BASKET, type FryerObject, type MixerObject, type SoftServeObject } from "../render/machines";
-import { CONE, CONE_STAND, makeConeStand, makeVessel, type VesselObject, type VesselState } from "../render/dessert";
+import { DRINK_TINT, makeCupStack, makeFountain, makeFryBasket, makeFryer, makeIceWell, makeLidStackSized, makePackPad, makeSleeve, makeSupplyShelf, makeTrashChute, FRY_BASKET, type FryerObject } from "../render/machines";
 import { applyKitchenLight, KITCHEN_BG, type KitchenLight } from "../render/lighting";
 import { SCALE } from "../render/units";
 
-export const PAGES = ["Drinks", "Grill", "Fryer", "Cold bar"] as const;
+export const PAGES = ["Drinks", "Grill", "Fryer", "Supplies"] as const;
 export const HOME_PAGE = 1;
 /**
- * The window line: drinks, grill, fryer and the cold bar run along the serving window, facing it, so
+ * The window line: drinks, grill, fryer and supplies run along the serving window, facing it, so
  * the tray above the counter really is the window ledge. (The truck is drawn wider than it could
  * be so every counter gets the window.) Page centres in world x:
  */
@@ -105,7 +102,7 @@ export const EMPTY_PACK = { size: null, cook: 0, fill: 0, salt: 0, curds: false,
 const PACK_SCALE = SCALE.fries;
 const CARTON_STACK_SCALE = SCALE.fries;
 
-/** A full stack of cups or cartons, and what the fresh sleeve that rises in its place refills it to. */
+/** A full stack of cups or cartons, and what a fresh sleeve from the Supplies counter refills it to. */
 const STACK_START = 10;
 export const SLEEVE = 10;
 
@@ -128,15 +125,10 @@ export const CUP_IN_HAND = SCALE.cup;
 const CUP_ROOM = 0.72;
 
 /**
- * The Cold bar: the soft-serve machine at the back left (vanilla handle on the left, the region's
- * flavour on the right, a cone or tin under each nozzle), the spindle mixer at the back right,
- * and the cones and shake tins along the front.
+ * Supplies: one shelf of steel bins, cups on the left and paper boats on the right, a bin per
+ * size. Nothing else, so every target on the page has a job.
  */
-const COLD = { machine: { x: -1.05, z: -1.6 }, mixer: { x: 2.85, z: -1.55 }, cones: { x: -2.85, z: 1.85 }, tins: { x: -1.05, z: 1.85 } };
-/** Cones, tins and shake cups on the counter and in hand, against cup units (like the cups). */
-export const VESSEL_SCALE = SCALE.cup;
-const SOFT_SPOTS = makeSoftServe().userData.spots;
-const MIXER_SPOTS = makeMixer().userData.spots;
+const SHELF_AT = { x: 0, z: 0 };
 /** Dollars of soda lost per second of overflow. */
 const SPILL_COST = 1.5;
 
@@ -173,7 +165,7 @@ export interface Basket {
   tilt: number;
 }
 
-/** A stack of empty cups or fries cartons. Once it runs out, a wrapped sleeve rises in its place: tap it open. */
+/** A stack of empty cups or fries cartons. Once it runs out, a wrapped sleeve from the Supplies counter refills it. */
 export interface Stack {
   kind: "cup" | "carton";
   size: Size;
@@ -219,27 +211,6 @@ export interface DrinkCup {
   tap: number;
 }
 
-/** A cone or tin standing under one of the soft-serve nozzles. */
-export interface ColdSpot {
-  /** What stands here (null when the spot is free), and the soft serve in it. */
-  held: VesselState | null;
-  obj: VesselObject | null;
-  stand: THREE.Object3D;
-  /** World position of the vessel's base. */
-  at: THREE.Vector3;
-  /** The handle is pulled: soft serve is coming out. */
-  pulling: boolean;
-}
-
-/** The spindle mixer, and the tin on it. */
-export interface Mixer {
-  tin: VesselState | null;
-  obj: VesselObject | null;
-  at: THREE.Vector3;
-  running: boolean;
-  angle: number;
-}
-
 export interface Tap {
   flavor: DrinkId;
   pouring: boolean;
@@ -267,11 +238,7 @@ export type Hit =
   | { type: "straws" }
   | { type: "zone"; idx: number }
   | { type: "stack"; idx: number }
-  | { type: "handle"; idx: number }
-  | { type: "coldSpot"; idx: number }
-  | { type: "cones" }
-  | { type: "tins" }
-  | { type: "mixer" }
+  | { type: "supplies"; kind: "cup" | "carton"; size: Size }
   | { type: "pack"; idx: number }
   | { type: "shaker" }
   | { type: "curds" }
@@ -364,7 +331,7 @@ export class CounterView {
     this.buildGrill();
     this.buildFryer();
     this.buildDrinks();
-    this.buildColdBar();
+    this.buildSupplies();
     this.buildTrash();
   }
 
@@ -409,7 +376,7 @@ export class CounterView {
     }
   }
 
-  /** Fryer page: see FRYER. */
+  /** Fryer page: see FRYER. Carton sleeves come from the Supplies counter. */
   private buildFryer(): void {
     const F = FRYER;
     const at = (x: number, y: number, z: number) => this.world(2, x, y, z);
@@ -520,157 +487,26 @@ export class CounterView {
   /** Where each lid stack stands, for its size tag and the playtest bot. */
   lidAt: { size: Size; at: THREE.Vector3 }[] = [];
 
-  /** The Cold bar, past the fryer: see COLD. */
-  private buildColdBar(): void {
-    const at = (x: number, y: number, z: number) => this.world(3, x, y, z);
-    const soft = makeSoftServe();
-    soft.position.copy(at(COLD.machine.x, 0, COLD.machine.z));
-    this.scene.add(soft);
-    this.softServe = soft;
-    const sp = soft.userData.spots;
-    sp.cups.forEach((c, i) => {
-      const base = soft.position.clone().add(new THREE.Vector3(c.x, c.y, c.z));
-      const stand = makeConeStand();
-      stand.scale.setScalar(VESSEL_SCALE);
-      stand.position.copy(base);
-      stand.visible = false;
-      this.scene.add(stand);
-      this.coldSpots.push({ held: null, obj: null, stand, at: base, pulling: false });
-      // The cone or tin: its lower part, so a press higher up reaches the handle.
-      this.proxy(new THREE.BoxGeometry(1.2, 1.3, 1.1), base.clone().setY(base.y + 0.55), { type: "coldSpot", idx: i });
-      const h = sp.handles[i];
-      this.proxy(new THREE.BoxGeometry(1.25, 1.1, 1.1), soft.position.clone().add(new THREE.Vector3(h.x, h.y, h.z)), { type: "handle", idx: i });
+  /**
+   * The Supplies counter, on the window line past the fryer: a shelf of steel bins, cup sleeves
+   * down the left and paper-boat sleeves down the right. Tap a bin for a sleeve and carry it to
+   * that stack over its counter's tab.
+   */
+  private buildSupplies(): void {
+    const shelf = makeSupplyShelf();
+    shelf.position.copy(this.world(3, SHELF_AT.x, 0, SHELF_AT.z));
+    this.scene.add(shelf);
+    const { bays, bayW, bayD } = shelf.userData.spots;
+    bays.forEach((b, i) => {
+      shelf.userData.setBay(i, 2);
+      const c = shelf.position.clone().add(new THREE.Vector3(b.x, b.y, b.z));
+      this.supplyAt.push({ kind: b.kind, size: b.size, at: c });
+      this.proxy(new THREE.BoxGeometry(bayW - 0.1, 0.9, bayD - 0.05), c.clone().setY(0.4), { type: "supplies", kind: b.kind, size: b.size });
     });
-    const mixer = makeMixer();
-    mixer.position.copy(at(COLD.mixer.x, 0, COLD.mixer.z));
-    this.scene.add(mixer);
-    this.mixerObj = mixer;
-    this.mixer.at = mixer.position.clone().add(new THREE.Vector3(MIXER_SPOTS.tin.x, MIXER_SPOTS.tin.y, MIXER_SPOTS.tin.z));
-    this.proxy(new THREE.BoxGeometry(1.4, 2.4, 1.7), mixer.position.clone().add(new THREE.Vector3(0, 1.0, 0.2)), { type: "mixer" });
-    const cones = makeConeTube();
-    cones.position.copy(at(COLD.cones.x, 0, COLD.cones.z));
-    this.scene.add(cones);
-    this.proxy(new THREE.BoxGeometry(1.2, 2.2, 1.3), at(COLD.cones.x, 0.9, COLD.cones.z), { type: "cones" });
-    const tins = makeTinStack();
-    tins.position.copy(at(COLD.tins.x, 0, COLD.tins.z));
-    this.scene.add(tins);
-    this.proxy(new THREE.BoxGeometry(1.2, 1.8, 1.3), at(COLD.tins.x, 0.7, COLD.tins.z), { type: "tins" });
-    this.coneTubeAt = cones.position.clone();
-    this.tinStackAt = tins.position.clone();
   }
 
-  private softServe!: SoftServeObject;
-  private mixerObj!: MixerObject;
-  coldSpots: ColdSpot[] = [];
-  mixer: Mixer = { tin: null, obj: null, at: new THREE.Vector3(), running: false, angle: 0 };
-  /** Today's two flavours: vanilla on the left handle, the region's on the right. */
-  flavors: [FlavorId, FlavorId] = ["vanilla", "huckleberry"];
-  coneTubeAt = new THREE.Vector3();
-  tinStackAt = new THREE.Vector3();
-
-  /** Set the soft-serve machine up for the region. */
-  setFlavors(f: [FlavorId, FlavorId]): void {
-    this.flavors = f;
-    this.softServe.userData.setFlavors([FLAVOR_COLOR[f[0]], FLAVOR_COLOR[f[1]]]);
-  }
-
-  /** A cone, tin or shake cup as an object, at the counter's scale. */
-  vesselMesh(s: VesselState, scale = VESSEL_SCALE): VesselObject {
-    const o = makeVessel(s);
-    o.scale.setScalar(scale);
-    return o;
-  }
-
-  /** Stand a cone or tin under a nozzle. False if something's already there. */
-  putOnSpot(i: number, s: VesselState): boolean {
-    const sp = this.coldSpots[i];
-    if (sp.held) return false;
-    sp.held = s;
-    sp.obj = this.vesselMesh(s);
-    sp.obj.position.copy(sp.at);
-    // A cone sits point down in its little wire stand.
-    if (s.vessel === "cone") sp.obj.position.y += CONE_STAND * VESSEL_SCALE;
-    sp.stand.visible = s.vessel === "cone";
-    this.scene.add(sp.obj);
-    return true;
-  }
-
-  /** Take whatever stands under a nozzle off it. */
-  takeFromSpot(i: number): VesselState | null {
-    const sp = this.coldSpots[i];
-    const s = sp.held;
-    if (sp.obj) {
-      this.scene.remove(sp.obj);
-      disposeObject(sp.obj);
-    }
-    Object.assign(sp, { held: null, obj: null, pulling: false });
-    sp.stand.visible = false;
-    return s;
-  }
-
-  /** Redraw a spot after its soft serve changes. */
-  syncSpot(i: number): void {
-    const sp = this.coldSpots[i];
-    if (sp.held && sp.obj) sp.obj.userData.set(sp.held);
-  }
-
-  /** The top of the soft serve at a spot (or its rim when empty), world space: where the swirl is drawn round. */
-  spotTop(i: number): THREE.Vector3 {
-    const sp = this.coldSpots[i];
-    const h = sp.held;
-    const rim = h?.vessel === "cone" ? CONE_STAND + CONE.h : 1.8;
-    const y = rim + (h?.vessel === "cone" ? Math.min(3, h.swirl) * 0.2 : 0);
-    return sp.at.clone().setY(sp.at.y + y * VESSEL_SCALE);
-  }
-
-  /** Pull or let go of a handle (it swings down while soft serve comes out). */
-  pull(i: number, on: boolean): void {
-    this.coldSpots[i].pulling = on;
-  }
-
-  /** Hang a tin on the mixer. False if one's on it already. */
-  mountTin(s: VesselState): boolean {
-    if (this.mixer.tin) return false;
-    this.mixer.tin = s;
-    this.mixer.obj = this.vesselMesh(s);
-    this.mixer.obj.position.copy(this.mixer.at);
-    this.scene.add(this.mixer.obj);
-    return true;
-  }
-
-  /** Take the tin off the mixer. */
-  unmountTin(): VesselState | null {
-    const m = this.mixer;
-    const s = m.tin;
-    if (m.obj) {
-      this.scene.remove(m.obj);
-      disposeObject(m.obj);
-    }
-    Object.assign(m, { tin: null, obj: null, running: false });
-    return s;
-  }
-
-  /** The mixer's switch, for tags and the playtest bot. */
-  mixerPoint(): THREE.Vector3 {
-    return this.mixer.at.clone().setY(1.2);
-  }
-
-  /** Where the soft-serve handles are, for the playtest bot. */
-  handlePoint(i: number): THREE.Vector3 {
-    const h = SOFT_SPOTS.handles[i];
-    return this.softServe.position.clone().add(new THREE.Vector3(h.x, h.y, h.z));
-  }
-
-  /** Over a nozzle spot (world point on the counter), or -1. */
-  overColdSpot(world: THREE.Vector3): number {
-    return this.coldSpots.findIndex((sp) => Math.abs(world.x - sp.at.x) < 0.85 && world.z > sp.at.z - 0.9 && world.z < sp.at.z + 1.1);
-  }
-
-  /** Over the mixer's tin rest. */
-  overMixer(world: THREE.Vector3): boolean {
-    return Math.abs(world.x - this.mixer.at.x) < 1.0 && world.z > this.mixer.at.z - 1.0 && world.z < this.mixer.at.z + 1.3;
-  }
-
+  /** Where each bin of the supply shelf is, for labels and the playtest bot. */
+  supplyAt: { kind: Stack["kind"]; size: Size; at: THREE.Vector3 }[] = [];
   private fryer!: FryerObject;
   /** The shaker standing in the topping column (hidden while it's in hand). */
   shakerObj!: THREE.Object3D;
@@ -882,11 +718,7 @@ export class CounterView {
 
   /** Clean stations for a new shift. Stacks pick up where the last shift left them. */
   resetStations(stock: Record<string, number> = {}): void {
-    for (const s of this.stacks) {
-      const count = Math.min(STACK_START, stock[s.kind + s.size] ?? STACK_START);
-      // An empty stack has its fresh sleeve waiting.
-      Object.assign(s, { count, sleeve: count === 0, tear: 0 });
-    }
+    for (const s of this.stacks) Object.assign(s, { count: Math.min(STACK_START, stock[s.kind + s.size] ?? STACK_START), sleeve: false, tear: 0 });
     this.stacks.forEach((s) => this.syncStack(s));
     for (const c of [...this.cups]) this.removeCup(c);
     for (const t of this.taps) t.puddle = 0;
@@ -895,8 +727,6 @@ export class CounterView {
       this.syncPack(i);
     });
     this.spillCost = 0;
-    this.coldSpots.forEach((_, i) => this.takeFromSpot(i));
-    this.unmountTin();
   }
 
   /** Packing spot under a world point, or -1. */
@@ -908,6 +738,12 @@ export class CounterView {
   /** Nozzle slot under a world point, or -1. */
   overTap(world: THREE.Vector3): number {
     return this.taps.findIndex((t) => Math.abs(world.x - t.x) < TAP_GAP / 2 && world.z > CUP_Z - 0.6 && world.z < CUP_Z + 1.4);
+  }
+
+  /** Stack under the pointer, or -1, picked by its hit box. */
+  overStack(ndc: THREE.Vector2): number {
+    const h = this.hit(ndc);
+    return h?.type === "stack" ? h.idx : -1;
   }
 
   /** Where each drink's push button sits on the fountain (its cap and name are drawn there as UI). */
@@ -1341,17 +1177,6 @@ export class CounterView {
         b.fries.userData.setAmount?.(b.amount);
       }
     }
-
-    // Cold bar: handles swing down while pulled; the mixer spins and blends while it's held.
-    this.coldSpots.forEach((sp, i) => this.softServe.userData.pull(i, sp.pulling ? 1 : 0));
-    const m = this.mixer;
-    if (m.running && m.tin) {
-      m.tin.blend = Math.min(BLEND.max, m.tin.blend + BLEND.rate * dt);
-      m.angle += dt * 40;
-      m.obj?.userData.set(m.tin);
-      if (m.obj) m.obj.position.x = m.at.x + Math.sin(this.time * 60) * 0.008;
-    }
-    this.mixerObj.userData.spin(m.angle, m.running && !!m.tin);
 
     // Drinks
     for (const t of this.taps) {

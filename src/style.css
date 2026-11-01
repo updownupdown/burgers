@@ -227,8 +227,6 @@ html, body {
 .ticket .ic .yolk { fill: #f1ae2a; }
 .ticket .ic .st { fill: #f3d36b; }
 .ticket .ic .lid { fill: #f4f1ea; }
-.ticket .ic .waf { fill: #d9a35a; }
-.ticket li.done .ic .waf { fill: #bdb5a9; }
 .ticket li .n { font: 700 12px var(--bv-font-mono); flex: none; margin-left: auto; }
 .ticket li .dpill { flex: none; min-width: 0; font-size: 11.5px; line-height: 1.15; padding: 0 6px 1px; vertical-align: 0; }
 /* Modifiers in small coloured boxes: Toast, Melt, Grill, Smash (an icon), Ice / No ice. */

@@ -16,6 +16,14 @@ const friesRamp = ramp([
   [1.0, "#b36a1e"],
   [1.3, "#3e2510"],
 ]);
+/** Sweet potato fries: deep orange raw, caramel when done, dark fast after. */
+const sweetRamp = ramp([
+  [0, "#f2a35a"],
+  [0.5, "#e8822e"],
+  [0.7, "#c9631e"],
+  [0.9, "#8a3e14"],
+  [1.15, "#3a1c0c"],
+]);
 const tmp = new THREE.Color();
 
 export interface FriesObject extends THREE.Group {
@@ -25,6 +33,8 @@ export interface FriesObject extends THREE.Group {
     sizeScale: number;
     /** Piles made with `makeFryPile(…, own)`: show this share (0..1) of the sticks. */
     setAmount?: (a: number) => void;
+    /** Sweet potato fries: their own colours (call before setCook). */
+    setSweet: (on: boolean) => void;
   };
 }
 
@@ -245,7 +255,19 @@ function friesGroup(baked: Baked | null): FriesObject {
     m.receiveShadow = false;
     g.add(m);
   }
-  g.userData = { sizeScale: 1, setCook: (t) => void mat.color.copy(friesRamp(t, tmp)) };
+  let sweet = false;
+  let last = 0;
+  g.userData = {
+    sizeScale: 1,
+    setCook: (t) => {
+      last = t;
+      mat.color.copy((sweet ? sweetRamp : friesRamp)(t, tmp));
+    },
+    setSweet: (on) => {
+      sweet = on;
+      g.userData.setCook(last);
+    },
+  };
   return g;
 }
 
@@ -253,15 +275,18 @@ function friesGroup(baked: Baked | null): FriesObject {
  * Fries in a paper boat of `size`, or a loose handful without one. `fill` (0..1) shows part of
  * a boat's fries, or part of a basket's handful. Bottom at y = 0, carton units.
  */
-export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1, top?: { salt?: number; curds?: boolean; gravy?: boolean }): FriesObject {
+export function makeFries(withCarton: boolean, size: FriesSize = "L", fill = 1, top?: { salt?: number; curds?: boolean; gravy?: boolean; sweet?: boolean }): FriesObject {
   const f = Math.min(1, Math.max(0, fill));
   if (!withCarton) {
     // A loose handful: `fill` is the share of a full basket (three scoops).
     const n = Math.round(FRIES_PER_SCOOP * 3 * f);
-    return friesGroup(n ? handful(n) : null);
+    const h = friesGroup(n ? handful(n) : null);
+    if (top?.sweet) h.userData.setSweet(true);
+    return h;
   }
   const n = Math.round(FRY_COUNT[size] * f);
   const g = friesGroup(n ? boatFries(size, n) : null);
+  if (top?.sweet) g.userData.setSweet(true);
   g.add(makeCarton(size));
   if (n && top) {
     const { w, d } = boatSize(size);

@@ -7,7 +7,7 @@ import { passed } from "./progress";
 import { alignLayers, layerQuality, payout, scorePlate } from "./scoring";
 import { FRIES_PERFECT, FRIES_ZONE, FRY_RATE } from "./cooking";
 import type { Kind, Layer, Order, Piece, Plate } from "./types";
-import { DONENESS_TARGET, newPiece } from "./types";
+import { BREADS, DONENESS_TARGET, isSauce, newPiece, PROTEINS } from "./types";
 
 function piece(kind: Kind, cook: [number, number] = [0, 0]): Piece {
   const p = newPiece(kind);
@@ -237,9 +237,11 @@ describe("makeOrder", () => {
         expect(o.fries || !!o.drink).toBe(true);
         continue;
       }
-      for (const l of o.layers) if (l.kind !== "ketchup" && l.kind !== "mustard") expect(stop.pantry).toContain(l.kind);
-      expect(o.layers[0].kind).toBe("bun");
-      expect(o.layers[o.layers.length - 1].kind).toBe("bun");
+      for (const l of o.layers) if (!isSauce(l.kind)) expect(stop.pantry).toContain(l.kind);
+      // The coast's paninis start and end with bread (an open-faced toast only starts with it).
+      const bread = stop.press ? [...BREADS] : ["bun"];
+      expect(bread).toContain(o.layers[0].kind);
+      if (o.name !== "Avocado Toast") expect(bread).toContain(o.layers[o.layers.length - 1].kind);
       expect(o.price).toBeGreaterThan(0);
     }
   });
@@ -401,11 +403,12 @@ describe("recipe modifiers", () => {
         const o = makeOrder(i, rng, 1, stop);
         if (!o.layers.length) continue;
         for (const m of o.mods) {
-          if (m.type !== "toast") expect(["bun", "patty"]).not.toContain(m.kind);
+          if (m.type !== "toast") expect(["bun", "patty", ...BREADS, ...PROTEINS]).not.toContain(m.kind);
           if (m.type === "add") expect(stop.pantry).toContain(m.kind);
         }
-        expect(o.layers[0].kind).toBe("bun");
-        expect(o.layers[o.layers.length - 1].kind).toBe("bun");
+        const bread = stop.press ? [...BREADS] : ["bun"];
+        expect(bread).toContain(o.layers[0].kind);
+        if (o.name !== "Avocado Toast") expect(bread).toContain(o.layers[o.layers.length - 1].kind);
       }
     }
   });

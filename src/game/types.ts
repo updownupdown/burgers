@@ -11,7 +11,21 @@ export type Kind =
   | "pineapple"
   | "jalapeno"
   | "ketchup"
-  | "mustard";
+  | "mustard"
+  // The Sunny Coast's panini press (DESIGN §24, phase 2).
+  | "ciabatta"
+  | "sourdough"
+  | "chicken"
+  | "veggie"
+  | "mozzarella"
+  | "basil"
+  | "avocado"
+  | "rocket"
+  | "cheddar"
+  | "redonion"
+  | "tuna"
+  | "pesto"
+  | "aioli";
 
 export type Doneness = "rare" | "medium" | "well";
 export type DrinkId = "cola" | "water" | "tea" | "pine" | "pink" | "cucumber" | "hibiscus" | "lime" | "cider" | "bramble";
@@ -19,7 +33,7 @@ export type DrinkId = "cola" | "water" | "tea" | "pine" | "pink" | "cucumber" | 
 export const DRINKS: DrinkId[] = ["cola", "water", "tea", "pine", "pink", "cucumber", "hibiscus", "lime", "cider", "bramble"];
 /** On the fountain everywhere; the other two buttons are the area's own. */
 export const HOUSE_DRINKS: DrinkId[] = ["cola", "water", "tea"];
-export type SauceKind = "ketchup" | "mustard";
+export type SauceKind = "ketchup" | "mustard" | "pesto" | "aioli";
 
 /** A single physical food item. `cook[0]` is the face currently down on the grill. */
 export interface Piece {
@@ -38,6 +52,8 @@ export interface Piece {
   flips?: number;
   /** Patties: grill marks seared into each face by the grille, 0..1 (`[down, up]`, like `cook`). */
   marks?: [number, number];
+  /** Panini bread: the sandwich was sliced in half on the cutting board. */
+  cut?: boolean;
 }
 
 export interface Layer {
@@ -67,6 +83,8 @@ export interface Fries {
   /** Poutine toppings: cheese curds, then gravy. */
   curds?: boolean;
   gravy?: boolean;
+  /** Sweet potato fries (the coast's fryer, from Driftwood): they cook faster with a narrower done band. */
+  sweet?: boolean;
 }
 
 export interface Drink {
@@ -93,6 +111,8 @@ export interface ExpectedLayer {
   count?: number;
   /** Eggs: flipped once on the grill (over easy). Unset is sunny side up. */
   flipped?: boolean;
+  /** Avocado on an open-faced toast: it should never have been in the press. */
+  cold?: boolean;
 }
 
 /** A change to a known recipe: "no pickles", "extra cheese", "add bacon", or a toasted bun on a burger that usually isn't. */
@@ -121,19 +141,30 @@ export interface Order {
   critic?: boolean;
   /** A poutine meal: a large carton of fries with curds and gravy, and no burger. */
   poutine?: boolean;
+  /** The fries are sweet potato fries. */
+  sweet?: boolean;
+  /** A panini to be sliced in half on the cutting board (Harbor City). */
+  slice?: boolean;
 }
 
 export const GRILLABLE: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon", "egg", "pineapple"]);
-export const SAUCES: ReadonlySet<Kind> = new Set<Kind>(["ketchup", "mustard"]);
+export const SAUCES: ReadonlySet<Kind> = new Set<Kind>(["ketchup", "mustard", "pesto", "aioli"]);
+export const isSauce = (k: Kind): k is SauceKind => SAUCES.has(k);
+/** Panini breads: a sandwich starts and (unless it's open-faced) ends with one. */
+export const BREADS: ReadonlySet<Kind> = new Set<Kind>(["ciabatta", "sourdough"]);
+/** Cooked in the panini press on their own before they go in a sandwich. */
+export const PROTEINS: ReadonlySet<Kind> = new Set<Kind>(["chicken", "veggie"]);
+/** Cheese that melts inside a closed panini. */
+export const PRESS_CHEESE: ReadonlySet<Kind> = new Set<Kind>(["mozzarella", "cheddar"]);
 /** Half the width of a squeezed line of sauce, in burger-local units (the bun has radius 1). */
 export const SAUCE_RADIUS = 0.09;
 /**
  * Toppings placed one piece at a time; a recipe asks for a number of them. Fewer saves money but
  * customers notice; a couple extra can win a better review.
  */
-export const COUNTED: ReadonlySet<Kind> = new Set<Kind>(["pickle", "onion", "tomato", "jalapeno"]);
+export const COUNTED: ReadonlySet<Kind> = new Set<Kind>(["pickle", "onion", "tomato", "jalapeno", "mozzarella", "avocado", "redonion", "tuna"]);
 /** Pieces of each counted topping in a standard recipe, unless the recipe says otherwise. */
-export const STANDARD_COUNT: Partial<Record<Kind, number>> = { pickle: 3, onion: 2, tomato: 2, jalapeno: 4 };
+export const STANDARD_COUNT: Partial<Record<Kind, number>> = { pickle: 3, onion: 2, tomato: 2, jalapeno: 4, mozzarella: 3, avocado: 4, redonion: 2, tuna: 2 };
 /** "Extra pickles" adds this many on top of the recipe's count. */
 export function extraCount(kind: Kind): number {
   return Math.max(1, Math.round((STANDARD_COUNT[kind] ?? 1) * 0.67));
@@ -153,6 +184,19 @@ export const KIND_LABEL: Record<Kind, string> = {
   jalapeno: "Jalapeños",
   ketchup: "Ketchup",
   mustard: "Mustard",
+  ciabatta: "Ciabatta",
+  sourdough: "Sourdough",
+  chicken: "Chicken",
+  veggie: "Veggie patty",
+  mozzarella: "Mozzarella",
+  basil: "Basil",
+  avocado: "Avocado",
+  rocket: "Rocket",
+  cheddar: "Cheddar",
+  redonion: "Pickled onion",
+  tuna: "Tuna",
+  pesto: "Pesto",
+  aioli: "Aioli",
 };
 
 /** Swatch colours used by tickets (CSS). */
@@ -170,6 +214,19 @@ export const KIND_COLOR: Record<Kind, string> = {
   jalapeno: "#3f8f3a",
   ketchup: "#d8261b",
   mustard: "#f0c419",
+  ciabatta: "#e8c38a",
+  sourdough: "#d9b27a",
+  chicken: "#f2d9c4",
+  veggie: "#8fa865",
+  mozzarella: "#fbfaf5",
+  basil: "#4e8a3a",
+  avocado: "#9bc25a",
+  rocket: "#4f8f3a",
+  cheddar: "#f39a1e",
+  redonion: "#d36aa8",
+  tuna: "#e8d5b5",
+  pesto: "#5f9a3a",
+  aioli: "#f1e6c2",
 };
 
 export const DRINK_LABEL: Record<DrinkId, string> = {

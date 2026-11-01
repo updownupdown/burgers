@@ -7,7 +7,7 @@ import * as gameMenu from "../game/menu";
 import { ADD_PRICE, DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "../game/menu";
 import { fountainFor, recipeCount, STOPS, townById, type Recipe, type Stop } from "../game/stops";
 import { openedBy, SHIFTS_TO_UNLOCK, unlockProgress } from "../game/travel";
-import { COUNTED, DRINK_COLOR, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, SIZE_LABEL, type Kind, type Size } from "../game/types";
+import { BREADS, COUNTED, DRINK_COLOR, PRESS_CHEESE, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, SIZE_LABEL, type Kind, type Size } from "../game/types";
 import { icon } from "../ui/icons";
 import { openHowTo } from "./howto";
 import { esc, getDeps, modalDepth, modalHead, modalOpen, price, pushModal, popModal, wireJumpChips } from "./modal";
@@ -26,11 +26,14 @@ export function stackArt(r: Recipe): string {
     const c = `--c:${KIND_COLOR[k]}`;
     if (k === "bun") return `<i class="ms bun ${i === n - 1 ? "top" : "bot"} ${r.toasted ? "toast" : ""}" style="${c}"></i>`;
     if (k === "patty") return `<i class="ms patty ${r.smash ? "smash" : ""}" style="${c}"></i>`;
+    // Panini bread, pressed golden with dark press lines.
+    if (BREADS.has(k)) return `<i class="ms bread ${k} ${i === 0 ? "bot" : "top"}" style="${c}"></i>`;
     if (COUNTED.has(k)) {
       const count = Math.min(5, recipeCount(r, k));
-      return `<i class="ms pieces ${k}" style="${c}">${"<b></b>".repeat(count)}</i>`;
+      const melt = r.panini && !r.open && PRESS_CHEESE.has(k);
+      return `<i class="ms pieces ${k} ${melt ? "melt" : ""}" style="${c}">${"<b></b>".repeat(count)}</i>`;
     }
-    const melted = k === "cheese" && r.melt && r.layers[i - 1] === "patty";
+    const melted = (k === "cheese" && r.melt && r.layers[i - 1] === "patty") || (r.panini && !r.open && PRESS_CHEESE.has(k));
     return `<i class="ms ${k} ${melted ? "melt" : ""}" style="${c}"></i>`;
   });
   return `<div class="mref-stack" aria-hidden="true">${parts.reverse().join("")}</div>`;
@@ -45,7 +48,11 @@ export function layerLabel(r: Recipe, k: Kind): string {
 export function recipeHtml(r: Recipe, mult: number, special: boolean, locked = false): string {
   const tags: string[] = [];
   if (special) tags.push(`<span class="bv-chip pill add">${icon("sparkle")}Event special</span>`);
-  if (r.toasted) tags.push(`<span class="bv-chip pill">${icon("toast")}Toasted bun</span>`);
+  if (r.panini) {
+    tags.push(`<span class="bv-chip pill">${icon("panini")}${r.open ? "Bread pressed, open-faced" : "Pressed"}</span>`);
+    if (r.layers.some((k) => k === "chicken" || k === "veggie")) tags.push(`<span class="bv-chip pill">${icon("press")}${r.layers.includes("chicken") ? "Chicken" : "Patty"} pressed first</span>`);
+    if (r.open && r.layers.includes("avocado")) tags.push(`<span class="bv-chip pill">${icon("avocado")}Avocado cold</span>`);
+  } else if (r.toasted) tags.push(`<span class="bv-chip pill">${icon("toast")}Toasted bun</span>`);
   if (r.smash) tags.push(`<span class="bv-chip pill">${icon("smash")}Smashed, well done</span>`);
   if (r.melt) tags.push(`<span class="bv-chip pill">${icon("cheese")}Melted cheese</span>`);
   if (r.layers.includes("pineapple")) tags.push(`<span class="bv-chip pill">${icon("flame")}Grilled pineapple</span>`);
@@ -106,6 +113,7 @@ function elsewhereHtml(town: Stop, seen: Set<string>, prog: RoadProgress | null)
 
 export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = null): string {
   const base = new Set(townById(town.id).menu.map((r) => r.name));
+  const press = !!town.press;
   const scoops = (s: Size) => Math.round(FRIES_PORTION[s] / FRIES_SCOOP);
   const poutine = poutinePrice();
   const counted = [...COUNTED].map((k) => KIND_LABEL[k].toLowerCase());
@@ -115,7 +123,7 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
   ).join("");
   return `
   <nav class="menu-chips" aria-label="Sections">
-    <button class="bv-chip pill" data-jump="burgers">${icon("burger")}Burgers</button>
+    <button class="bv-chip pill" data-jump="burgers">${icon(press ? "panini" : "burger")}${press ? "Paninis" : "Burgers"}</button>
     <button class="bv-chip pill" data-jump="road">${icon("map")}Down the road</button>
     <button class="bv-chip pill" data-jump="sides">${icon("fries")}Sides</button>
     <button class="bv-chip pill" data-jump="drinks">${icon("drink")}Drinks</button>
@@ -123,8 +131,8 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
   </nav>
   ${mult !== 1 ? `<p class="bv-callout mref-biz">${icon("tag")}<span>Your prices: today's are ${mult > 1 ? "raised" : "lowered"} (×${mult.toFixed(2).replace(/0$/, "")}).</span></p>` : ""}
   <section class="mref-sec" data-sec="burgers">
-    <h3 class="menu-h">${icon("burger")}Burgers in ${esc(town.name)} <span>${town.menu.length}</span></h3>
-    <p class="mref-note">Every patty goes out medium. Nobody asks for rare or well done.</p>
+    <h3 class="menu-h">${icon(press ? "panini" : "burger")}${press ? "Paninis" : "Burgers"} in ${esc(town.name)} <span>${town.menu.length}</span></h3>
+    <p class="mref-note">${press ? `Every panini is pressed golden, the cheese melted inside.${town.press?.slice ? " Here they go out cut in half." : ""}` : "Every patty goes out medium. Nobody asks for rare or well done."}</p>
     ${town.menu.map((r) => recipeHtml(r, mult, !base.has(r.name))).join("")}
   </section>
   ${elsewhereHtml(town, new Set(town.menu.map((r) => r.name)), prog)}
@@ -133,6 +141,7 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
     <table class="bv-table mref-table">
       <thead><tr><th>Fries</th><th>Scoops</th><th class="num">Price</th></tr></thead>
       <tbody>${fries}
+      ${town.sweet ? `<tr class="mref-poutine"><td colspan="2"><b>Sweet potato fries</b><small>Same sizes and prices; they cook faster</small></td><td class="num">${price(FRIES_PRICE.S)}+</td></tr>` : ""}
       ${poutine != null && town.poutine ? `<tr class="mref-poutine"><td colspan="2"><b>Poutine</b><small>Fries, cheese curds, gravy</small></td><td class="num">${price(poutine)}</td></tr>` : ""}
       </tbody>
     </table>

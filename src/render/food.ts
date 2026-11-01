@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import { avgCook, bunToast, cookLevel, isFlipped, isMelted, MARKED } from "../game/cooking";
 import type { Kind, Piece } from "../game/types";
-import { COUNTED, SAUCE_RADIUS } from "../game/types";
+import { BREADS, COUNTED, isSauce, SAUCE_RADIUS } from "../game/types";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
 import { faceted, grade, lineColor, lineMaterial, mesh, outline, ramp, shareGeometry, toon } from "./materials";
 import { TOPPING_BOOST } from "./units";
+import { makePaniniPiece, PANINI_HEIGHT } from "./panini";
 
 /*
  * Burger parts, from James's picks in the Kitchen Bench study: the sesame classic bun, a patty
@@ -20,7 +21,7 @@ import { TOPPING_BOOST } from "./units";
 /** Layers other than buns and sauce are drawn this much thicker than life. */
 const THICK = 1.12;
 /** Thin toppings: drawn at x1.6 against x1.5 for burger parts. */
-const VEG: ReadonlySet<Kind> = new Set<Kind>(["lettuce", "tomato", "onion", "pickle", "jalapeno"]);
+const VEG: ReadonlySet<Kind> = new Set<Kind>(["lettuce", "tomato", "onion", "pickle", "jalapeno", "basil", "avocado", "rocket", "redonion", "tuna", "mozzarella"]);
 /** Outline width for baked food parts, in ingredient units (about 0.014 game units). */
 const INK_W = 0.024;
 
@@ -39,12 +40,12 @@ const BASE_HEIGHT: Record<Kind, number> = {
   jalapeno: 0.1,
   ketchup: 0.04,
   mustard: 0.04,
+  ...(PANINI_HEIGHT as Record<Exclude<Kind, "bun" | "patty" | "bacon" | "egg" | "cheese" | "lettuce" | "tomato" | "onion" | "pickle" | "pineapple" | "jalapeno" | "ketchup" | "mustard">, number>),
 };
-const isSauce = (k: Kind) => k === "ketchup" || k === "mustard";
 /** Vertical and horizontal scale each kind is built at. */
 const bodyScale = (k: Kind): [number, number] => {
   const w = VEG.has(k) ? TOPPING_BOOST : 1;
-  return [w, k === "bun" || isSauce(k) ? 1 : w * THICK];
+  return [w, k === "bun" || BREADS.has(k) || isSauce(k) ? 1 : w * THICK];
 };
 
 /** Thickness each piece adds to a stack, in ingredient units (a patty is ~2 units wide). */
@@ -612,9 +613,11 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       set((p) => (ring.material as THREE.MeshToonMaterial).color.copy(pineRamp(Math.max(p.cook[0], p.cook[1]), tmpA)));
       break;
     }
-    case "cheese": {
+    case "cheese":
+    case "cheddar": {
       // The corners slump as it melts; it turns a deeper orange once it counts as melted.
-      const slice = mesh(cheeseAt(piece.melt ?? 0), "#f7c531", { side: THREE.DoubleSide, ink: 1.02 });
+      const [cold, hot] = piece.kind === "cheddar" ? ["#f39a1e", "#e57a12"] : ["#f7c531", "#f6ad25"];
+      const slice = mesh(cheeseAt(piece.melt ?? 0), cold, { side: THREE.DoubleSide, ink: 1.02 });
       body.add(slice);
       let melted: boolean | null = null;
       set((p) => {
@@ -625,8 +628,8 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
         }
         if (isMelted(p) === melted) return;
         melted = isMelted(p);
-        slice.material = toon(melted ? "#f6ad25" : "#f7c531", { side: THREE.DoubleSide });
-        (slice.children[0] as THREE.Mesh).material = lineMaterial(lineColor(grade(melted ? "#f6ad25" : "#f7c531")));
+        slice.material = toon(melted ? hot : cold, { side: THREE.DoubleSide });
+        (slice.children[0] as THREE.Mesh).material = lineMaterial(lineColor(grade(melted ? hot : cold)));
       });
       break;
     }
@@ -639,8 +642,10 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       body.add(veg(piece.kind, piece.kind === "jalapeno" && piece.uid % 4 === 2));
       break;
     case "ketchup":
-    case "mustard": {
-      const color = piece.kind === "ketchup" ? "#d8261b" : "#f0c419";
+    case "mustard":
+    case "pesto":
+    case "aioli": {
+      const color = SAUCE_COLOR[piece.kind];
       const holder = new THREE.Group();
       body.add(holder);
       let lastLen = -1;
@@ -668,12 +673,20 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       });
       break;
     }
+    default: {
+      // The panini press's breads, proteins and fillings (render/panini.ts).
+      const update = makePaniniPiece(piece, body);
+      if (update) set(update);
+    }
   }
   return g;
 }
 
+/** Sauce lines on the stack. */
+const SAUCE_COLOR: Record<"ketchup" | "mustard" | "pesto" | "aioli", string> = { ketchup: "#d8261b", mustard: "#f0c419", pesto: "#4f8f2e", aioli: "#f1e4b8" };
+
 /** How far from the middle of the burger each counted topping's slices sit. */
-const SLICE_RING: Partial<Record<Kind, number>> = { tomato: 0.42, onion: 0.28, pickle: 0.45, jalapeno: 0.46 };
+const SLICE_RING: Partial<Record<Kind, number>> = { tomato: 0.42, onion: 0.28, pickle: 0.45, jalapeno: 0.46, mozzarella: 0.44, avocado: 0.2, redonion: 0.36, tuna: 0.36 };
 
 /** Where the `k`th slice of a counted topping goes (x, z), spread around the burger so they don't pile up. */
 export function sliceSpot(kind: Kind, k: number): [number, number] {
@@ -708,7 +721,8 @@ export function stackBases(pieces: StackPiece[]): { bases: number[]; top: number
       bases.push(next);
     }
     // Buns stay square on; counted slices keep their own spread.
-    yaw.push(p.kind === "bun" || COUNTED.has(p.kind) || isSauce(p.kind) ? 0 : i * STACK_YAW);
+    // Panini bread stays square on too (a turned slab hides the fillings), and so does what's in it.
+    yaw.push(p.kind === "bun" || BREADS.has(p.kind) || BREADS.has(pieces[0].kind) || COUNTED.has(p.kind) || isSauce(p.kind) ? 0 : i * STACK_YAW);
     back.push(i * STACK_BACK);
     next = Math.max(next, runBase + stackHeight(p, i === 0 ? "bottom" : "top"));
   });

@@ -1,7 +1,7 @@
 import type { Order, Plate } from "./game/types";
 import { COOK_SCALE, cookZone, type Cookable } from "./game/cooking";
 import { collapseCounted, layerQuality, PATTY_OFF } from "./game/scoring";
-import { COUNTED, DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, extraCount, KIND_COLOR, KIND_LABEL, type DrinkId } from "./game/types";
+import { BREADS, COUNTED, DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, extraCount, KIND_COLOR, KIND_LABEL, PROTEINS, type DrinkId } from "./game/types";
 import { fountainFor } from "./game/stops";
 import { icon } from "./ui/icons";
 
@@ -53,6 +53,15 @@ const TAB_ART: Record<string, string> = {
     <ellipse cx="30.5" cy="17.6" rx="5.4" ry="2.3" fill="#8a4a33" ${INK}/>
     <path d="M26.6 16.1h7.8l-1.2 2.3h-1.6l-.6 1.4-.8-1.4h-2.6z" fill="#f2c14e" ${INK}/>
     <circle cx="11" cy="26.2" r="1.7" fill="#f4efe6" ${INK}/><circle cx="17" cy="26.2" r="1.7" fill="#f4efe6" ${INK}/>`,
+  // The Sunny Coast's panini press: a clamshell bay with its lid down on a panini, steam over it.
+  Press: `<path d="M16 9.5c-1.2-1.6 1.2-2.6 0-4.4M24 8.5c-1.2-1.6 1.2-2.6 0-4.4M32 9.5c-1.2-1.6 1.2-2.6 0-4.4" fill="none" stroke="#c8472e" stroke-width="1.4" stroke-linecap="round"/>
+    <path d="M7 24h34v6a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z" fill="#8a8178" ${INK}/>
+    <path d="M10.5 21.4h27l.6 2.6H9.9z" fill="#e8b25c" ${INK}/>
+    <path d="M10.4 12.6h27.2a1.6 1.6 0 0 1 1.6 1.6v6.2a1 1 0 0 1-1 1H9.8a1 1 0 0 1-1-1v-6.2a1.6 1.6 0 0 1 1.6-1.6z" fill="#b9b2a6" ${INK}/>
+    <path d="M13 15.6h22M13 18.4h22" fill="none" stroke="#2a2622" stroke-width="1" opacity=".45"/>
+    <path d="M6 20.6h36" fill="none" stroke="#2a2622" stroke-width="3.6" stroke-linecap="round"/>
+    <path d="M6 20.6h36" fill="none" stroke="#d8573a" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="36.5" cy="28" r="1.6" fill="#ff9a2a" ${INK}/>`,
   Fryer: `<path d="M17.5 12.5 16 5M20.5 12.5V3.5M23.5 12.5l1-8M26.5 12.5l1.8-6.6M29.2 12.5l2.4-5.4" fill="none" stroke="#2a2622" stroke-width="3.4" stroke-linecap="round"/>
     <path d="M17.5 12.5 16 5M20.5 12.5V3.5M23.5 12.5l1-8M26.5 12.5l1.8-6.6M29.2 12.5l2.4-5.4" fill="none" stroke="#f0c341" stroke-width="1.6" stroke-linecap="round"/>
     <path d="M7 19h34v11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z" fill="#b9b2a6" ${INK}/>
@@ -63,6 +72,15 @@ const TAB_ART: Record<string, string> = {
     <circle cx="14" cy="27" r="1.6" fill="#f4efe6" ${INK}/>`,
 };
 const tabArt = (page: string) => `<svg class="tab-art" viewBox="0 0 48 36" aria-hidden="true">${TAB_ART[page] ?? ""}</svg>`;
+
+/** Redraw a counter button for the station it leads to: the grill's becomes the panini press at the coast. */
+export function setTabArt(tab: HTMLButtonElement | undefined, page: string): void {
+  if (!tab || tab.dataset.art === page) return;
+  tab.dataset.art = page;
+  tab.innerHTML = tabArt(page);
+  tab.setAttribute("aria-label", page);
+  tab.title = page;
+}
 
 export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   root.innerHTML = `
@@ -186,10 +204,13 @@ const SHORT_NAME: Record<string, string> = {
   "Campfire Melt": "Camp M",
   "Summit Smash": "Smash",
   "Lumberjack Stack": "Lumber",
-  // phase 1 placeholder burgers for the Coast, Red Rock and Orchard Isle
-  "Boardwalk Basic": "Brdwlk",
-  "Luau Stack": "Luau",
-  "Low Tide": "Lo Tide",
+  // Sunny Coast paninis
+  Caprese: "Caprese",
+  "Avocado Toast": "Avo T",
+  "Tuna Melt": "Tuna M",
+  "Chicken Pesto": "Chk Pst",
+  "Veggie Club": "Veg Clb",
+  // phase 1 placeholder burgers for Red Rock and Orchard Isle
   Tumbleweed: "Tumble",
   Rattlesnake: "Rattler",
   "Ranch Breakfast": "Ranch B",
@@ -232,6 +253,20 @@ const ICON_PATH: Record<string, string> = {
   drink: `<path d="M3.2 2.6h9.6l-1.2 8.9H4.4z"/><rect class="lid" x="2.4" y="1" width="11.2" height="1.8" rx=".9"/>`,
   curds: `<rect x="2" y="5" width="4.6" height="4.6" rx="1"/><rect x="7.2" y="3" width="4.6" height="4.6" rx="1"/><rect x="9" y="7" width="4.6" height="4.2" rx="1"/>`,
   gravy: `<path d="M1.5 6.5c2-1.4 3.6-.4 5-1.6 1.6-1.4 3.6-1 5.2.2 1.3 1 2.3.8 2.8.6v2.6c-1.6 1.6-4.6 2.3-7.5 2.3-2.8 0-4.6-.8-5.5-1.8z"/>`,
+  // The Sunny Coast's panini fillings.
+  ciabatta: `<rect x="1" y="3.2" width="14" height="6" rx="2.2"/><g class="hi"><path d="M4 5.4h2.2M9.4 6.8h2.4"/></g>`,
+  sourdough: `<path d="M1.4 9.4V6.6C1.4 3.6 4.3 2 8 2s6.6 1.6 6.6 4.6v2.8z"/>`,
+  chicken: `<path d="M1.4 7.2c0-2.6 2.8-4.2 6.4-4.2 3.6 0 6.8 1.4 6.8 3.8 0 2.4-3 3.6-6.4 3.6-3.8 0-6.8-.8-6.8-3.2z"/>`,
+  veggie: `<rect x="1.2" y="3" width="13.6" height="7" rx="3.5"/><g class="hi"><circle cx="5" cy="5.6" r=".8"/><circle cx="9.6" cy="7.4" r=".8"/><circle cx="11.4" cy="5" r=".8"/></g>`,
+  mozzarella: `<circle cx="8" cy="6.5" r="4.8"/>`,
+  basil: `<path d="M8 1.6c3.8 1.4 5.6 4.6 4 8.2-1.4.6-2.8.6-4 .2-1.2.4-2.6.4-4-.2-1.6-3.6.2-6.8 4-8.2z"/>`,
+  avocado: `<path fill-rule="evenodd" d="M8 1.2c2.4 0 3.6 2.6 4.6 4.6 1 2 1 5.2-4.6 5.2s-5.6-3.2-4.6-5.2C4.4 3.8 5.6 1.2 8 1.2zm0 5.2a2 2 0 1 0 0 4 2 2 0 1 0 0-4z"/>`,
+  rocket: `<path d="M1 9.6c1.4-3 2.4-5.6 4-6.4.4 1.6-.2 3 .6 3.8 1-2 2-3.6 3.4-4.2.2 1.8-.4 3.2.4 4 1-1.4 2.6-2.4 4.6-2.8-.6 2.4-1.8 4.4-3.4 5.6z"/>`,
+  cheddar: `<path d="M1 3.5h14v3.6h-3.2v2.6a1.2 1.2 0 0 1-2.4 0V7.1H1z"/>`,
+  redonion: `<path fill-rule="evenodd" d="M8 2a6.5 4.5 0 1 0 0 9A6.5 4.5 0 1 0 8 2zm0 2.4a3.6 2.1 0 1 1 0 4.2 3.6 2.1 0 1 1 0-4.2z"/>`,
+  tuna: `<path d="M1.6 9.6c0-3.2 2.8-5.8 6.4-5.8s6.4 2.6 6.4 5.8z"/><g class="hi"><path d="M5 7.2l1.4 1M8.4 6l1.2 1.2M10.6 7.6l.8.8"/></g>`,
+  pesto: `<path d="M8 1.2c1.6 2.4 4.2 4.9 4.2 7.1a4.2 4.2 0 0 1-8.4 0c0-2.2 2.6-4.7 4.2-7.1z"/>`,
+  aioli: `<path d="M8 1.2c1.6 2.4 4.2 4.9 4.2 7.1a4.2 4.2 0 0 1-8.4 0c0-2.2 2.6-4.7 4.2-7.1z"/>`,
 };
 
 const ticketIcon = (name: string, color: string) =>
@@ -285,8 +320,8 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     const f = plate.fries;
     const d = plate.drink;
     if (order.fries) {
-      const state: RowState = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy ? "done" : "wrong";
-      rows.push({ icon: "fries", color: "#f3d36b", label: `<i class="sz">${order.friesSize}</i>Fries`, tail: "", state, mod: false, next: false });
+      const state: RowState = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy && !!f.sweet === !!order.sweet ? "done" : "wrong";
+      rows.push({ icon: "fries", color: order.sweet ? "#f08a3a" : "#f3d36b", label: `<i class="sz">${order.friesSize}</i>${order.sweet ? "Sweet fries" : "Fries"}`, tail: "", state, mod: false, next: false });
     }
     if (order.drink) {
       const iceOk = order.ice == null || !!d?.ice === order.ice;
@@ -354,7 +389,12 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     if (exp.kind === "bun") {
       icon = i === 0 ? "bunBottom" : "bunTop";
       if (exp.toasted) tail = modBox("toast", "Toast");
-    } else if (exp.kind === "patty") {
+    } else if (BREADS.has(exp.kind)) {
+      // Panini bread is pressed; at Harbor City the top slice says it's cut in half too.
+      tail = modBox("toast", "Press") + (order.slice && i === order.layers.length - 1 ? modBox("cut", "Cut") : "");
+    } else if (PROTEINS.has(exp.kind)) tail = modBox("toast", "Press");
+    else if (exp.cold) tail = modBox("cold", "Cold");
+    else if (exp.kind === "patty") {
       if (exp.smashed) icon = "smashed";
       if (exp.smashed) tail = `<span class="mb smash" title="Smash">${SMASH_SVG}</span>`;
     } else if (exp.kind === "egg") tail = exp.flipped ? modBox("flip", "Flip") : modBox("sunny", "Sunny");
@@ -400,8 +440,8 @@ function sideRows(order: Order, plate: Plate): string {
   if (!order.layers.length && !order.poutine) return "";
   if (order.fries && order.layers.length) {
     const f = plate.fries;
-    const state = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy ? "done" : "wrong";
-    out.push(`<div class="sg">${section("fries", "#c8472e")}<div class="sd ${state}"><span class="sl"><i class="sz">${order.friesSize}</i><span class="dn">Fries</span></span></div></div>`);
+    const state = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy && !!f.sweet === !!order.sweet ? "done" : "wrong";
+    out.push(`<div class="sg">${section("fries", "#c8472e")}<div class="sd ${state}"><span class="sl"><i class="sz">${order.friesSize}</i><span class="dn">${order.sweet ? "Sweet fries" : "Fries"}</span></span></div></div>`);
   }
   if (order.drink) {
     const d = plate.drink;

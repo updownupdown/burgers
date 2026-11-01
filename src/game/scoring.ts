@@ -1,6 +1,6 @@
-import { avgCook, bunToast, CHAR_FACE, cookLevel, COOK_SCALE, friesQuality, friesZone, FRIES_ZONE, isFlipped, isMelted, DRINK_FILL, MARKED, pattyDoneness, SALT } from "./cooking";
+import { avgCook, bunToast, CHAR_FACE, cookLevel, COOK_SCALE, cookZone, friesQuality, friesZone, FRIES_ZONE, isFlipped, isMelted, DRINK_FILL, MARKED, pattyDoneness, SALT, SWEET_ZONE } from "./cooking";
 import type { Drink, ExpectedLayer, Fries, Layer, Order, Piece, Plate } from "./types";
-import { COUNTED, KIND_LABEL, SAUCE_RADIUS, SIZE_LABEL } from "./types";
+import { BREADS, COUNTED, KIND_LABEL, SAUCE_RADIUS, SIZE_LABEL } from "./types";
 
 export interface ScoreResult {
   /** 0..100 */
@@ -175,15 +175,42 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
       return [1, null];
     }
     case "ketchup":
-    case "mustard": {
+    case "mustard":
+    case "pesto":
+    case "aioli": {
       const { q, word } = sauceVerdict(sauceCoverage(piece.stroke));
       if (word === "stingy") return [q, `stingy with the ${exp.kind}`];
       if (word === "drowning") return [q, `drowning in ${exp.kind}`];
       return [q, null];
     }
     case "cheese":
+    case "mozzarella":
+    case "cheddar":
       if (exp.melted && !isMelted(piece)) return [0.55, "cheese not melted"];
       return [1, null];
+    case "ciabatta":
+    case "sourdough": {
+      // Panini bread: pale, golden with press lines, dark, burnt.
+      const z = cookZone(exp.kind, cookLevel(piece));
+      if (z === "burnt") return [0.15, "burnt bread"];
+      if (exp.toasted && z === "under") return [0.5, "bread not pressed"];
+      if (z === "over") return [0.85, "bread a bit dark"];
+      return [1, null];
+    }
+    case "chicken": {
+      const z = cookZone("chicken", cookLevel(piece));
+      if (z === "under") return [0.1, "pink chicken"];
+      if (z === "burnt") return [0.1, "burnt chicken"];
+      if (z === "over") return [0.8, "dry chicken"];
+      return [1, null];
+    }
+    case "veggie": {
+      const z = cookZone("veggie", cookLevel(piece));
+      if (z === "under") return [0.45, "soggy veggie patty"];
+      if (z === "burnt") return [0.1, "burnt veggie patty"];
+      if (z === "over") return [0.85, "veggie patty a bit dark"];
+      return [1, null];
+    }
     default:
       return [1, null];
   }
@@ -242,13 +269,16 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
       if (COUNTED.has(exp[i].kind)) {
         const want = exp[i].count ?? 1;
         [q0, note] = countQuality(want, act[j].count, exp[i].kind);
+        // Counted cheese still has to melt; the avocado on an open toast must never be heated.
+        if (exp[i].melted && !isMelted(act[j].piece)) [q0, note] = [Math.min(q0, 0.55), "cheese not melted"];
+        if (exp[i].cold && (act[j].piece.cook[0] ?? 0) > 0.15) [q0, note] = [Math.min(q0, 0.55), "warm avocado"];
         // A piece or two more than the recipe reads as generous.
         generous += Math.min(2, Math.max(0, act[j].count - want));
       }
       const dry = heldPenalty(act[j].piece);
       const q = q0 * (1 - dry);
       if (dry > 0.15 && !notes.includes("been sitting a while")) notes.push("been sitting a while");
-      const w = exp[i].kind === "patty" ? 3 : 1;
+      const w = exp[i].kind === "patty" || exp[i].kind === "chicken" || exp[i].kind === "veggie" ? 3 : 1;
       sum += q * w;
       weights += w;
       worst = Math.min(worst, q);
@@ -256,6 +286,15 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
       if (note && !notes.includes(note)) notes.push(note);
     }
     quality = 0.5 * (sum / weights) + 0.5 * worst;
+  }
+
+  // Harbor City cuts its paninis in half on the board.
+  if (order.slice && exp.length) {
+    const top = plate.layers[plate.layers.length - 1]?.piece;
+    if (top && BREADS.has(top.kind) && !top.cut) {
+      quality *= 0.88;
+      notes.push("wanted it cut in half");
+    }
   }
 
   let presentation = 0;
@@ -316,7 +355,7 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
     total += Math.min(0.12, (1 - total) * 0.35) * q;
     perks.push(what);
   };
-  if (!order.fries && plate.fries && plate.fries.fill > 0.5) freebie(friesScore({ ...order, poutine: !!plate.fries.curds }, plate.fries, []), plate.fries.curds ? "free poutine" : "free fries");
+  if (!order.fries && plate.fries && plate.fries.fill > 0.5) freebie(friesScore({ ...order, poutine: !!plate.fries.curds, sweet: !!plate.fries.sweet }, plate.fries, []), plate.fries.curds ? "free poutine" : "free fries");
   if (!order.drink && plate.drink && plate.drink.fill > 0.6) freebie(Math.min(1, plate.drink.fill), "free drink");
 
   const score = Math.round(clamp01(total) * 100);
@@ -329,10 +368,15 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
 /** Fries or poutine against the order, 0..1. */
 function friesScore(order: Order, fries: Fries, notes: string[]): number {
   const c = fries.cook;
-  let q = friesQuality(c);
-  const zone = friesZone(c);
+  const sweet = !!fries.sweet;
+  let q = friesQuality(c, sweet);
+  const zone = friesZone(c, sweet);
   if (zone === "under") notes.push("soggy fries");
-  else if (zone === "over") notes.push(c >= FRIES_ZONE.burnt ? "burnt fries" : "overdone fries");
+  else if (zone === "over") notes.push(c >= (sweet ? SWEET_ZONE : FRIES_ZONE).burnt ? "burnt fries" : "overdone fries");
+  if (!order.poutine && sweet !== !!order.sweet) {
+    q *= 0.6;
+    notes.push(order.sweet ? "wanted sweet potato fries" : "wanted regular fries");
+  }
   if (fries.size !== order.friesSize) {
     q *= 0.5;
     notes.push(`wanted ${SIZE_LABEL[order.friesSize].toLowerCase()} fries`);

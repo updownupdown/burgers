@@ -182,6 +182,22 @@
 .ms.pieces.tomato b { flex-basis: 20px; }
 .ms.pieces.onion b { background: transparent; border: 1.5px solid #b98fc6; box-shadow: none; }
 .ms.pieces.jalapeno b { flex-basis: 10px; border-radius: 40%; }
+/* Paninis: pressed slabs of bread with dark press lines, flat fillings between. */
+.ms.bread { width: 96%; height: 9px; border-radius: 4px; background: repeating-linear-gradient(90deg, var(--c) 0 6px, #a8641f 6px 7.5px); box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.16); }
+.ms.bread.sourdough.top { height: 11px; border-radius: 12px 12px 4px 4px / 8px 8px 4px 4px; }
+.ms.bread.sourdough.bot { border-radius: 4px 4px 6px 6px; }
+.ms.chicken { height: 7px; border-radius: 4px; width: 92%; background: repeating-linear-gradient(90deg, var(--c) 0 7px, #b07a3e 7px 8px); }
+.ms.veggie { height: 8px; border-radius: 5px; width: 96%; background: radial-gradient(circle at 30% 50%, #c64a2a 0 1px, transparent 1.6px), radial-gradient(circle at 66% 40%, #f0c341 0 1px, transparent 1.6px), var(--c); }
+.ms.basil, .ms.rocket { height: 4px; width: 104%; border-radius: 40% 60% 50% 50% / 100% 100% 60% 60%; }
+.ms.cheddar { height: 3px; width: 104%; border-radius: 1px; }
+.ms.cheddar.melt { border-radius: 2px 2px 6px 6px; height: 4px; }
+.ms.cheddar.melt::after { content: ""; position: absolute; left: 24%; top: 2px; border: 3px solid transparent; border-top: 5px solid var(--c); }
+.ms.pesto, .ms.aioli { height: 3px; width: 80%; border-radius: 2px; }
+.ms.pieces.mozzarella b { flex-basis: 14px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12); }
+.ms.pieces.melt b { flex-basis: 18px; height: 4px; margin: 0 -2px; border-radius: 40%; }
+.ms.pieces.avocado b { flex-basis: 11px; border-radius: 50% 50% 40% 40%; }
+.ms.pieces.redonion b { background: transparent; border: 1.5px solid #a3406e; box-shadow: none; }
+.ms.pieces.tuna b { flex-basis: 18px; border-radius: 50% 50% 30% 30%; height: 6px; }
 
 .mref-table td { vertical-align: middle; }
 .mref-table .bv-chip.size { margin-right: 6px; }
@@ -287,6 +303,9 @@
 
 /* Stacking */
 .hw-stack { display: flex; align-items: flex-end; gap: 16px; }
+.hw-press { width: 100%; max-width: 300px; height: auto; }
+.hw-stack .ms.bread { height: 11px; }
+.hw-stack .ms.bread.sourdough.top { height: 14px; }
 .hw-stack .mref-stack { width: 84px; transform-origin: bottom; }
 .hw-stack .ms { height: 7px; }
 .hw-stack .ms.bun.top { height: 24px; }

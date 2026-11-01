@@ -298,6 +298,31 @@ export function makeCurdTray(): THREE.Mesh {
 }
 
 /**
+ * Sweet potato fries (the coast's fryer, from Driftwood): frozen orange sticks in a cooled tray
+ * where the curd tray stands in the Pines. Origin on the floor.
+ */
+export const SWEET_TRAY = { w: 1.6, d: 0.95, h: 0.34 };
+let sweetBaked: Baked | null = null;
+export function makeSweetTray(): THREE.Group {
+  const { w, d, h } = SWEET_TRAY;
+  if (!sweetBaked) {
+    const p = new Parts();
+    p.add(box(w + 0.2, 0.02, d + 0.2), "#c3cdcc", { p: [0, 0.01, 0], ink: 0.012 });
+    deepWell(p, w, d, h, 0.08, STEEL, "#c9dde4", STEEL_LIGHT);
+    p.add(box(w + 0.01, 0.06, 0.02), "#7fb6d6", { p: [0, h * 0.5, d / 2 + 0.005], ink: false });
+    sweetBaked = bakeShared(p);
+  }
+  const g = new THREE.Group();
+  g.add(bakedMesh(sweetBaked));
+  const pile = makeFryPile(w - 0.26, d - 0.22, 2, 23);
+  pile.userData.setSweet(true);
+  pile.userData.setCook(0);
+  pile.position.y = 0.04;
+  g.add(pile);
+  return g;
+}
+
+/**
  * Gravy in a heated rectangular well (a bain-marie): a deep steel pan of gravy sunk in a heated
  * body with an orange heat light and a ladle resting across it. Origin on the floor.
  */

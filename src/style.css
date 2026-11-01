@@ -238,6 +238,8 @@ html, body {
 /* Modifiers in small coloured boxes: Toast, Melt, Grill, Smash (an icon), Ice / No ice. */
 .ticket .mb { flex: none; display: inline-grid; place-items: center; font: 800 11.5px/1.15 var(--bv-font-ui); font-style: normal; border-radius: 4px; padding: 0 4px 1px; background: var(--mb-bg); color: var(--mb-fg); }
 .ticket .mb.toast { --mb-bg: #f3dcb2; --mb-fg: #774611; }
+.ticket .mb.cut { --mb-bg: #dfe6e6; --mb-fg: #3a4547; }
+.ticket .mb.cold { --mb-bg: #d9eedf; --mb-fg: #2d6340; }
 .ticket .mb.melt { --mb-bg: #f9e7a1; --mb-fg: #6b5200; }
 .ticket .mb.grill { --mb-bg: #ead2c1; --mb-fg: #5c3420; }
 .ticket .mb.smash { --mb-bg: #4b4640; --mb-fg: #fff; padding: 1px 3px; height: 15px; }
@@ -670,6 +672,17 @@ html, body {
 .cmeter.bun { --f0: #fde9bb; --f1: #f2a33c; --f2: #ad6630; }
 .cmeter.pineapple { --f0: #fff27c; --f1: #f6b21f; --f2: #bc742e; }
 .cmeter.fries { --f0: #f8f0cc; --f1: #ffc62e; --f2: #c47a26; }
+/* The panini press (the Sunny Coast): bread pale to golden to dark, chicken pink to white to dry, veggie soft to crisp. */
+.cmeter.ciabatta, .cmeter.sourdough { --f0: #fbeccb; --f1: #e9a64a; --f2: #94592b; }
+.cmeter.chicken { --f0: #ff9fae; --f1: #f6ead6; --f2: #c79560; }
+.cmeter.veggie { --f0: #b9cf86; --f1: #c98a3e; --f2: #7d4b23; }
+.cmeter.sweet { --f0: #ffc58d; --f1: #f07d22; --f2: #a2481d; }
+/* A press bay's meter, in front of the bay: a melt mark beside it once there's cheese inside. */
+.gtag.pt.bay { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.gtag.pt.bay[hidden] { display: none; }
+.gtag.pt.bay .cmeter { width: 60px; margin-top: 0; }
+.gtag.pt.bay .melt { font: 800 9.5px/1.2 var(--bv-font-ui); font-style: normal; color: #6b5200; background: #fbeec0; border-radius: 4px; padding: 0 4px; box-shadow: 0 0 0 1px rgb(42 38 34 / 0.6); opacity: 0.7; }
+.gtag.pt.bay .melt.on { background: #f9d95b; opacity: 1; }
 /* A stack on the grill: how many are in it, beside its meter. */
 .gtag.pt .sc { position: absolute; right: -8px; top: -6px; }
 .gtag .sc { font: 800 11px/1 var(--bv-font-mono); background: var(--bv-ink); color: var(--bv-paper); border-radius: 4px; padding: 2px 4px; align-self: flex-end; }

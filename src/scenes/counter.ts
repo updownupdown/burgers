@@ -1,10 +1,12 @@
 import * as THREE from "three";
-import { cookLevel, COOK_SCALE, DRINK_FILL, FRIES_PERFECT, FRIES_ZONE, FRY_RATE, GRILL_RATE, MARK_RATE, MELT_RATE, type Cookable } from "../game/cooking";
-import type { DrinkId, FriesSize, Kind, Piece, SauceKind, Size } from "../game/types";
-import { CUP_SPEED, GRILLABLE } from "../game/types";
-import { fountainFor } from "../game/stops";
+import { cookLevel, COOK_SCALE, DRINK_FILL, FRIES_PERFECT, FRIES_ZONE, FRY_RATE, GRILL_RATE, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, SWEET_FRY, SWEET_PERFECT, SWEET_ZONE, type Cookable } from "../game/cooking";
+import type { DrinkId, FriesSize, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
+import { BREADS, CUP_SPEED, GRILLABLE, isSauce, PRESS_CHEESE, PROTEINS } from "../game/types";
+import { fountainFor, type MiddleCounter } from "../game/stops";
+import { BAY, BOARD, CLOSED_GAP, makeCuttingBoard, makePressBay, PLATE, type PressBayObject } from "../render/machines/press";
+import { makeSweetTray, SWEET_TRAY } from "../render/fryer";
 import { counterTop, wallPanels } from "../render/wear";
-import { CUP_DIMS, cupSurfaceY, makeCarton, makeCartonStack, makeCup, makeFood, makeBasketFries, makeFries, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
+import { CUP_DIMS, cupSurfaceY, makeCarton, makeCartonStack, makeCup, makeFood, makeBasketFries, makeFries, stackBases, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { dressCup } from "../render/cup";
 import { CURD_TRAY, FREEZER, GRAVY_WELL, makeCurdHandful, makeCurdTray, makeFreezer, makeGravyWell, makeLadle, makeShaker } from "../render/fryer";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
@@ -16,6 +18,11 @@ import { applyKitchenLight, KITCHEN_BG, type KitchenLight } from "../render/ligh
 import { COUNTER_FOOD, SCALE } from "../render/units";
 
 export const PAGES = ["Drinks", "Grill", "Fryer"] as const;
+/** True when an object and everything it sits in are shown (no object counts as shown). */
+const shown = (o: THREE.Object3D | undefined): boolean => {
+  for (let x: THREE.Object3D | null | undefined = o; x; x = x.parent) if (!x.visible) return false;
+  return true;
+};
 export const HOME_PAGE = 1;
 /**
  * The window line: drinks, grill and fryer run along the serving window, facing it, so
@@ -53,6 +60,22 @@ const GRIDDLE = { x: 1.2, z: 0.62 };
 const GRILL_PANS = { x: 1.2, z: -2.45 };
 const SIDE_PANS = { x: -3.0, z: -1.05 };
 const CADDY = { x: -2.82, z: 2.2 };
+
+/**
+ * The press page (the Sunny Coast), in the grill page's place: breads, proteins and the tuna well
+ * in the row of pans at the back, the cold fillings in a rail down the left (two pans across, as
+ * many rows as it needs), the clamshell bays in a row in the middle with a meter under each, the
+ * pesto and aioli caddy at the front, and at Harbor City a cutting board front right.
+ */
+const PRESS = { x: 1.2, z: 0.3, gap: 0.12 };
+const PRESS_CADDY = { x: -0.62, z: 2.42 };
+const PRESS_BOARD = { x: 2.5, z: 2.4 };
+/** The left rail's back edge stays put whatever its row count, so the pans line up with the grill page's. */
+const SIDE_BACK_Z = SIDE_PANS.z - 2.1;
+/** Most bays a press has (Harbor City); fewer are hidden. */
+export const MAX_BAYS = 3;
+/** Kinds that go in the row of pans behind the press. */
+const PRESS_BACK = (k: Kind) => BREADS.has(k) || PROTEINS.has(k) || k === "tuna";
 /** The griddle's cook surface, zones and buttons, griddle-local (read once from the model). */
 const GRIDDLE_SPOTS = makeGriddle().userData.spots;
 const GRIDDLE_SURFACE = GRIDDLE_SPOTS.surface;
@@ -113,7 +136,7 @@ const SHAKER_SCALE = 1.6;
 /** One packing pad (the cream square inside its orange outline). */
 const PAD = { w: 1.47, d: 1.07 };
 /** A packing pad with nothing on it. */
-export const EMPTY_PACK = { size: null, cook: 0, fill: 0, salt: 0, curds: false, gravy: false } as const;
+export const EMPTY_PACK = { size: null, cook: 0, fill: 0, salt: 0, curds: false, gravy: false, sweet: false } as const;
 /** Cartons on the pads and in their stacks, against carton units. */
 const PACK_SCALE = SCALE.fries;
 const CARTON_STACK_SCALE = SCALE.fries;
@@ -178,6 +201,8 @@ export interface Mess {
 
 export interface Basket {
   loaded: boolean;
+  /** Sweet potato fries in this basket (a basket holds one kind at a time). */
+  sweet: boolean;
   cook: number;
   down: boolean;
   goldenRung: boolean;
@@ -207,6 +232,8 @@ export interface Stack {
 /** A spot at the front of the fryer where a carton waits to be filled. */
 export interface Pack {
   size: FriesSize | null;
+  /** Sweet potato fries in this carton. */
+  sweet: boolean;
   cook: number;
   fill: number;
   /** Salt shaken on so far (SALT in cooking.ts). */
@@ -266,7 +293,32 @@ export type Hit =
   | { type: "pack"; idx: number }
   | { type: "shaker" }
   | { type: "curds" }
-  | { type: "gravy" };
+  | { type: "gravy" }
+  | { type: "sweetBin" }
+  | { type: "bay"; idx: number }
+  | { type: "handle"; idx: number }
+  | { type: "board" };
+
+/** One clamshell bay of the panini press and what's in it (a lone protein or bread, or a built sandwich). */
+export interface PressBay {
+  obj: PressBayObject;
+  /** Page-local centre of the bay. */
+  x: number;
+  z: number;
+  layers: Layer[];
+  /** The food drawn in the bay. */
+  food: THREE.Group | null;
+  foodKey: string;
+  closed: boolean;
+  /** Lid opening, 1 open .. 0 shut (animated toward `closed`). */
+  open: number;
+  handleProxy: THREE.Mesh;
+  /** Seconds since the lid last moved, for its thunk. */
+  moved: number;
+  /** What the lamp and the ooze show now (so materials only change when they need to). */
+  lit?: boolean;
+  oozing?: boolean;
+}
 
 export interface CounterEvents {
   golden: () => void;
@@ -332,6 +384,8 @@ export class CounterView {
   baskets: Basket[] = [];
   /** Where to grab frozen fries from (the middle of the potato freezer), in world units. */
   friesBinAt = new THREE.Vector3();
+  /** ...and sweet potato fries (their tray), where the coast has them. */
+  sweetBinAt = new THREE.Vector3();
   taps: Tap[] = [];
   private fountain: FountainObject | null = null;
   /** Cups standing on the drinks counter. */
@@ -340,8 +394,21 @@ export class CounterView {
   packs: Pack[] = [];
   /** Running cost of soda poured onto the drip tray this shift. */
   spillCost = 0;
-  /** The bottles standing in the caddy (hidden while one is in hand). */
-  bottles!: Record<SauceKind, THREE.Object3D>;
+  /** The bottles standing in the caddies (hidden while one is in hand): ketchup and mustard at the grill, pesto and aioli at the press. */
+  bottles: Partial<Record<SauceKind, THREE.Object3D>> = {};
+  /** Which middle counter is out: the grill (the Pines) or the panini press (the Sunny Coast). */
+  middle: MiddleCounter = "grill";
+  private grillGroup = new THREE.Group();
+  private pressGroup = new THREE.Group();
+  private pressCaddy!: SauceCaddyObject;
+  /** The press's clamshell bays (MAX_BAYS built; `bayCount` of them out). */
+  bays: PressBay[] = [];
+  bayCount = 2;
+  /** The cutting board (Harbor City), and the sandwich on it. */
+  board: { obj: THREE.Object3D; x: number; z: number; layers: Layer[]; food: THREE.Group | null; foodKey: string; on: boolean } | null = null;
+  private sweetTray!: THREE.Object3D;
+  private curdTray!: THREE.Object3D;
+  private gravyWell!: THREE.Object3D;
   private puffs: THREE.Mesh[] = [];
   private held: THREE.Object3D | null = null;
   private time = 0;
@@ -366,16 +433,21 @@ export class CounterView {
     splash.position.set(7, 0.25, -3.35);
     this.scene.add(splash);
 
+    this.scene.add(this.grillGroup, this.pressGroup);
+    this.pressGroup.visible = false;
     this.buildGrill();
+    this.buildPress();
     this.buildFryer();
     this.buildDrinks();
     this.buildTrash();
   }
 
-  private proxy(geo: THREE.BufferGeometry, pos: THREE.Vector3, hit: Hit): THREE.Mesh {
+  /** An invisible hit box. With an `owner`, it only counts while that object (and everything it sits in) is shown. */
+  private proxy(geo: THREE.BufferGeometry, pos: THREE.Vector3, hit: Hit, owner?: THREE.Object3D): THREE.Mesh {
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ visible: false }));
     m.position.copy(pos);
     m.userData.hit = hit;
+    if (owner) m.userData.owner = owner;
     this.scene.add(m);
     this.hitMeshes.push(m);
     return m;
@@ -383,24 +455,25 @@ export class CounterView {
 
   private buildGrill(): void {
     const at = (x: number, y: number, z: number) => this.world(1, x, y, z);
+    const G = this.grillGroup;
     const griddle = makeGriddle();
     griddle.position.copy(at(GRIDDLE.x, 0, GRIDDLE.z));
-    this.scene.add(griddle);
+    G.add(griddle);
     this.griddle = griddle;
     // A push button per zone on the front ledge: tap to cycle off, warm, hot.
     griddle.userData.spots.buttons.forEach((b, i) => {
-      this.proxy(new THREE.BoxGeometry(1.05, 0.5, 0.75), griddle.position.clone().add(new THREE.Vector3(b.x, b.y - 0.1, b.z)), { type: "zone", idx: i });
+      this.proxy(new THREE.BoxGeometry(1.05, 0.5, 0.75), griddle.position.clone().add(new THREE.Vector3(b.x, b.y - 0.1, b.z)), { type: "zone", idx: i }, G);
     });
 
     // The sauce caddy in the front left corner, bottles upside down and ready to lift.
     const caddy = makeSauceCaddy();
     caddy.position.copy(at(CADDY.x, 0, CADDY.z));
-    this.scene.add(caddy);
+    G.add(caddy);
     this.caddy = caddy;
-    this.bottles = caddy.userData.bottles;
+    Object.assign(this.bottles, caddy.userData.bottles);
     for (const k of ["ketchup", "mustard"] as SauceKind[]) {
-      const b = caddy.userData.spots.bottles[k];
-      this.proxy(new THREE.BoxGeometry(0.55, 1.6, 0.85), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k });
+      const b = caddy.userData.spots.bottles[k]!;
+      this.proxy(new THREE.BoxGeometry(0.55, 1.6, 0.85), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k }, G);
     }
 
     const puffMat = new THREE.MeshBasicMaterial({ color: "#f2f2f2", transparent: true, opacity: 0.3, depthWrite: false });
@@ -411,6 +484,162 @@ export class CounterView {
       this.scene.add(m);
       this.puffs.push(m);
     }
+  }
+
+  /** The panini press page (the Sunny Coast): see PRESS. Built once, shown in place of the grill. */
+  private buildPress(): void {
+    const P = this.pressGroup;
+    const at = (x: number, y: number, z: number) => this.world(1, x, y, z);
+    for (let i = 0; i < MAX_BAYS; i++) {
+      const obj = makePressBay();
+      P.add(obj);
+      const bay: PressBay = { obj, x: 0, z: PRESS.z, layers: [], food: null, foodKey: "", closed: false, open: 1, handleProxy: null!, moved: 9 };
+      // The bay's plate (drop food in, lift it out), and the handle wherever the lid has it.
+      this.proxy(new THREE.BoxGeometry(BAY.w - 0.1, 0.9, PLATE.d + 0.15), new THREE.Vector3(), { type: "bay", idx: i }, obj);
+      bay.handleProxy = this.proxy(new THREE.BoxGeometry(BAY.w - 0.1, 0.55, 0.6), new THREE.Vector3(), { type: "handle", idx: i }, obj);
+      this.bays.push(bay);
+    }
+    this.layoutBays();
+    const caddy = makeSauceCaddy(["pesto", "aioli"]);
+    caddy.position.copy(at(PRESS_CADDY.x, 0, PRESS_CADDY.z));
+    P.add(caddy);
+    this.pressCaddy = caddy;
+    Object.assign(this.bottles, caddy.userData.bottles);
+    for (const k of ["pesto", "aioli"] as SauceKind[]) {
+      const b = caddy.userData.spots.bottles[k]!;
+      this.proxy(new THREE.BoxGeometry(0.55, 1.6, 0.85), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k }, P);
+    }
+    const board = makeCuttingBoard();
+    board.position.copy(at(PRESS_BOARD.x, 0, PRESS_BOARD.z));
+    P.add(board);
+    this.board = { obj: board, x: PRESS_BOARD.x, z: PRESS_BOARD.z, layers: [], food: null, foodKey: "", on: false };
+    this.proxy(new THREE.BoxGeometry(BOARD.w, 0.7, BOARD.d), at(PRESS_BOARD.x, 0.3, PRESS_BOARD.z), { type: "board" }, board);
+  }
+
+  /** Spread the bays that are out evenly about the press's centre, and hide the rest. */
+  private layoutBays(): void {
+    const n = this.bayCount;
+    const step = BAY.w + PRESS.gap;
+    this.bays.forEach((b, i) => {
+      b.obj.visible = i < n;
+      // Three bays sit a little left so the third stays clear of the screen edge.
+      b.x = PRESS.x - (n - 2) * 0.3 + (i - (n - 1) / 2) * step;
+      b.obj.position.copy(this.world(1, b.x, 0, b.z));
+      b.handleProxy.parent?.updateMatrixWorld();
+      const plate = this.hitMeshes.find((m) => (m.userData.hit as Hit).type === "bay" && (m.userData.hit as { idx: number }).idx === i);
+      plate?.position.copy(this.world(1, b.x, PLATE.y + 0.3, b.z + PLATE.z));
+      this.placeHandle(b);
+    });
+  }
+  private placeHandle(b: PressBay): void {
+    b.handleProxy.position.copy(b.obj.position).add(b.obj.userData.handle());
+  }
+
+  /**
+   * Put out this town's middle counter: the grill, or the panini press with its bays and (at
+   * Harbor City) the cutting board. Empties the press.
+   */
+  setMiddle(mode: MiddleCounter, bays = 2, board = false): void {
+    this.middle = mode;
+    this.grillGroup.visible = mode === "grill";
+    this.pressGroup.visible = mode === "press";
+    this.bayCount = Math.max(1, Math.min(MAX_BAYS, bays));
+    for (const b of this.bays) this.setBay(b, []);
+    for (const b of this.bays) Object.assign(b, { closed: false, open: 1 });
+    this.layoutBays();
+    if (this.board) {
+      this.board.on = board;
+      this.board.obj.visible = board;
+      this.setBoard([]);
+    }
+  }
+
+  /** The fryer's extras: curds and gravy where poutine is served (and in the Pines), the sweet potato tray at the coast from Driftwood. */
+  setFryerSides(poutine: boolean, sweet: boolean): void {
+    this.curdTray.visible = this.gravyWell.visible = poutine;
+    this.sweetTray.visible = sweet;
+  }
+
+  /** Build the food drawn for a stack of layers (bottom first), at the counter food scale. */
+  private stackObject(layers: Layer[]): THREE.Group {
+    const g = new THREE.Group();
+    const { bases, yaw, back } = stackBases(layers.map((l) => l.piece));
+    layers.forEach((l, i) => {
+      const o = makeFood(l.piece, i === 0 ? "bottom" : "top");
+      o.position.set(l.offX * 0.5, bases[i], l.offZ * 0.5 - back[i]);
+      o.rotation.y = yaw[i];
+      g.add(o);
+    });
+    g.scale.setScalar(GRILL_SCALE);
+    return g;
+  }
+
+  /** Put this stack in a bay (or empty it with []). */
+  setBay(b: PressBay, layers: Layer[]): void {
+    b.layers = layers;
+    this.syncFood(b, b.obj.position.clone().add(b.obj.userData.food));
+  }
+  /** Put this stack on the cutting board (or clear it). */
+  setBoard(layers: Layer[]): void {
+    const bd = this.board;
+    if (!bd) return;
+    bd.layers = layers;
+    this.syncFood(bd, this.world(1, bd.x - 0.12, BOARD.h, bd.z));
+  }
+  /** Redraw what sits in a bay or on the board when its pieces change. */
+  syncFood(holder: { layers: Layer[]; food: THREE.Group | null; foodKey: string }, at: THREE.Vector3): void {
+    const key = holder.layers.map((l) => `${l.piece.uid}${l.piece.cut ? "c" : ""}${l.piece.stroke?.length ?? ""}`).join(",");
+    if (key === holder.foodKey && holder.food) return;
+    holder.foodKey = key;
+    if (holder.food) {
+      this.scene.remove(holder.food);
+      disposeObject(holder.food);
+      holder.food = null;
+    }
+    if (!holder.layers.length) return;
+    holder.food = this.stackObject(holder.layers);
+    holder.food.position.copy(at);
+    holder.food.userData.h = new THREE.Box3().setFromObject(holder.food).getSize(new THREE.Vector3()).y;
+    holder.food.userData.y0 = at.y;
+    this.scene.add(holder.food);
+  }
+
+  /** The bay under a world point on the press (at plate height), or -1. */
+  overBay(world: THREE.Vector3): number {
+    return this.bays.findIndex((b, i) => i < this.bayCount && Math.abs(world.x - pageX(1) - b.x) < BAY.w / 2 + 0.05 && Math.abs(world.z - b.z - PLATE.z) < BAY.d / 2 + 0.1);
+  }
+  /** True when a world point is over the cutting board. */
+  overBoard(world: THREE.Vector3): boolean {
+    const bd = this.board;
+    return !!bd && bd.on && Math.abs(world.x - pageX(1) - bd.x) < BOARD.w / 2 + 0.1 && Math.abs(world.z - bd.z) < BOARD.d / 2 + 0.15;
+  }
+  /** Close or lift a bay's lid. */
+  setLid(i: number, closed: boolean): void {
+    const b = this.bays[i];
+    if (!b || b.closed === closed) return;
+    b.closed = closed;
+    b.moved = 0;
+  }
+  /** What a bay's meter reads: its bread if a sandwich, else the lone piece. */
+  bayReading(b: PressBay): Piece | null {
+    return b.layers.find((l) => BREADS.has(l.piece.kind))?.piece ?? b.layers[0]?.piece ?? null;
+  }
+  /** Where a bay's meter sits: on the counter in front of the bay, clear of any cheese oozing out. */
+  bayTagPoint(i: number): THREE.Vector3 {
+    const b = this.bays[i];
+    return this.world(1, b.x, 0, b.z + BAY.d / 2 + 0.5);
+  }
+  /** The middle of a bay's handle grip, world space (for hints and the playtest bot). */
+  handlePoint(i: number): THREE.Vector3 {
+    return this.bays[i].handleProxy.position.clone();
+  }
+  /** The middle of a bay's plate, world space. */
+  bayPoint(i: number): THREE.Vector3 {
+    const b = this.bays[i];
+    return b.obj.position.clone().add(b.obj.userData.food);
+  }
+  boardPoint(): THREE.Vector3 {
+    return this.world(1, this.board?.x ?? 0, BOARD.h, this.board?.z ?? 0);
   }
 
   /** Fryer page: see FRYER. */
@@ -446,11 +675,21 @@ export class CounterView {
     const tray = makeCurdTray();
     tray.position.copy(at(F.curds.x, 0, F.curds.z));
     this.scene.add(tray);
-    this.proxy(new THREE.BoxGeometry(CURD_TRAY.w + 0.1, 0.9, CURD_TRAY.d + 0.2), at(F.curds.x, 0.3, F.curds.z), { type: "curds" });
+    this.curdTray = tray;
+    this.proxy(new THREE.BoxGeometry(CURD_TRAY.w + 0.1, 0.9, CURD_TRAY.d + 0.2), at(F.curds.x, 0.3, F.curds.z), { type: "curds" }, tray);
     const well = makeGravyWell();
     well.position.copy(at(F.gravy.x, 0, F.gravy.z));
     this.scene.add(well);
-    this.proxy(new THREE.BoxGeometry(GRAVY_WELL.w + 0.1, 1.2, GRAVY_WELL.d + 0.2), at(F.gravy.x, 0.5, F.gravy.z), { type: "gravy" });
+    this.gravyWell = well;
+    this.proxy(new THREE.BoxGeometry(GRAVY_WELL.w + 0.1, 1.2, GRAVY_WELL.d + 0.2), at(F.gravy.x, 0.5, F.gravy.z), { type: "gravy" }, well);
+    // Sweet potato fries (the coast, from Driftwood) where the curds are in the Pines.
+    const sweet = makeSweetTray();
+    sweet.position.copy(at(F.curds.x, 0, F.curds.z));
+    sweet.visible = false;
+    this.scene.add(sweet);
+    this.sweetTray = sweet;
+    this.sweetBinAt.copy(at(F.curds.x, 0.4, F.curds.z));
+    this.proxy(new THREE.BoxGeometry(SWEET_TRAY.w + 0.1, 0.9, SWEET_TRAY.d + 0.2), at(F.curds.x, 0.3, F.curds.z), { type: "sweetBin" }, sweet);
 
     // The hang-rail fryer: a basket per well, hanging tilted on the rail until it's lowered.
     const fryer = makeFryer();
@@ -478,7 +717,7 @@ export class CounterView {
       const hang = sp.hang[i];
       const up = fryer.position.clone().add(new THREE.Vector3(hang.x, hang.y, hang.z));
       const down = fryer.position.clone().add(new THREE.Vector3(w.x, sp.down.y, w.z));
-      this.baskets.push({ loaded: false, cook: 0, down: false, goldenRung: false, beepT: 0, obj: basket, fries, t: 0, amount: 0, up, downAt: down, tilt: hang.tilt });
+      this.baskets.push({ loaded: false, sweet: false, cook: 0, down: false, goldenRung: false, beepT: 0, obj: basket, fries, t: 0, amount: 0, up, downAt: down, tilt: hang.tilt });
       this.proxy(new THREE.BoxGeometry(1.5 * k, 1.4, 2.6 * k), fryer.position.clone().add(new THREE.Vector3(w.x, 0.8, w.z + 0.5 * k)), { type: "basket", idx: i });
     });
   }
@@ -747,6 +986,11 @@ export class CounterView {
       Object.assign(p, EMPTY_PACK);
       this.syncPack(i);
     });
+    for (const b of this.bays) {
+      this.setBay(b, []);
+      Object.assign(b, { closed: false, open: 1 });
+    }
+    this.setBoard([]);
     this.spillCost = 0;
   }
 
@@ -784,8 +1028,13 @@ export class CounterView {
       }
       return keep;
     });
-    const hot = kinds.filter((k) => GRILLABLE.has(k)).slice(0, 5);
-    const cold = kinds.filter((k) => !GRILLABLE.has(k)).slice(0, 6);
+    const press = this.middle === "press";
+    // At the press the back rail holds what goes in the press first (breads, proteins) and the
+    // tuna well; the side rail the cold fillings. Sauces are in the caddy, never in a pan.
+    const back = (k: Kind) => (press ? PRESS_BACK(k) : GRILLABLE.has(k));
+    const usable = kinds.filter((k) => !(press && isSauce(k)));
+    const hot = usable.filter(back).slice(0, 5);
+    const cold = usable.filter((k) => !back(k)).slice(0, press ? 8 : 6);
     const group = new THREE.Group();
     this.bins = [];
     const fill = (rail: ReturnType<typeof makeColdRail>, at: { x: number; z: number }) => {
@@ -799,8 +1048,12 @@ export class CounterView {
         this.proxy(new THREE.BoxGeometry(pan.w, 0.9, pan.d), this.world(1, b.x, b.y - 0.2, b.z), { type: "bin", kind: b.kind });
       }
     };
-    fill(makeColdRail({ cols: Math.max(3, hot.length), rows: 1, kinds: hot }), GRILL_PANS);
-    fill(makeColdRail({ cols: 2, rows: 3, kinds: cold }), SIDE_PANS);
+    fill(makeColdRail({ cols: Math.max(press ? 2 : 3, hot.length), rows: 1, kinds: hot }), GRILL_PANS);
+    if (press) {
+      // Down from the same back edge as the grill's side rail, as many rows as it takes.
+      const rows = Math.max(3, Math.ceil(cold.length / 2));
+      fill(makeColdRail({ cols: 2, rows, kinds: cold }), { x: SIDE_PANS.x, z: SIDE_BACK_Z + (rows * 1.27 + 0.4) / 2 });
+    } else fill(makeColdRail({ cols: 2, rows: 3, kinds: cold }), SIDE_PANS);
     this.pantry = group;
     this.scene.add(group);
   }
@@ -875,10 +1128,15 @@ export class CounterView {
       const c = this.cupAt(this.groundPoint(ndc, 0.5));
       if (c) return { type: "cup", idx: this.cups.indexOf(c) };
     }
-    const hits = this.raycaster.intersectObjects(this.hitMeshes, false);
+    const hits = this.raycaster.intersectObjects(this.hitMeshes, false).filter((h) => shown(h.object.userData.owner));
     const first = hits.length ? (hits[0].object.userData.hit as Hit) : null;
     // The zone buttons sit right in front of the plate: a tap on one is never a grab.
     if (first?.type === "zone") return first;
+    // An open lid's handle stands up in front of the back rail: the pans behind it come first.
+    if (first?.type === "handle" && !this.bays[first.idx].closed) {
+      const pan = hits.find((h) => (h.object.userData.hit as Hit).type === "bin");
+      if (pan) return pan.object.userData.hit as Hit;
+    }
     if (best) return { type: "grillItem", item: best };
     if (this.page === 1) {
       const m = this.messAt(p.x - pageX(1), p.z);
@@ -914,6 +1172,7 @@ export class CounterView {
 
   /** Grill-local position if the world point is over the grill plate. */
   overGrill(world: THREE.Vector3): { x: number; z: number } | null {
+    if (this.middle !== "grill") return null;
     const x = world.x - pageX(1);
     const { x0, x1, z0, z1 } = GRILL_BOUNDS;
     if (x < x0 - 0.3 || x > x1 + 0.3 || world.z < z0 - 0.5 || world.z > z1 + 0.4) return null;
@@ -1082,7 +1341,7 @@ export class CounterView {
    */
   liftSauce(kind: SauceKind | null): void {
     this.inHand = kind;
-    for (const k of ["ketchup", "mustard"] as SauceKind[]) this.bottles[k].visible = k !== kind;
+    for (const [k, b] of Object.entries(this.bottles)) b.visible = k !== kind;
     this.pointSauce(null);
   }
   inHand: SauceKind | null = null;
@@ -1111,7 +1370,7 @@ export class CounterView {
 
   /** Where the sauce caddy stands, for the in-hand mask. */
   caddyPoint(): THREE.Vector3 {
-    return this.caddy.position.clone().setY(0.8);
+    return (this.middle === "press" ? this.pressCaddy : this.caddy).position.clone().setY(0.8);
   }
 
   /** Where a basket's fry meter sits: in its window on the fryer's back panel. */
@@ -1126,7 +1385,8 @@ export class CounterView {
 
   sizzleLevel(): number {
     const on = this.grillItems.filter((g) => !g.held && !g.below && g.flipT < 0);
-    return on.filter((g) => this.heatOf(g) === "hot").length * 0.35 + on.filter((g) => this.heatOf(g) === "warm").length * 0.08;
+    const pressing = this.middle === "press" ? this.bays.filter((b) => b.closed && b.layers.length).length : 0;
+    return on.filter((g) => this.heatOf(g) === "hot").length * 0.35 + on.filter((g) => this.heatOf(g) === "warm").length * 0.08 + pressing * 0.3;
   }
 
   /** Which grill zone a page-local x is over (nearest at the ends). */
@@ -1233,11 +1493,59 @@ export class CounterView {
       it.obj.scale.set(GRILL_SCALE * (1 + s * 0.4), GRILL_SCALE * (1 - s), GRILL_SCALE * (1 + s * 0.4));
       it.obj.userData.update(it.piece);
     }
+    // Press: a closed bay cooks everything in it, both faces at once.
+    const smokes: { x: number; z: number; y: number; cook: number }[] = [];
+    if (this.middle === "press") {
+      for (let i = 0; i < this.bayCount; i++) {
+        const b = this.bays[i];
+        b.moved += dt;
+        b.open += ((b.closed ? 0 : 1) - b.open) * Math.min(1, dt * 11);
+        if (Math.abs(b.open - (b.closed ? 0 : 1)) < 0.002) b.open = b.closed ? 0 : 1;
+        b.obj.userData.setOpen(b.open);
+        this.placeHandle(b);
+        const pressing = b.closed && b.open < 0.2 && b.layers.length > 0;
+        let melted = false;
+        if (pressing) {
+          const sandwich = b.layers.length > 1;
+          for (const l of b.layers) {
+            const p = l.piece;
+            const k = p.kind;
+            const before = cookLevel(p);
+            if (BREADS.has(k) || PROTEINS.has(k)) {
+              const r = PRESS_RATE * (PRESS_SPEED[k] ?? 0.3) * (PROTEINS.has(k) && sandwich ? PRESS_INSIDE : 1) * this.grillBoost * dt;
+              p.cook[0] += r;
+              p.cook[1] += r;
+              const sc = COOK_SCALE[k as Cookable];
+              if (sc && before < sc.done && cookLevel(p) >= sc.done) anyDone = true;
+              if (sc && before <= sc.burnt - 0.05 && cookLevel(p) > sc.burnt - 0.05) anyBurning = true;
+            } else if (PRESS_CHEESE.has(k)) {
+              p.melt = Math.min(1, (p.melt ?? 0) + PRESS_MELT * this.grillBoost * dt);
+              if (p.melt >= 0.5) melted = true;
+            } else p.cook[0] = Math.min(1, p.cook[0] + PRESS_WARM * dt);
+          }
+          const r = this.bayReading(b);
+          smokes.push({ x: pageX(1) + b.x, z: b.z + PLATE.z, y: PLATE.y + CLOSED_GAP + 0.3, cook: r ? cookLevel(r) : 0 });
+        }
+        if (b.lit !== pressing) b.obj.userData.setLamp((b.lit = pressing));
+        const ooze = melted && b.open < 0.05;
+        if (b.oozing !== ooze) b.obj.userData.setOoze((b.oozing = ooze));
+        // Redraw what's in the bay as it cooks, squeezed flat under a closing lid.
+        this.syncFood(b, b.obj.position.clone().add(b.obj.userData.food));
+        if (b.food) {
+          b.food.children.forEach((c, j) => (c as FoodObject).userData.update?.(b.layers[j].piece));
+          const h = (b.food.userData.h as number) || 0.1;
+          const fit = Math.min(1, (CLOSED_GAP - 0.03) / h);
+          const lidDown = 1 - Math.min(1, b.open * 2.2);
+          b.food.scale.set(GRILL_SCALE, GRILL_SCALE * (1 - (1 - fit) * lidDown), GRILL_SCALE);
+        }
+      }
+    }
     if (anyBurning) this.events.burning();
     if (anyDone) this.events.done();
 
-    // Smoke: puffs drift up from cooking items; darker when burning.
+    // Smoke: puffs drift up from cooking items (and closed press bays); darker when burning.
     const active = this.grillItems.filter((g) => !g.held && !g.below && g.flipT < 0 && this.heatOf(g) === "hot");
+    for (const it of active) smokes.push({ x: gx + it.x, z: it.z, y: GRILL_TOP + 0.3, cook: it.piece.cook[0] });
     const shown = this.zones.join();
     if (this.zonesShown !== shown) {
       this.zones.forEach((z, i) => this.griddle.userData.setZone(i, z));
@@ -1250,7 +1558,7 @@ export class CounterView {
       this.griddle.userData.pressButton(i, Math.sin(Math.PI * Math.min(1, this.zonePush[i] / 0.22)));
     });
     this.puffs.forEach((m, i) => {
-      const it = active[i % Math.max(1, active.length)];
+      const it = smokes[i % Math.max(1, smokes.length)];
       m.userData.t += dt * 0.5;
       if (!it) {
         m.visible = false;
@@ -1262,13 +1570,13 @@ export class CounterView {
         m.userData.oz = (Math.random() - 0.5) * 0.7;
       }
       const t = m.userData.t;
-      const burnt = it.piece.cook[0] > 0.95;
+      const burnt = it.cook > 0.95;
       m.visible = true;
-      m.position.set(gx + it.x + (m.userData.ox ?? 0) + Math.sin(t * 5 + i) * 0.08, GRILL_TOP + 0.3 + t * 1.6, it.z + (m.userData.oz ?? 0));
+      m.position.set(it.x + (m.userData.ox ?? 0) + Math.sin(t * 5 + i) * 0.08, it.y + t * 1.6, it.z + (m.userData.oz ?? 0));
       m.scale.setScalar(0.6 + t * 1.5);
       const mat = m.material as THREE.MeshBasicMaterial;
       mat.color.set(burnt ? "#3a3532" : "#f2f2f2");
-      mat.opacity = (burnt ? 0.55 : 0.28) * Math.sin(Math.PI * t) * Math.min(1, it.piece.cook[0] * 4);
+      mat.opacity = (burnt ? 0.55 : 0.28) * Math.sin(Math.PI * t) * Math.min(1, it.cook * 4);
     });
 
     // Fryer
@@ -1289,22 +1597,25 @@ export class CounterView {
       }
       if (inOil) {
         const before = b.cook;
-        b.cook += FRY_RATE * this.fryBoost * dt;
-        if (before < FRIES_ZONE.done && b.cook >= FRIES_ZONE.done) this.events.done();
-        if (!b.goldenRung && b.cook >= FRIES_PERFECT - 0.04) {
+        const zone = b.sweet ? SWEET_ZONE : FRIES_ZONE;
+        const perfect = b.sweet ? SWEET_PERFECT : FRIES_PERFECT;
+        b.cook += FRY_RATE * this.fryBoost * (b.sweet ? SWEET_FRY : 1) * dt;
+        if (before < zone.done && b.cook >= zone.done) this.events.done();
+        if (!b.goldenRung && b.cook >= perfect - 0.04) {
           b.goldenRung = true;
           this.events.golden();
         }
         // Beep from perfect on, quicker once they're overdone, until the basket comes up.
-        if (b.cook >= FRIES_PERFECT - 0.04) {
+        if (b.cook >= perfect - 0.04) {
           b.beepT -= dt;
           if (b.beepT <= 0) {
             this.events.beep();
-            b.beepT = b.cook >= FRIES_ZONE.over ? 0.4 : 0.75;
+            b.beepT = b.cook >= zone.over ? 0.4 : 0.75;
           }
         }
       } else b.beepT = 0;
       if (b.loaded) {
+        b.fries.userData.setSweet?.(b.sweet);
         b.fries.userData.setCook(b.cook);
         b.fries.userData.setAmount?.(b.amount);
       }

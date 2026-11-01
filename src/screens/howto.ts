@@ -67,6 +67,60 @@ const scoops = (s: Size) => Math.round(FRIES_PORTION[s] / FRIES_SCOOP);
 /** A worked example for the stacking drawing. */
 const EXAMPLE: Recipe = { name: "Trailhead Classic", price: 9, layers: ["bun", "ketchup", "patty", "lettuce", "tomato", "bun"], toasted: true };
 
+/** The panini example: a Caprese, pressed. */
+const PANINI: Recipe = { name: "Caprese", price: 10, layers: ["ciabatta", "pesto", "mozzarella", "tomato", "basil", "ciabatta"], toasted: true, panini: true, melt: true, counts: { mozzarella: 3, tomato: 3 } };
+
+/** Two press bays: one open with bread on its ribbed plate, one shut with its meter in front. */
+function pressSvg(): string {
+  const INK = `stroke="#2a2622" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"`;
+  const ribs = (x: number, y: number, w: number) => [0, 1, 2, 3].map((i) => `<path d="M${x + 3} ${y + 2 + i * 3}h${w - 6}" stroke="#5a6064" stroke-width="1"/>`).join("");
+  return `<svg class="hw-press" viewBox="0 0 168 84" aria-hidden="true">
+    <g>
+      <path d="M8 22 6 4h64l-2 18z" fill="#c9cfcd" ${INK}/>
+      <path d="M10 6h56" stroke="#2a2622" stroke-width="1" opacity=".3"/>
+      <path d="M4 3h68" stroke="#2a2622" stroke-width="5" stroke-linecap="round"/><path d="M4 3h68" stroke="#d8573a" stroke-width="3" stroke-linecap="round"/>
+      <rect x="6" y="44" width="64" height="26" rx="3" fill="#aab3b1" ${INK}/>
+      <rect x="10" y="34" width="56" height="12" rx="1.5" fill="#2f3336" ${INK}/>${ribs(10, 34, 56)}
+      <rect x="20" y="31" width="36" height="9" rx="3" fill="#f0d49a" ${INK}/>
+      <path d="M26 33.5h4M34 35.5h5M44 33.5h4" stroke="#c49a55" stroke-width="1.2"/>
+    </g>
+    <g>
+      <rect x="96" y="44" width="64" height="26" rx="3" fill="#aab3b1" ${INK}/>
+      <rect x="98" y="30" width="60" height="15" rx="4" fill="#c9cfcd" ${INK}/>
+      <path d="M104 41h48" stroke="#e8b25c" stroke-width="2.4"/>
+      <path d="M94 46h68" stroke="#2a2622" stroke-width="5" stroke-linecap="round"/><path d="M94 46h68" stroke="#d8573a" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="152" cy="62" r="2.4" fill="#ff9a2a" ${INK}/>
+      <path d="M112 26c-1.4-1.8 1.4-3 0-5M124 24c-1.4-1.8 1.4-3 0-5M136 26c-1.4-1.8 1.4-3 0-5" fill="none" stroke="#9aa0a0" stroke-width="1.4" stroke-linecap="round"/>
+      <rect x="104" y="74" width="48" height="8" rx="4" fill="#2c2f33" stroke="#0f1012" stroke-width="1.2"/>
+      <rect x="104" y="74" width="30" height="8" rx="4" fill="#e9a64a"/>
+    </g>
+    <path d="M80 20v22" stroke="#2a2622" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="2 3"/>
+    <path d="M76 36l4 6 4-6" fill="none" stroke="#2a2622" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+/** The panini press, for the Sunny Coast (DESIGN §24). */
+function pressSec(): Sec {
+  return {
+    id: "press",
+    chip: "Press",
+    icon: "panini",
+    title: "The panini press",
+    lede: "On the Sunny Coast the grill makes way for a clamshell press. Both sides cook at once.",
+    fig: `${pressSvg()}
+      <div class="hw-stack">${stackArt(PANINI)}<p class="hw-cap">A Caprese: ciabatta, pesto, mozzarella ×3, tomato ×3, basil, ciabatta. Built on the tray, then pressed.</p></div>`,
+    points: [
+      "<b>Build the sandwich on the tray</b>, bread first. With the top slice on, drag down on the tray to lift the whole sandwich, and drop it in an <b>open bay</b>.",
+      "<b>Pull the handle down</b> to close the lid. The lid hides the food, so watch the <b>meter in front of the bay</b>: pale, golden with press lines, then dark. <b>Tap the handle</b> to lift the lid, then drag the panini back to the tray.",
+      "The cheese inside melts while it's shut, and a little <b>oozes out</b> at the front when it has.",
+      "<b>Chicken and veggie patties</b> are pressed on their own first, until their meter says done, then go in the sandwich and back in the press.",
+      "<b>Avocado Toast</b> is open-faced: press only the sourdough, then add the avocado and rocket on the tray. The avocado never goes in the press.",
+      "The <b>tuna well</b>: each tap is one scoop onto the active tray. Pesto and aioli squeeze from the bottles like any sauce.",
+      "In <b>Harbor City</b> there's a third bay and a cutting board: drop a finished panini on the board and <b>swipe across it</b> to cut it in half before it goes out.",
+    ],
+  };
+}
+
 /* ---- the guide ------------------------------------------------------------ */
 
 function sections(): Sec[] {
@@ -369,7 +423,7 @@ function menuSec(): Sec {
     chip: "Menu",
     icon: "food-menu",
     title: town ? `The menu in ${town.name}` : "The menu",
-    lede: "How each burger is built, bottom to top, with its topping counts.",
+    lede: town?.press ? "How each panini is built, bottom to top, with its filling counts." : "How each burger is built, bottom to top, with its topping counts.",
     fig: "",
     points: [],
     raw: `<div class="hw-std"><span class="bv-eyebrow">Standard counts</span><div>${counts}</div></div>
@@ -379,7 +433,10 @@ function menuSec(): Sec {
 }
 
 export function howToHtml(): string {
-  const secs = [...sections(), menuSec()];
+  const all = sections();
+  // On the Sunny Coast the press section follows the grill's (and the menu shows paninis).
+  if (getDeps()?.town()?.press) all.splice(all.findIndex((x) => x.id === "grill") + 1, 0, pressSec());
+  const secs = [...all, menuSec()];
   return `<nav class="menu-chips" aria-label="Sections">${secs.map((s) => `<button class="bv-chip pill" data-jump="${s.id}">${icon(s.icon)}${s.chip}</button>`).join("")}</nav>
   ${secs
     .map(

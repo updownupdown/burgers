@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { Kind } from "../game/types";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
 import { vegParts } from "./food";
+import { paniniParts, rawParts } from "./panini";
 import { faceted } from "./materials";
 
 /**
@@ -233,6 +234,86 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
       parts.addParts(vegParts("jalapeno", i % 9 === 4, 0.01), { p, r: rot, s: s * 0.8 });
     }
   },
+  // ---- the panini press's pans (the Sunny Coast) ----
+  ciabatta: (parts, r) => breadBin(parts, r, "ciabatta"),
+  sourdough: (parts, r) => breadBin(parts, r, "sourdough"),
+  chicken: (parts, r) => {
+    // Raw breasts on paper, fanned so each reads.
+    const s = HEAP_S;
+    parts.add(G.paper, "#f4f1ea", { p: [0, PAN.floor, 0], r: [0, 0.1, 0], s, ink: 0.01 });
+    for (let i = 0; i < 4; i++) parts.addParts(rawParts("chicken"), { p: [jitter(r, 0.04), PAN.floor + 0.02 + i * 0.07, -0.18 + i * 0.12], r: [-0.22 + jitter(r, 0.05), (i % 2 ? 0.3 : -0.25) + jitter(r, 0.1), jitter(r, 0.05)], s: s * 0.95 });
+  },
+  veggie: (parts, r) => {
+    const s = HEAP_S;
+    let y = PAN.floor;
+    for (let i = 0; i < 4; i++) {
+      parts.add(G.paper, "#f4f1ea", { p: [jitter(r, 0.02), y, jitter(r, 0.02)], r: [0, 0.1 + jitter(r, 0.12), 0], s, ink: 0.01 });
+      y += 0.012;
+      parts.addParts(rawParts("veggie"), { p: [jitter(r, 0.03), y, jitter(r, 0.03)], r: [0, r() * 6, 0], s });
+      y += 0.26 * s + 0.004;
+    }
+  },
+  mozzarella: (parts, r) => {
+    // Fresh mozzarella balls in their whey.
+    parts.add(box(1.06, 0.02, 0.9), "#eef3f0", { p: [0, PAN.floor + 0.05, 0], ink: false });
+    for (let i = 0; i < 9; i++) {
+      const a = i * 2.399;
+      const rr = Math.sqrt((i + 0.5) / 9);
+      parts.addParts(rawParts("mozzarella"), { p: [Math.cos(a) * rr * 0.34, PAN.floor - 0.05 + (1 - rr) * 0.08 + r() * 0.03, Math.sin(a) * rr * 0.26], r: [jitter(r, 0.3), r() * 6, jitter(r, 0.3)], s: VEG_S * 0.95 });
+    }
+  },
+  basil: (parts, r) => {
+    for (let i = 0; i < 9; i++) {
+      const a = i * 2.399;
+      const rr = Math.sqrt((i + 0.5) / 9);
+      parts.addParts(paniniParts("basil", 0.02), { p: [Math.cos(a) * rr * 0.3, PAN.floor + 0.05 + (1 - rr) * 0.14 + r() * 0.03, Math.sin(a) * rr * 0.24], r: [jitter(r, 0.35), r() * 6, jitter(r, 0.35)], s: VEG_S });
+    }
+  },
+  avocado: (parts, r) => {
+    // Avocado halves, flesh up, pits in two of them.
+    const half = faceted(new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2));
+    for (let i = 0; i < 4; i++) {
+      const x = i % 2 ? 0.2 : -0.2;
+      const z = i < 2 ? -0.18 : 0.2;
+      const yaw = r() * 6;
+      parts.add(half, "#3f6a24", { p: [x, PAN.floor + 0.2, z], r: [Math.PI, yaw, 0], s: [0.21, 0.16, 0.28], ink: 0.016 });
+      parts.add(faceted(new THREE.CircleGeometry(1, 14).rotateX(-Math.PI / 2)), "#d6e48e", { p: [x, PAN.floor + 0.205, z], r: [0, yaw, 0], s: [0.19, 1, 0.26], ink: false });
+      parts.add(faceted(new THREE.CircleGeometry(1, 12).rotateX(-Math.PI / 2)), "#f1edb0", { p: [x, PAN.floor + 0.208, z], r: [0, yaw, 0], s: [0.12, 1, 0.17], ink: false });
+      if (i % 2 === 0) parts.add(faceted(new THREE.SphereGeometry(0.08, 8, 6)), "#7a4a26", { p: [x, PAN.floor + 0.22, z], s: [1, 0.7, 1], ink: 0.012 });
+    }
+  },
+  rocket: (parts, r) => {
+    for (let i = 0; i < 7; i++) {
+      const a = i * 2.399;
+      const rr = Math.sqrt((i + 0.5) / 7);
+      parts.addParts(paniniParts("rocket", 0.02), { p: [Math.cos(a) * rr * 0.26, PAN.floor + 0.04 + (1 - rr) * 0.12 + r() * 0.03, Math.sin(a) * rr * 0.2], r: [jitter(r, 0.3), r() * 6, jitter(r, 0.3)], s: VEG_S * 0.85 });
+    }
+  },
+  cheddar: (parts, r) => {
+    const s = HEAP_S;
+    for (let i = 0; i < 9; i++) {
+      const y = PAN.floor + i * 0.022;
+      parts.add(G.slice, i % 2 ? "#f39a1e" : "#e88c16", { p: [jitter(r, 0.025) - 0.03 + i * 0.006, y, jitter(r, 0.025)], r: [0, jitter(r, 0.07), 0], s, ink: i === 8 ? 0.02 : 0.012 });
+    }
+    parts.add(G.slice, "#f5a42a", { p: [0.04, PAN.floor + 0.23, 0.02], r: [0.06, 0.22, -0.08], s, ink: 0.018 });
+  },
+  redonion: (parts, r) => {
+    for (let i = 0; i < 16; i++) {
+      const a = i * 2.399;
+      const rr = Math.sqrt((i + 0.5) / 16);
+      parts.addParts(paniniParts("redonion", 0.012), { p: [Math.cos(a) * rr * 0.32, PAN.floor + 0.04 + (1 - rr) * 0.14 + r() * 0.03, Math.sin(a) * rr * 0.24], r: [jitter(r, 0.45), r() * 6, jitter(r, 0.45)], s: 0.6 });
+    }
+  },
+  tuna: (parts, r) => {
+    // The tuna well: a smooth mound with a steel scoop resting in it.
+    for (let i = 0; i < 6; i++) {
+      const a = i * 2.399;
+      const rr = Math.sqrt((i + 0.5) / 6);
+      parts.addParts(paniniParts("tuna", 0.014), { p: [Math.cos(a) * rr * 0.3, PAN.floor + 0.04 + (1 - rr) * 0.06, Math.sin(a) * rr * 0.22], r: [0, r() * 6, 0], s: 0.75 });
+    }
+    parts.add(faceted(new THREE.SphereGeometry(0.13, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2)), "#c9d1cf", { p: [0.18, PAN.floor + 0.22, 0.08], r: [Math.PI, 0, 0], s: [1, 0.6, 1], ink: 0.014 });
+    parts.add(box(0.5, 0.035, 0.05), "#8e9a98", { p: [0.4, PAN.floor + 0.3, -0.08], r: [0, 0.5, 0.35], ink: 0.012 });
+  },
   egg: (parts, r) => {
     // A cardboard flat of six big whole eggs, at the same scale as the egg in your hand.
     parts.add(box(1.1, 0.06, 0.9), "#cdbb9b", { p: [0, PAN.floor + 0.03, 0], ink: 0.012 });
@@ -246,6 +327,15 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
     }
   },
 };
+
+/** Bread in the bin: a wooden board in the pan with slices fanned on it. */
+function breadBin(parts: Parts, r: () => number, kind: "ciabatta" | "sourdough"): void {
+  parts.add(box(1.04, 0.05, 0.88), "#c58a52", { p: [0, PAN.floor + 0.025, 0], ink: 0.012 });
+  const s = HEAP_S * 0.92;
+  for (let i = 0; i < 4; i++) {
+    parts.addParts(rawParts(kind), { p: [jitter(r, 0.03), PAN.floor + 0.08 + i * 0.03, -0.24 + i * 0.15], r: [-0.55 + jitter(r, 0.05), jitter(r, 0.08), jitter(r, 0.04)], s });
+  }
+}
 
 /** The heap for one kind on its own, without the pan, in game units with the pan's base at y = 0. */
 export function heapParts(kind: Kind): Parts {

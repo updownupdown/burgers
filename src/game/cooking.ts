@@ -1,4 +1,4 @@
-import type { Doneness, Piece } from "./types";
+import type { Doneness, Kind, Piece } from "./types";
 
 
 /** Seconds of grill time per unit of cook on one face. A side goes raw to medium in about 7s; patties cook at a third of that pace. */
@@ -61,7 +61,7 @@ export interface CookScale {
   burnt: number;
   perfect: number;
 }
-export type Cookable = "patty" | "bacon" | "egg" | "bun" | "pineapple" | "fries";
+export type Cookable = "patty" | "bacon" | "egg" | "bun" | "pineapple" | "fries" | "ciabatta" | "sourdough" | "chicken" | "veggie" | "sweet";
 export const COOK_SCALE: Record<Cookable, CookScale> = {
   // Under: raw and rare. Done: medium. Over: well done, then burnt.
   // Medium is generous: about 50% longer than it used to be (0.43-0.67).
@@ -71,7 +71,33 @@ export const COOK_SCALE: Record<Cookable, CookScale> = {
   bun: { done: 0.35, over: 0.8, burnt: 0.95, perfect: 0.55 },
   pineapple: { done: 0.35, over: 0.8, burnt: 1.0, perfect: 0.55 },
   fries: { done: 0.5, over: 0.95, burnt: 1.3, perfect: 0.725 },
+  // The panini press (the Sunny Coast). Bread: pale, golden with press lines, dark. Chicken: pink,
+  // white, dry. Veggie patty: soft, crisp, burnt.
+  ciabatta: { done: 0.35, over: 0.78, burnt: 1.0, perfect: 0.56 },
+  sourdough: { done: 0.35, over: 0.78, burnt: 1.0, perfect: 0.56 },
+  chicken: { done: 0.4, over: 0.8, burnt: 1.05, perfect: 0.6 },
+  veggie: { done: 0.35, over: 0.8, burnt: 1.0, perfect: 0.57 },
+  // Sweet potato fries: the done band is narrower than plain fries' (and they cook faster, SWEET_FRY).
+  sweet: { done: 0.5, over: 0.82, burnt: 1.12, perfect: 0.66 },
 };
+
+/**
+ * The panini press cooks both faces at once, so a piece's two faces stay equal; its cook level is
+ * the face reading. Cook per second against PRESS_RATE, on a closed bay. At these speeds: ciabatta
+ * goes golden at about 12 s and dark at 27 s; sourdough browns faster (about 9 s to 21 s); chicken
+ * pressed on its own is cooked through at about 17 s and dry from 34 s; a veggie patty crisps from
+ * about 12 s. Proteins inside a sandwich only warm through (PRESS_INSIDE).
+ */
+export const PRESS_RATE = 0.08;
+export const PRESS_SPEED: Partial<Record<Kind, number>> = { ciabatta: 0.36, sourdough: 0.46, chicken: 0.29, veggie: 0.36 };
+/** A protein already pressed, then pressed again inside its sandwich, cooks at this share of its pace. */
+export const PRESS_INSIDE = 0.25;
+/** Cheese inside a closed panini melts this much per second: melted (0.5) after about 5 s, an ooze at the seam. */
+export const PRESS_MELT = 0.1;
+/** Anything else inside a closed press warms by this much per second (avocado should never be warmed). */
+export const PRESS_WARM = 0.12;
+/** Sweet potato fries cook this much faster than plain ones. */
+export const SWEET_FRY = 1.3;
 
 /**
  * How cooked a piece is, on its kind's scale. Patties and bacon are the average of their two
@@ -82,6 +108,8 @@ export function cookLevel(p: Piece): number {
   switch (p.kind) {
     case "patty":
     case "bacon":
+    case "chicken":
+    case "veggie":
       return avgCook(p);
     case "egg":
       return p.cook[0] + p.cook[1];
@@ -112,8 +140,14 @@ export const MARK_RATE = 0.075;
 export const FRIES_ZONE = { done: 0.5, over: 0.95, burnt: 1.3 };
 export const FRIES_PERFECT = (FRIES_ZONE.done + FRIES_ZONE.over) / 2;
 
-export function friesZone(t: number): "under" | "done" | "over" {
-  return t < FRIES_ZONE.done ? "under" : t < FRIES_ZONE.over ? "done" : "over";
+/** Sweet potato fries: a narrower done band (COOK_SCALE.sweet). */
+export const SWEET_ZONE = { done: COOK_SCALE.sweet.done, over: COOK_SCALE.sweet.over, burnt: COOK_SCALE.sweet.burnt };
+export const SWEET_PERFECT = (SWEET_ZONE.done + SWEET_ZONE.over) / 2;
+const zoneOf = (sweet: boolean) => (sweet ? SWEET_ZONE : FRIES_ZONE);
+
+export function friesZone(t: number, sweet = false): "under" | "done" | "over" {
+  const z = zoneOf(sweet);
+  return t < z.done ? "under" : t < z.over ? "done" : "over";
 }
 
 /**
@@ -121,10 +155,11 @@ export function friesZone(t: number): "under" | "done" | "over" {
  * in the done zone is good and dead centre is best; underdone gets better towards done, and
  * overdone gets worse the longer they stay in.
  */
-export function friesQuality(t: number): number {
-  const { done, over, burnt } = FRIES_ZONE;
+export function friesQuality(t: number, sweet = false): number {
+  const { done, over, burnt } = zoneOf(sweet);
+  const perfect = (done + over) / 2;
   if (t < done) return 0.15 + 0.4 * Math.max(0, t / done);
-  if (t < over) return 1 - (0.25 * Math.abs(t - FRIES_PERFECT)) / (FRIES_PERFECT - done);
+  if (t < over) return 1 - (0.25 * Math.abs(t - perfect)) / (perfect - done);
   if (t < burnt) return 0.6 - (0.45 * (t - over)) / (burnt - over);
   return 0.1;
 }

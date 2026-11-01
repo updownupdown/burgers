@@ -18,6 +18,10 @@ export interface Recipe {
   from?: number;
   /** Pieces of counted toppings (pickles, onions...) when not the standard number (STANDARD_COUNT). */
   counts?: Partial<Record<Kind, number>>;
+  /** Made on the panini press (the Sunny Coast): bread pressed golden, cheese inside melted. */
+  panini?: boolean;
+  /** Open-faced: only the bread goes in the press; what goes on top is never heated. */
+  open?: boolean;
 }
 
 /** How many pieces of a counted topping go in each of its layers in this recipe. */
@@ -52,7 +56,18 @@ export interface Stop {
   crowd: CrowdId;
   /** Poutine is on the fryer menu here (the Pines bring it in at Cedar Falls). */
   poutine: boolean;
+  /**
+   * The middle counter is a panini press here instead of the grill (the Sunny Coast): how many
+   * clamshell bays, and whether the cutting board is out for slicing (Harbor City).
+   */
+  press?: { bays: number; slice: boolean };
+  /** Sweet potato fries are on the fryer menu here (the coast, from Driftwood). */
+  sweet?: boolean;
 }
+
+/** Which middle counter a town cooks on. */
+export type MiddleCounter = "grill" | "press";
+export const middleOf = (t: Pick<Stop, "press">): MiddleCounter => (t.press ? "press" : "grill");
 
 export type RegionId = "mountains" | "coast" | "desert" | "orchard";
 
@@ -95,11 +110,14 @@ const CAMPFIRE: Recipe = { name: "Campfire Melt", price: 11, layers: ["bun", "pa
 const SMASH: Recipe = { name: "Summit Smash", price: 12, layers: ["bun", "patty", "cheese", "pickle", "mustard", "bun"], toasted: false, smash: true, melt: true };
 const LUMBERJACK: Recipe = { name: "Lumberjack Stack", price: 15, layers: ["bun", "patty", "cheese", "bacon", "patty", "ketchup", "bun"], toasted: true, melt: true, from: 0.3 };
 
-// phase 1 placeholder: the Coast, Red Rock and Orchard Isle keep a short burger menu on the grill
-// until their own counters (panini press, comal, hearth oven) arrive. Three of the cut burgers each.
-const BOARDWALK: Recipe = { name: "Boardwalk Basic", price: 8, layers: ["bun", "patty", "lettuce", "ketchup", "bun"], toasted: false };
-const LUAU: Recipe = { name: "Luau Stack", price: 13, layers: ["bun", "patty", "pineapple", "bacon", "mustard", "bun"], toasted: false };
-const LOW_TIDE: Recipe = { name: "Low Tide", price: 11, layers: ["bun", "lettuce", "tomato", "patty", "cheese", "onion", "bun"], toasted: false, melt: true };
+// The Sunny Coast: paninis on the press (DESIGN §24, phase 2). Built on the tray bottom to top,
+// pressed closed until the bread is golden and the cheese oozes. Proteins are pressed on their own
+// first. Avocado Toast is open-faced: only the bread goes in the press.
+const CAPRESE: Recipe = { name: "Caprese", price: 10, layers: ["ciabatta", "pesto", "mozzarella", "tomato", "basil", "ciabatta"], toasted: true, panini: true, melt: true, counts: { mozzarella: 3, tomato: 3 } };
+const AVO_TOAST: Recipe = { name: "Avocado Toast", price: 9, layers: ["sourdough", "avocado", "rocket"], toasted: true, panini: true, open: true, counts: { avocado: 4 } };
+const TUNA_MELT: Recipe = { name: "Tuna Melt", price: 11, layers: ["sourdough", "tuna", "cheddar", "redonion", "sourdough"], toasted: true, panini: true, melt: true, counts: { tuna: 2, redonion: 2 } };
+const CHICKEN_PESTO: Recipe = { name: "Chicken Pesto", price: 13, layers: ["ciabatta", "pesto", "chicken", "mozzarella", "tomato", "ciabatta"], toasted: true, panini: true, melt: true, counts: { mozzarella: 2, tomato: 2 }, from: 0.15 };
+const VEGGIE_CLUB: Recipe = { name: "Veggie Club", price: 12, layers: ["ciabatta", "aioli", "veggie", "tomato", "rocket", "ciabatta"], toasted: true, panini: true, counts: { tomato: 2 }, from: 0.2 };
 const TUMBLEWEED: Recipe = { name: "Tumbleweed", price: 8, layers: ["bun", "patty", "onion", "ketchup", "bun"], toasted: false };
 const RATTLESNAKE: Recipe = { name: "Rattlesnake", price: 13, layers: ["bun", "patty", "jalapeno", "cheese", "jalapeno", "ketchup", "bun"], toasted: false };
 const RANCH: Recipe = { name: "Ranch Breakfast", price: 14, layers: ["bun", "patty", "bacon", "egg", "bun"], toasted: true, egg: "over", from: 0.15 };
@@ -108,7 +126,8 @@ const SANDY_PICKLE: Recipe = { name: "Sandy Pickle", price: 10, layers: ["bun", 
 const SUNSET_DOUBLE: Recipe = { name: "Sunset Double", price: 16, layers: ["bun", "patty", "cheese", "patty", "cheese", "jalapeno", "bun"], toasted: true, smash: true, melt: true, from: 0.25 };
 
 const PINES_PANTRY: Kind[] = ["bun", "patty", "bacon", "egg", "cheese", "lettuce", "tomato", "onion", "pickle"];
-const COAST_PANTRY: Kind[] = ["bun", "patty", "bacon", "pineapple", "cheese", "lettuce", "tomato", "onion", "pickle"];
+/** The press counter's pans: breads, proteins and the tuna well behind the press, fillings in the cold rail. */
+const COAST_FIRST: Kind[] = ["ciabatta", "sourdough", "mozzarella", "tomato", "basil", "avocado", "rocket"];
 const DESERT_PANTRY: Kind[] = ["bun", "patty", "bacon", "egg", "cheese", "lettuce", "tomato", "onion", "jalapeno"];
 const ORCHARD_PANTRY: Kind[] = ["bun", "patty", "bacon", "cheese", "lettuce", "tomato", "onion", "pickle", "jalapeno"];
 
@@ -200,12 +219,13 @@ export const STOPS: Stop[] = [
     x: 72,
     y: 54,
     roads: ["gullpoint"],
-    pantry: COAST_PANTRY,
-    poutine: true,
+    pantry: COAST_FIRST,
+    poutine: false,
+    press: { bays: 2, slice: false },
     customers: 10,
     shiftLength: 190,
-    newThing: "New here: grilled pineapple. Grill one side until it's golden.",
-    menu: [BOARDWALK, LUAU],
+    newThing: "New here: the panini press. Build the sandwich on the tray, drag it into a bay and pull the handle down. Tap the handle to lift it when the meter is golden.",
+    menu: [CAPRESE, AVO_TOAST],
   },
   {
     id: "gullpoint",
@@ -217,11 +237,13 @@ export const STOPS: Stop[] = [
     x: 99,
     y: 59,
     roads: ["driftwood"],
-    pantry: COAST_PANTRY,
-    poutine: true,
+    pantry: [...COAST_FIRST, "tuna", "cheddar", "redonion"],
+    poutine: false,
+    press: { bays: 2, slice: false },
+    newThing: "New here: the Tuna Melt. Tap the tuna well for a scoop. Sourdough browns faster than ciabatta, so it comes out sooner.",
     customers: 11,
     shiftLength: 190,
-    menu: [BOARDWALK, LUAU, LOW_TIDE],
+    menu: [CAPRESE, AVO_TOAST, TUNA_MELT],
   },
   {
     id: "driftwood",
@@ -233,11 +255,14 @@ export const STOPS: Stop[] = [
     x: 95,
     y: 77,
     roads: ["harbor"],
-    pantry: COAST_PANTRY,
-    poutine: true,
+    pantry: [...COAST_FIRST, "tuna", "cheddar", "redonion", "chicken"],
+    poutine: false,
+    press: { bays: 2, slice: false },
+    sweet: true,
+    newThing: "New here: Chicken Pesto (press the chicken on its own first, then the whole sandwich) and sweet potato fries, which cook fast.",
     customers: 12,
     shiftLength: 190,
-    menu: [BOARDWALK, LUAU, LOW_TIDE],
+    menu: [CAPRESE, AVO_TOAST, TUNA_MELT, CHICKEN_PESTO],
   },
   {
     id: "harbor",
@@ -250,11 +275,14 @@ export const STOPS: Stop[] = [
     y: 100,
     roads: ["redmesa"],
     capital: true,
-    pantry: COAST_PANTRY,
-    poutine: true,
+    pantry: [...COAST_FIRST, "tuna", "cheddar", "redonion", "chicken", "veggie"],
+    poutine: false,
+    press: { bays: 3, slice: true },
+    sweet: true,
+    newThing: "New here: the Veggie Club, a third press bay and the cutting board. Swipe across a pressed panini on the board to cut it in half.",
     customers: 13,
     shiftLength: 210,
-    menu: [BOARDWALK, LUAU, LOW_TIDE],
+    menu: [CAPRESE, AVO_TOAST, TUNA_MELT, CHICKEN_PESTO, VEGGIE_CLUB],
   },
   // ---- Red Rock: a long triangle, with 64 empty miles between Red Mesa and Cactus Junction.
   {

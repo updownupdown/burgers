@@ -177,9 +177,11 @@ export function prepHtml(p: PrepInput): string {
     .map((r) => {
       const on = menu.includes(r);
       const locked = on && menu.length <= MIN_MENU;
-      const chips = [r.toasted ? "Toasted bun" : "", r.smash ? "Smashed patty" : "", r.melt ? "Melted cheese" : ""].filter(Boolean);
-      // Between the buns, bottom to top; counted toppings once, with their count.
-      const inner = r.layers.slice(1, -1);
+      const chips = r.panini
+        ? [r.open ? "Open-faced, bread pressed" : "Pressed", r.melt ? "Melted cheese" : ""].filter(Boolean)
+        : [r.toasted ? "Toasted bun" : "", r.smash ? "Smashed patty" : "", r.melt ? "Melted cheese" : ""].filter(Boolean);
+      // Between the buns (or on the bread of an open-faced toast), bottom to top; counted toppings once, with their count.
+      const inner = r.open ? r.layers.slice(1) : r.layers.slice(1, -1);
       const build = inner
         .filter((k, i) => !COUNTED.has(k) || inner.indexOf(k) === i)
         .map((k) => (COUNTED.has(k) ? `${KIND_LABEL[k]} ×${recipeCount(r, k)}` : KIND_LABEL[k]))

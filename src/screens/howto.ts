@@ -195,7 +195,7 @@ function sections(): Sec[] {
         "<b>Extra</b> on a receipt means a bigger helping, and the customer pays a little more.",
         "Going light saves on ingredients, but customers notice. A little generosity can tip a good review into a great one; a pile of pickles won't.",
       ],
-      foot: `<button class="bv-btn sm ghost" data-goto="menu">${icon("menu-book")}Counts for every recipe</button>`,
+      foot: `<button class="bv-btn sm ghost" data-goto="menu">${icon("food-menu")}Counts for every recipe</button>`,
     },
     {
       id: "fryer",
@@ -349,7 +349,8 @@ function sections(): Sec[] {
       points: [
         "How many people come depends on your <b>popularity</b> (who has heard of you) and your <b>rating</b> (what they say), both earned by cooking well.",
         "A longer <b>menu</b> brings more people and more kinds of order; hide recipes to keep it simple.",
-        "Lunch peaks from noon to one. <b>Open early or close late</b> for a few quieter hours either side.",
+        "Drag the <b>shift</b> slider to open early or close late: lunch peaks from noon to one, with quieter hours either side. A shift is at least four hours.",
+        "Every burger on the menu can be ordered all day; the taller ones come up more as the shift goes on. Tap the chevron on a burger to read its recipe.",
         "<b>Pacing</b> and your <b>bonus</b> are set here and stay put for the whole shift. Bring one bonus at most.",
         "<b>Takings</b> are your score for the shift: orders, plus tips for speed, less anything you gave away free. They go into your <b>savings</b>.",
         "Spend savings in the <b>Garage</b> (the truck button by Settings): unlocked bonuses, and looks for the truck that show on the map and at night.",
@@ -366,14 +367,14 @@ function menuSec(): Sec {
   return {
     id: "menu",
     chip: "Menu",
-    icon: "menu-book",
+    icon: "food-menu",
     title: town ? `The menu in ${town.name}` : "The menu",
     lede: "How each burger is built, bottom to top, with its topping counts.",
     fig: "",
     points: [],
     raw: `<div class="hw-std"><span class="bv-eyebrow">Standard counts</span><div>${counts}</div></div>
       ${town ? `<div class="hw-menu">${town.menu.map((r) => recipeHtml(r, 1, false)).join("")}</div>
-      <button class="bv-btn block" data-m="menuref">${icon("menu-book")}Sides, drinks and extras</button>` : ""}`,
+      <button class="bv-btn block" data-m="menuref">${icon("food-menu")}Sides, drinks and extras</button>` : ""}`,
   };
 }
 

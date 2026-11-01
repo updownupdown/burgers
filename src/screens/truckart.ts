@@ -59,6 +59,17 @@ const PAINTS: Record<string, Paint> = {
   gold: { base: GOLD, belt: "#b8892a", finish: "gold" },
 };
 
+/** The look's colours, for the 3D kitchen's window (the truck's side under the sill, the awning's hem). */
+export function lookColours(look: Look): { base: string; belt: string; finish?: string; awning: string; hem: string; hem2: string } {
+  const p = PAINTS[look.paint] ?? PAINTS.coral;
+  const aw =
+    look.awning === "stripes" ? { awning: CHERRY, hem: CHERRY, hem2: CREAM }
+    : look.awning === "velvet" ? { awning: "#7a2738", hem: GOLD, hem2: "#b8892a" }
+    : look.awning === "teal" ? { awning: "#4f9e9a", hem: CREAM, hem2: CREAM }
+    : { awning: MUSTARD, hem: MUSTARD, hem2: MUSTARD };
+  return { base: p.base, belt: p.belt, finish: p.finish, ...aw };
+}
+
 /** A colour that stands for the paint on small things (the trailer, the balloon's stripes). */
 export function paintColour(id: string): string {
   return PAINTS[id]?.base ?? CORAL;

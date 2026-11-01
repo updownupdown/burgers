@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import type { Backdrop } from "../game/stops";
+import type { Look } from "../game/looks";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
+import { lookColours } from "../screens/truckart";
 
 export type Mood = "neutral" | "happy" | "sad" | "angry";
 
@@ -168,15 +170,102 @@ export class CustomersView {
     // It sits in front of every backdrop's ground so nothing pokes through below the sill.
     const ledge = mesh(faceted(new THREE.BoxGeometry(40, 0.5, 2.2)), "#f3efe4");
     ledge.position.set(0, 0.05, 3.4);
+    // The truck's paint under the sill, with its belt line: it follows the truck's look.
     const trim = mesh(faceted(new THREE.BoxGeometry(40, 0.6, 0.2)), "#ff8a70", { ink: false });
     trim.position.set(0, -0.4, 4.5);
     this.scene.add(trim);
+    this.trim = trim;
+    const belt = mesh(faceted(new THREE.BoxGeometry(40, 0.12, 0.22)), "#faf3e6", { ink: false });
+    belt.position.set(0, -0.2, 4.5);
+    this.scene.add(belt);
+    this.belt = belt;
+    this.scene.add(this.valance);
     // The truck's inside wall under the window, where the order rail is mounted.
     const wall = mesh(new THREE.BoxGeometry(40, 8, 0.2), "#d6cdbf", { ink: false });
     wall.position.set(0, -4.6, 4.6);
     this.scene.add(wall);
     this.scene.add(ledge);
     for (let i = 0; i < 3; i++) this.slots.push({ fig: null, x: 0, enterT: 0, leaving: false });
+  }
+
+  private trim: THREE.Mesh;
+  private belt: THREE.Mesh;
+  /** The awning's hem across the top of the window, and any lights on it (see setLook). */
+  private valance = new THREE.Group();
+  /** World y just under the HUD strip, on the valance's plane (set by layout). */
+  private valanceY = 3.2;
+  private static VAL_Z = 2.6;
+
+  /**
+   * Dress the window in the truck's look: the paint and belt line under the sill, the awning's
+   * hem hanging across the top, and string lights or marquee bulbs along it.
+   */
+  setLook(look: Look): void {
+    const c = lookColours(look);
+    this.trim.material = toon(c.base);
+    this.belt.material = toon(c.belt);
+    const g = this.valance;
+    disposeObject(g);
+    g.clear();
+    const W = 40;
+    const add = (geo: THREE.BufferGeometry, color: string, x: number, y: number, z = 0, ink = false) => {
+      const m = mesh(faceted(geo), color, { ink, shadow: false });
+      m.position.set(x, y, z);
+      g.add(m);
+      return m;
+    };
+    // Canvas: a band, its bottom edge at y = 0 of the group.
+    const band = 0.42;
+    if (look.awning === "stripes") {
+      const sw = 0.5;
+      for (let i = 0; i * sw < W; i++) {
+        const x = -W / 2 + (i + 0.5) * sw;
+        const col = i % 2 ? "#faf3e6" : c.awning;
+        add(new THREE.BoxGeometry(sw, band, 0.05), col, x, band / 2);
+        // A pointed flag under each stripe.
+        const tri = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-sw / 2, 0, 0), new THREE.Vector3(0, -0.24, 0), new THREE.Vector3(sw / 2, 0, 0)]);
+        add(tri, col, x, 0, 0.03);
+      }
+    } else {
+      add(new THREE.BoxGeometry(W, band, 0.05), c.awning, 0, band / 2);
+      if (look.awning === "velvet") {
+        add(new THREE.BoxGeometry(W, 0.06, 0.07), "#b8892a", 0, 0.02, 0.02);
+        for (let i = 0; i * 0.09 < W; i++) add(new THREE.BoxGeometry(0.035, i % 2 ? 0.16 : 0.2, 0.02), c.hem, -W / 2 + i * 0.09, -0.08, 0.03);
+      } else {
+        // Scallops along the hem.
+        const r = 0.24;
+        for (let i = 0; i * r * 2 < W; i++) add(new THREE.CircleGeometry(r, 12, Math.PI, Math.PI), c.hem, -W / 2 + (i + 0.5) * r * 2, 0.01, 0.03);
+        if (look.awning !== "teal") add(new THREE.BoxGeometry(W, 0.06, 0.06), "#f8dc97", 0, band * 0.55, 0.01);
+      }
+    }
+    // Lights.
+    const glow = (x: number, y: number, r: number) => {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), new THREE.MeshBasicMaterial({ color: "#fff1c2" }));
+      b.position.set(x, y, 0.12);
+      g.add(b);
+      const h = new THREE.Mesh(new THREE.SphereGeometry(r * 2.4, 10, 8), new THREE.MeshBasicMaterial({ color: "#ffd98a", transparent: true, opacity: 0.18, depthWrite: false }));
+      h.position.copy(b.position);
+      g.add(h);
+    };
+    if (look.lights === "string") {
+      const span = 1.6;
+      const sag = 0.22;
+      const pts: THREE.Vector3[] = [];
+      for (let x = -W / 2; x <= W / 2; x += 0.1) {
+        const t = ((((x + W / 2) / span) % 1) + 1) % 1;
+        pts.push(new THREE.Vector3(x, -0.06 - sag * 4 * t * (1 - t), 0.1));
+      }
+      const wire = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: "#3f3630" }));
+      g.add(wire);
+      for (let x = -W / 2 + span / 2; x < W / 2; x += span) glow(x, -0.06 - sag - 0.1, 0.075);
+    } else if (look.lights === "marquee") {
+      for (let x = -W / 2 + 0.3; x < W / 2; x += 0.6) glow(x, -0.36, 0.07);
+    }
+    this.placeValance();
+  }
+
+  private placeValance(): void {
+    this.valance.position.set(0, this.valanceY - 0.34, CustomersView.VAL_Z);
   }
 
   setBackdrop(kind: Backdrop): void {
@@ -251,6 +340,13 @@ export class CustomersView {
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
+    // The awning's hem hangs just under the HUD strip, on its own plane nearer the window.
+    {
+      this.raycaster.setFromCamera(new THREE.Vector2(0, 1 - 2 * hudF), this.camera);
+      const out = new THREE.Vector3();
+      if (this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), -CustomersView.VAL_Z), out)) this.valanceY = out.y;
+      this.placeValance();
+    }
     // Each customer stands centred over their receipt.
     for (let i = 0; i < 3; i++) {
       this.raycaster.setFromCamera(new THREE.Vector2(((i + 0.5) / 3) * 2 - 1, 0), this.camera);

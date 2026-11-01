@@ -53,15 +53,16 @@ describe("the shift window", () => {
   it("defaults to the lunch rush and stays inside the day", () => {
     expect(validShift(null)).toEqual(DEFAULT_SHIFT);
     expect(validShift({ start: 5, end: 30 })).toEqual({ start: 9, end: 17 });
-    expect(validShift({ start: 14, end: 12 })).toEqual({ start: 14, end: 15 });
+    expect(validShift({ start: 14, end: 12 })).toEqual({ start: 13, end: 17 });
+    expect(validShift({ start: 11, end: 13 })).toEqual({ start: 11, end: 15 });
     expect(crowdShare(DEFAULT_SHIFT)).toBeCloseTo(1);
   });
 
-  it("plays a third of the town's shift per hour and runs the clock across it", () => {
+  it("plays a quarter of the town's shift per hour and runs the clock across it", () => {
     expect(shiftSeconds(DEFAULT_SHIFT, 180)).toBe(180);
-    expect(shiftSeconds({ start: 10, end: 15 }, 180)).toBe(300);
+    expect(shiftSeconds({ start: 9, end: 15 }, 180)).toBe(270);
     expect(clockAt(0, DEFAULT_SHIFT, 180)).toBe(11);
-    expect(clockAt(90, DEFAULT_SHIFT, 180)).toBe(12.5);
+    expect(clockAt(90, DEFAULT_SHIFT, 180)).toBe(13);
   });
 
   it("brings people closer together at the noon peak", () => {
@@ -152,5 +153,21 @@ describe("old saves", () => {
     expect(s.look).toEqual(DEFAULT_LOOK);
     expect(s.shift).toEqual(DEFAULT_SHIFT);
     expect((s.hidden as string[]).length).toBeGreaterThan(0);
+  });
+});
+
+describe("the menu through the day", () => {
+  it("lets every burger be ordered from opening, the later ones just less often", async () => {
+    const { pickRecipe, recipeWeight } = await import("./menu");
+    const { STOPS } = await import("./stops");
+    const desert = STOPS.find((s) => s.menu.some((r) => r.from))!;
+    const late = desert.menu.find((r) => r.from)!;
+    expect(recipeWeight(late, 0)).toBeGreaterThan(0);
+    expect(recipeWeight(late, 0)).toBeLessThan(recipeWeight(late, 0.9));
+    let seed = 1;
+    const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const seen = new Set<string>();
+    for (let i = 0; i < 400; i++) seen.add(pickRecipe(desert.menu, 0, rng).name);
+    expect(seen.size).toBe(desert.menu.length);
   });
 });

@@ -14,7 +14,7 @@ export interface Recipe {
   smash?: boolean;
   /** Cheese sitting right on a patty should be melted on the grill. */
   melt?: boolean;
-  /** Only ordered once the shift has warmed up (0..1 of the way through). */
+  /** Ordered more often once the shift has warmed up (0..1 of the way through); rarer, but possible, before. */
   from?: number;
   /** Pieces of counted toppings (pickles, onions...) when not the standard number (STANDARD_COUNT). */
   counts?: Partial<Record<Kind, number>>;

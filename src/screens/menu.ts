@@ -20,7 +20,7 @@ import { openMenuRef } from "./menuref";
 import { closeAllModals, esc, getDeps, modalDepth, modalOpen, popModal, price, pushModal, setDeps, type GfxLevel, type MenuDeps, type ShiftSummary } from "./modal";
 import { stackArt } from "./menuref";
 import { clockLabel } from "../game/shift";
-import { recipeCount, type Recipe, type Stop } from "../game/stops";
+import { recipeCount, type Stop } from "../game/stops";
 import { COUNTED, KIND_LABEL } from "../game/types";
 import { devOn, setDevOn, SIM_LEVELS, simLevel } from "../game/devmode";
 
@@ -109,7 +109,7 @@ export function openMenu(over: Partial<MenuDeps> = {}): void {
       ? pauseHtml(d, town)
       : `${head(d.subtitle?.() ?? "Menu", town.name, false)}
       <div class="menu-body menu-scroll menu-general">
-        ${row("menuref", "menu-book", "Menu", `${esc(town.name)} · ${town.menu.length} burgers, sides and drinks`)}
+        ${row("menuref", "food-menu", "Menu", `${esc(town.name)} · ${town.menu.length} burgers, sides and drinks`)}
         <h3 class="menu-h">${icon("truck")}Bun Voyage</h3>
         ${row("settings", "settings", "Settings", "Sound, graphics, the app")}
         ${row("howto", "help", "How to Play", "The grill, the fryer, the drinks, the road")}
@@ -175,7 +175,7 @@ function pauseHtml(d: MenuDeps, town: Stop): string {
     </header>
     <div class="menu-body menu-scroll pause-body">
       ${sh ? shiftHtml(sh) : ""}
-      ${todayMenuHtml(town, 1, sh)}
+      ${todayMenuHtml(town, 1)}
     </div>
     <footer class="pause-foot">
       <div class="pause-acts">
@@ -228,9 +228,7 @@ function shiftHtml(sh: ShiftSummary): string {
 }
 
 /** Today's menu in brief: only what's served today, each burger as a little stack and its build. */
-function todayMenuHtml(town: Stop, mult: number, sh: ShiftSummary | undefined): string {
-  const at = (f: number) => (sh ? clockLabel(sh.start + (sh.end - sh.start) * f) : `${Math.round(f * 100)}% in`);
-  const later = (r: Recipe) => !!r.from && (!sh || sh.progress < r.from);
+function todayMenuHtml(town: Stop, mult: number): string {
   const items = town.menu
     .map((r) => {
       const notes: string[] = [];
@@ -240,18 +238,18 @@ function todayMenuHtml(town: Stop, mult: number, sh: ShiftSummary | undefined): 
       // Bottom to top, between the buns; counted toppings once, with their count.
       const inner = r.layers.slice(1, -1);
       const uniq = inner.filter((k, i) => !COUNTED.has(k) || inner.indexOf(k) === i).map((k) => (COUNTED.has(k) ? `${KIND_LABEL[k]} ×${recipeCount(r, k)}` : KIND_LABEL[k]));
-      return `<li class="pause-dish ${later(r) ? "later" : ""}">
+      return `<li class="pause-dish">
         ${stackArt(r)}
-        <div class="pd-main"><b>${esc(r.name)}</b><small>${uniq.map(esc).join(" · ")}</small>${notes.length || later(r) ? `<span class="tags">${later(r) ? `<span class="bv-chip pill">${icon("clock")}from ${at(r.from!)}</span>` : ""}${notes.map((n) => `<span class="bv-chip pill">${n}</span>`).join("")}</span>` : ""}</div>
+        <div class="pd-main"><b>${esc(r.name)}</b><small>${uniq.map(esc).join(" · ")}</small>${notes.length ? `<span class="tags">${notes.map((n) => `<span class="bv-chip pill">${n}</span>`).join("")}</span>` : ""}</div>
         <span class="bv-mono pr">${price(Math.round(r.price * mult))}</span>
       </li>`;
     })
     .join("");
   return `<section class="pause-menu" aria-label="Today's menu">
-    <h3 class="menu-h">${icon("menu-book")}Today's menu <span>${town.menu.length}</span></h3>
+    <h3 class="menu-h">${icon("food-menu")}Today's menu <span>${town.menu.length}</span></h3>
     <ul class="pause-dishes">${items}</ul>
     <p class="pause-note mute">Fries S, M, L · Drinks S, M, L, with ice and a lid unless asked.</p>
-    <button class="bv-btn sm ghost" data-m="menuref">${icon("menu-book")}Full menu and prices</button>
+    <button class="bv-btn sm ghost" data-m="menuref">${icon("food-menu")}Full menu and prices</button>
   </section>`;
 }
 

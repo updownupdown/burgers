@@ -114,6 +114,8 @@ export const ICONS: Record<string, IconDef> = {
   panini: { group: "food", svg: P("M4 9h16v3H4zM4 15h16v3H4zM4 12h16v3H4zM6 9V7h12v2M7 12l2 1M11 12l2 1M15 12l2 1"), tags: "pressed sandwich melt toasted" },
   toast: { group: "food", svg: P("M6 10a3 3 0 0 1 0-6h12a3 3 0 0 1 0 6v10H6zM9 13l3 3 3-3"), tags: "toasted bun bread" },
   smash: { group: "food", svg: P("M5 13h14M4 16a8 3 0 0 0 16 0M12 13V5M9 8l3-3 3 3"), tags: "pressed thin crust" },
+  /** The food menu: a menu card with a burger at its head (not the three-line app menu). */
+  "food-menu": { group: "food", svg: P("M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8.5 10a3.5 2.6 0 0 1 7 0zM8.5 12.5h7M9 15h6M9 18h6"), tags: "menu card dishes recipes food" },
   "menu-book": { group: "food", svg: P("M4 5h7a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H4zM20 5h-7a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2h7zM7 9h3M7 12h3M14 9h3M14 12h3"), tags: "recipe book cookbook" },
 
   /* ---- trip (road, stops, map) -------------------------------------- */

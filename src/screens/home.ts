@@ -201,7 +201,7 @@ function statsHtml(save: Save): string {
     ${
       evening
         ? `<button class="home-door" data-home="results" ${last ? "" : "disabled"}>${icon("receipt")}<span>Results</span></button>`
-        : `<button class="home-door" data-home="menuref">${icon("menu-book")}<span>Menu</span></button>`
+        : `<button class="home-door" data-home="menuref">${icon("food-menu")}<span>Menu</span></button>`
     }
   </div>`;
 }

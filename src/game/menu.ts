@@ -1,4 +1,4 @@
-import type { Doneness, DrinkId, ExpectedLayer, FriesSize, Kind, Modifier, Order, Size } from "./types";
+import type { DrinkId, ExpectedLayer, FriesSize, Kind, Modifier, Order, Size } from "./types";
 import { COUNTED, DRINK_LABEL, DRINKS, extraCount } from "./types";
 import { recipeCount, type Recipe, type Stop } from "./stops";
 
@@ -60,7 +60,6 @@ export function seededRng(seed: number): Rng {
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 }
 
-const DONENESS: Doneness[] = ["rare", "medium", "well"];
 
 /** Recipe layers with modifiers applied, bottom to top. */
 export function applyMods(base: Kind[], mods: Modifier[]): Kind[] {
@@ -82,7 +81,6 @@ export function applyMods(base: Kind[], mods: Modifier[]): Kind[] {
 export function orderFromRecipe(
   id: number,
   recipe: Recipe,
-  doneness: Doneness,
   fries: boolean,
   drink: DrinkId | null,
   mods: Modifier[] = [],
@@ -101,7 +99,7 @@ export function orderFromRecipe(
     else if (!removed.some((r) => r.kind === k && r.at === kinds.length)) removed.push({ kind: k, at: kinds.length });
   }
   const layers: ExpectedLayer[] = kinds.map((kind, i) => {
-    if (kind === "patty") return recipe.smash ? { kind, doneness, smashed: true } : { kind, doneness };
+    if (kind === "patty") return recipe.smash ? { kind, smashed: true } : { kind };
     if (kind === "bun") return { kind, toasted: recipe.toasted };
     if (kind === "cheese" && recipe.melt && kinds[i - 1] === "patty") return { kind, melted: true };
     if (COUNTED.has(kind)) return { kind, count: recipeCount(recipe, kind) + (more.has(kind) ? extraCount(kind) : 0) };
@@ -151,8 +149,6 @@ export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Orde
   if (level < 0.25) pool = pool.filter((r) => r.layers.length <= 6);
   if (!pool.length) pool = stop.menu;
   const recipe = pool[Math.floor(rng() * pool.length)];
-  // Smashed patties are thin, so they're always cooked through.
-  const doneness = recipe.smash ? "well" : DONENESS[Math.floor(rng() * DONENESS.length)];
   const fries = rng() < 0.25 + level * 0.4;
   const drink = rng() < 0.2 + level * 0.5 ? DRINKS[Math.floor(rng() * DRINKS.length)] : null;
   // Modifiers keep tickets short: a known recipe plus "no pickles" rather than a new list.
@@ -161,7 +157,7 @@ export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Orde
   const friesSize: FriesSize = f < 0.35 ? "S" : f < 0.75 ? "M" : "L";
   const r = rng();
   const drinkSize: Size = r < 0.3 ? "S" : r < 0.7 ? "M" : "L";
-  const order = orderFromRecipe(id, recipe, doneness, fries, drink, mods, friesSize, drinkSize);
+  const order = orderFromRecipe(id, recipe, fries, drink, mods, friesSize, drinkSize);
   if (drink) {
     const i = rng();
     order.ice = i < 0.45 ? true : i < 0.7 ? false : null;

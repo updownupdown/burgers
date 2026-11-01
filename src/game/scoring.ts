@@ -1,6 +1,6 @@
-import { avgCook, bunToast, friesQuality, friesZone, FRIES_ZONE, isMelted, DRINK_FILL, SALT } from "./cooking";
+import { avgCook, bunToast, friesQuality, friesZone, FRIES_ZONE, isMelted, DRINK_FILL, pattyDoneness, SALT } from "./cooking";
 import type { Drink, ExpectedLayer, Fries, Layer, Order, Piece, Plate } from "./types";
-import { COUNTED, DONENESS_TARGET, KIND_LABEL, SAUCE_RADIUS, SIZE_LABEL } from "./types";
+import { COUNTED, KIND_LABEL, SAUCE_RADIUS, SIZE_LABEL } from "./types";
 
 export interface ScoreResult {
   /** 0..100 */
@@ -123,22 +123,19 @@ export function sauceVerdict(cov: number): { q: number; word: SauceWord } {
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
+/** A rare or well-done patty: acceptable, not ideal. */
+export const PATTY_OFF = 0.8;
+
 /** How well a piece meets its ticket line, 0..1, plus an optional complaint. */
 export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string | null] {
   switch (exp.kind) {
     case "patty": {
-      const target = DONENESS_TARGET[exp.doneness ?? "medium"];
-      const [a, b] = piece.cook;
-      if (Math.max(a, b) >= 0.95) return [0.05, "burnt patty"];
-      if (Math.min(a, b) < 0.15) return [0.15, "raw patty"];
-      const off = Math.abs(avgCook(piece) - target);
-      const uneven = Math.abs(a - b);
-      // Anywhere inside the doneness band is fine; beyond it the score drops quickly.
-      const q = clamp01(1 - Math.max(0, off - 0.1) * 4 - Math.max(0, uneven - 0.2) * 1.6);
-      let note: string | null = null;
+      // Every patty goes out medium. Rare and well done are acceptable but not ideal; raw and
+      // burnt are not.
+      const level = pattyDoneness(Math.max(piece.cook[0], piece.cook[1]));
+      const [q, note]: [number, string | null] =
+        level === "burnt" ? [0.05, "burnt patty"] : level === "raw" ? [0.15, "raw patty"] : level === "medium" ? [1, null] : [PATTY_OFF, level === "rare" ? "patty a bit rare" : "patty a bit well done"];
       if (exp.smashed && !piece.smashed) return [q * 0.6, "wanted it smashed"];
-      if (off > 0.12) note = avgCook(piece) > target ? "patty overcooked" : "patty undercooked";
-      else if (uneven > 0.3) note = "patty cooked on one side";
       return [q, note];
     }
     case "bun": {
@@ -373,13 +370,10 @@ function drinkScore(order: Order, d: Drink, notes: string[]): number {
     q *= 0.6;
     notes.push("asked for no ice");
   }
-  // A drink handed over without a lid and straw is a drink about to be spilled.
+  // A drink handed over without a lid is a drink about to be spilled.
   if (!d.lid) {
     q *= 0.8;
     notes.push("no lid");
-  } else if (!d.straw) {
-    q *= 0.9;
-    notes.push("no straw");
   }
   return q;
 }

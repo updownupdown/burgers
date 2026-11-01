@@ -68,7 +68,6 @@ export interface Drink {
   size: Size;
   ice?: boolean;
   lid?: boolean;
-  straw?: boolean;
 }
 
 export interface Plate {
@@ -79,7 +78,6 @@ export interface Plate {
 
 export interface ExpectedLayer {
   kind: Kind;
-  doneness?: Doneness;
   toasted?: boolean;
   smashed?: boolean;
   /** Cheese that should be melted onto the patty below it. */
@@ -184,6 +182,7 @@ export const DRINK_COLOR: Record<DrinkId, string> = {
   tea: "#c3731f",
 };
 
+/** Middle of each patty doneness band (every order wants medium; see pattyDoneness). */
 export const DONENESS_TARGET: Record<Doneness, number> = {
   rare: 0.32,
   medium: 0.55,

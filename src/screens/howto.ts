@@ -44,15 +44,14 @@ export function donePill(level: "raw" | "rare" | "medium" | "well" | "burnt", pr
 
 const arrow = `<span class="hw-arrow" aria-hidden="true">${icon("forward")}</span>`;
 
-function cupSvg(step: "cup" | "ice" | "pour" | "lid" | "straw"): string {
+function cupSvg(step: "cup" | "ice" | "pour" | "lid"): string {
   const body = "M9 16h22l-2.6 32H11.6z";
   const fill = step === "cup" || step === "ice" ? "" : `<path d="M10.1 26h19.8l-1.8 22H11.9z" class="liq"/>`;
   const ice = step === "cup" ? "" : `<rect x="13" y="${step === "ice" ? 38 : 28}" width="6" height="6" rx="1.2" class="ice"/><rect x="20" y="${step === "ice" ? 40 : 31}" width="6" height="6" rx="1.2" class="ice"/>`;
   const stream = step === "pour" ? `<rect x="18.8" y="2" width="2.4" height="24" rx="1.2" class="liq stream"/><path d="M14 4h12v4H14z" class="nozzle"/>` : "";
   const line = step === "pour" ? `<path d="M9.6 21h20.8" class="line"/>` : "";
-  const lid = step === "lid" || step === "straw" ? `<path d="M7 16h26v-2.2c-4-3.6-22-3.6-26 0z" class="lid"/>` : "";
-  const straw = step === "straw" ? `<path d="M22 13L27 1" class="straw"/>` : "";
-  return `<svg class="hw-cup" viewBox="0 0 40 50" aria-hidden="true">${stream}${fill}${ice}<path d="${body}" class="cup"/>${line}${straw}${lid}</svg>`;
+  const lid = step === "lid" ? `<path d="M7 16h26v-2.2c-4-3.6-22-3.6-26 0z" class="lid"/>` : "";
+  return `<svg class="hw-cup" viewBox="0 0 40 50" aria-hidden="true">${stream}${fill}${ice}<path d="${body}" class="cup"/>${line}${lid}</svg>`;
 }
 
 function carton(size: Size): string {
@@ -87,7 +86,7 @@ function sections(): Sec[] {
         <li>${icon("arrow-up")}<b>Swipe up</b><span>to serve</span></li>
       </ol>
       <div class="hw-tabs" aria-hidden="true">
-        <span>${icon("drink")}Drinks</span><span class="on">${icon("grill")}Grill</span><span>${icon("fryer")}Fryer</span><span>${icon("box")}Supplies</span>
+        <span>${icon("drink")}Drinks</span><span class="on">${icon("grill")}Grill</span><span>${icon("fryer")}Fryer</span>
       </div>
       <p class="hw-cap">${icon("swap")}Tap a counter in the bottom bar, or swipe along the bar to move between them. The fryer is wide: tap its tab again for the other end.</p>`,
       points: [
@@ -140,19 +139,15 @@ function sections(): Sec[] {
       lede: "Patties cook slowly. Put them on early, then go do something else.",
       fig: `<div class="hw-dn">
         <div class="hw-dnrow">${donePill("rare", 0.5)}${donePill("medium", 0.5)}${donePill("well", 0.5)}${donePill("burnt")}</div>
-        <div class="hw-match">
-          <div class="hw-patty"><span class="lbl">On the grill</span>${donePill("medium", 0.45)}<svg viewBox="0 0 60 18" aria-hidden="true"><ellipse cx="30" cy="11" rx="26" ry="6" class="grillbar"/><ellipse cx="30" cy="8" rx="22" ry="6" fill="${KIND_COLOR.patty}"/></svg></div>
-          <span class="hw-eq">${icon("check")}</span>
-          <div class="hw-patty"><span class="lbl">On the receipt</span>${donePill("medium")}<span class="rc-mini">Trailhead Classic</span></div>
-        </div>
-        <p class="hw-cap">Same colour, same word. The bar fills as the patty moves through a level: take it off around the middle.</p>
+        <p class="hw-cap">Every patty goes out <b>Medium</b>. Rare or Well will do, but customers notice; Burnt won't. The bar fills as the patty moves through a level.</p>
       </div>`,
       points: [
-        "Drag a patty onto a hot part of the grill. <b>Swipe up on it to flip</b>: each side cooks on its own, so cook both.",
+        "Drag a patty onto a hot part of the grill. <b>No flipping:</b> it cooks through on one side. Take it off when its tag says <b>Medium</b>.",
         "The grill has <b>three zones</b>, each with a button on the front: tap it to go <b>off, warm, hot</b>. The strip along the front shows it in blue, orange or red. A shift starts hot, hot, off.",
-        "<b>Smash:</b> press and hold a fresh patty to flatten it. Smashed patties cook fast and are always well done.",
+        "<b>Smash:</b> press and hold a fresh patty to flatten it. Smashed patties cook fast.",
         "<b>Melt:</b> drop a cheese slice on a patty while it's on the grill. They come off together.",
-        "<b>Toast</b> buns face down. Bacon, eggs and pineapple grill too.",
+        "<b>Toast</b> buns face down. Bacon and pineapple grill too.",
+        "<b>Eggs:</b> tap one in the tray to pick it up, then tap it on the grill to crack it. A quick, crisp tap opens it in one; otherwise tap again. Then drop the <b>shells in the trash</b>.",
         "A <b>warm</b> zone barely cooks and keeps food hot: park finished food there. Food on an off zone doesn't cook at all.",
       ],
     },
@@ -240,35 +235,18 @@ function sections(): Sec[] {
       chip: "Drinks",
       icon: "drink",
       title: "Drinks",
-      lede: "Five steps, always in this order.",
+      lede: "Four steps, always in this order.",
       fig: `<ol class="hw-drink">
         <li>${cupSvg("cup")}<b>Cup</b><span>S · M · L</span></li>
         <li>${cupSvg("ice")}<b>Ice</b><span>optional</span></li>
         <li>${cupSvg("pour")}<b>Pour</b><span>hold</span></li>
         <li>${cupSvg("lid")}<b>Lid</b></li>
-        <li>${cupSvg("straw")}<b>Straw</b></li>
       </ol>`,
       points: [
         `Take a cup of the right size from the front row: <b>S, M or L</b> (${price(DRINK_PRICE.S)} to ${price(DRINK_PRICE.L)}). Stand it anywhere on the counter, or straight under a nozzle; you can move a cup any time.`,
         "Add ice from the ice bin unless the receipt says <b>No ice</b>.",
         "<b>Hold</b> the drink's button on top of the fountain to pour. A bar on the left shows the level: let go at <b>Perfect</b>. Overflowing leaves a spill: <b>wipe it</b> before that nozzle takes another cup.",
-        "Snap on a <b>lid of the cup's size</b>, add a <b>straw</b>, then drag the drink up to the tray.",
-      ],
-    },
-    {
-      id: "supplies",
-      chip: "Supplies",
-      icon: "box",
-      title: "Supplies",
-      lede: "The fourth counter, for when a stack of cups or cartons runs out.",
-      fig: `<div class="hw-sup">
-        <span class="sleeve">${icon("box")}<b>Sleeve</b></span>${arrow}
-        <span class="taps"><i class="tapfx" aria-hidden="true"></i><b>Tap, tap</b><small>to tear it open</small></span>${arrow}
-        <span class="stack">${icon("cup-stack")}<b>Stack refilled</b></span>
-      </div>`,
-      points: [
-        "The shelf has cups down the left and paper boats down the right. Grab a sleeve, hold it over the Drinks or Fryer tab, and tear it open on the empty stack of the same size.",
-        "Whatever's left <b>carries over</b> to the next day, so restock in a quiet moment, not mid-rush.",
+        "Snap on a <b>lid of the cup's size</b>, then drag the drink up to the tray.",
       ],
     },
     {

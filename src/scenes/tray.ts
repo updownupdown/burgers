@@ -220,7 +220,7 @@ export class PlateView {
       }
       this.friesKey = fk;
     }
-    const ck = p.drink ? `${p.drink.flavor}${p.drink.fill.toFixed(2)}${p.drink.size}${+!!p.drink.ice}${+!!p.drink.lid}${+!!p.drink.straw}` : "";
+    const ck = p.drink ? `${p.drink.flavor}${p.drink.fill.toFixed(2)}${p.drink.size}${+!!p.drink.ice}${+!!p.drink.lid}` : "";
     if (ck !== this.cupKey) {
       if (this.cup) {
         this.group.remove(this.cup);

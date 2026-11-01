@@ -164,8 +164,8 @@ export function makeBasket(): THREE.Group {
   return g;
 }
 
-/** Potato freezer: a chest freezer, lid propped open against the wall, heaped with frozen fries. */
-export const FREEZER = { w: 3.2, d: 2.4, h: 0.55 };
+/** Potato freezer: a narrow chest freezer, lid propped open against the wall, heaped with frozen fries. */
+export const FREEZER = { w: 1.6, d: 2.4, h: 0.55 };
 const LID_TILT = -1.62;
 let freezerBaked: Baked | null = null;
 export function makeFreezer(): THREE.Group {

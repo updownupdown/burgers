@@ -4,13 +4,11 @@ import type { CupObject } from "./food";
 export interface CupDressing {
   ice?: boolean;
   lid?: boolean;
-  straw?: boolean;
 }
 
-/** Show a cup's ice, lid and straw. */
+/** Show a cup's ice and lid. */
 export function dressCup(cup: CupObject, d: CupDressing): void {
-  const u = cup.userData as Partial<Record<"setIce" | "setLid" | "setStraw", (on: boolean) => void>>;
+  const u = cup.userData as Partial<Record<"setIce" | "setLid", (on: boolean) => void>>;
   u.setIce?.(!!d.ice);
   u.setLid?.(!!d.lid);
-  u.setStraw?.(!!d.straw);
 }

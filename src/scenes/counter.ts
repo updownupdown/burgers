@@ -5,24 +5,23 @@ import { CUP_SPEED, DRINKS, GRILLABLE } from "../game/types";
 import { counterTop, wallPanels } from "../render/wear";
 import { CUP_DIMS, cupSurfaceY, makeCarton, makeCartonStack, makeCup, makeFood, makeBasketFries, makeFries, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { dressCup } from "../render/cup";
-import { makeStrawHolder } from "../render/models/drinks";
 import { FREEZER, makeCurdHandful, makeCurdTub, makeFreezer, makeGravyPot, makeLadle, makeShaker } from "../render/fryer";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { makeGriddle, ZONE_HEATS, type GriddleObject, type ZoneHeat } from "../render/machines/griddle";
 import { makeColdRail } from "../render/machines/coldRail";
 import { makeSauceBottle, makeSauceCaddy, type SauceCaddyObject } from "../render/machines/sauces";
-import { DRINK_TINT, makeCupStack, makeFountain, makeFryBasket, makeFryer, makeIceWell, makeLidStackSized, makePackPad, makeSleeve, makeSupplyShelf, makeTrashChute, FRY_BASKET, type FryerObject } from "../render/machines";
+import { DRINK_TINT, makeCupStack, makeFountain, makeFryBasket, makeFryer, makeIceWell, makeLidStackSized, makePackPad, makeTrashChute, FRY_BASKET, type FryerObject } from "../render/machines";
 import { applyKitchenLight, KITCHEN_BG, type KitchenLight } from "../render/lighting";
 import { SCALE } from "../render/units";
 
-export const PAGES = ["Drinks", "Grill", "Fryer", "Supplies"] as const;
+export const PAGES = ["Drinks", "Grill", "Fryer"] as const;
 export const HOME_PAGE = 1;
 /**
- * The window line: drinks, grill, fryer and supplies run along the serving window, facing it, so
+ * The window line: drinks, grill and fryer run along the serving window, facing it, so
  * the tray above the counter really is the window ledge. (The truck is drawn wider than it could
  * be so every counter gets the window.) Page centres in world x:
  */
-const PAGE_CX = [-14, 0, 15, 30];
+const PAGE_CX = [-14, 0, 15];
 export const pageX = (i: number) => PAGE_CX[i];
 /** One zoom for every page: about 9 units (1.35 m) across the middle, which fits the grill page front to back. */
 const VIEW_W = 9.0;
@@ -83,8 +82,8 @@ const TRASH_HALF = 4.4;
  * screen, so lifting a basket (an upward flick) never looks like a carry.
  */
 const FRYER = {
-  fryer: { x: 0.85, z: -1.45 },
-  freezer: { x: -2.6, z: -1.75 },
+  fryer: { x: 0.25, z: -1.55 },
+  freezer: { x: -3.35, z: -1.75 },
   stacks: [["S", -3.45], ["M", -2.35], ["L", -1.25]] as [FriesSize, number][],
   stackZ: 1.75,
   pads: { x: 1.45, z: 1.75 },
@@ -92,6 +91,8 @@ const FRYER = {
   curds: { x: 3.6, z: -1.05 },
   shaker: { x: 3.6, z: 0.25 },
 };
+/** The fryer (and its baskets) drawn this much bigger than the model, in the room a smaller potato freezer frees up. */
+const FRYER_SCALE = 1.3;
 /** The salt shaker is drawn bigger than life so it reads as a thing to pick up. */
 const SHAKER_SCALE = 1.6;
 /** One packing pad (the cream square inside its orange outline). */
@@ -102,33 +103,36 @@ export const EMPTY_PACK = { size: null, cook: 0, fill: 0, salt: 0, curds: false,
 const PACK_SCALE = SCALE.fries;
 const CARTON_STACK_SCALE = SCALE.fries;
 
-/** A full stack of cups or cartons, and what a fresh sleeve from the Supplies counter refills it to. */
-const STACK_START = 10;
-export const SLEEVE = 10;
+/** Cup and carton stacks never run out: this is just how many are drawn. */
+const STACK_SHOWN = 10;
 
 /**
- * Drinks page: the ice bin (as big as the fountain) and the fountain share the back wall, the
- * middle of the counter is free for cups to stand anywhere, and the front row holds the cup
- * stacks, a lid stack per cup size and the straws.
+ * Drinks page: a small ice bin and a big fountain share the back wall, the middle of the counter
+ * is free for cups to stand anywhere, and the front row holds the cup stacks on the left and a
+ * lid stack per cup size on the right, spread out along the whole counter.
  */
-const FOUNTAIN = { x: 2.15, z: -2.1 };
-const ICE = { x: -2.2, z: -2.2 };
-const CUP_STACKS: [Size, number][] = [["S", -3.25], ["M", -2.3], ["L", -1.3]];
-const LID_STACKS: [Size, number][] = [["S", -0.15], ["M", 0.8], ["L", 1.8]];
-const STRAWS = { x: 3.15 };
+/** The fountain is drawn this much bigger than its model, so its buttons are easy to hit. */
+const FOUNTAIN_SCALE = 1.22;
+const FOUNTAIN = { x: 1.1, z: -1.75 };
+/** The ice bin is half the fountain model's width. */
+const ICE_WIDTH = 0.5;
+const ICE = { x: -3.25, z: -2.2 };
+const CUP_STACKS: [Size, number][] = [["S", -3.5], ["M", -2.25], ["L", -1.0]];
+const LID_STACKS: [Size, number][] = [["S", 1.0], ["M", 2.25], ["L", 3.5]];
 const FRONT_Z = 1.95;
-const FOUNTAIN_SPOTS = makeFountain().userData.spots;
+type P3 = { x: number; y: number; z: number };
+const scaleP = (p: P3, k: number): P3 => ({ x: p.x * k, y: p.y * k, z: p.z * k });
+const FOUNTAIN_SPOTS = (() => {
+  const s = makeFountain().userData.spots;
+  const k = FOUNTAIN_SCALE;
+  return { cups: s.cups.map((p) => scaleP(p, k)), nozzles: s.nozzles.map((p) => scaleP(p, k)), buttons: s.buttons.map((p) => scaleP(p, k)) };
+})();
 /** Cups on the counter and in the hand, against cup units. */
 const CUP_AT_TAP = SCALE.cup;
 export const CUP_IN_HAND = SCALE.cup;
 /** A cup takes this much room on the counter (it can't stand closer than this to another). */
 const CUP_ROOM = 0.72;
 
-/**
- * Supplies: one shelf of steel bins, cups on the left and paper boats on the right, a bin per
- * size. Nothing else, so every target on the page has a job.
- */
-const SHELF_AT = { x: 0, z: 0 };
 /** Dollars of soda lost per second of overflow. */
 const SPILL_COST = 1.5;
 
@@ -165,14 +169,10 @@ export interface Basket {
   tilt: number;
 }
 
-/** A stack of empty cups or fries cartons. Once it runs out, a wrapped sleeve from the Supplies counter refills it. */
+/** A stack of empty cups or fries cartons. It never runs out. */
 export interface Stack {
   kind: "cup" | "carton";
   size: Size;
-  count: number;
-  /** A wrapped sleeve is sitting here; `tear` counts the taps spent opening it. */
-  sleeve: boolean;
-  tear: number;
   obj: THREE.Group;
   x: number;
   z: number;
@@ -203,7 +203,6 @@ export interface DrinkCup {
   fill: number;
   ice: boolean;
   lid: boolean;
-  straw: boolean;
   /** World position on the counter. */
   x: number;
   z: number;
@@ -235,10 +234,8 @@ export type Hit =
   | { type: "spill"; idx: number }
   | { type: "ice" }
   | { type: "lids"; size: Size }
-  | { type: "straws" }
   | { type: "zone"; idx: number }
   | { type: "stack"; idx: number }
-  | { type: "supplies"; kind: "cup" | "carton"; size: Size }
   | { type: "pack"; idx: number }
   | { type: "shaker" }
   | { type: "curds" }
@@ -253,8 +250,11 @@ export interface CounterEvents {
 }
 
 /** Buns toast and eggs set more slowly than meat, so they're forgiving to leave on. */
-/** Patties are slow on purpose: put them on, go do something else, come back to flip. */
-const COOK_SPEED: Record<string, number> = { patty: 0.34, bacon: 1.1, egg: 0.75, bun: 0.6, pineapple: 0.7 };
+/**
+ * Patties cook through on one side (no flip), slowly on purpose: put them on, go do something
+ * else, come back while they're medium (about 21 to 33 seconds on a hot zone).
+ */
+const COOK_SPEED: Record<string, number> = { patty: 0.255, bacon: 1.1, egg: 0.75, bun: 0.6, pineapple: 0.7 };
 
 /** Nozzle spacing on the soda fountain. */
 export const TAP_GAP = FOUNTAIN_SPOTS.cups[1].x - FOUNTAIN_SPOTS.cups[0].x;
@@ -331,7 +331,6 @@ export class CounterView {
     this.buildGrill();
     this.buildFryer();
     this.buildDrinks();
-    this.buildSupplies();
     this.buildTrash();
   }
 
@@ -376,7 +375,7 @@ export class CounterView {
     }
   }
 
-  /** Fryer page: see FRYER. Carton sleeves come from the Supplies counter. */
+  /** Fryer page: see FRYER. */
   private buildFryer(): void {
     const F = FRYER;
     const at = (x: number, y: number, z: number) => this.world(2, x, y, z);
@@ -417,12 +416,22 @@ export class CounterView {
 
     // The hang-rail fryer: a basket per well, hanging tilted on the rail until it's lowered.
     const fryer = makeFryer();
+    fryer.scale.setScalar(FRYER_SCALE);
     fryer.position.copy(at(F.fryer.x, 0, F.fryer.z));
     this.scene.add(fryer);
     this.fryer = fryer;
-    const sp = fryer.userData.spots;
+    const k = FRYER_SCALE;
+    const raw = fryer.userData.spots;
+    const sp = {
+      wells: raw.wells.map((w) => ({ x: w.x * k, z: w.z * k, oilY: w.oilY * k })),
+      down: { y: raw.down.y * k },
+      hang: raw.hang.map((h) => ({ ...scaleP(h, k), tilt: h.tilt })),
+      meters: raw.meters.map((m) => scaleP(m, k)),
+    };
+    this.fryerSpots = sp;
     sp.wells.forEach((w, i) => {
       const basket = makeFryBasket();
+      basket.scale.setScalar(k);
       const fries = makeBasketFries(FRY_BASKET.w - 0.1, FRY_BASKET.d - 0.1, 21 + i);
       fries.position.y = 0.02;
       fries.visible = false;
@@ -432,16 +441,17 @@ export class CounterView {
       const up = fryer.position.clone().add(new THREE.Vector3(hang.x, hang.y, hang.z));
       const down = fryer.position.clone().add(new THREE.Vector3(w.x, sp.down.y, w.z));
       this.baskets.push({ loaded: false, cook: 0, down: false, goldenRung: false, beepT: 0, obj: basket, fries, t: 0, amount: 0, up, downAt: down, tilt: hang.tilt });
-      this.proxy(new THREE.BoxGeometry(1.5, 1.4, 2.6), fryer.position.clone().add(new THREE.Vector3(w.x, 0.8, w.z + 0.5)), { type: "basket", idx: i });
+      this.proxy(new THREE.BoxGeometry(1.5 * k, 1.4, 2.6 * k), fryer.position.clone().add(new THREE.Vector3(w.x, 0.8, w.z + 0.5 * k)), { type: "basket", idx: i });
     });
   }
 
   private buildDrinks(): void {
     const at = (x: number, y: number, z: number) => this.world(0, x, y, z);
     const fountain = makeFountain();
+    fountain.scale.setScalar(FOUNTAIN_SCALE);
     fountain.position.copy(at(FOUNTAIN.x, 0, FOUNTAIN.z));
     this.scene.add(fountain);
-    const sp = fountain.userData.spots;
+    const sp = FOUNTAIN_SPOTS;
     DRINKS.forEach((flavor, i) => {
       const x = tapX(i);
       const stream = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1, 8), toon(DRINK_TINT[flavor]));
@@ -461,14 +471,14 @@ export class CounterView {
       this.proxy(new THREE.BoxGeometry(TAP_GAP - 0.04, 0.6, 1.3), new THREE.Vector3(x, 0.3, CUP_Z + 0.15), { type: "spill", idx: i });
     });
 
-    // The ice bin, as big as the fountain: grab a scoop from anywhere on it.
-    const ice = makeIceWell();
+    // The ice bin: grab a scoop from anywhere on it.
+    const ice = makeIceWell(ICE_WIDTH);
     ice.position.copy(at(ICE.x, 0, ICE.z));
     this.scene.add(ice);
     const fp = ice.userData.footprint as { w: number; d: number };
     this.proxy(new THREE.BoxGeometry(fp.w, 1.0, fp.d), at(ICE.x, 0.5, ICE.z), { type: "ice" });
 
-    // The front row: cups by size, a stack of lids for each cup size, then the straws.
+    // The front row: cups by size on the left, a stack of lids for each cup size on the right.
     for (const [size, x] of CUP_STACKS) this.addStack("cup", size, at(x, 0, FRONT_Z));
     for (const [size, x] of LID_STACKS) {
       const lids = makeLidStackSized(size, 8);
@@ -477,37 +487,14 @@ export class CounterView {
       this.lidAt.push({ size, at: lids.position.clone() });
       this.proxy(new THREE.BoxGeometry(0.95, 1.0, 1.2), at(x, 0.4, FRONT_Z), { type: "lids", size });
     }
-    const straws = makeStrawHolder();
-    straws.scale.setScalar(1.2);
-    straws.position.copy(at(STRAWS.x, 0, FRONT_Z));
-    this.scene.add(straws);
-    this.proxy(new THREE.BoxGeometry(1.2, 1.8, 1.2), at(STRAWS.x, 0.8, FRONT_Z), { type: "straws" });
   }
 
   /** Where each lid stack stands, for its size tag and the playtest bot. */
   lidAt: { size: Size; at: THREE.Vector3 }[] = [];
 
-  /**
-   * The Supplies counter, on the window line past the fryer: a shelf of steel bins, cup sleeves
-   * down the left and paper-boat sleeves down the right. Tap a bin for a sleeve and carry it to
-   * that stack over its counter's tab.
-   */
-  private buildSupplies(): void {
-    const shelf = makeSupplyShelf();
-    shelf.position.copy(this.world(3, SHELF_AT.x, 0, SHELF_AT.z));
-    this.scene.add(shelf);
-    const { bays, bayW, bayD } = shelf.userData.spots;
-    bays.forEach((b, i) => {
-      shelf.userData.setBay(i, 2);
-      const c = shelf.position.clone().add(new THREE.Vector3(b.x, b.y, b.z));
-      this.supplyAt.push({ kind: b.kind, size: b.size, at: c });
-      this.proxy(new THREE.BoxGeometry(bayW - 0.1, 0.9, bayD - 0.05), c.clone().setY(0.4), { type: "supplies", kind: b.kind, size: b.size });
-    });
-  }
-
-  /** Where each bin of the supply shelf is, for labels and the playtest bot. */
-  supplyAt: { kind: Stack["kind"]; size: Size; at: THREE.Vector3 }[] = [];
   private fryer!: FryerObject;
+  /** The fryer's spots, scaled with it. */
+  private fryerSpots!: FryerObject["userData"]["spots"];
   /** The shaker standing in the topping column (hidden while it's in hand). */
   shakerObj!: THREE.Object3D;
 
@@ -553,8 +540,8 @@ export class CounterView {
     return i >= 0 && this.packs[i].size && this.packs[i].fill > 0 ? i : -1;
   }
 
-  /** A scoop of ice, one lid (for a cup size) or one straw: on the counter and in hand. */
-  extraMesh(what: "ice" | "lid" | "straw", size: Size = "M"): THREE.Object3D {
+  /** A scoop of ice or one lid (for a cup size): on the counter and in hand. */
+  extraMesh(what: "ice" | "lid", size: Size = "M"): THREE.Object3D {
     if (what === "ice") {
       const g = new THREE.Group();
       for (let i = 0; i < 3; i++) {
@@ -565,11 +552,8 @@ export class CounterView {
       }
       return g;
     }
-    if (what === "lid") {
-      const r = (CUP_DIMS[size].r + 0.03) * CUP_IN_HAND;
-      return mesh(faceted(new THREE.CylinderGeometry(r, r + 0.02, 0.06, 18)), "#f4f2ec");
-    }
-    return mesh(faceted(new THREE.CylinderGeometry(0.04, 0.04, 1.3, 6)), "#d24c3f");
+    const r = (CUP_DIMS[size].r + 0.03) * CUP_IN_HAND;
+    return mesh(faceted(new THREE.CylinderGeometry(r, r + 0.02, 0.06, 18)), "#f4f2ec");
   }
 
   /** A stack of cups or cartons standing at a world point. */
@@ -580,35 +564,21 @@ export class CounterView {
     const obj = new THREE.Group();
     obj.position.copy(at).setY(at.y + 0.04);
     this.scene.add(obj);
-    const s: Stack = { kind, size, count: STACK_START, sleeve: false, tear: 0, obj, x: at.x, z: at.z };
+    const s: Stack = { kind, size, obj, x: at.x, z: at.z };
     this.stacks.push(s);
     this.syncStack(s);
     this.proxy(new THREE.BoxGeometry(1.0, 1.6, 1.2), at.clone().setY(at.y + 0.6), { type: "stack", idx: this.stacks.length - 1 });
   }
 
-  /** A plastic-wrapped sleeve of cups or paper boats of one size. */
-  sleeveMesh(kind: Stack["kind"], size: Size): THREE.Object3D {
-    return makeSleeve(kind, size);
-  }
-
-  /** Redraw a cup or carton stack after its count changes. */
+  /** Draw a cup or carton stack. */
   syncStack(s: Stack): void {
     for (const c of [...s.obj.children]) {
       s.obj.remove(c);
       disposeObject(c);
     }
-    if (s.sleeve) {
-      const sleeve = this.sleeveMesh(s.kind, s.size);
-      // A torn one sags open a little.
-      sleeve.position.y = 0.05;
-      sleeve.rotation.y = 0.3;
-      sleeve.scale.set(1 + s.tear * 0.15, 1 - s.tear * 0.25, 1 + s.tear * 0.15);
-      s.obj.add(sleeve);
-      return;
-    }
     // Nested cups and cartons are baked into one mesh per size and count.
-    if (s.kind === "cup") return void s.obj.add(makeCupStack(s.size, s.count));
-    const o = makeCartonStack(s.size as FriesSize, s.count);
+    if (s.kind === "cup") return void s.obj.add(makeCupStack(s.size, STACK_SHOWN));
+    const o = makeCartonStack(s.size as FriesSize, STACK_SHOWN);
     o.scale.setScalar(CARTON_STACK_SCALE);
     s.obj.add(o);
   }
@@ -657,8 +627,8 @@ export class CounterView {
     this.scene.add(obj);
   }
 
-  /** Add ice, a lid or a straw to a cup on the counter. */
-  dressCupAt(cup: DrinkCup, what: "ice" | "lid" | "straw"): void {
+  /** Add ice or a lid to a cup on the counter. */
+  dressCupAt(cup: DrinkCup, what: "ice" | "lid"): void {
     cup[what] = true;
     if (what === "lid" && cup.tap >= 0) this.taps[cup.tap].pouring = false;
     dressCup(cup.obj, cup);
@@ -711,15 +681,8 @@ export class CounterView {
     p.obj = o;
   }
 
-  /** Cups and cartons left in each stack, counting an unopened sleeve as a full refill. */
-  stock(): Record<string, number> {
-    return Object.fromEntries(this.stacks.map((s) => [s.kind + s.size, s.count + (s.sleeve ? SLEEVE : 0)]));
-  }
-
-  /** Clean stations for a new shift. Stacks pick up where the last shift left them. */
-  resetStations(stock: Record<string, number> = {}): void {
-    for (const s of this.stacks) Object.assign(s, { count: Math.min(STACK_START, stock[s.kind + s.size] ?? STACK_START), sleeve: false, tear: 0 });
-    this.stacks.forEach((s) => this.syncStack(s));
+  /** Clean stations for a new shift. */
+  resetStations(): void {
     for (const c of [...this.cups]) this.removeCup(c);
     for (const t of this.taps) t.puddle = 0;
     this.packs.forEach((p, i) => {
@@ -738,12 +701,6 @@ export class CounterView {
   /** Nozzle slot under a world point, or -1. */
   overTap(world: THREE.Vector3): number {
     return this.taps.findIndex((t) => Math.abs(world.x - t.x) < TAP_GAP / 2 && world.z > CUP_Z - 0.6 && world.z < CUP_Z + 1.4);
-  }
-
-  /** Stack under the pointer, or -1, picked by its hit box. */
-  overStack(ndc: THREE.Vector2): number {
-    const h = this.hit(ndc);
-    return h?.type === "stack" ? h.idx : -1;
   }
 
   /** Where each drink's push button sits on the fountain (its cap and name are drawn there as UI). */
@@ -940,8 +897,9 @@ export class CounterView {
 
   flip(item: GrillItem): boolean {
     if (item.flipT >= 0 || item.held || item.topping) return false;
-    // Eggs and buns don't flip in this shop: eggs are sunny side up, buns toast cut side down.
-    if (item.piece.kind === "egg") return false;
+    // Eggs, buns and patties don't flip in this shop: eggs are sunny side up, buns toast cut side
+    // down and patties cook through on one side.
+    if (item.piece.kind === "egg" || item.piece.kind === "patty") return false;
     item.flipT = 0;
     return true;
   }
@@ -1002,7 +960,7 @@ export class CounterView {
 
   /** Where a basket's fry meter sits: in its window on the fryer's back panel. */
   fryTagPoint(i: number): THREE.Vector3 {
-    const m = this.fryer.userData.spots.meters[i];
+    const m = this.fryerSpots.meters[i];
     return this.fryer.position.clone().add(new THREE.Vector3(m.x, m.y, m.z));
   }
 
@@ -1095,6 +1053,8 @@ export class CounterView {
         }
         it.piece.cook[0] += GRILL_RATE * heat * dt;
         if (it.piece.kind === "egg") it.piece.cook[1] += GRILL_RATE * 0.35 * heat * dt;
+        // A patty cooks right through from the bottom: both faces brown together.
+        if (it.piece.kind === "patty") it.piece.cook[1] = it.piece.cook[0];
         it.obj.position.set(gx + it.x, GRILL_TOP, it.z);
         if (it.piece.cook[0] > 0.9 && before <= 0.9) anyBurning = true;
       }

@@ -82,12 +82,18 @@ export function makeFountain(): FountainObject {
 
 // ---- ice bin ----------------------------------------------------------------------
 
-/** The ice bin is as big as the fountain beside it: one open steel well heaped with cubes. */
-const IW = FW - 0.2;
+/** The ice bin: one open steel well heaped with cubes, full width as wide as the fountain. */
+const IW_FULL = FW - 0.2;
 const ID = 3.6;
 const IH = 0.75;
 
-const iceBody = cached(() => {
+const ICE_BODIES = new Map<number, ReturnType<ReturnType<typeof cached>>>();
+function iceBody(widthK: number) {
+  let b = ICE_BODIES.get(widthK);
+  if (!b) ICE_BODIES.set(widthK, (b = cached(() => buildIce(IW_FULL * widthK))()));
+  return b;
+}
+function buildIce(IW: number): Parts {
   const p = new Parts();
   const r = rng(12);
   const t = 0.14;
@@ -97,7 +103,7 @@ const iceBody = cached(() => {
   p.add(box(IW - 2 * t, 0.02, ID - 2 * t), "#9fb6bd", { p: [0, 0.3, 0], ink: false });
   // Cubes heaped higher in the middle, a little over the rim.
   const cube = box(0.32, 0.28, 0.32);
-  for (let i = 0; i < 170; i++) {
+  for (let i = 0; i < Math.round((170 * IW) / IW_FULL); i++) {
     const x = (r() - 0.5) * (IW - 0.5);
     const z = (r() - 0.5) * (ID - 0.5);
     const heap = 1 - Math.hypot(x / (IW / 2), z / (ID / 2)) * 0.6;
@@ -107,13 +113,13 @@ const iceBody = cached(() => {
   p.add(cyl(0.28, 0.22, 0.42, 12, true), "#d7dedd", { p: [IW / 2 - 0.7, 0.95, ID / 2 - 0.75], r: [0, 0, Math.PI / 2 - 0.25] });
   p.add(cyl(0.06, 0.06, 0.8, 8), "#3a3633", { p: [IW / 2 - 1.3, 1.02, ID / 2 - 0.75], r: [0, 0, Math.PI / 2 - 0.1] });
   return p;
-});
+}
 
-/** The ice bin, in game units: 4.13 x 2.4, 0.5 tall. Grab a scoop from anywhere on it. */
-export function makeIceWell(): THREE.Group {
+/** The ice bin, in game units: 4.13 x 2.4 at full width (`widthK` narrows it), 0.5 tall. Grab a scoop from anywhere on it. */
+export function makeIceWell(widthK = 1): THREE.Group {
   const g = new THREE.Group();
-  g.add(bakedMesh(iceBody()));
-  machine(g, IW, ID, IH, {});
+  g.add(bakedMesh(iceBody(widthK)));
+  machine(g, IW_FULL * widthK, ID, IH, {});
   return g;
 }
 

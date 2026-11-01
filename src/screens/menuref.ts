@@ -124,7 +124,7 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
   ${mult !== 1 ? `<p class="bv-callout mref-biz">${icon("tag")}<span>Your prices: today's are ${mult > 1 ? "raised" : "lowered"} (×${mult.toFixed(2).replace(/0$/, "")}).</span></p>` : ""}
   <section class="mref-sec" data-sec="burgers">
     <h3 class="menu-h">${icon("burger")}Burgers in ${esc(town.name)} <span>${town.menu.length}</span></h3>
-    <p class="mref-note">Patties are cooked the way each customer asks (rare, medium or well), unless the recipe says smashed.</p>
+    <p class="mref-note">Every patty goes out medium. Nobody asks for rare or well done.</p>
     ${town.menu.map((r) => recipeHtml(r, mult, !base.has(r.name))).join("")}
   </section>
   ${elsewhereHtml(town, new Set(town.menu.map((r) => r.name)), prog)}
@@ -145,7 +145,7 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
       <thead><tr><th>Size</th><th></th><th class="num">Price</th></tr></thead>
       <tbody>${SIZES.map((s) => `<tr><td><span class="bv-chip size">${s}</span> ${SIZE_LABEL[s]}</td><td class="mref-cup">${cup(s)}</td><td class="num">${price(DRINK_PRICE[s])}</td></tr>`).join("")}</tbody>
     </table>
-    <p class="mref-note">Every drink gets ice (unless they say “No ice”), a lid and a straw.</p>
+    <p class="mref-note">Every drink gets ice (unless they say “No ice”) and a lid.</p>
   </section>
   <section class="mref-sec" data-sec="extras">
     <h3 class="menu-h">${icon("plus")}Extras</h3>

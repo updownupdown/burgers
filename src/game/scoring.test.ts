@@ -32,7 +32,7 @@ const classic: Order = {
   mods: [],
   layers: [
     { kind: "bun", toasted: true },
-    { kind: "patty", doneness: "medium" },
+    { kind: "patty" },
     { kind: "ketchup" },
     { kind: "bun", toasted: true },
   ],
@@ -100,7 +100,7 @@ describe("scorePlate", () => {
 
   it("penalises a burnt patty and says so", () => {
     const p = perfectPlate();
-    p.layers[1].piece.cook = [1.2, 0.6];
+    p.layers[1].piece.cook = [1.2, 1.2];
     const r = scorePlate(classic, p);
     expect(r.score).toBeLessThan(90);
     expect(r.notes).toContain("burnt patty");
@@ -127,7 +127,7 @@ describe("scorePlate", () => {
     plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt: 0.6 };
     plate.drink = { flavor: "cola", fill: 0.9, size: "M" };
     expect(scorePlate(order, plate).notes).toContain("no lid");
-    plate.drink = { flavor: "cola", fill: 0.9, size: "M", lid: true, straw: true };
+    plate.drink = { flavor: "cola", fill: 0.9, size: "M", lid: true };
     expect(scorePlate(order, plate).score).toBe(100);
     plate.drink = { flavor: "pine", fill: 0.9, size: "M" };
     expect(scorePlate(order, plate).notes).toContain("wrong drink");
@@ -206,7 +206,7 @@ describe("scorePlate", () => {
 
   it("checks ice", () => {
     const plate = perfectPlate();
-    const drink = { flavor: "cola" as const, fill: 0.9, size: "M" as const, lid: true, straw: true };
+    const drink = { flavor: "cola" as const, fill: 0.9, size: "M" as const, lid: true };
     plate.drink = { ...drink, ice: true };
     expect(scorePlate({ ...classic, drink: "cola", ice: false }, plate).notes).toContain("asked for no ice");
     expect(scorePlate({ ...classic, drink: "cola", ice: null }, plate).notes).toEqual([]);
@@ -274,8 +274,8 @@ describe("counted toppings", () => {
 
   it("orders extra pickles as more pieces, at a price", () => {
     const recipe = { name: "P", price: 6, layers: ["bun", "patty", "pickle", "bun"] as Kind[], toasted: false };
-    const plain = orderFromRecipe(1, recipe, "medium", false, null);
-    const extra = orderFromRecipe(1, recipe, "medium", false, null, [{ type: "extra", kind: "pickle" }]);
+    const plain = orderFromRecipe(1, recipe, false, null);
+    const extra = orderFromRecipe(1, recipe, false, null, [{ type: "extra", kind: "pickle" }]);
     expect(plain.layers.find((l) => l.kind === "pickle")?.count).toBe(3);
     expect(extra.layers.filter((l) => l.kind === "pickle")).toHaveLength(1);
     expect(extra.layers.find((l) => l.kind === "pickle")?.count).toBe(5);
@@ -294,12 +294,35 @@ describe("poutine", () => {
   });
 });
 
+describe("patties", () => {
+  it("are always wanted medium; rare and well done are acceptable but not ideal", () => {
+    const at = (t: number) => {
+      const p = perfectPlate();
+      p.layers[1].piece.cook = [t, t];
+      return scorePlate(classic, p);
+    };
+    expect(at(DONENESS_TARGET.medium).score).toBe(100);
+    for (const t of [DONENESS_TARGET.rare, DONENESS_TARGET.well]) {
+      const r = at(t);
+      expect(r.score).toBeLessThan(100);
+      expect(r.score).toBeGreaterThan(80);
+    }
+    expect(at(DONENESS_TARGET.rare).notes).toContain("patty a bit rare");
+    expect(at(DONENESS_TARGET.well).notes).toContain("patty a bit well done");
+    expect(at(0.05).notes).toContain("raw patty");
+    expect(at(0.97).notes).toContain("burnt patty");
+    expect(at(0.97).score).toBeLessThan(at(DONENESS_TARGET.well).score);
+  });
+  it("never come with a doneness on the order", () => {
+    const rng = seededRng(3);
+    for (let i = 0; i < 200; i++) for (const l of makeOrder(i, rng, 0.7, STOPS[0]).layers) expect(Object.keys(l)).not.toContain("doneness");
+  });
+});
+
 describe("smash burgers", () => {
   it("wants smashed patties when the recipe says so", () => {
-    const order: Order = { ...classic, layers: classic.layers.map((l) => (l.kind === "patty" ? { ...l, doneness: "well", smashed: true } : l)) };
+    const order: Order = { ...classic, layers: classic.layers.map((l) => (l.kind === "patty" ? { ...l, smashed: true } : l)) };
     const p = perfectPlate();
-    const w = DONENESS_TARGET.well;
-    p.layers[1].piece.cook = [w, w];
     expect(scorePlate(order, p).notes).toContain("wanted it smashed");
     p.layers[1].piece.smashed = true;
     expect(scorePlate(order, p).score).toBe(100);
@@ -458,7 +481,7 @@ describe("critics and popularity", () => {
 
 describe("drinks-only and fries-only customers", () => {
   const drinkOnly: Order = { ...classic, name: "Road Cola", price: 2, layers: [], fries: false, drink: "cola", drinkSize: "M", ice: null };
-  const goodDrink = { flavor: "cola" as const, fill: 0.9, size: "M" as const, lid: true, straw: true };
+  const goodDrink = { flavor: "cola" as const, fill: 0.9, size: "M" as const, lid: true };
   const friesOnly: Order = { ...classic, name: "Fries", price: 3, layers: [], fries: true, friesSize: "M", drink: null };
   const goodFries = { cook: FRIES_PERFECT, size: "M" as const, fill: 1, salt: 0.6 };
 

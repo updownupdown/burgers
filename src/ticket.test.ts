@@ -8,7 +8,7 @@ const order: Order = {
   name: "Trailhead Classic",
   price: 9,
   mods: [],
-  layers: [{ kind: "bun", toasted: true }, { kind: "ketchup" }, { kind: "patty", doneness: "medium" }, { kind: "lettuce" }, { kind: "tomato", count: 2 }, { kind: "bun", toasted: true }],
+  layers: [{ kind: "bun", toasted: true }, { kind: "ketchup" }, { kind: "patty" }, { kind: "lettuce" }, { kind: "tomato", count: 2 }, { kind: "bun", toasted: true }],
   fries: false,
   drink: null,
   friesSize: "S",
@@ -36,8 +36,9 @@ describe("forgiving ticket", () => {
     expect(r).toContain("wrong|Mustard");
     expect(r.find((x) => x.includes("next"))).toBe("next|Patty");
   });
-  it("counts a patty at the wrong doneness but marks it red", () => {
-    const r = rows(plate("bun", "ketchup", ["patty", DONENESS_TARGET.well]));
+  it("counts a well-done patty as fine, but marks a burnt one red", () => {
+    expect(rows(plate("bun", "ketchup", ["patty", DONENESS_TARGET.well])).filter((x) => x.endsWith("|Patty"))).toEqual(["done|Patty"]);
+    const r = rows(plate("bun", "ketchup", ["patty", 0.97]));
     expect(r.filter((x) => x.endsWith("|Patty"))).toEqual(["wrong|Patty"]);
     expect(r.find((x) => x.includes("next"))).toBe("next|Lettuce");
   });

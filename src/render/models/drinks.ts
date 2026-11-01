@@ -4,8 +4,7 @@ import { bakedMesh, bakeShared, Parts, type Baked } from "../bake";
 import { faceted, grade, lineColor, lineMaterial, mesh, shareGeometry, toon } from "../materials";
 
 /*
- * Drinks-page models: cups (with liquid, ice, lid and straw), the lid stack, the straw
- * holder, the ice bin and the under-counter supplies cupboard. Everything here is built
+ * Drinks-page models: cups (with liquid, ice and lid), the lid stack, the ice bin and the under-counter supplies cupboard. Everything here is built
  * from shared geometry; only the few parts that depend on flavour pick a material per cup,
  * and those come from the material cache, so cups are cheap to make and throw away.
  */
@@ -17,7 +16,6 @@ export interface CupObject extends THREE.Group {
     setFill: (f: number) => void;
     setIce: (on: boolean) => void;
     setLid: (on: boolean) => void;
-    setStraw: (on: boolean) => void;
   };
 }
 
@@ -48,7 +46,6 @@ const LID_RIDGE = shareGeometry(faceted(new THREE.TorusGeometry(0.29, 0.035, 6, 
 const CUP_PAPER = "#f6f3ec";
 const CUP_INSIDE = "#d9d4c6";
 const ICE = "#e4f5fb";
-const STRAW_RED = "#e5432b";
 /** Drink colours as the study painted them: the band on the cup and the liquid inside. */
 const DRINK_PAINT: Record<DrinkId, string> = { pine: "#7dbd8a", pink: "#f3a3b8", cola: "#3b1d1b", water: "#cfe8f2", tea: "#c3731f" };
 
@@ -92,24 +89,16 @@ function liquidGeo(size: Size, fill: number): THREE.BufferGeometry {
   return g;
 }
 
-/** Lid and straw for a size, baked once. */
-const TOPS = new Map<Size, { lid: Baked; straw: Baked }>();
-function tops(size: Size): { lid: Baked; straw: Baked } {
+/** The lid for a size, baked once. */
+const TOPS = new Map<Size, { lid: Baked }>();
+function tops(size: Size): { lid: Baked } {
   let t = TOPS.get(size);
   if (t) return t;
   const { r: rT, h: H } = CUP_DIMS[size];
   const lid = new Parts();
   lid.add(new THREE.CylinderGeometry(rT + 0.03, rT + 0.02, 0.07, SEG), "#f8f8f4", { p: [0, H + 0.04, 0], ink: 0.014 });
   lid.add(new THREE.TorusGeometry(rT * 0.62, 0.03, 5, SEG), "#f8f8f4", { p: [0, H + 0.08, 0], r: [Math.PI / 2, 0, 0], ink: 0.01 });
-  lid.add(new THREE.CylinderGeometry(0.06, 0.06, 0.01, 10), "#3a3633", { p: [rT * 0.3, H + 0.078, 0.02], ink: false });
-  // The straw leans back from the lid's hole and bends over at the top, so it reads from above.
-  const straw = new Parts();
-  const sp = new Parts();
-  sp.add(new THREE.CylinderGeometry(0.05, 0.05, 0.95, 8), STRAW_RED, { p: [0, 0.475, 0], ink: 0.018 });
-  sp.add(new THREE.CylinderGeometry(0.056, 0.056, 0.07, 8), "#fbe9e4", { p: [0, 0.72, 0], ink: false });
-  sp.add(new THREE.CylinderGeometry(0.05, 0.05, 0.34, 8), STRAW_RED, { p: [0.13, 1.04, 0], r: [0, 0, -0.95], ink: 0.018 });
-  straw.addParts(sp, { p: [rT * 0.3, H - 0.2, 0.02], r: [0.1, 0, -0.14] });
-  TOPS.set(size, (t = { lid: bakeShared(lid), straw: bakeShared(straw) }));
+  TOPS.set(size, (t = { lid: bakeShared(lid) }));
   return t;
 }
 
@@ -123,8 +112,8 @@ const CUP_ICE: { a: number; q: number; r: number; dy: number }[] = [
 ];
 
 /**
- * A paper cup, in cup units (draw at SCALE.cup): the drink inside, and optional ice, lid and
- * straw. With no flavour it's a plain empty cup for the stacks. `lid` is only the starting lid
+ * A paper cup, in cup units (draw at SCALE.cup): the drink inside, and optional ice and lid.
+ * With no flavour it's a plain empty cup for the stacks. `lid` is only the starting lid
  * state; `setLid` toggles it later.
  */
 export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"): CupObject {
@@ -153,9 +142,7 @@ export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"):
   const t = tops(size);
   const top = bakedMesh(t.lid);
   top.visible = lid;
-  const straw = bakedMesh(t.straw, { shadow: false });
-  straw.visible = false;
-  g.add(top, straw);
+  g.add(top);
 
   let fill = 0;
   let iceOn = false;
@@ -184,9 +171,6 @@ export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"):
     setLid: (on) => {
       top.visible = on;
       ice.visible = iceOn && !on;
-    },
-    setStraw: (on) => {
-      straw.visible = on;
     },
   };
   place();
@@ -252,35 +236,6 @@ export function makeLidStack(count: number): THREE.Group {
     ridge.position.y = 0.14 + (count - 1) * 0.055 + 0.05;
     g.add(ridge);
   }
-  return g;
-}
-
-const STRAW_CUP = shareGeometry(faceted(new THREE.CylinderGeometry(0.36, 0.3, 0.8, 12)));
-const STRAW_CUP_MOUTH = shareGeometry(new THREE.CircleGeometry(0.33, 12));
-const STRAW_LONG = shareGeometry(faceted(new THREE.CylinderGeometry(0.042, 0.042, 1.25, 6)));
-
-/** A steel pot of straws, red and white, leaning every which way. */
-export function makeStrawHolder(): THREE.Group {
-  const g = new THREE.Group();
-  const pot = mesh(STRAW_CUP, "#9aa3a6");
-  pot.position.y = 0.4;
-  const mouth = mesh(STRAW_CUP_MOUTH, "#4a5255", { ink: false, shadow: false });
-  mouth.rotation.x = -Math.PI / 2;
-  mouth.position.y = 0.805;
-  g.add(pot, mouth);
-  const rnd = jitter(7);
-  const red: THREE.Matrix4[] = [];
-  const white: THREE.Matrix4[] = [];
-  for (let i = 0; i < 11; i++) {
-    const a = rnd() * Math.PI * 2;
-    const r = rnd() * 0.2;
-    const lean = 0.08 + rnd() * 0.22;
-    const x = Math.cos(a) * r;
-    const z = Math.sin(a) * r;
-    // Lean outward from the centre so the bunch fans out of the pot.
-    (i % 2 ? red : white).push(compose(x, 0.55 + rnd() * 0.08, z, lean * Math.sin(a), 0, -lean * Math.cos(a)));
-  }
-  g.add(instanced(STRAW_LONG, STRAW_RED, red, 1.18), instanced(STRAW_LONG, "#fbe9e4", white, 1.18));
   return g;
 }
 

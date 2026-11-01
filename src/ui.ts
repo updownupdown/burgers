@@ -1,5 +1,5 @@
 import type { Order, Plate } from "./game/types";
-import { collapseCounted, layerQuality } from "./game/scoring";
+import { collapseCounted, layerQuality, PATTY_OFF } from "./game/scoring";
 import { DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, DRINKS, KIND_COLOR, KIND_LABEL } from "./game/types";
 import { icon } from "./ui/icons";
 
@@ -34,7 +34,7 @@ export interface Ui {
 
 /*
  * Counter tabs show a small drawing of each station instead of a word: a fountain cup, the
- * flat-top with patties, the fry basket, a box of supplies. Inked like the kitchen, in muted
+ * flat-top with patties, the fry basket. Inked like the kitchen, in muted
  * colour; tabs you're not on are faded (see .tab in style.css).
  */
 const INK = `stroke="#2a2622" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"`;
@@ -42,8 +42,6 @@ const TAB_ART: Record<string, string> = {
   Drinks: `<path d="M15.5 12h17l-2.2 19.6a2 2 0 0 1-2 1.8h-8.6a2 2 0 0 1-2-1.8z" fill="#de6f55" ${INK}/>
     <path d="M16.3 18.6h15.4l-.85 7.6H17.15z" fill="#faf7f1" ${INK}/>
     <path d="M19.6 22.6c1.4-1.1 2.8-1.1 4.2 0s2.8 1.1 4.2 0" fill="none" stroke="#de6f55" stroke-width="1.4" stroke-linecap="round"/>
-    <path d="M26.5 10 29.5 3h3.5" fill="none" stroke="#2a2622" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M26.5 10 29.5 3h3.5" fill="none" stroke="#f3d36b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
     <rect x="13.5" y="9" width="21" height="3.6" rx="1.8" fill="#f4efe6" ${INK}/>`,
   Grill: `<path d="M13 11.5c-1.2-1.6 1.2-2.6 0-4.4M24 10.5c-1.2-1.6 1.2-2.6 0-4.4M35 11.5c-1.2-1.6 1.2-2.6 0-4.4" fill="none" stroke="#c8472e" stroke-width="1.4" stroke-linecap="round"/>
     <path d="M5 21h38v8.5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z" fill="#8a8178" ${INK}/>
@@ -60,12 +58,6 @@ const TAB_ART: Record<string, string> = {
     <path d="M18.5 11.5v8M23.5 11.5v8M28.5 11.5v8M14.6 15.3h17.8" fill="none" stroke="#2a2622" stroke-width="1" opacity=".55"/>
     <path d="M33 12.5h7.5" fill="none" stroke="#2a2622" stroke-width="2.4" stroke-linecap="round"/>
     <circle cx="14" cy="27" r="1.6" fill="#f4efe6" ${INK}/>`,
-  Supplies: `<path d="M34 17.5 39 12v15.5l-5 5.5z" fill="#b98a55" ${INK}/>
-    <path d="M8 17.5h26V33H8z" fill="#d6a76f" ${INK}/>
-    <path d="M8 17.5 13 12h26l-5 5.5z" fill="#e8c08e" ${INK}/>
-    <path d="M18 17.5h6V33h-6zM18 17.5l5-5.5h6l-5 5.5z" fill="#f1e4ca" ${INK}/>
-    <path d="M28.5 4.5h7l-.8 7.5h-5.4z" fill="#faf7f1" ${INK}/><path d="M28.2 4.5h7.6" stroke="#2a2622" stroke-width="2.2" stroke-linecap="round"/>
-    <path d="M11 22.5h4M11 25.5h3" stroke="#2a2622" stroke-width="1.2" stroke-linecap="round" opacity=".6"/>`,
 };
 const tabArt = (page: string) => `<svg class="tab-art" viewBox="0 0 48 36" aria-hidden="true">${TAB_ART[page] ?? ""}</svg>`;
 
@@ -269,7 +261,7 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     }
     if (order.drink) {
       const iceOk = order.ice == null || !!d?.ice === order.ice;
-      const state: RowState = !d ? "" : d.flavor !== order.drink || d.size !== order.drinkSize || !iceOk ? "wrong" : d.lid && d.straw ? "done" : "";
+      const state: RowState = !d ? "" : d.flavor !== order.drink || d.size !== order.drinkSize || !iceOk ? "wrong" : d.lid ? "done" : "";
       const ice = order.ice === true ? modBox("ice", "Ice") : order.ice === false ? modBox("noice", "No ice") : "";
       rows.push({ icon: "drink", color: DRINK_COLOR[order.drink], label: `<i class="sz">${order.drinkSize}</i>${DRINK_LABEL[order.drink]}`, tail: ice, state, mod: false, next: false });
     }
@@ -282,7 +274,7 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
   const modded = new Set(order.mods.filter((m) => m.type !== "no").map((m) => m.kind));
   // The ticket is forgiving (the score isn't): each piece on the plate ticks off the lowest
   // ticket line of its kind still open, wherever it went in the stack, so a slip never asks for
-  // another copy. A patty at the wrong doneness, or a counted topping left short under other
+  // another copy. A raw or burnt patty, or a counted topping left short under other
   // layers, still counts but shows red. Pieces the order has no line for are listed in red,
   // crossed out, where they sit. A short count still on top is just unfinished.
   const states: RowState[] = order.layers.map(() => "");
@@ -299,7 +291,7 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     if (st.count < (exp.count ?? 1)) {
       if (j === stacked.length - 1) partialIdx = i;
       else states[i] = "wrong";
-    } else if (exp.kind === "patty" && layerQuality(exp, st.piece)[1]) states[i] = "wrong";
+    } else if (exp.kind === "patty" && layerQuality(exp, st.piece)[0] < PATTY_OFF) states[i] = "wrong";
     else states[i] = "done";
   });
   const nextIdx = partialIdx >= 0 ? partialIdx : states.findIndex((st) => !st);
@@ -329,7 +321,7 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
       if (exp.toasted) tail = modBox("toast", "Toast");
     } else if (exp.kind === "patty") {
       if (exp.smashed) icon = "smashed";
-      tail = `${donenessPill(exp.doneness ?? "medium")}${exp.smashed ? `<span class="mb smash" title="Smash">${SMASH_SVG}</span>` : ""}`;
+      if (exp.smashed) tail = `<span class="mb smash" title="Smash">${SMASH_SVG}</span>`;
     } else if (exp.kind === "pineapple") tail = modBox("grill", "Grill");
     else if (exp.melted) tail = modBox("melt", "Melt");
     if (exp.count) {
@@ -369,21 +361,13 @@ function sideRows(order: Order, plate: Plate): string {
     const d = plate.drink;
     const iceOk = order.ice == null || !!d?.ice === order.ice;
     const wrong = !!d && (d.flavor !== order.drink || d.size !== order.drinkSize || !iceOk);
-    const state = !d ? "" : wrong ? "wrong" : d.lid && d.straw ? "done" : "";
+    const state = !d ? "" : wrong ? "wrong" : d.lid ? "done" : "";
     const ice = order.ice === true ? modBox("ice", "Ice") : order.ice === false ? modBox("noice", "No ice") : "";
     out.push(
       `<div class="sg">${section("drink", DRINK_COLOR[order.drink])}<div class="sd ${state}"><span class="sl"><i class="sz">${order.drinkSize}</i><span class="dn">${DRINK_LABEL[order.drink]}</span></span>${ice ? `<span class="sm">${ice}</span>` : ""}</div></div>`,
     );
   }
   return out.join("");
-}
-
-/** Doneness for an order's patties, for a collapsed ticket: one pill with "×2" when they match. */
-function pattyPills(order: Order): string {
-  const pats = order.layers.filter((l) => l.kind === "patty").map((l) => l.doneness ?? "medium");
-  if (!pats.length) return "";
-  if (pats.every((d) => d === pats[0])) return `<div class="pp">${donenessPill(pats[0])}${pats.length > 1 ? `<span class="x">×${pats.length}</span>` : ""}</div>`;
-  return `<div class="pp">${pats.map((d) => donenessPill(d)).join("")}</div>`;
 }
 
 /** "+2" for each side ordered with the main (fries, drink), "*" when the order changes the menu recipe. */
@@ -413,7 +397,6 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, focused
       .join("");
     return `<div class="pat ${mood}">${moodFace(mood, !!order.critic)}${bar}</div>
       <div class="name"><span class="l">${esc(shortName(order.name))}</span>${nameMarks(order)}</div>
-      ${pattyPills(order)}
       <div class="left">${left ? `<b>${left}</b> left` : "Ready"}</div><div class="pips">${pips}</div>`;
   }
   let list = rows;

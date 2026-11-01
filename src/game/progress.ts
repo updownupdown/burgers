@@ -79,8 +79,6 @@ export interface Save {
   press: PressPiece[];
   /** Social media bought for the next shift (see ADS in line.ts); stays on until changed. */
   ads: AdLevel;
-  /** Cups and cartons left in each stack ("cupS", "cartonL"...), carried from shift to shift. */
-  stock: Record<string, number>;
 }
 
 /** Everything the Closing screen shows about today's shift, kept until the truck sleeps. */
@@ -148,7 +146,6 @@ export function freshSave(): Save {
     popularity: 10,
     press: [],
     ads: 0,
-    stock: {},
   };
 }
 

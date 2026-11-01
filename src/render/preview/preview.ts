@@ -129,7 +129,6 @@ const SHOWS: Record<string, () => void> = {
       const cup = makeCup((["pine", "pink", "cola", "water", "tea"] as const)[i], i === 3, sizes[i]);
       cup.userData.setFill(0.3 + i * 0.15);
       cup.userData.setIce(i > 1);
-      cup.userData.setStraw(i === 3);
       cup.scale.setScalar(SCALE.cup);
       at(cup, fo.position.x + c.x, c.y, fo.position.z + c.z);
     });
@@ -186,7 +185,6 @@ const SHOWS: Record<string, () => void> = {
       const c = makeCup((["cola", "pink", "tea"] as const)[i], i === 2, sz);
       c.userData.setFill(0.9);
       c.userData.setIce(true);
-      c.userData.setStraw(i === 2);
       c.scale.setScalar(SCALE.cup);
       at(c, 1.2 + i * 1.1, 0, -1.8);
     });
@@ -218,7 +216,6 @@ const SHOWS: Record<string, () => void> = {
         const c = makeCup((["cola", "pink", "tea"] as const)[i], lid, sz);
         c.userData.setFill(0.9);
         c.userData.setIce(true);
-        c.userData.setStraw(true);
         c.scale.setScalar(SCALE.cup);
         at(c, -1.4 + i * 1.4, 0, lid ? 0.8 : -0.6);
       }

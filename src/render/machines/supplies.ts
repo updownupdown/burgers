@@ -317,19 +317,41 @@ export function makePackPad(): PackPadObject {
   return g;
 }
 
-/** A trash chute along a counter's front edge, `w` game units long and 0.4 deep, with a steel lip and grate bars. */
-export function makeTrashChute(w: number): THREE.Group {
+/**
+ * A trash chute along a counter's front edge, `w` game units long and `d` deep: a dark slot in a
+ * steel lip, closed by two rows of black rubber flaps that meet in the middle (they part as trash
+ * drops through), with rounded steel end caps.
+ */
+export function makeTrashChute(w: number, d = 0.45): THREE.Group {
   const sw = w / STUDY;
+  const sd = d / STUDY;
+  const lip = 0.16;
   const p = new Parts();
-  p.add(box(sw, 0.04, 0.5), "#1e2422", { p: [0, 0.02, 0], ink: false });
-  p.add(box(sw + 0.1, 0.06, 0.08), "#8d9a97", { p: [0, 0.04, -0.27], ink: false });
-  p.add(box(sw + 0.1, 0.06, 0.08), "#8d9a97", { p: [0, 0.04, 0.27], ink: false });
-  for (let i = 1; i < Math.round(sw / 1.2); i++) p.add(box(0.05, 0.05, 0.5), "#8d9a97", { p: [-sw / 2 + i * 1.2, 0.04, 0], ink: false });
+  p.add(box(sw, 0.03, sd), "#000000", { p: [0, 0.01, 0], ink: false });
+  for (const k of [-1, 1]) {
+    p.add(box(sw + 0.04, 0.1, lip), "#d3d7d4", { p: [0, 0.05, k * (sd / 2 + lip / 2)], ink: false });
+    p.add(box(sw + 0.04, 0.09, 0.045), "#6b716e", { p: [0, 0.045, k * (sd / 2 + lip + 0.022)], ink: false });
+  }
+  // Two rows of rubber flaps, back row a shade lighter, with hairline splits between them.
+  const n = Math.max(1, Math.round(sw / 0.36));
+  const fw = sw / n;
+  const fd = sd / 2 - 0.025;
+  for (let i = 0; i < n; i++) {
+    const x = -sw / 2 + fw * (i + 0.5);
+    p.add(box(fw - 0.06, 0.03, fd), "#1f201f", { p: [x, 0.045, -sd / 4 - 0.012], ink: false });
+    p.add(box(fw - 0.06, 0.03, fd), "#141514", { p: [x, 0.04, sd / 4 + 0.012], ink: false });
+  }
   // Rounded steel end caps: the chute stops just inside the outer counters, bookending the line.
-  for (const k of [-1, 1]) p.add(new THREE.CylinderGeometry(0.31, 0.31, 0.06, 16, 1, false, k < 0 ? Math.PI : 0, Math.PI), "#8d9a97", { p: [k * (sw / 2 + 0.05), 0.04, 0], ink: false });
+  const r = sd / 2 + lip;
+  for (const k of [-1, 1]) {
+    const arc = (rr: number, h: number) => new THREE.CylinderGeometry(rr, rr, h, 24, 1, false, k < 0 ? Math.PI : 0, Math.PI);
+    p.add(arc(r + 0.045, 0.09), "#6b716e", { p: [k * (sw / 2 + 0.02), 0.045, 0], ink: false });
+    p.add(arc(r, 0.1), "#d3d7d4", { p: [k * (sw / 2 + 0.02), 0.05, 0], ink: false });
+  }
   const g = new THREE.Group();
-  const m = bakedMesh(new Parts().addParts(p, { s: STUDY }).bake(), { shadow: false });
+  // Unlit, so the slot stays properly dark and the steel lip bright under the kitchen's soft light.
+  const m = bakedMesh(new Parts().addParts(p, { s: STUDY }).bake(), { shadow: false, material: new THREE.MeshBasicMaterial({ vertexColors: true }) });
   g.add(m);
-  machine(g, sw, 0.6, 0.1, {});
+  machine(g, sw, sd + lip * 2, 0.1, {});
   return g;
 }

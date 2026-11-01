@@ -22,7 +22,6 @@ export interface Ui {
   hintText: HTMLElement;
   hintClose: HTMLButtonElement;
   tabs: HTMLButtonElement[];
-  tabDots: HTMLElement[];
   menuBtn: HTMLButtonElement;
   /** The service bell: a ring calls the next person in line. */
   bell: HTMLButtonElement;
@@ -35,9 +34,8 @@ export interface Ui {
 }
 
 /*
- * Counter tabs show a small drawing of each station instead of a word: a fountain cup, the
- * flat-top with patties, the fry basket. Inked like the kitchen, in muted
- * colour; tabs you're not on are faded (see .tab in style.css).
+ * Counter buttons show a small drawing of each station instead of a word: a fountain cup, the
+ * flat-top with patties, the fry basket, inked like the kitchen (see .cbtn in style.css).
  */
 const INK = `stroke="#2a2622" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"`;
 const TAB_ART: Record<string, string> = {
@@ -82,8 +80,8 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   ${[0, 1, 2].map(() => `<div class="sentback" data-r="sentback" hidden></div>`).join("")}
   <div class="hint" data-r="hint" role="status" hidden><span data-r="hintText"></span><button class="hint-x" data-r="hintClose" aria-label="Dismiss tip">${icon("close")}</button></div>
   ${DRINKS.map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_SHORT[d]}</div>`).join("")}
-  <nav class="tabs">
-    ${pages.map((p, i) => `<button class="tab" data-r="tab" data-page="${i}" aria-selected="false" aria-label="${p}" title="${p}">${TAB_ART[p] ? tabArt(p) : icon("box")}<span class="dot" hidden></span></button>`).join("")}
+  <nav class="cnav" aria-label="Counters">
+    ${pages.map((p, i) => `<button class="cbtn" data-r="tab" data-page="${i}" data-lamp="off" aria-label="${p}" title="${p}">${TAB_ART[p] ? tabArt(p) : icon("box")}</button>`).join("")}
   </nav>
   <div class="update" data-r="update" hidden>
     <span data-r="updateText">A new build is ready.</span>
@@ -109,7 +107,6 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     hintText: q("hintText"),
     hintClose: q("hintClose") as HTMLButtonElement,
     tabs,
-    tabDots: tabs.map((t) => t.querySelector<HTMLElement>(".dot")!),
     menuBtn: q("menuBtn") as HTMLButtonElement,
     bell: q("bell") as HTMLButtonElement,
     bellCount: q("bellCount"),
@@ -141,15 +138,17 @@ export function donenessPill(d: string, progress?: number, cls = ""): string {
 }
 
 /**
- * The one doneness meter, for everything that cooks: three regions (not done enough, done,
- * over-done; the end is burnt), a dark line at perfect, and a caret over where it is now. What's
- * still ahead is veiled, so the meter fills as it cooks and the caret never hides the reading.
- * No words: the regions take the ingredient's own colours.
+ * The one doneness meter, for everything that cooks (James's pick M14 from the meter study): a dark
+ * pill in a thin black rim, the done range hatched, and a fill that runs edge to edge in one flat
+ * colour for the food and where it is (raw pink, cooked brown, dark when over-done for a patty),
+ * flashing red and black once burnt. Thin half-clear black lines mark the zone edges on top. No words.
  */
 export function cookMeter(kind: Cookable, t: number): string {
   const z = COOK_SCALE[kind];
   const pct = (v: number) => `${((Math.min(z.burnt, Math.max(0, v)) / z.burnt) * 100).toFixed(1)}%`;
-  return `<span class="cmeter ${kind} ${cookZone(kind, t)}" style="--u:${pct(z.done)};--d:${pct(z.over)};--p:${pct(z.perfect)};--v:${pct(t)}"><i></i></span>`;
+  const zone = cookZone(kind, t);
+  const flash = zone === "burnt" && Math.floor(performance.now() / 260) % 2 === 0 ? " flash" : "";
+  return `<span class="cmeter ${kind} ${zone}${flash}" style="--u:${pct(z.done)};--d:${pct(z.over)};--v:${pct(t)}"><b></b></span>`;
 }
 
 /** How a waiting customer feels. The figure at the window and the face on their ticket always agree. */

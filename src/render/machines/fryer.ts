@@ -88,7 +88,7 @@ export interface FryerObject extends THREE.Group {
       down: { y: number };
       /** Lifted basket hanging on the rail: position, and rotation.x = tilt. */
       hang: { x: number; y: number; z: number; tilt: number }[];
-      /** Where each basket's meter goes: the middle of its window on the back panel. */
+      /** Where each basket's meter goes: on the rim just in front of its well, below the fries. */
       meters: { x: number; y: number; z: number }[];
     };
     /** Bubbles on each well's oil; show them while a basket is down. */
@@ -113,12 +113,12 @@ export function makeFryer(): FryerObject {
     g.add(b);
     bubbles.push(b);
   });
-  const mz = (PANEL.z0 + PANEL.z1) / 2;
   machine(g, W, D, H + PANEL.hi, {
     wells: XS.map((x) => ({ x: x * STUDY, z: WZ * STUDY, oilY: OIL_Y * STUDY })),
     down: { y: DOWN_Y * STUDY },
     hang: XS.map((x) => ({ x: x * STUDY, y: HANG.y * STUDY, z: (WZ + HANG.dz) * STUDY, tilt: HANG.tilt })),
-    meters: XS.map((x) => ({ x: x * STUDY, y: (H + (PANEL.lo + PANEL.hi) / 2) * STUDY, z: mz * STUDY })),
+    // Meters sit just in front of each well, below the fries, like every other meter in the kitchen.
+    meters: XS.map((x) => ({ x: x * STUDY, y: H * STUDY, z: (WZ + WELL_D / 2 + 0.45) * STUDY })),
   });
   g.userData.bubbles = bubbles;
   return g;

@@ -28,7 +28,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
   const plate = (i) => ev((i) => { const b = window.__bv.trayView.plates[i].burger; b.updateWorldMatrix(true, false); const e = b.matrixWorld.elements; return window.__bv.project('tray', e[12], 0.3, e[14]); }, i);
   const items = () => ev(() => window.__bv.counter.grillItems.map((it, i) => ({ i, kind: it.piece.kind, cook: it.piece.cook.slice(), level: window.__bv.cookLevel(it.piece), flips: it.piece.flips || 0, flipping: it.flipT >= 0, uid: it.piece.uid, melt: it.topping ? (it.topping.piece.melt ?? 0) : -1, x: it.x, z: it.z, scr: window.__bv.project('counter', it.x, 0.95, it.z) })));
   const stop = async (s) => { await ev((s) => window.__bv.goToStop(s), s); await step(p, 0.6); };
-  const page = async (n) => { await p.evaluate((n) => document.querySelectorAll('.tab')[n].click(), n); await step(p, 0.6); };
+  const page = async (n) => { await p.evaluate((n) => window.__bv.goToPage(n), n); await step(p, 0.6); };
   const act = async (pts, ms) => { await gesture(p, pts, ms); await step(p, ACTION); };
   const tap = async ([x, y]) => act([[x, y], [x, y]], 30);
   // Press, carry along pts, rest there for restMs of real time, step the clock, then finish with

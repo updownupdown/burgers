@@ -221,9 +221,9 @@ function layout(): void {
   viewH = H;
   const w = Math.min(W, Math.round(H * 0.62), 560);
   colX = Math.round((W - w) / 2);
-  const safeB = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-b")) || 0;
   const safeT = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-t")) || 0;
-  const tabsH = 64 + safeB;
+  // No tab bar: the counter runs to the bottom of the screen and the counter buttons float over it.
+  const tabsH = 0;
   // The customers band holds the window (HUD on top, customers, then the order rail) and the
   // receipts hanging from the rail; it's taller than the tray so the receipts have room.
   const custH = Math.round(THREE.MathUtils.clamp(H * 0.34, 200, 320));
@@ -616,7 +616,7 @@ function tutorialHint(): string | null {
   if (!s) return null;
   const layers = s.plate.layers;
   const pattyOnGrill = counter.grillItems.find((g) => g.piece.kind === "patty");
-  if (counter.page !== HOME_PAGE) return "Tap the grill tab below to go back.";
+  if (counter.page !== HOME_PAGE) return "Tap the grill button at the edge of the counter to go back.";
   if (layers.length === 0) return "Drag a bun up onto the plate on the tray.";
   const hasPatty = layers.some((l) => l.piece.kind === "patty");
   if (!hasPatty) {
@@ -763,17 +763,14 @@ function moveHold(pt: Pointer): void {
   }
 }
 
-/** Carrying something over a tab for a moment switches to that counter, so items can move between counters. */
+/** Carrying something over a counter button for a moment switches to that counter, so items can move between counters. */
 let hover = { tab: -1, since: 0 };
 function hoverTab(pt: Pointer, now: number): void {
-  if (bandAt(pt.y) !== "tabs") {
-    hover.tab = -1;
-    return;
-  }
   const cx = pt.x + colX;
   const tab = ui.tabs.findIndex((t) => {
+    if (t.style.pointerEvents === "none") return false;
     const r = t.getBoundingClientRect();
-    return cx >= r.left && cx <= r.right;
+    return cx >= r.left && cx <= r.right && pt.y >= r.top && pt.y <= r.bottom;
   });
   if (tab !== hover.tab) hover = { tab, since: now };
   else if (tab >= 0 && tab !== counter.page && now - hover.since > 280) goToPage(tab);
@@ -1818,37 +1815,6 @@ function goToStop(s: number): void {
   if (counter.stop !== before) sfx.whoosh();
 }
 
-// Swipe along the tab bar to move between counters (the counters themselves don't swipe).
-{
-  const nav = ui.tabs[0].parentElement!;
-  let sx = -1;
-  let swiped = false;
-  nav.addEventListener("pointerdown", (e) => {
-    sx = e.clientX;
-    swiped = false;
-  });
-  nav.addEventListener("pointermove", (e) => {
-    if (sx < 0 || swiped) return;
-    const dx = e.clientX - sx;
-    if (Math.abs(dx) > 36) {
-      swiped = true;
-      sfx.unlock();
-      if (!counter.inHand) goToStop(counter.stop + (dx < 0 ? 1 : -1));
-    }
-  });
-  const end = () => (sx = -1);
-  nav.addEventListener("pointerup", end);
-  nav.addEventListener("pointercancel", end);
-  // A swipe that started on a tab shouldn't also count as tapping it.
-  nav.addEventListener("click", (e) => {
-    if (swiped) {
-      e.stopPropagation();
-      e.preventDefault();
-      swiped = false;
-    }
-  }, true);
-}
-
 ui.tabs.forEach((t, i) =>
   t.addEventListener("click", () => {
     sfx.unlock();
@@ -2725,7 +2691,7 @@ function updateUi(dt = 0): void {
   updateSauce(dt);
   updateEgg(dt);
 
-  ui.tabs.forEach((t, i) => t.setAttribute("aria-selected", String(i === counter.page)));
+  placeNav();
   updateGrillTags();
   updateFryTags();
   updateStaleUi();
@@ -2751,9 +2717,9 @@ function updateUi(dt = 0): void {
   const grillBurning = counter.grillItems.some((g) => !g.below && g.piece.kind in COOK_SCALE && cookLevel(g.piece) > COOK_SCALE[g.piece.kind as Cookable].over + 0.1);
   const dots = [false, grillBurning, friesReady || friesBurning];
   const hot = [false, grillBurning, friesBurning];
-  ui.tabDots.forEach((d, i) => {
-    d.hidden = !dots[i] || i === counter.page;
-    d.classList.toggle("hot", hot[i]);
+  ui.tabs.forEach((t, i) => {
+    const lamp = hot[i] ? "coral" : dots[i] ? "amber" : "off";
+    if (t.dataset.lamp !== lamp) t.dataset.lamp = lamp;
   });
 
   const tut = tutorialHint();
@@ -2765,6 +2731,38 @@ function updateUi(dt = 0): void {
     ui.hint.style.transform = "";
   }
   ui.hint.hidden = !show;
+}
+
+/**
+ * The counter buttons (T17 from the tabs study): only the next counter each way, as round buttons
+ * at the screen edges, level with the trash chute. Each tracks where its counter is as the camera
+ * moves: a counter d screens away (d = its index minus the view's) sits in the middle and faded out
+ * at d = 0, at the edge at d = ±1, and just off screen at d = ±2. So the button you press glides to
+ * the middle and fades as you arrive, and the counter you left grows back out on the other side.
+ */
+const NAV_SIZE = 60;
+function placeNav(): void {
+  const f = counter.viewPage;
+  const w = bands.counter.w;
+  const S = NAV_SIZE, m = 10;
+  const v = counter.trashPoint().project(counter.camera);
+  const y = Math.round(bands.counter.y + ((1 - v.y) / 2) * bands.counter.h - S / 2);
+  const C = w / 2 - S / 2, EL = m, ER = w - m - S, OL = -S - 24, OR = w + 24;
+  const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
+  ui.tabs.forEach((t, i) => {
+    const d = i - f, ad = Math.abs(d);
+    const x = d <= -1 ? lerp(EL, OL, Math.min(1, -d - 1)) : d < 0 ? lerp(C, EL, -d) : d < 1 ? lerp(C, ER, d) : lerp(ER, OR, Math.min(1, d - 1));
+    const k = Math.min(1, ad);
+    const tf = `translate(${x.toFixed(1)}px, ${y}px) scale(${(0.75 + 0.25 * k).toFixed(3)})`;
+    if (t.style.transform !== tf) t.style.transform = tf;
+    const op = k.toFixed(2);
+    if (t.style.opacity !== op) t.style.opacity = op;
+    const live = ad > 0.5 && ad < 1.5;
+    const pe = live ? "" : "none";
+    if (t.style.pointerEvents !== pe) t.style.pointerEvents = pe;
+    t.tabIndex = live ? 0 : -1;
+    t.setAttribute("aria-hidden", String(!live));
+  });
 }
 
 /** A doneness meter under each grill item (the top of each stack), so players don't have to judge colour alone. */

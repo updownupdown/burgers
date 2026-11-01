@@ -590,3 +590,43 @@ From the meter and tabs study (project files `meter-tabs-study/`, four rounds). 
 - **Scroll shadows.** A fixed header shows a shadow only while the page is scrolled down from the top; a fixed footer only while there's more below (`scrollShadows`).
 - **Prep & Open** is a card over the map (the summary layer, `prepOpen`), titled "Town: Day N", with the same padding as the menus; a tap on the dimmed map closes it. Order: expected customers (big number beside "expected customers" and the crowd), Pacing, Shift, Menu (a *Show ingredients* switch, the burger drawn on the right), Bonus (one a row; the last pick stays selected).
 - **Map.** The dark top bar floats, and under it a cream plate holds Popularity, Rating and Menu (Results in the evening) as three separate buttons. The day moved to the dock: "Day 7 · Morning in". The map zooms out to 0.6 of the whole island and pans further past the edges. Drive here has no caption under it.
+
+## 24. Four regions, four kitchens (study pick)
+
+From the regional study (project files `region-study/`, artifact "Bun Voyage Regions"). James picked the **Opus** proposal on 2026-11-01, with Orchard Isle flatbreads as the fourth area (no ice cream).
+
+**Idea.** Every area keeps Drinks and Fryer; only the middle counter changes, and each area teaches one new verb. The town you park in sets the counter, so going back to the Pines brings the grill back.
+
+### The map
+
+- One main island plus **Orchard Isle**, reached by a causeway from Sun Valley. Map space grows to 120 by 170 units (one unit is about two miles).
+- Spacing follows the land: the Pines is a Y (a valley road plus a spur up to Elk Pass), the coast a string of towns 17 to 27 apart, Red Rock a long triangle with 64 empty miles between Red Mesa and Cactus Junction, the isle a short chain.
+- **Area names sit on the land** in spaced small caps over each wash. Water bodies get their own names in italics: Westering Sea, Morning Sea, Saltwater Bay, Lantern Sound, Mirror Lake, the Shallows.
+- 14 towns: Pines 4, Coast 4, Red Rock 3, Orchard Isle 3. **Dust Bowl Flats is dropped** (its rodeo moves to Cactus Junction). New towns: Applecross, Larkvale, Port Amber.
+- **Gated highways**, drawn dashed with a barrier and a note until open: Coast Highway (Summit City to Saltwater Bay) after Summit City; Desert Highway (Harbor City to Red Mesa) after Harbor City; the causeway (Sun Valley to Applecross) after Sun Valley. Two late links only shorten the way back: the **Old Pass road** (Elk Pass to Cactus Junction) clears once you reach Cactus Junction, and the **ferry** (Port Amber to Harbor City) runs once you reach Port Amber.
+
+### Kitchens and menus
+
+| Area | Middle counter | New verb | Menu | Fryer | Local drinks |
+|---|---|---|---|---|---|
+| The Pines | Grill (as today) | (base: drag, tap, flick, hold, squeeze) | Trailhead Classic $9, Sunrise Summit $11, Campfire Melt $11, Summit Smash $12, Lumberjack Stack $15 | Fries, poutine | Pine Fizz, Pink Lemonade |
+| Sunny Coast | Panini press: 2 clamshell bays (3 at Harbor City), bread bin (ciabatta, sourdough), chicken and veggie patty drawer, tuna well, cutting board, pesto and aioli | Pull the handle down to close the lid (tap to lift); slice at Harbor City | Caprese $10, Avocado Toast $9, Tuna Melt $11, Chicken Pesto $13, Veggie Club $12 | Fries, sweet potato fries, corn in a steam well (Driftwood) | Pink Lemonade, Cucumber Cooler |
+| Red Rock | Comal: one long plate, hot left, warm right; pork and beans steam wells, corn and flour tortillas, tortilla press (Sun Valley), taco rack, red/green salsa and crema | Fold a tortilla by dragging its edge across | Street Tacos $10, Quesadilla $9, Pastor Tacos $12, Bean Tostada $10, Breakfast Taco $11 | Chips and salsa, nachos (chips, queso, jalapeños), churros (Sun Valley) | Hibiscus Cooler, Lime Agua |
+| Orchard Isle | Hearth oven: wood-fired dome, peel to build on, dough, sauce pot, honey and oil; 2 pies (3 at Port Amber) | Tap a pie in the oven to turn its pale side to the fire | Harvest Red $10, Mushroom $11, Fig & Ham $13, Pear & Blue $12, Calzone $14 (fold) | Fries, zucchini fritti, apple fritters (Larkvale) | Sparkling Cider, Bramble Soda |
+
+Road Cola, Water and Iced Tea are on the fountain everywhere; the other two buttons change by area. The Pines keeps five burgers, one signature step each (plain, egg, melt, smash, double); the other fifteen burger recipes are cut (Plain Jane lives on as a Classic with NOs). Prep & Open lists only the area's dishes unlocked so far; the player shows or hides them as today (at least two). Each area scales the same way: the first town has two dishes, middle towns add a dish or two, a pan and a fryer option, and the capital adds the last dish and one machine upgrade. A new verb never arrives in the same town as a new machine.
+
+### Bonuses (14)
+
+Pinecrest Comfy bench $40, Elk Pass Smart fountain $70, Cedar Falls Steady hands $90, Summit City Heat lamp $140, Saltwater Bay Apology cookies $180, Gull Point **Kitchen timer** (new: a soft tick when anything reaches done) $210, Driftwood Turbo fryer $240, Harbor City Guest book $290, Red Mesa Sandwich board $340, Cactus Junction **Hot plate** (was Searing plate; any middle counter 25% faster) $400, Sun Valley Shiny tip jar $460, Applecross Press pass $520, Larkvale **Ticket rail** (new: the next customer's ticket shows early) $580, Port Amber Meal deal sign (any main + side + drink) $650.
+
+### Events
+
+Farmers' market (Cedar Falls), County fair (Summit City), Surf contest (Driftwood, special becomes a panini), Harbor festival (Harbor City), Chili cook-off (Red Mesa), Rodeo (Cactus Junction, a taco platter), and a new Harvest fair at Larkvale.
+
+### Build order
+
+1. **Map and data:** the new island and isle, 14 towns, gated highways, names on land, the Pines trimmed to five burgers, 14 bonuses, save migration (savings, bonuses and looks kept; Dust Bowl Flats progress folds into Cactus Junction). Until their counters land, the Coast, Red Rock and the isle keep a short burger menu on the grill.
+2. **Sunny Coast:** panini press, breads, fillings, sweet potato fries, steam well, local drinks.
+3. **Red Rock:** comal, tortillas, fold, chips and nachos, churros.
+4. **Orchard Isle:** hearth oven, turn, flatbreads, calzone, fritti and fritters.

@@ -1,6 +1,7 @@
 // The repo's competent-player bot (tools/playtest/bot.cjs), moved onto the window-line layout:
 // targets come from the counter's hit proxies, sauce is lifted / drawn / put back, cartons are
-// carried across the fryer's two stops with the edge carry, sleeves are sized.
+// carried across the fryer's two stops with the edge carry. Eggs are tapped on the grill and
+// the shells binned; stacks never run out.
 const path = require('path');
 const { open, gesture, line, hold, step, state, out, enterShift } = require('./lib.cjs');
 const OUT = out;
@@ -78,7 +79,14 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       let sp, tries = 0;
       do { sp = spots[si++ % spots.length]; } while (occupied.some(o => Math.hypot(o.x - sp[0], o.z - sp[1]) < 1) && tries++ < spots.length);
       const [gx, gy] = await ev(([x, z]) => window.__bv.project('counter', x, 0.9, z), sp);
-      await act(line(bx, by, gx, gy, 10));
+      if (n.kind === 'egg') {
+        // Pick one up, one crisp tap on the grill, shells in the trash.
+        await tap([bx, by]);
+        await tap([gx, gy]);
+        const tr = await ev(() => window.__bv.project('counter', window.__bv.counter.trashPoint().x, 0.3, window.__bv.counter.trashPoint().z));
+        await tap(tr);
+        if (await ev(() => window.__bv.eggInHand())) console.log('EGG STILL IN HAND');
+      } else await act(line(bx, by, gx, gy, 10));
       const fresh = (await items()).find(i => !used.has(i.uid));
       if (fresh) {
         used.add(fresh.uid);
@@ -122,11 +130,11 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
             const ln = Object.entries(assigned).find(([, u]) => u === o.uid);
             if (!ln) continue;
             const ex = order.layers[+ln[0]];
-            const tgt = ex.kind === 'patty' ? TARGET[ex.doneness] : 0.6;
+            const tgt = ex.kind === 'patty' ? TARGET.medium : 0.6;
             if ((ex.kind === 'patty' || ex.kind === 'bacon') && o.cook[0] >= tgt && o.cook[1] < 0.1) {
               await act(line(o.scr[0], o.scr[1], o.scr[0], o.scr[1] - 60, 4), 16);
             } else if (+ln[0] !== li) {
-              const t2 = ex.kind === 'patty' ? TARGET[ex.doneness] : ex.kind === 'bacon' ? 0.6 : 0.5;
+              const t2 = ex.kind === 'patty' ? TARGET.medium : ex.kind === 'bacon' ? 0.6 : 0.5;
               const done2 = ex.kind === 'patty' || ex.kind === 'bacon' ? o.cook[0] >= t2 - 0.02 && o.cook[1] >= t2 - 0.02 : o.cook[0] >= t2;
               const warm = await ev(() => window.__bv.counter.zones[2] === 'warm');
               const onWarm = o.x > warmSpots[0][0] - 0.8;
@@ -139,7 +147,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
               }
             }
           }
-          const tgt = l.kind === 'patty' ? TARGET[l.doneness] : l.kind === 'bun' || l.kind === 'egg' || l.kind === 'pineapple' ? 0.5 : 0.6;
+          const tgt = l.kind === 'patty' ? TARGET.medium : l.kind === 'bun' || l.kind === 'egg' || l.kind === 'pineapple' ? 0.5 : 0.6;
           if (wantsMelt(li) && it.melt < 0 && it.cook[1] >= tgt - 0.02 && it.cook[0] >= tgt - 0.15 && !it.flipping) {
             await cheeseOn(it); skip.add(li + 1); continue;
           }
@@ -174,23 +182,10 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
         for (let n = l.count || 1; n > 0; n--) await act(line(bx, by, px, py, 10));
       }
     }
-    // An empty cup or carton from its stack; fetch and unwrap a sleeve of that size when it's out.
-    // `deliver(from)` carries it from the stack to where it goes.
+    // An empty cup or carton from its stack (they never run out). `deliver(from)` carries it to where it goes.
     const takeEmpty = async (kind, size, deliver) => {
       const si = await ev(([k, z]) => window.__bv.counter.stacks.findIndex(s => s.kind === k && s.size === z), [kind, size]);
-      let s = await hp('stack', { idx: si });
-      if (!(await ev((i) => window.__bv.counter.stacks[i].count, si))) {
-        const back = await ev(() => window.__bv.counter.page);
-        const backStop = await ev(() => window.__bv.counter.stop);
-        await page(3);
-        const a = await hp('supplies', { kind, size });
-        const tab = await ev((n) => { const r = document.querySelectorAll('.tab')[n].getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }, back);
-        await carryVia(line(a[0], a[1], tab[0], tab[1], 10), 480, async () => { if ((await ev(() => window.__bv.counter.stop)) !== backStop) { await ev((s) => window.__bv.goToStop(s), backStop); await step(p, 0.6); } return hp('stack', { idx: si }); });
-        s = await hp('stack', { idx: si });
-        await tap(s); await tap(s);
-        refills++;
-      }
-      await deliver(s);
+      await deliver(await hp('stack', { idx: si }));
     };
     // 4. Fries: carton from the stacks to the pad, all on the fryer's one screen.
     if (order.fries) {
@@ -249,9 +244,8 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       const t = await hp('tap', { idx });
       await hold(p, t[0], t[1], Math.round(0.9 / (0.42 * { S: 1.35, M: 1, L: 0.78 }[order.drinkSize]) * 1000));
       await extra('lids', { size: order.drinkSize });
-      await extra('straws');
-      const d = await ev((i) => { const q = window.__bv.counter.taps[i].cup; return q && { lid: q.lid, straw: q.straw, fill: q.fill }; }, idx);
-      if (!d || !d.lid || !d.straw) console.log('DRINK NOT DRESSED', d && { lid: d.lid, straw: d.straw, fill: d.fill });
+      const d = await ev((i) => { const q = window.__bv.counter.taps[i].cup; return q && { lid: q.lid, fill: q.fill }; }, idx);
+      if (!d || !d.lid) console.log('DRINK NOT DRESSED', d && { lid: d.lid, fill: d.fill });
       await act(line(c[0], c[1], px, py, 12));
       await page(1);
     }

@@ -827,6 +827,11 @@ export class CounterView {
   }
   private trashGlow: (THREE.Mesh | undefined)[] = [];
 
+  /** The middle of the trash slot on the current counter, world space (for the playtest bot). */
+  trashPoint(): THREE.Vector3 {
+    return this.world(this.page, 0, 0, (TRASH.z0 + TRASH.z1) / 2);
+  }
+
   /** True when a dropped item at this world point lands in the trash slot. */
   overTrash(world: THREE.Vector3): boolean {
     return world.z > TRASH.z0 - 0.05 && Math.abs(world.x - pageX(this.page)) < TRASH_HALF + 0.6;

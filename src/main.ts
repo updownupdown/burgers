@@ -39,6 +39,7 @@ import { CounterView, CUP_IN_HAND, EMPTY_PACK, STOPS, GRILL_SCALE, HOME_PAGE, PA
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
 import { SauceZoom } from "./scenes/saucezoom";
+import { makeEgg, type EggStage } from "./render/egg";
 import "./ui/components.css";
 import "./style.css";
 import { mountHome, refreshHome } from "./screens/home";
@@ -683,7 +684,7 @@ interface Pointer {
   x: number;
   y: number;
   band: ReturnType<typeof bandAt>;
-  mode: "none" | "swipe" | "held" | "grill" | "basket" | "pour" | "sauce" | "plate" | "wipe";
+  mode: "none" | "swipe" | "held" | "grill" | "basket" | "pour" | "sauce" | "plate" | "wipe" | "egg";
   /** Tap whose spill is being wiped. */
   wipe: number;
   hit: Hit | null;
@@ -1016,6 +1017,124 @@ function finishHold(pt: Pointer): void {
       }
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Eggs: tap one in the tray to pick it up (or drag it out), then tap it on the grill to crack
+// it. A quick, crisp tap opens it in one; a slower one only cracks it and it takes a second tap.
+// The egg drops onto the grill where it was tapped and the empty shells stay in hand until
+// they go in the trash. While an egg or its shells are in hand, presses on the grill counter
+// move them rather than doing anything else.
+
+interface EggHand {
+  stage: EggStage;
+  obj: THREE.Object3D;
+  /** Where it hovers, world space on the grill top. */
+  at: THREE.Vector3;
+  /** Knock animation, 1 just tapped down to 0. */
+  knock: number;
+}
+let eggHand: EggHand | null = null;
+/** A tap counts as clean when it's this quick (ms) and doesn't slide. */
+const EGG_CLEAN_TAP = 220;
+/** How high the egg hovers over the grill top while in hand, and how much bigger it's drawn there (it's nearer the eye). */
+const EGG_HOVER = 0.55;
+const EGG_IN_HAND = 1.4;
+
+function setEggStage(stage: EggStage): void {
+  const e = eggHand!;
+  counter.scene.remove(e.obj);
+  disposeObject(e.obj);
+  e.stage = stage;
+  e.obj = makeEgg(stage);
+  e.obj.scale.setScalar(EGG_IN_HAND);
+  counter.scene.add(e.obj);
+}
+
+function pickUpEgg(at: THREE.Vector3): void {
+  spend(KIND_COST.egg);
+  const obj = makeEgg("whole");
+  obj.scale.setScalar(EGG_IN_HAND);
+  counter.scene.add(obj);
+  eggHand = { stage: "whole", obj, at: at.clone(), knock: 0 };
+  sfx.pop();
+  hintOnce("egg-tap", "Tap the egg on the grill to crack it. A quick, crisp tap opens it in one.", 3.5);
+}
+
+function dropEggHand(): void {
+  if (!eggHand) return;
+  counter.scene.remove(eggHand.obj);
+  disposeObject(eggHand.obj);
+  eggHand = null;
+}
+
+function moveEgg(pt: Pointer): void {
+  if (!eggHand) return;
+  eggHand.at.copy(counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), GRILL_TOP));
+  counter.highlightTrash(counter.overTrash(counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3)));
+}
+
+/** Let go of the egg (or shells) in hand: a knock on the grill, the trash, back in the tray, or it just waits there. */
+function releaseEgg(pt: Pointer, dt: number, cancelled: boolean): void {
+  const e = eggHand;
+  counter.highlightTrash(false);
+  if (!e || cancelled) return;
+  const ndc = ndcIn(bands.counter, pt.x, pt.y);
+  const g = counter.groundPoint(ndc, GRILL_TOP);
+  const justPicked = pt.hit?.type === "bin" && pt.hit.kind === "egg" && !pt.moved;
+  if (justPicked) return;
+  if (counter.overTrash(counter.groundPoint(ndc, 0.3))) {
+    dropEggHand();
+    sfx.thud();
+    buzz(20);
+    return;
+  }
+  if (e.stage === "shells") {
+    showHint("The shells go in the trash, along the front edge.", 2);
+    return;
+  }
+  const hit = counter.hit(ndc);
+  if (e.stage === "whole" && hit?.type === "bin" && hit.kind === "egg") {
+    // Back in the tray.
+    spend(-KIND_COST.egg);
+    dropEggHand();
+    sfx.plop();
+    return;
+  }
+  const over = counter.overGrill(g);
+  if (!over) return;
+  if (counter.grillItemAt(g)) {
+    showHint("Crack it on a clear spot of the grill.", 1.8);
+    return;
+  }
+  e.knock = 1;
+  buzz(12);
+  const clean = dt < EGG_CLEAN_TAP && !pt.moved;
+  if (e.stage === "whole" && !clean) {
+    setEggStage("cracked");
+    sfx.thud();
+    showHint("Cracked. Tap it again to open it.", 1.8);
+    return;
+  }
+  const inOne = e.stage === "whole";
+  counter.addGrillItem(newPiece("egg"), over.x, over.z);
+  sfx.sizzleHit();
+  setEggStage("shells");
+  if (inOne) showHint("Clean crack!", 1.2);
+  hintOnce("egg-shells", "Now drop the shells in the trash, along the front edge.", 3);
+  zoneHint(over.x);
+}
+
+function updateEgg(dt: number): void {
+  const e = eggHand;
+  if (!e) return;
+  e.knock = Math.max(0, e.knock - dt * 5);
+  // A knock: down to the grill and back up.
+  const dip = Math.sin(Math.PI * e.knock) * EGG_HOVER;
+  e.obj.position.set(e.at.x, e.at.y + EGG_HOVER - dip, e.at.z);
+  // A whole egg is held lying over, so from above it reads as an egg and not a ball.
+  if (e.stage === "shells") e.obj.rotation.set(0, 0, 0);
+  else e.obj.rotation.set(-0.35, 0, 1.25);
 }
 
 /** Something just went down on a grill zone that's off or only warm: say so, once each. */
@@ -1404,8 +1523,16 @@ canvas.addEventListener("pointerdown", (e) => {
   if (pt.band === "counter") {
     const hit = counter.hit(ndcIn(bands.counter, x, y));
     pt.hit = hit;
-    if (!hit) pt.mode = "swipe";
-    else if (hit.type === "bin") {
+    if (eggHand && counter.page === HOME_PAGE) {
+      // An egg or its shells in hand: this press moves them (a tap on the grill cracks the egg).
+      pt.mode = "egg";
+      moveEgg(pt);
+    } else if (!hit) pt.mode = "swipe";
+    else if (hit.type === "bin" && hit.kind === "egg") {
+      pickUpEgg(counter.groundPoint(ndcIn(bands.counter, x, y), GRILL_TOP));
+      pt.mode = "egg";
+      moveEgg(pt);
+    } else if (hit.type === "bin") {
       spend(KIND_COST[hit.kind]);
       startHold(pt, { type: "piece", piece: newPiece(hit.kind), fromGrill: null });
     }
@@ -1492,6 +1619,9 @@ canvas.addEventListener("pointermove", (e) => {
     case "swipe":
       // Sideways swipes on the counter are free for station actions; counters change from the tab bar.
       break;
+    case "egg":
+      if (bandAt(pt.y) === "counter") moveEgg(pt);
+      break;
     case "held":
       moveHold(pt);
       hoverTab(pt, e.timeStamp);
@@ -1572,6 +1702,9 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
 
   switch (pt.mode) {
     case "swipe":
+      break;
+    case "egg":
+      releaseEgg(pt, dt, cancelled);
       break;
     case "held":
       if (cancelled) {
@@ -1978,6 +2111,7 @@ function startShift(plan: Plan | null = null): void {
     syncTray(i, false);
   }
   for (const g of [...counter.grillItems]) counter.removeGrillItem(g);
+  dropEggHand();
   counter.zones = [...ZONE_START];
   for (const b of counter.baskets) Object.assign(b, { loaded: false, cook: 0, down: false, goldenRung: false, amount: 0 });
   counter.resetStations();
@@ -2466,6 +2600,7 @@ function updateUi(dt = 0): void {
     trayView.fitUnder(i, (bottom - bands.tray.y) / bands.tray.h);
   });
   updateSauce(dt);
+  updateEgg(dt);
 
   ui.tabs.forEach((t, i) => t.setAttribute("aria-selected", String(i === counter.page)));
   updateGrillTags();
@@ -2800,6 +2935,7 @@ window.addEventListener("blur", cancelPointer);
   serve,
   goToPage,
   goToStop,
+  eggInHand: () => eggHand?.stage ?? null,
   stops: STOPS.length,
   ring: ringBell,
   callNext,

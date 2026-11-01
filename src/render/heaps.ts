@@ -229,15 +229,14 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
     }
   },
   egg: (parts, r) => {
-    // A cardboard flat of whole eggs.
-    parts.add(box(1.06, 0.06, 0.88), "#cdbb9b", { p: [0, PAN.floor + 0.03, 0], ink: 0.012 });
-    for (let ix = 0; ix < 4; ix++) {
-      for (let iz = 0; iz < 3; iz++) {
-        const x = -0.375 + ix * 0.25;
-        const z = -0.27 + iz * 0.27;
-        parts.add(G.cup, "#bfac8b", { p: [x, PAN.floor + 0.05, z], ink: false });
-        if (ix === 3 && iz === 0) continue;
-        parts.add(G.egg, (ix + iz) % 3 ? "#f6efe2" : "#efe2cc", { p: [x, PAN.floor + 0.06, z], r: [jitter(r, 0.2), 0, jitter(r, 0.2)], s: 0.105, ink: 0.014 });
+    // A cardboard flat of six big whole eggs, at the same scale as the egg in your hand.
+    parts.add(box(1.1, 0.06, 0.9), "#cdbb9b", { p: [0, PAN.floor + 0.03, 0], ink: 0.012 });
+    for (let ix = 0; ix < 3; ix++) {
+      for (let iz = 0; iz < 2; iz++) {
+        const x = -0.36 + ix * 0.36;
+        const z = -0.2 + iz * 0.4;
+        parts.add(G.cup, "#bfac8b", { p: [x, PAN.floor + 0.05, z], s: [1.2, 1, 1.2], ink: false });
+        parts.add(G.egg, (ix + iz) % 3 ? "#f6efe2" : "#efe2cc", { p: [x, PAN.floor + 0.04, z], r: [jitter(r, 0.15), 0, jitter(r, 0.15)], s: 0.165, ink: 0.014 });
       }
     }
   },

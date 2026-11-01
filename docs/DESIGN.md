@@ -444,6 +444,8 @@ James's build #36 notes on the grill and the top trays, as built (`src/scenes/co
 
 ## 16. After build #36: drinks, fryer, supplies and the line
 
+*Supplies, straws, the stack counts and the drinks and fryer sizes changed again after build #52: see §18.*
+
 James's build #36 notes on the other three counters and on the truck as a whole, as built (`src/scenes/counter.ts`, `src/render/machines/{drinks,fryer,supplies}.ts`, `src/main.ts`).
 
 - **One stop per counter, no turning round.** The truck is drawn wider than it could be so all four counters face the window: Drinks, Grill, Fryer, Supplies, left to right, one camera stop each (`STOPS`, `PAGE_CX`). The fryer's second stop, its edge carry and the tab pips are gone, and so is the turn to the back wall.
@@ -468,3 +470,16 @@ James picked option C, "Dusk", from the round-3 UI study (five full looks, fonts
 - **Logo.** "Bun" over "Voyage" in Young Serif, Voyage in butter with a dashed coral route under it. Text only, so it scales and needs no asset.
 - **Home.** One dark dashboard card groups the morning/evening Day tile (coral), budget, popularity and rating, with Menu, Reviews and Supplies as a button row under them. Help and Settings are icon buttons by the logo. The dock and the town sheet are cream.
 - **Pause sheet.** Resume; Restart shift and Quit to map side by side; a "This shift" group with Today's menu, Pacing and Complexity; then doors to Settings and How to play. Settings is split into Play, Device and App.
+
+## 18. After build #52: a simpler kitchen
+
+Build #52 replaced Supplies with a fourth counter, a Cold bar (soft serve and shakes). James asked for it to go, and for a batch of simplifications across the other counters.
+
+- **Three counters.** Drinks, Grill, Fryer. The Cold bar (its machines, desserts, orders and scoring) is gone, and Supplies is not coming back: **stacks never run out**, so there is nothing to restock and no sleeves (`Stack` has no count; `STACK_SHOWN` is only how many are drawn). The leftover-stock save field is gone too.
+- **Stack labels** show only the size (S, M, L): no counts on cups, lids or fry boats, and the lid stacks are not labelled "Lid".
+- **No straws.** A drink is cup, ice (unless "No ice"), pour, lid. Straws are gone from the counter, the cup model, scoring, receipts, the how-to and the Drinks tab drawing.
+- **Drinks counter.** The ice bin is half as wide (`makeIceWell(0.5)`), and the fountain is drawn 1.22 times its model (`FOUNTAIN_SCALE`) so the push buttons are bigger. Cup stacks run along the front left and the lid stacks along the front right, spread over the room the straws left.
+- **Fryer counter.** The potato freezer is half as wide (`FREEZER.w` 1.6), and the fryer and its baskets are drawn 1.3 times (`FRYER_SCALE`) in the freed room.
+- **Eggs.** The egg flat holds six big eggs at the same exaggerated scale as the fried egg. Tap one (or drag it out) to pick it up; it stays in hand, hovering over the grill. Tap it on a clear spot of the grill: a **quick, crisp tap** (under 220 ms, no slide: `EGG_CLEAN_TAP`) cracks it open in one, a slower one only cracks it and a second tap opens it. The fried egg lands where it was tapped and the two **half shells stay in hand until they're dropped in the trash** slot. While an egg or shells are in hand, presses on the grill counter move them (`eggHand` in `src/main.ts`, models in `src/render/egg.ts`). An egg tapped back on its flat is refunded.
+- **Patties.** Cooked on one side only: both faces brown together (`COOK_SPEED.patty` 0.255, medium from about 21 s to 33 s on a hot zone) and patties no longer flip. Orders never ask for a doneness: every patty goes out **medium**. Rare or well done score 0.8 for that layer (`PATTY_OFF`, "patty a bit rare / well done") and tick the receipt; raw and burnt still fail and show red. The grill tag is one pill with a tick at Medium; receipts lost their doneness pills (the smash mark stays).
+

@@ -1,5 +1,5 @@
 import type { DrinkId, ExpectedLayer, FriesSize, FryKind, Kind, Modifier, Order, Size } from "./types";
-import { BREADS, COUNTED, DRINK_LABEL, extraCount, FRY_LABEL, PRESS_CHEESE, PROTEINS, SAUCES } from "./types";
+import { AFTER_OVEN, BREADS, COUNTED, DRINK_LABEL, extraCount, FRY_LABEL, OVEN_CHEESE, PRESS_CHEESE, PROTEINS, SAUCES } from "./types";
 import { fountainFor, fryerOf, recipeCount, type Recipe, type Stop } from "./stops";
 
 export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, M: 3, L: 4 };
@@ -41,10 +41,12 @@ export const SIDES_ONLY_CHANCE = 0.06;
 /** Share of fries orders that want the fryer's second kind, where it has one: sweet potato fries on the coast, churros at Sun Valley. */
 export const SWEET_CHANCE = 0.4;
 
-/** The side an order gets from a town's fryer: its usual kind, or now and then its second. */
+/** The side an order gets from a town's fryer: its usual kind, or now and then one of the others. */
 function pickFry(fries: boolean, fryer: readonly FryKind[], rng: Rng): FryKind {
   const alt = fries && fryer.length > 1 && rng() < SWEET_CHANCE;
-  return alt ? fryer[1] : fryer[0] ?? "fries";
+  if (!alt) return fryer[0] ?? "fries";
+  // Orchard Isle fries two others (zucchini fritti, apple fritters): either one.
+  return fryer.length > 2 ? fryer[1 + Math.floor(rng() * (fryer.length - 1))] : fryer[1];
 }
 
 /** Just a drink (most often), just fries (or chips), or both, and no burger. Drinks come from the town's fountain. */
@@ -86,7 +88,7 @@ export function seededRng(seed: number): Rng {
  * Recipe layers with modifiers applied, bottom to top. On a panini an added filling goes on the
  * protein if there is one, else just under the top slice; on an open-faced toast it goes on top.
  */
-export function applyMods(base: Kind[], mods: Modifier[], open = false, dish = false): Kind[] {
+export function applyMods(base: Kind[], mods: Modifier[], open = false, dish = false, pie = false): Kind[] {
   let out = base.slice();
   for (const m of mods) {
     if (m.type === "toast") continue;
@@ -94,6 +96,12 @@ export function applyMods(base: Kind[], mods: Modifier[], open = false, dish = f
     else if (m.type === "extra") {
       const i = out.lastIndexOf(m.kind);
       if (i >= 0) out.splice(i + 1, 0, m.kind);
+    } else if (pie) {
+      // A flatbread: an added topping goes on before the oven, under basil, rocket and honey; an
+      // added basil or rocket goes on after with them.
+      let i = out.length;
+      if (!AFTER_OVEN.has(m.kind)) while (i > 1 && AFTER_OVEN.has(out[i - 1])) i--;
+      out.splice(i, 0, m.kind);
     } else if (dish) {
       // Tacos, a quesadilla or a tostada: an added filling goes with the others, before the lime and the salsa.
       let i = out.length - 1;
@@ -123,7 +131,7 @@ export function orderFromRecipe(
   // "Extra pickles" means more pickles in the same layer, not a second layer of them.
   const more = new Set(mods.filter((m) => m.type === "extra" && COUNTED.has(m.kind)).map((m) => m.kind));
   // Leave-offs come out last, so the ticket can show "- Ketchup" where the ketchup would have gone.
-  const full = applyMods(recipe.layers, mods.filter((m) => m.type !== "no" && !(m.type === "extra" && COUNTED.has(m.kind))), !!recipe.open, !!recipe.dish);
+  const full = applyMods(recipe.layers, mods.filter((m) => m.type !== "no" && !(m.type === "extra" && COUNTED.has(m.kind))), !!recipe.open, !!recipe.dish, !!recipe.pie);
   const nos = new Set(mods.filter((m) => m.type === "no").map((m) => m.kind));
   const removed: { kind: Kind; at: number }[] = [];
   const kinds: Kind[] = [];
@@ -133,6 +141,17 @@ export function orderFromRecipe(
   }
   const counted = (kind: Kind) => recipeCount(recipe, kind) + (more.has(kind) ? extraCount(kind) : 0);
   const layers: ExpectedLayer[] = kinds.map((kind, i) => {
+    if (recipe.pie) {
+      // Orchard Isle: the dough is baked and turned (a calzone folded first and turned twice), the
+      // cheese melts in the oven, and basil, rocket and honey go on after.
+      const calzone = recipe.pie === "calzone";
+      if (kind === "dough") return calzone ? { kind, toasted: true, turns: 2, folded: true } : { kind, toasted: true, turns: 1 };
+      const exp: ExpectedLayer = { kind };
+      if (COUNTED.has(kind)) exp.count = counted(kind);
+      if (OVEN_CHEESE.has(kind)) exp.melted = true;
+      if (AFTER_OVEN.has(kind)) exp.after = true;
+      return exp;
+    }
     if (recipe.dish) {
       // Red Rock: tortillas warmed on the comal (a quesadilla's folded and crisped on both sides),
       // its cheese melted inside; the over-easy egg flipped once.
@@ -172,6 +191,10 @@ const PANINI_ADD: Kind[] = ["avocado", "avocado", "rocket", "tomato", "redonion"
 const DISH_OPTIONAL: ReadonlySet<Kind> = new Set<Kind>(["onion", "cilantro", "lettuce", "lime", "pineapple", "greensalsa", "redsalsa", "crema", "jalapeno"]);
 const DISH_EXTRA: ReadonlySet<Kind> = new Set<Kind>(["pork", "beans", "onion", "jalapeno", "jack", "cilantro"]);
 const DISH_ADD: Kind[] = ["jalapeno", "jalapeno", "jack", "cilantro", "onion"];
+/** Orchard Isle: flatbread toppings to leave off, to double, and to add. The dough, its sauce and a calzone's cheese stay. */
+const PIE_OPTIONAL: ReadonlySet<Kind> = new Set<Kind>(["basil", "rocket", "honey", "mushroom", "fig", "pear"]);
+const PIE_EXTRA: ReadonlySet<Kind> = new Set<Kind>(["mozzarella", "mushroom", "ham", "fig", "pear", "blue"]);
+const PIE_ADD: Kind[] = ["mushroom", "ham", "ham", "rocket", "basil"];
 
 export function pickMods(recipe: Recipe, pantry: Kind[], rng: Rng, level: number): Modifier[] {
   const mods: Modifier[] = [];
@@ -184,12 +207,25 @@ export function pickMods(recipe: Recipe, pantry: Kind[], rng: Rng, level: number
     if (pantry.includes(k)) mods.push({ type: "add", kind: k });
   }
   const dish = !!recipe.dish;
+  const pie = !!recipe.pie;
   for (let n = mods.length; n < count; n++) {
-    const has = new Set(applyMods(recipe.layers, mods, !!recipe.open, dish));
+    const has = new Set(applyMods(recipe.layers, mods, !!recipe.open, dish, pie));
     const roll = rng();
     const pick = <T>(xs: T[]) => (xs.length ? xs[Math.floor(rng() * xs.length)] : null);
     let m: Modifier | null = null;
-    if (dish) {
+    if (pie) {
+      // Flatbreads keep to their own lists too; nothing is added to a calzone once it's folded but more of what's in it.
+      if (roll < 0.4) {
+        const k = pick([...has].filter((k) => PIE_OPTIONAL.has(k) && !(recipe.pie === "calzone")));
+        if (k) m = { type: "no", kind: k };
+      } else if (roll < 0.75 || recipe.pie === "calzone") {
+        const k = pick([...has].filter((k) => PIE_EXTRA.has(k)));
+        if (k) m = { type: "extra", kind: k };
+      } else {
+        const k = pick(PIE_ADD.filter((k) => pantry.includes(k) && !has.has(k)));
+        if (k) m = { type: "add", kind: k };
+      }
+    } else if (dish) {
       // Tacos, quesadillas and tostadas keep to their own lists.
       if (roll < 0.45) {
         const k = pick([...has].filter((k) => DISH_OPTIONAL.has(k)));
@@ -262,8 +298,9 @@ export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Orde
   const drinkSize: Size = r < 0.3 ? "S" : r < 0.7 ? "M" : "L";
   const order = orderFromRecipe(id, recipe, fries, drink, mods, friesSize, drinkSize);
   if (fries && fry !== "fries") order.fry = fry;
-  // At Harbor City a closed panini goes out cut in half.
+  // At Harbor City a closed panini goes out cut in half; at Port Amber a flatbread is cut in four.
   if (recipe.panini && !recipe.open && stop.press?.slice) order.slice = true;
+  if (recipe.pie === "flatbread" && stop.oven?.board) order.slice = true;
   if (drink) {
     const i = rng();
     order.ice = i < 0.45 ? true : i < 0.7 ? false : null;

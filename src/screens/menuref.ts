@@ -7,7 +7,7 @@ import * as gameMenu from "../game/menu";
 import { ADD_PRICE, DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "../game/menu";
 import { fountainFor, fryerOf, recipeCount, STOPS, townById, type Recipe, type Stop } from "../game/stops";
 import { openedBy, SHIFTS_TO_UNLOCK, unlockProgress } from "../game/travel";
-import { BREADS, COUNTED, DRINK_COLOR, PRESS_CHEESE, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, SIZE_LABEL, type Kind, type Size } from "../game/types";
+import { AFTER_OVEN, BREADS, COUNTED, DRINK_COLOR, PRESS_CHEESE, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, SIZE_LABEL, type Kind, type Size } from "../game/types";
 import { icon } from "../ui/icons";
 import { openHowTo } from "./howto";
 import { esc, getDeps, modalDepth, modalHead, modalOpen, price, pushModal, popModal, wireJumpChips } from "./modal";
@@ -19,8 +19,39 @@ const cup = (s: Size) => {
   return `<svg viewBox="0 0 16 ${h + 3}" style="height:${h + 3}px" aria-hidden="true"><path d="M1.5 2.5h13l-1.6 ${h}H3.1z"/><path d="M0.8 2.5h14.4" class="rim"/></svg>`;
 };
 
+/**
+ * Orchard Isle's flatbreads drawn from above: a golden oval (a calzone's half moon), its sauce, a
+ * scatter of each topping and, for what goes on after the oven, leaves or a honey drizzle.
+ */
+export function pieArt(r: Recipe): string {
+  const calzone = r.pie === "calzone";
+  if (calzone)
+    return `<div class="mref-stack pie" aria-hidden="true"><svg viewBox="0 0 64 44" width="100%"><path d="M6 30a26 22 0 0 1 52 0z" fill="#e3ad5a" stroke="#2a2622" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 30h48" stroke="#2a2622" stroke-width="1.6" stroke-linecap="round"/><g fill="#c47a3a">${[14, 22, 30, 38, 46].map((x) => `<circle cx="${x + 2}" cy="${29 - Math.sin(((x - 6) / 52) * Math.PI) * 2}" r="1.6"/>`).join("")}</g><path d="M26 16l4 3M34 16l4 3" stroke="#7a4a22" stroke-width="1.6" stroke-linecap="round"/></svg></div>`;
+  const sauce = r.layers.includes("redsauce") ? "#c8402a" : r.layers.includes("oil") ? "#efe1a0" : null;
+  const bits: string[] = [];
+  let k = 0;
+  for (const kind of r.layers) {
+    if (kind === "dough" || kind === "redsauce" || kind === "oil") continue;
+    if (kind === "honey") {
+      bits.push(`<path d="M18 18l7 9 6-10 7 11 7-9" fill="none" stroke="#e9a92a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`);
+      continue;
+    }
+    const n = COUNTED.has(kind) ? Math.min(6, recipeCount(r, kind)) : 3;
+    const leaf = kind === "basil" || kind === "rocket";
+    for (let i = 0; i < n; i++, k++) {
+      const a = k * 2.4;
+      const rr = 0.35 + 0.55 * (((k * 0.618) % 1) * 0.8 + 0.1);
+      const x = (32 + Math.cos(a) * rr * 19).toFixed(1);
+      const y = (22 + Math.sin(a) * rr * 13).toFixed(1);
+      bits.push(leaf ? `<ellipse cx="${x}" cy="${y}" rx="3.2" ry="1.7" transform="rotate(${(a * 57) % 180} ${x} ${y})" fill="${KIND_COLOR[kind]}" stroke="#2a2622" stroke-width=".8"/>` : `<circle cx="${x}" cy="${y}" r="${kind === "mozzarella" ? 3.4 : 2.4}" fill="${KIND_COLOR[kind]}" stroke="#2a2622" stroke-width=".8"/>`);
+    }
+  }
+  return `<div class="mref-stack pie" aria-hidden="true"><svg viewBox="0 0 64 44" width="100%"><ellipse cx="32" cy="22" rx="29" ry="20" fill="#e3ad5a" stroke="#2a2622" stroke-width="1.6"/><ellipse cx="32" cy="22" rx="24" ry="16" fill="${sauce ?? "#f1dcaa"}"/>${bits.join("")}</svg></div>`;
+}
+
 /** The burger drawn as a little stack, top bun first, so a recipe reads at a glance. */
 export function stackArt(r: Recipe): string {
+  if (r.pie) return pieArt(r);
   const n = r.layers.length;
   const parts = r.layers.map((k, i) => {
     const c = `--c:${KIND_COLOR[k]}`;
@@ -55,9 +86,13 @@ export function recipeHtml(r: Recipe, mult: number, special: boolean, locked = f
   } else if (r.dish === "quesadilla") tags.push(`<span class="bv-chip pill">${icon("toast")}Folded, flipped once</span>`);
   else if (r.dish === "tacos") tags.push(`<span class="bv-chip pill">${icon("toast")}Warm tortillas</span>`);
   else if (r.dish === "tostada") tags.push(`<span class="bv-chip pill">${icon("flame")}Fried shell</span>`);
+  else if (r.pie === "calzone") tags.push(`<span class="bv-chip pill">${icon("flame")}Folded, turned twice</span>`);
+  else if (r.pie) tags.push(`<span class="bv-chip pill">${icon("flame")}Baked, turned once</span>`);
   else if (r.toasted) tags.push(`<span class="bv-chip pill">${icon("toast")}Toasted bun</span>`);
   if (r.smash) tags.push(`<span class="bv-chip pill">${icon("smash")}Smashed, well done</span>`);
   if (r.melt) tags.push(`<span class="bv-chip pill">${icon("cheese")}Melted cheese</span>`);
+  const after = r.pie ? r.layers.filter((k) => AFTER_OVEN.has(k)) : [];
+  if (after.length) tags.push(`<span class="bv-chip pill">${icon("sparkle")}${after.map((k) => KIND_LABEL[k]).join(", ")} after the oven</span>`);
   if (r.layers.includes("pineapple")) tags.push(`<span class="bv-chip pill">${icon("flame")}${r.dish ? "Charred" : "Grilled"} pineapple</span>`);
   if (r.egg === "over") tags.push(`<span class="bv-chip pill">${icon("flame")}Egg over easy</span>`);
   const flow = r.layers.map((k) => `<li><i class="swc" style="--c:${KIND_COLOR[k]}"></i><span>${layerLabel(r, k)}</span></li>`).join("");
@@ -119,8 +154,9 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
   const base = new Set(townById(town.id).menu.map((r) => r.name));
   const press = !!town.press;
   const comal = !!town.comal;
+  const oven = !!town.oven;
   const fryer = fryerOf(town);
-  const main = press ? "Paninis" : comal ? "Tacos" : "Burgers";
+  const main = press ? "Paninis" : comal ? "Tacos" : oven ? "Flatbreads" : "Burgers";
   const mainIcon = press ? "panini" : "burger";
   const scoops = (s: Size) => Math.round(FRIES_PORTION[s] / FRIES_SCOOP);
   const poutine = poutinePrice();
@@ -140,7 +176,7 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
   ${mult !== 1 ? `<p class="bv-callout mref-biz">${icon("tag")}<span>Your prices: today's are ${mult > 1 ? "raised" : "lowered"} (×${mult.toFixed(2).replace(/0$/, "")}).</span></p>` : ""}
   <section class="mref-sec" data-sec="burgers">
     <h3 class="menu-h">${icon(mainIcon)}${main} in ${esc(town.name)} <span>${town.menu.length}</span></h3>
-    <p class="mref-note">${press ? `Every panini is pressed golden, the cheese melted inside.${town.press?.slice ? " Here they go out cut in half." : ""}` : comal ? `Tortillas are warmed on the comal until soft and spotted; a quesadilla is folded and flipped once, its cheese melted.${town.comal?.tpress ? " Hand-pressed tortillas earn a tip." : ""}` : "Every patty goes out medium. Nobody asks for rare or well done."}</p>
+    <p class="mref-note">${press ? `Every panini is pressed golden, the cheese melted inside.${town.press?.slice ? " Here they go out cut in half." : ""}` : comal ? `Tortillas are warmed on the comal until soft and spotted; a quesadilla is folded and flipped once, its cheese melted.${town.comal?.tpress ? " Hand-pressed tortillas earn a tip." : ""}` : oven ? `Every flatbread is built on the peel, baked in the hearth oven and turned once so both halves go golden; basil, rocket and honey go on after.${town.oven?.board ? " Here they go out cut in four." : ""}` : "Every patty goes out medium. Nobody asks for rare or well done."}</p>
     ${town.menu.map((r) => recipeHtml(r, mult, !base.has(r.name))).join("")}
   </section>
   ${elsewhereHtml(town, new Set(town.menu.map((r) => r.name)), prog)}
@@ -150,6 +186,8 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
       <thead><tr><th>${fryer.includes("chips") ? "Chips & salsa" : "Fries"}</th><th>Scoops</th><th class="num">Price</th></tr></thead>
       <tbody>${fryer.includes("chips") ? fries.replace(/ fries</g, " chips<") : fries}
       ${fryer.includes("churros") ? `<tr class="mref-poutine"><td colspan="2"><b>Churros</b><small>Same sizes and prices; sugar on top</small></td><td class="num">${price(FRIES_PRICE.S)}+</td></tr>` : ""}
+      ${fryer.includes("zucchini") ? `<tr class="mref-poutine"><td colspan="2"><b>Zucchini fritti</b><small>Same sizes and prices; battered, then fried and salted</small></td><td class="num">${price(FRIES_PRICE.S)}+</td></tr>` : ""}
+      ${fryer.includes("fritters") ? `<tr class="mref-poutine"><td colspan="2"><b>Apple fritters</b><small>Same sizes and prices; cinnamon sugar on top</small></td><td class="num">${price(FRIES_PRICE.S)}+</td></tr>` : ""}
       ${fryer.includes("sweet") ? `<tr class="mref-poutine"><td colspan="2"><b>Sweet potato fries</b><small>Same sizes and prices; they cook faster</small></td><td class="num">${price(FRIES_PRICE.S)}+</td></tr>` : ""}
       ${poutine != null && town.poutine ? (fryer.includes("chips") ? `<tr class="mref-poutine"><td colspan="2"><b>Nachos</b><small>Chips, jalapeños, queso</small></td><td class="num">${price(poutine)}</td></tr>` : `<tr class="mref-poutine"><td colspan="2"><b>Poutine</b><small>Fries, cheese curds, gravy</small></td><td class="num">${price(poutine)}</td></tr>`) : ""}
       </tbody>

@@ -27,6 +27,11 @@ export interface Recipe {
    * a quesadilla (folded and crisped on the comal), or a tostada (a fried shell built flat).
    */
   dish?: "tacos" | "quesadilla" | "tostada";
+  /**
+   * Baked in the hearth oven (Orchard Isle): a flatbread built on the peel, baked and turned once,
+   * or a calzone, folded before the oven and turned twice.
+   */
+  pie?: "flatbread" | "calzone";
 }
 
 /** How many pieces of a counted topping go in each of its layers in this recipe. */
@@ -71,6 +76,11 @@ export interface Stop {
    */
   comal?: { tpress: boolean };
   /**
+   * The middle counter is a hearth oven here (Orchard Isle): how many pies it holds, and whether
+   * the board is out for cutting them in four (Port Amber).
+   */
+  oven?: { spots: number; board: boolean };
+  /**
    * What the fryer makes here, the usual side first: fries in the Pines, sweet potato fries too on
    * the coast from Driftwood, chips (and churros at Sun Valley) in Red Rock. Missing is just fries.
    */
@@ -78,8 +88,8 @@ export interface Stop {
 }
 
 /** Which middle counter a town cooks on. */
-export type MiddleCounter = "grill" | "press" | "comal";
-export const middleOf = (t: Pick<Stop, "press" | "comal">): MiddleCounter => (t.press ? "press" : t.comal ? "comal" : "grill");
+export type MiddleCounter = "grill" | "press" | "comal" | "oven";
+export const middleOf = (t: Pick<Stop, "press" | "comal" | "oven">): MiddleCounter => (t.press ? "press" : t.comal ? "comal" : t.oven ? "oven" : "grill");
 /** The fryer's kinds in a town (fries unless it says otherwise). */
 export const fryerOf = (t: Pick<Stop, "fryer">): FryKind[] => t.fryer ?? ["fries"];
 
@@ -143,9 +153,17 @@ const BEAN_TOSTADA: Recipe = { name: "Bean Tostada", price: 10, layers: ["tostad
 const BREAKFAST_TACO: Recipe = { name: "Breakfast Taco", price: 11, layers: ["flour", "beans", "egg", "redsalsa"], toasted: true, dish: "tacos", egg: "over", counts: { beans: 1 }, from: 0.15 };
 /** The Rodeo special at Cactus Junction: a platter of four street tacos. */
 const RODEO_PLATTER: Recipe = { name: "Rodeo Platter", price: 15, layers: ["corn", "pork", "onion", "cilantro", "lime"], toasted: true, dish: "tacos", counts: { corn: 4, pork: 4, onion: 1 }, from: 0.1 };
-const SWITCHBACK: Recipe = { name: "Cheesy Switchback", price: 10, layers: ["bun", "patty", "cheese", "pickle", "mustard", "bun"], toasted: false };
-const SANDY_PICKLE: Recipe = { name: "Sandy Pickle", price: 10, layers: ["bun", "pickle", "patty", "cheese", "pickle", "bun"], toasted: false };
-const SUNSET_DOUBLE: Recipe = { name: "Sunset Double", price: 16, layers: ["bun", "patty", "cheese", "patty", "cheese", "jalapeno", "bun"], toasted: true, smash: true, melt: true, from: 0.25 };
+// Orchard Isle: flatbreads from the hearth oven (DESIGN §24, phase 4). Built on the peel (dough,
+// sauce or oil, then the toppings), slid into the oven and turned once so both halves bake;
+// basil, rocket and honey go on at the tray after the oven. The calzone is folded on the peel and
+// turned twice.
+const HARVEST_RED: Recipe = { name: "Harvest Red", price: 10, layers: ["dough", "redsauce", "mozzarella", "basil"], toasted: true, pie: "flatbread", melt: true, counts: { mozzarella: 4 } };
+const MUSHROOM: Recipe = { name: "Mushroom", price: 11, layers: ["dough", "redsauce", "mozzarella", "mushroom"], toasted: true, pie: "flatbread", melt: true, counts: { mozzarella: 3, mushroom: 5 } };
+const FIG_HAM: Recipe = { name: "Fig & Ham", price: 13, layers: ["dough", "oil", "mozzarella", "ham", "fig", "honey"], toasted: true, pie: "flatbread", melt: true, counts: { mozzarella: 3, ham: 3, fig: 4 }, from: 0.15 };
+const PEAR_BLUE: Recipe = { name: "Pear & Blue", price: 12, layers: ["dough", "blue", "pear", "rocket"], toasted: true, pie: "flatbread", melt: true, counts: { blue: 4, pear: 5 } };
+const CALZONE: Recipe = { name: "Calzone", price: 14, layers: ["dough", "redsauce", "mozzarella", "ham", "mushroom"], toasted: true, pie: "calzone", melt: true, counts: { mozzarella: 3, ham: 2, mushroom: 3 }, from: 0.2 };
+/** The Harvest fair special at Larkvale: a loaded flatbread with everything from the fair. */
+const HARVEST_FAIR: Recipe = { name: "Harvest Fair", price: 15, layers: ["dough", "redsauce", "mozzarella", "ham", "mushroom", "pear", "basil"], toasted: true, pie: "flatbread", melt: true, counts: { mozzarella: 3, ham: 3, mushroom: 3, pear: 3 }, from: 0.1 };
 
 const PINES_PANTRY: Kind[] = ["bun", "patty", "bacon", "egg", "cheese", "lettuce", "tomato", "onion", "pickle"];
 /** The press counter's pans: breads, proteins and the tuna well behind the press, fillings in the cold rail. */
@@ -153,7 +171,12 @@ const COAST_FIRST: Kind[] = ["ciabatta", "sourdough", "mozzarella", "tomato", "b
 /** The comal counter's pans: tortillas and the steam wells behind the comal, the cold rail on the left, the salsas in the caddy. */
 const DESERT_FIRST: Kind[] = ["corn", "flour", "pork", "onion", "cilantro", "jack", "jalapeno", "lime"];
 const DESERT_MID: Kind[] = [...DESERT_FIRST, "beans", "pineapple", "lettuce", "greensalsa", "crema"];
-const ORCHARD_PANTRY: Kind[] = ["bun", "patty", "bacon", "cheese", "lettuce", "tomato", "onion", "pickle", "jalapeno"];
+/**
+ * The oven counter's pans: dough, the sauce pot and the oil and honey bottles have their own spots;
+ * the toppings go in the rail on the left.
+ */
+const ORCHARD_FIRST: Kind[] = ["dough", "redsauce", "mozzarella", "mushroom", "basil"];
+const ORCHARD_MID: Kind[] = [...ORCHARD_FIRST, "oil", "honey", "ham", "fig", "blue", "pear", "rocket"];
 
 /**
  * Every town on the road map, area by area. Each area opens at its first town and ends at its
@@ -378,11 +401,14 @@ export const STOPS: Stop[] = [
     x: 80,
     y: 145,
     roads: ["larkvale"],
-    pantry: ORCHARD_PANTRY,
-    poutine: true,
+    pantry: ORCHARD_FIRST,
+    poutine: false,
+    oven: { spots: 2, board: false },
+    fryer: ["fries", "zucchini"],
     customers: 11,
     shiftLength: 200,
-    menu: [SWITCHBACK, SANDY_PICKLE],
+    newThing: "New here: the hearth oven. Build a flatbread on the peel, slide it into the oven and tap it once to turn it, so both halves bake. Basil goes on after, at the tray.",
+    menu: [HARVEST_RED, MUSHROOM],
   },
   {
     id: "larkvale",
@@ -394,11 +420,14 @@ export const STOPS: Stop[] = [
     x: 93,
     y: 152,
     roads: ["portamber"],
-    pantry: ORCHARD_PANTRY,
-    poutine: true,
+    pantry: ORCHARD_MID,
+    poutine: false,
+    oven: { spots: 2, board: false },
+    fryer: ["fries", "zucchini", "fritters"],
     customers: 12,
     shiftLength: 210,
-    menu: [SWITCHBACK, SANDY_PICKLE, SUNSET_DOUBLE],
+    newThing: "New here: white bases. Fig & Ham gets olive oil before the oven and honey after; Pear & Blue gets rocket after. And apple fritters, with cinnamon sugar.",
+    menu: [HARVEST_RED, MUSHROOM, FIG_HAM, PEAR_BLUE],
   },
   {
     id: "portamber",
@@ -411,11 +440,14 @@ export const STOPS: Stop[] = [
     y: 127,
     roads: [],
     capital: true,
-    pantry: ORCHARD_PANTRY,
-    poutine: true,
+    pantry: ORCHARD_MID,
+    poutine: false,
+    oven: { spots: 3, board: true },
+    fryer: ["fries", "zucchini", "fritters"],
     customers: 14,
     shiftLength: 220,
-    menu: [SWITCHBACK, SANDY_PICKLE, SUNSET_DOUBLE],
+    newThing: "New here: the Calzone (fold it on the peel, turn it twice), a third oven spot and the board: swipe across a flatbread twice to cut it in four.",
+    menu: [HARVEST_RED, MUSHROOM, FIG_HAM, PEAR_BLUE, CALZONE],
   },
 ];
 
@@ -539,6 +571,7 @@ export const EVENTS: TownEvent[] = [
     busy: 1.5,
     longer: 40,
     blurb: "Grape stomping, apple bobbing and a very long table under the vines.",
+    special: HARVEST_FAIR,
   },
 ];
 

@@ -37,7 +37,17 @@ export type Kind =
   | "tostada"
   | "redsalsa"
   | "greensalsa"
-  | "crema";
+  | "crema"
+  // Orchard Isle's hearth oven (DESIGN §24, phase 4).
+  | "dough"
+  | "redsauce"
+  | "oil"
+  | "honey"
+  | "mushroom"
+  | "ham"
+  | "fig"
+  | "pear"
+  | "blue";
 
 export type Doneness = "rare" | "medium" | "well";
 export type DrinkId = "cola" | "water" | "tea" | "pine" | "pink" | "cucumber" | "hibiscus" | "lime" | "cider" | "bramble";
@@ -45,13 +55,16 @@ export type DrinkId = "cola" | "water" | "tea" | "pine" | "pink" | "cucumber" | 
 export const DRINKS: DrinkId[] = ["cola", "water", "tea", "pine", "pink", "cucumber", "hibiscus", "lime", "cider", "bramble"];
 /** On the fountain everywhere; the other two buttons are the area's own. */
 export const HOUSE_DRINKS: DrinkId[] = ["cola", "water", "tea"];
-export type SauceKind = "ketchup" | "mustard" | "pesto" | "aioli" | "redsalsa" | "greensalsa" | "crema";
+export type SauceKind = "ketchup" | "mustard" | "pesto" | "aioli" | "redsalsa" | "greensalsa" | "crema" | "redsauce" | "oil" | "honey";
 /**
  * What a fryer basket and a carton hold: plain fries, sweet potato fries (the coast), tortilla
- * chips (Red Rock, in place of fries) or churros (Sun Valley).
+ * chips (Red Rock, in place of fries), churros (Sun Valley), or on Orchard Isle battered zucchini
+ * fritti and apple fritters (Larkvale).
  */
-export type FryKind = "fries" | "sweet" | "chips" | "churros";
-export const FRY_LABEL: Record<FryKind, string> = { fries: "Fries", sweet: "Sweet fries", chips: "Chips", churros: "Churros" };
+export type FryKind = "fries" | "sweet" | "chips" | "churros" | "zucchini" | "fritters";
+export const FRY_LABEL: Record<FryKind, string> = { fries: "Fries", sweet: "Sweet fries", chips: "Chips", churros: "Churros", zucchini: "Zucchini fritti", fritters: "Apple fritters" };
+/** Fry kinds that get sugar from the sugar shaker rather than salt. */
+export const SUGARED: ReadonlySet<FryKind> = new Set<FryKind>(["churros", "fritters"]);
 /** The fry kind on a carton or an order (missing means plain fries). */
 export const fryOf = (x: { fry?: FryKind } | null | undefined): FryKind => x?.fry ?? "fries";
 
@@ -82,6 +95,17 @@ export interface Piece {
   fill?: Piece[];
   /** A corn tortilla flattened by hand in the tortilla press (Sun Valley). */
   handmade?: boolean;
+  /**
+   * A flatbread's dough (Orchard Isle): times it was turned in the hearth oven. `cook[0]` is the
+   * half that started facing the fire, `cook[1]` the other; an even count has half 0 to the fire.
+   */
+  turns?: number;
+  /** Seconds the side facing the fire spent running too far ahead of the pale side (it scorches). */
+  scorch?: number;
+  /** Cuts across a flatbread on the board (Port Amber cuts in four: two cuts). */
+  cuts?: number;
+  /** The order a flatbread was started for (its ticket ticks off as it's built on the peel). */
+  forOrder?: number;
 }
 
 export interface Layer {
@@ -144,8 +168,12 @@ export interface ExpectedLayer {
   flipped?: boolean;
   /** Avocado on an open-faced toast: it should never have been in the press. */
   cold?: boolean;
-  /** A flour tortilla folded over its filling and crisped on both sides (a quesadilla). */
+  /** A flour tortilla folded over its filling and crisped on both sides (a quesadilla), or a calzone. */
   folded?: boolean;
+  /** A flatbread's dough: baked in the hearth oven, turned this many times (the calzone twice). */
+  turns?: number;
+  /** Goes on a flatbread after the oven (basil, rocket, honey): it should never have been baked. */
+  after?: boolean;
 }
 
 /** A change to a known recipe: "no pickles", "extra cheese", "add bacon", or a toasted bun on a burger that usually isn't. */
@@ -176,12 +204,12 @@ export interface Order {
   poutine?: boolean;
   /** The side is sweet potato fries, chips or churros rather than plain fries. */
   fry?: FryKind;
-  /** A panini to be sliced in half on the cutting board (Harbor City). */
+  /** A panini to be sliced in half on the cutting board (Harbor City), or a flatbread cut in four (Port Amber). */
   slice?: boolean;
 }
 
 export const GRILLABLE: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon", "egg", "pineapple", "corn", "flour"]);
-export const SAUCES: ReadonlySet<Kind> = new Set<Kind>(["ketchup", "mustard", "pesto", "aioli", "redsalsa", "greensalsa", "crema"]);
+export const SAUCES: ReadonlySet<Kind> = new Set<Kind>(["ketchup", "mustard", "pesto", "aioli", "redsalsa", "greensalsa", "crema", "redsauce", "oil", "honey"]);
 export const isSauce = (k: Kind): k is SauceKind => SAUCES.has(k);
 /** Panini breads: a sandwich starts and (unless it's open-faced) ends with one. */
 export const BREADS: ReadonlySet<Kind> = new Set<Kind>(["ciabatta", "sourdough"]);
@@ -195,18 +223,28 @@ export const TORTILLAS: ReadonlySet<Kind> = new Set<Kind>(["corn", "flour"]);
 export const SCOOPED: ReadonlySet<Kind> = new Set<Kind>(["tuna", "pork", "beans"]);
 /** What can be laid on a tortilla on the comal (a quesadilla's filling). */
 export const COMAL_FILL: ReadonlySet<Kind> = new Set<Kind>(["jack", "pork", "beans", "jalapeno", "onion", "cilantro"]);
+/** Orchard Isle: what goes on a flatbread after it comes out of the oven. */
+export const AFTER_OVEN: ReadonlySet<Kind> = new Set<Kind>(["basil", "rocket", "honey"]);
+/** Cheese that melts on a flatbread in the oven. */
+export const OVEN_CHEESE: ReadonlySet<Kind> = new Set<Kind>(["mozzarella", "blue"]);
+/** Sauces spread on a flatbread on the peel, before the oven: tomato with the ladle, olive oil from its bottle. */
+export const PEEL_SAUCE: ReadonlySet<Kind> = new Set<Kind>(["redsauce", "oil"]);
 /** Half the width of a squeezed line of sauce, in burger-local units (the bun has radius 1). */
 export const SAUCE_RADIUS = 0.09;
+/** Tomato sauce spread with the ladle on a flatbread: a wide spiral, in the pie's own unit oval. */
+export const LADLE_RADIUS = 0.2;
+/** How wide each sauce's line is, in the unit disc it's painted in. */
+export const sauceRadius = (k: Kind): number => (k === "redsauce" ? LADLE_RADIUS : SAUCE_RADIUS);
 /**
  * Toppings placed one piece at a time; a recipe asks for a number of them. Fewer saves money but
  * customers notice; a couple extra can win a better review.
  */
-export const COUNTED: ReadonlySet<Kind> = new Set<Kind>(["pickle", "onion", "tomato", "jalapeno", "mozzarella", "avocado", "redonion", "tuna", "corn", "pork", "beans"]);
+export const COUNTED: ReadonlySet<Kind> = new Set<Kind>(["pickle", "onion", "tomato", "jalapeno", "mozzarella", "avocado", "redonion", "tuna", "corn", "pork", "beans", "mushroom", "ham", "fig", "pear", "blue"]);
 /**
  * Pieces of each counted topping in a standard recipe, unless the recipe says otherwise. A taco
  * order's corn tortillas are counted too (one per taco), and so are scoops from the steam wells.
  */
-export const STANDARD_COUNT: Partial<Record<Kind, number>> = { pickle: 3, onion: 2, tomato: 2, jalapeno: 4, mozzarella: 3, avocado: 4, redonion: 2, tuna: 2, corn: 3, pork: 1, beans: 1 };
+export const STANDARD_COUNT: Partial<Record<Kind, number>> = { pickle: 3, onion: 2, tomato: 2, jalapeno: 4, mozzarella: 3, avocado: 4, redonion: 2, tuna: 2, corn: 3, pork: 1, beans: 1, mushroom: 5, ham: 3, fig: 4, pear: 5, blue: 4 };
 /** "Extra pickles" adds this many on top of the recipe's count. */
 export function extraCount(kind: Kind): number {
   return Math.max(1, Math.round((STANDARD_COUNT[kind] ?? 1) * 0.67));
@@ -250,6 +288,15 @@ export const KIND_LABEL: Record<Kind, string> = {
   redsalsa: "Red salsa",
   greensalsa: "Green salsa",
   crema: "Crema",
+  dough: "Dough",
+  redsauce: "Tomato sauce",
+  oil: "Olive oil",
+  honey: "Honey",
+  mushroom: "Mushroom",
+  ham: "Ham",
+  fig: "Fig",
+  pear: "Pear",
+  blue: "Blue cheese",
 };
 
 /** Swatch colours used by tickets (CSS). */
@@ -291,6 +338,15 @@ export const KIND_COLOR: Record<Kind, string> = {
   redsalsa: "#c8321f",
   greensalsa: "#6c9e2c",
   crema: "#f7f1e1",
+  dough: "#efcf8e",
+  redsauce: "#c8402a",
+  oil: "#c9b84a",
+  honey: "#e9a92a",
+  mushroom: "#b9946a",
+  ham: "#e79a9a",
+  fig: "#7a2f5a",
+  pear: "#e6dc8a",
+  blue: "#d9dde6",
 };
 
 export const DRINK_LABEL: Record<DrinkId, string> = {

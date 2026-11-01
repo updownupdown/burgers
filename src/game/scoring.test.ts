@@ -245,6 +245,11 @@ describe("makeOrder", () => {
         expect(["corn", "flour", "tostada"]).toContain(o.layers[0].kind);
         continue;
       }
+      // Orchard Isle's flatbreads and calzones start with the dough.
+      if (stop.oven) {
+        expect(o.layers[0].kind).toBe("dough");
+        continue;
+      }
       const bread = stop.press ? [...BREADS] : ["bun"];
       expect(bread).toContain(o.layers[0].kind);
       if (o.name !== "Avocado Toast") expect(bread).toContain(o.layers[o.layers.length - 1].kind);
@@ -357,7 +362,7 @@ describe("smash burgers", () => {
 
 describe("melted cheese", () => {
   it("only asks for melting on cheese that sits right on a patty", () => {
-    const recipe = STOPS.flatMap((s) => s.menu).find((r) => r.name === "Sunset Double")!;
+    const recipe = STOPS.flatMap((s) => s.menu).find((r) => r.name === "Lumberjack Stack")!;
     let seed = 3;
     let order: Order;
     do order = makeOrder(1, seededRng(seed++), 1, { ...STOPS[2], menu: [recipe] });
@@ -409,11 +414,15 @@ describe("recipe modifiers", () => {
         const o = makeOrder(i, rng, 1, stop);
         if (!o.layers.length) continue;
         for (const m of o.mods) {
-          if (m.type !== "toast") expect(["bun", "patty", ...BREADS, ...PROTEINS, "corn", "flour", "tostada"]).not.toContain(m.kind);
+          if (m.type !== "toast") expect(["bun", "patty", ...BREADS, ...PROTEINS, "corn", "flour", "tostada", "dough"]).not.toContain(m.kind);
           if (m.type === "add") expect(stop.pantry).toContain(m.kind);
         }
         if (stop.comal) {
           expect(["corn", "flour", "tostada"]).toContain(o.layers[0].kind);
+          continue;
+        }
+        if (stop.oven) {
+          expect(o.layers[0].kind).toBe("dough");
           continue;
         }
         const bread = stop.press ? [...BREADS] : ["bun"];

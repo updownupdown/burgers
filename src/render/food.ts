@@ -7,6 +7,7 @@ import { faceted, grade, lineColor, lineMaterial, mesh, outline, ramp, shareGeom
 import { TOPPING_BOOST } from "./units";
 import { makePaniniPiece, PANINI_HEIGHT } from "./panini";
 import { makeTacoPiece, TACO_HEIGHT, FOLDED_HEIGHT } from "./tacos";
+import { FLATBREAD_TOP, makeFlatbread, toppingMesh } from "./flatbread";
 
 /*
  * Burger parts, from James's picks in the Kitchen Bench study: the sesame classic bun, a patty
@@ -43,6 +44,16 @@ const BASE_HEIGHT: Record<Kind, number> = {
   mustard: 0.04,
   ...(PANINI_HEIGHT as Record<Exclude<Kind, "bun" | "patty" | "bacon" | "egg" | "cheese" | "lettuce" | "tomato" | "onion" | "pickle" | "pineapple" | "jalapeno" | "ketchup" | "mustard">, number>),
   ...(TACO_HEIGHT as Record<Exclude<Kind, "bun" | "patty" | "bacon" | "egg" | "cheese" | "lettuce" | "tomato" | "onion" | "pickle" | "pineapple" | "jalapeno" | "ketchup" | "mustard">, number>),
+  // Orchard Isle's flatbread (drawn as one object, render/flatbread.ts) and what goes on it.
+  dough: FLATBREAD_TOP,
+  redsauce: 0.03,
+  oil: 0.02,
+  honey: 0.02,
+  mushroom: 0.06,
+  ham: 0.08,
+  fig: 0.1,
+  pear: 0.05,
+  blue: 0.08,
 };
 /** Vertical and horizontal scale each kind is built at. */
 const bodyScale = (k: Kind): [number, number] => {
@@ -649,7 +660,10 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
     case "aioli":
     case "redsalsa":
     case "greensalsa":
-    case "crema": {
+    case "crema":
+    case "redsauce":
+    case "oil":
+    case "honey": {
       const color = SAUCE_COLOR[piece.kind];
       const holder = new THREE.Group();
       body.add(holder);
@@ -678,6 +692,22 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       });
       break;
     }
+    case "dough": {
+      // A flatbread base on its own (in hand, off the dough stack).
+      const fb = makeFlatbread([piece]);
+      body.add(fb);
+      set((p) => fb.userData.update([p]));
+      break;
+    }
+    case "mushroom":
+    case "ham":
+    case "fig":
+    case "pear":
+    case "blue": {
+      const m = toppingMesh(piece.kind);
+      if (m) body.add(m);
+      break;
+    }
     default: {
       // The panini press's breads, proteins and fillings (render/panini.ts), and the comal's
       // tortillas and taco fillings (render/tacos.ts).
@@ -697,7 +727,7 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
 }
 
 /** Sauce lines on the stack. */
-const SAUCE_COLOR: Record<"ketchup" | "mustard" | "pesto" | "aioli" | "redsalsa" | "greensalsa" | "crema", string> = { ketchup: "#d8261b", mustard: "#f0c419", pesto: "#4f8f2e", aioli: "#f1e4b8", redsalsa: "#c8321f", greensalsa: "#6c9e2c", crema: "#f7f1e1" };
+const SAUCE_COLOR: Record<"ketchup" | "mustard" | "pesto" | "aioli" | "redsalsa" | "greensalsa" | "crema" | "redsauce" | "oil" | "honey", string> = { ketchup: "#d8261b", mustard: "#f0c419", pesto: "#4f8f2e", aioli: "#f1e4b8", redsalsa: "#c8321f", greensalsa: "#6c9e2c", crema: "#f7f1e1", redsauce: "#c8402a", oil: "#d6c64a", honey: "#eaa22a" };
 
 /** How far from the middle of the burger each counted topping's slices sit. */
 const SLICE_RING: Partial<Record<Kind, number>> = { tomato: 0.42, onion: 0.28, pickle: 0.45, jalapeno: 0.46, mozzarella: 0.44, avocado: 0.2, redonion: 0.36, tuna: 0.36 };

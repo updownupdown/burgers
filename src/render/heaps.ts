@@ -4,6 +4,7 @@ import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
 import { vegParts } from "./food";
 import { paniniParts, rawParts } from "./panini";
 import { fillParts, limeParts, tortillaStackParts } from "./tacos";
+import { blueParts, figParts, hamParts, mushroomParts, pearParts } from "./flatbread";
 import { faceted } from "./materials";
 
 /**
@@ -108,7 +109,27 @@ const jitter = (r: () => number, a: number) => (r() - 0.5) * 2 * a;
 const HEAP_S = 0.514;
 const VEG_S = 0.548;
 
+/** A pan heaped with one of the flatbread toppings: `n` pieces in a mound, two layers deep. */
+function mound(parts: Parts, r: () => number, piece: (i: number) => Parts, n: number, s: number, lift = 0.05): void {
+  for (let i = 0; i < n; i++) {
+    const a = i * 2.399;
+    const rr = Math.sqrt((i + 0.5) / n);
+    parts.addParts(piece(i), { p: [Math.cos(a) * rr * 0.36, PAN.floor + lift + (1 - rr) * 0.12 + r() * 0.03, Math.sin(a) * rr * 0.27], r: [jitter(r, 0.3), r() * 6, jitter(r, 0.3)], s });
+  }
+}
+
 const HEAPS: Partial<Record<Kind, Builder>> = {
+  // Orchard Isle's toppings (DESIGN §24, phase 4), drawn with the flatbread's own pieces.
+  mushroom: (parts, r) => mound(parts, r, () => mushroomParts(false), 12, 1.25),
+  ham: (parts, r) => mound(parts, r, (i) => hamParts(i + 1), 9, 1.15),
+  fig: (parts, r) => mound(parts, r, () => figParts(), 11, 1.35),
+  pear: (parts, r) => mound(parts, r, () => pearParts(), 10, 1.2),
+  blue: (parts, r) => {
+    // A wedge of blue cheese and its crumbles.
+    parts.add(faceted(new THREE.CylinderGeometry(0.42, 0.42, 0.26, 3, 1, false, 0, Math.PI * 0.6)), "#e9ecf1", { p: [-0.12, PAN.floor + 0.13, -0.05], r: [0, 0.4, 0], ink: 0.016 });
+    for (let i = 0; i < 5; i++) parts.add(faceted(new THREE.SphereGeometry(0.035, 5, 3)), "#6f7d9a", { p: [-0.05 + (r() - 0.5) * 0.2, PAN.floor + 0.265, -0.05 + (r() - 0.5) * 0.15], ink: false });
+    mound(parts, r, (i) => blueParts(false, i + 2), 7, 1.3, 0.0);
+  },
   bun: (parts, r) => {
     const bun = (crown: string) => {
       const b = new Parts()

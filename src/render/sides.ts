@@ -40,7 +40,26 @@ const churrosRamp = ramp([
   [0.95, "#8a4e1c"],
   [1.25, "#3a200c"],
 ]);
-const RAMPS: Record<FryKind, ReturnType<typeof ramp>> = { fries: friesRamp, sweet: sweetRamp, chips: chipsRamp, churros: churrosRamp };
+/** Zucchini fritti: a pale batter coat, golden when done, brown after. (Unbattered sticks are drawn green: see RAW_ZUCCHINI.) */
+const zucchiniRamp = ramp([
+  [0, "#f4ead0"],
+  [0.5, "#ecd283"],
+  [0.7, "#e2b75a"],
+  [0.95, "#a8702e"],
+  [1.2, "#3e2412"],
+]);
+/** Apple fritters: pale dough, deep gold done, dark after. */
+const frittersRamp = ramp([
+  [0, "#f2e0b4"],
+  [0.5, "#e2aa58"],
+  [0.7, "#cf8c3a"],
+  [0.95, "#8f5220"],
+  [1.25, "#3a200c"],
+]);
+const RAMPS: Record<FryKind, ReturnType<typeof ramp>> = { fries: friesRamp, sweet: sweetRamp, chips: chipsRamp, churros: churrosRamp, zucchini: zucchiniRamp, fritters: frittersRamp };
+/** A cook below zero means zucchini sticks still waiting for their batter: plain green. */
+const RAW_ZUCCHINI = "#7caf4e";
+const fryColor = (fry: FryKind, t: number, out: THREE.Color) => (t < 0 ? out.set(RAW_ZUCCHINI) : RAMPS[fry](t, out));
 const tmp = new THREE.Color();
 
 export interface FriesObject extends THREE.Group {
@@ -240,12 +259,38 @@ const CHURRO = (() => {
   }
   return shareGeometry(faceted(g));
 })();
-const STICK: Record<FryKind, THREE.BufferGeometry> = { fries: FRY_STICK, sweet: FRY_STICK, chips: CHIP, churros: CHURRO };
-/** Stick shape and how many to draw per fry, by kind: chips are a few more, churros fewer and longer. */
+/** A battered zucchini stick: a round, knobbly stick a little thicker than a fry. */
+const ZUCCHINI = (() => {
+  const g = new THREE.CylinderGeometry(0.06, 0.06, 1, 7, 6);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const z = p.getZ(i);
+    const k = 1 + 0.18 * Math.sin(p.getY(i) * 23 + Math.atan2(z, x) * 3);
+    p.setX(i, x * k);
+    p.setZ(i, z * k);
+  }
+  return shareGeometry(faceted(g));
+})();
+/** An apple fritter: a lumpy round of dough (the stick's length is its height, so it's laid as a squat ball). */
+const FRITTER = (() => {
+  const g = new THREE.IcosahedronGeometry(0.5, 1);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    const k = 1 + 0.16 * Math.sin(7 * x + 5 * z) + 0.1 * Math.sin(9 * y - 4 * x);
+    p.setXYZ(i, x * k * 0.36, y * k, z * k * 0.36);
+  }
+  return shareGeometry(faceted(g));
+})();
+const STICK: Record<FryKind, THREE.BufferGeometry> = { fries: FRY_STICK, sweet: FRY_STICK, chips: CHIP, churros: CHURRO, zucchini: ZUCCHINI, fritters: FRITTER };
+/** Stick shape and how many to draw per fry, by kind: chips are a few more, churros fewer and longer, fritters fewer and round. */
 const stickOf = (fry: FryKind) => STICK[fry];
-const COUNT_K: Record<FryKind, number> = { fries: 1, sweet: 1, chips: 1.1, churros: 0.4 };
-const LEN_K: Record<FryKind, number> = { fries: 1, sweet: 1, chips: 1, churros: 1.25 };
-const shaped = (fry: FryKind) => fry === "chips" || fry === "churros";
+const COUNT_K: Record<FryKind, number> = { fries: 1, sweet: 1, chips: 1.1, churros: 0.4, zucchini: 0.6, fritters: 0.32 };
+const LEN_K: Record<FryKind, number> = { fries: 1, sweet: 1, chips: 1, churros: 1.25, zucchini: 1.05, fritters: 0.75 };
+const shaped = (fry: FryKind) => fry === "chips" || fry === "churros" || fry === "zucchini" || fry === "fritters";
 
 /** `n` of a boat's fries lying in it, bottom layer first, so part-filled boats sit lower. */
 const BOAT_FRIES = new Map<string, Baked>();
@@ -318,7 +363,7 @@ function friesGroup(baked: Baked | null): FriesObject {
     sizeScale: 1,
     setCook: (t) => {
       last = t;
-      mat.color.copy(RAMPS[fry](t, tmp));
+      mat.color.copy(fryColor(fry, t, tmp));
     },
     setFry: (f) => {
       fry = f;
@@ -451,7 +496,7 @@ export function makeBasketFries(w: number, d: number, seed: number): FriesObject
     sizeScale: 1,
     setCook: (t) => {
       last = t;
-      mat.color.copy(RAMPS[fry](t, tmp));
+      mat.color.copy(fryColor(fry, t, tmp));
     },
     setFry: (f) => {
       if (f === fry) return;
@@ -539,7 +584,7 @@ export function friesToppings(rx: number, rz: number, top: number, saltLevel: nu
     } else if (curds) curdLumps(p, 9, rx * 0.9, rz * 1.1, top + 0.02, 23, 0.75);
     if (salt) {
       const grain = new THREE.BoxGeometry(0.018, 0.018, 0.018);
-      for (let i = 0; i < grains; i++) p.add(grain, fry === "churros" ? "#fbf3e0" : "#ffffff", { p: [(r() - 0.5) * rx * 1.7, top + 0.03 + r() * 0.05, (r() - 0.5) * rz * 1.7], ink: false });
+      for (let i = 0; i < grains; i++) p.add(grain, fry === "fritters" ? (i % 3 ? "#f6e7c8" : "#b9773a") : fry === "churros" ? "#fbf3e0" : "#ffffff", { p: [(r() - 0.5) * rx * 1.7, top + 0.03 + r() * 0.05, (r() - 0.5) * rz * 1.7], ink: false });
     }
     b = bakeShared(p);
     TOPPED.set(key, b);

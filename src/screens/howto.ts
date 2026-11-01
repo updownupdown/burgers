@@ -7,7 +7,7 @@ import { CROWD } from "../game/business";
 import { RANGE_MI } from "../game/day";
 import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "../game/menu";
 import { HOLD_GRACE } from "../game/scoring";
-import type { Recipe } from "../game/stops";
+import { fryerOf, type Recipe } from "../game/stops";
 import { COUNTED, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, STANDARD_COUNT, type Kind, type Size } from "../game/types";
 import { icon } from "../ui/icons";
 import { getDeps, jumpTo, modalHead, modalOpen, popModal, price, pushModal, wireJumpChips } from "./modal";
@@ -137,6 +137,49 @@ function foldSvg(): string {
     <path d="M96 30v40" stroke="#2a2622" stroke-width="1.6"/>
     <path d="M120 52c2 0 3 2 2 4" fill="none" stroke="#f4c54a" stroke-width="3" stroke-linecap="round"/>
   </svg>`;
+}
+
+const FLATBREAD: Recipe = { name: "Harvest Red", price: 10, layers: ["dough", "redsauce", "mozzarella", "basil"], toasted: true, pie: "flatbread", melt: true, counts: { mozzarella: 4 } };
+
+/** The hearth oven from above: the fire at the back left, a pie in front of it turned half round. */
+function ovenSvg(): string {
+  const INK = `stroke="#2a2622" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"`;
+  return `<svg class="hw-svg" viewBox="0 0 160 90" aria-hidden="true">
+    <path d="M8 52a72 46 0 0 1 144 0z" fill="#d99a6c" ${INK}/>
+    <path d="M18 52a62 36 0 0 1 124 0z" fill="#4a3326"/>
+    <rect x="6" y="52" width="148" height="10" rx="2" fill="#dcc8a4" ${INK}/>
+    <g><path d="M30 50c-4-6 2-10 2-16 4 6 6 8 4 16z" fill="#ff8a2a"/><path d="M38 50c-2-5 2-8 2-12 3 4 4 7 2 12z" fill="#ffd15a"/><path d="M26 51h18" stroke="#5c3d26" stroke-width="3" stroke-linecap="round"/></g>
+    <ellipse cx="98" cy="50" rx="26" ry="9" fill="#f1dcaa" ${INK}/>
+    <path d="M74 50a24 8 0 0 1 48 0" fill="#d99a48"/>
+    <ellipse cx="98" cy="50" rx="19" ry="6" fill="#c8402a"/>
+    <g fill="#fbf6e6"><circle cx="90" cy="49" r="2.6"/><circle cx="101" cy="52" r="2.6"/><circle cx="106" cy="47" r="2.4"/></g>
+    <path d="M128 30a22 22 0 0 1 0 30" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M124 59l4 2 2-5" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="70" y="70" width="56" height="8" rx="4" fill="#2c2f33" stroke="#0f1012" stroke-width="1.2"/>
+    <rect x="70" y="70" width="36" height="8" rx="4" fill="#e3ad5a"/>
+    <rect x="132" y="68" width="22" height="12" rx="4" fill="#ffd99a" ${INK}/><text x="143" y="77" text-anchor="middle" font-size="7" font-weight="800" fill="#6b3a00">Turn</text>
+  </svg>`;
+}
+
+/** The hearth oven, for Orchard Isle (DESIGN §24, phase 4). */
+function ovenSec(board: boolean, fritters: boolean): Sec {
+  return {
+    id: "oven",
+    chip: "Oven",
+    icon: "flame",
+    title: "The hearth oven",
+    lede: "On Orchard Isle the grill makes way for a wood-fired oven. Flatbreads are built on the peel, baked, and turned once so both halves go golden.",
+    fig: `${ovenSvg()}
+      <div class="hw-stack">${stackArt(FLATBREAD)}<p class="hw-cap">Harvest Red: dough, tomato sauce, mozzarella ×4, then basil after the oven.</p></div>`,
+    points: [
+      "<b>Tap the dough</b> to lay a base on the peel. <b>Hold the ladle</b> in the pot and spread the sauce in a spiral out to the crust (white bases get a drizzle of olive oil instead). Then the toppings: tap a pan for one piece, or drag them on.",
+      "<b>Drag the pie into the oven.</b> The fire is at the back left: the side facing it bakes <b>twice as fast</b>. The meter under the pie shows its <b>paler side</b>; when it says <b>Turn</b>, tap the pie to spin it round. Once, about halfway, is right.",
+      "Left unturned, the fire side <b>scorches</b>. Turned just right, both halves come out even, with <b>leopard spots</b> on the crust: a small bonus.",
+      "<b>Mushrooms</b> want the longer bake. <b>Basil, rocket and honey go on after</b>: drag the flatbread up to the tray first, then add them there (honey squeezes like any sauce).",
+      ...(board ? ["In <b>Port Amber</b>: a third spot in the oven, the <b>Calzone</b> (fold it on the peel by dragging the dough's edge across the middle, then <b>turn it twice</b>), and the board: <b>swipe across a flatbread twice</b> to cut it in four."] : []),
+      `At the fryer, <b>zucchini fritti</b> go through the <b>batter bowl</b> on the way to the basket; salt them in the carton.${fritters ? " <b>Apple fritters</b> fry like fries and get cinnamon sugar from the sugar shaker." : ""}`,
+    ],
+  };
 }
 
 /** The comal, for Red Rock (DESIGN §24, phase 3). */
@@ -478,6 +521,9 @@ export function howToHtml(): string {
   // In Red Rock the comal's follows it.
   const comal = getDeps()?.town()?.comal;
   if (comal) all.splice(all.findIndex((x) => x.id === "grill") + 1, 0, comalSec(!!comal.tpress));
+  // On Orchard Isle the oven's.
+  const town = getDeps()?.town();
+  if (town?.oven) all.splice(all.findIndex((x) => x.id === "grill") + 1, 0, ovenSec(town.oven.board, fryerOf(town).includes("fritters")));
   const secs = [...all, menuSec()];
   return `<nav class="menu-chips" aria-label="Sections">${secs.map((s) => `<button class="bv-chip pill" data-jump="${s.id}">${icon(s.icon)}${s.chip}</button>`).join("")}</nav>
   ${secs

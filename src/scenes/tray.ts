@@ -306,7 +306,7 @@ export class PlateView {
   }
   /** Draw the plate as a dish if it is one; true when it was. */
   private syncDish(p: Plate, animate: boolean, onLand: () => void): boolean {
-    const dish = p.layers.length > 0 && p.layers[0] && (p.layers[0].piece.kind === "corn" || p.layers[0].piece.kind === "flour");
+    const dish = p.layers.length > 0 && p.layers[0] && (p.layers[0].piece.kind === "corn" || p.layers[0].piece.kind === "flour" || p.layers[0].piece.kind === "dough");
     if (!dish) {
       this.clearDish();
       return false;
@@ -329,6 +329,7 @@ export class PlateView {
         onLand();
       }
     }
+    this.dishObj!.update?.(p.layers.map((l) => l.piece));
     // Sauce being squeezed on: redraw its line as it grows.
     for (const [i, o] of this.dishObj!.sauces) {
       const piece = p.layers[i]?.piece;

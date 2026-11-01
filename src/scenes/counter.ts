@@ -1,11 +1,13 @@
 import * as THREE from "three";
-import { COMAL_SPEED, cookLevel, COOK_SCALE, DRINK_FILL, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, GRILL_RATE, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, type Cookable } from "../game/cooking";
+import { bakeStep, bakeTopping, COMAL_SPEED, cookLevel, COOK_SCALE, DRINK_FILL, fireHalf, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, GRILL_RATE, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, type Cookable } from "../game/cooking";
 import type { DrinkId, FriesSize, FryKind, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
-import { BREADS, CUP_SPEED, GRILLABLE, isSauce, PRESS_CHEESE, PROTEINS, SCOOPED, TORTILLAS } from "../game/types";
+import { BREADS, CUP_SPEED, GRILLABLE, isSauce, OVEN_CHEESE, PRESS_CHEESE, PROTEINS, SCOOPED, TORTILLAS } from "../game/types";
 import { fountainFor, type MiddleCounter } from "../game/stops";
 import { BAY, BOARD, CLOSED_GAP, makeCuttingBoard, makePressBay, PLATE, type PressBayObject } from "../render/machines/press";
 import { makeFryTray, makeJalapenoHandful, makeJalapenoTray, makeSugarShaker, SWEET_TRAY } from "../render/fryer";
 import { makeComal, makeTortillaPress, type TortillaPressObject } from "../render/machines/comal";
+import { BATTER, DOUGH, HEARTH, makeBatterBowl, makeDoughStack, makeHearthOven, makePeel, makeSaucePot, PEEL, POT, type HearthOvenObject } from "../render/machines/oven";
+import { INNER_RX, INNER_RZ, makeFlatbread, PIE, pieYaw, type FlatbreadObject } from "../render/flatbread";
 import { QUESO } from "../render/sides";
 import { tickTacos } from "../render/tacos";
 import { counterTop, wallPanels } from "../render/wear";
@@ -91,10 +93,34 @@ const SIDE_BACK_Z = SIDE_PANS.z - 2.1;
 export const MAX_BAYS = 3;
 /** Kinds that go in the row of pans behind the press. */
 const PRESS_BACK = (k: Kind) => BREADS.has(k) || PROTEINS.has(k) || k === "tuna";
+/**
+ * The oven page (Orchard Isle), in the grill page's place: the hearth oven across the back (its
+ * dome, the fire at the back left), the pies on the hearth in front of the dome's mouth with a
+ * meter under each, the cold rail down the left as at the press, and the front strip: dough
+ * bases and the tomato pot on the left, the peel in the middle, the oil and honey caddy front
+ * right and, at Port Amber, the board below it.
+ */
+const OVEN_Z = -1.12;
+const OVEN_XS: Record<number, number[]> = { 1: [1.4], 2: [0.45, 2.6], 3: [-0.55, 1.45, 3.45] };
+export const MAX_OVEN = 3;
+const PEEL_AT = { x: 1.25, z: 0.98 };
+const DOUGH_AT = { x: -0.72, z: 0.5 };
+const POT_AT = { x: -0.72, z: 2.05 };
+const OVEN_CADDY = { x: 3.2, z: 0.52 };
+/** The board at Port Amber, a little smaller so it sits clear of the peel and fully on screen. */
+const OVEN_BOARD = { x: 3.2, z: 1.95, scale: 0.88 };
+/** Seconds a pie takes to turn round in the oven. */
+const TURN_TIME = 0.4;
+/** The fryer's batter bowl (Orchard Isle), at the gravy well's spot. */
+const BATTER_AT = { x: 3.42, z: -2.05 };
+
 /** The griddle's cook surface, zones and buttons, griddle-local (read once from the model). */
 const GRIDDLE_SPOTS = makeGriddle().userData.spots;
 const GRIDDLE_SURFACE = GRIDDLE_SPOTS.surface;
 export const GRILL_TOP = GRIDDLE_SURFACE.y;
+/** Heights of the oven's hearth and the peel's blade, for drops and painting. */
+export const HEARTH_Y = HEARTH.y;
+export const PEEL_Y = PEEL.y;
 const GRILL_BOUNDS = {
   x0: GRIDDLE.x + GRIDDLE_SURFACE.x0 + 0.32,
   x1: GRIDDLE.x + GRIDDLE_SURFACE.x1 - 0.32,
@@ -317,7 +343,28 @@ export type Hit =
   | { type: "tpress" }
   | { type: "bay"; idx: number }
   | { type: "handle"; idx: number }
-  | { type: "board" };
+  | { type: "board" }
+  | { type: "dough" }
+  | { type: "pot" }
+  | { type: "peel" }
+  | { type: "spot"; idx: number }
+  | { type: "batter" };
+
+/** Something a pie sits on: the peel, a spot in the oven or the board. */
+export interface PieHolder {
+  layers: Layer[];
+  food: THREE.Group | null;
+  foodKey: string;
+}
+/** One spot on the hearth: page-local centre, and the turn in progress (0..1, or -1). */
+export interface OvenSpot extends PieHolder {
+  x: number;
+  z: number;
+  turnT: number;
+  marker: THREE.Object3D;
+  /** The fire side has run too far ahead (so the warning only sounds once per run). */
+  warned?: boolean;
+}
 
 /** One clamshell bay of the panini press and what's in it (a lone protein or bread, or a built sandwich). */
 export interface PressBay {
@@ -439,6 +486,17 @@ export class CounterView {
   tpress!: TortillaPressObject;
   tpressT = 0;
   tpressOn = false;
+  private ovenGroup = new THREE.Group();
+  private oven!: HearthOvenObject;
+  private ovenCaddy: SauceCaddyObject | null = null;
+  /** The pie on the peel, and the hearth's spots (MAX_OVEN built; `ovenCount` of them out). */
+  peel: PieHolder = { layers: [], food: null, foodKey: "" };
+  ovenSpots: OvenSpot[] = [];
+  ovenCount = 2;
+  private boardProxy: THREE.Mesh | null = null;
+  batterBowl!: THREE.Object3D;
+  /** Orchard Isle's fryer kit (zucchini fritti, apple fritters) is out. */
+  orchard = false;
   private curdTray!: THREE.Object3D;
   private gravyWell!: THREE.Object3D;
   private puffs: THREE.Mesh[] = [];
@@ -465,12 +523,14 @@ export class CounterView {
     splash.position.set(7, 0.25, -3.35);
     this.scene.add(splash);
 
-    this.scene.add(this.grillGroup, this.pressGroup, this.comalGroup);
+    this.scene.add(this.grillGroup, this.pressGroup, this.comalGroup, this.ovenGroup);
     this.pressGroup.visible = false;
     this.comalGroup.visible = false;
+    this.ovenGroup.visible = false;
     this.buildGrill();
     this.buildPress();
     this.buildComal();
+    this.buildOven();
     this.buildFryer();
     this.buildDrinks();
     this.buildTrash();
@@ -547,7 +607,144 @@ export class CounterView {
     board.position.copy(at(PRESS_BOARD.x, 0, PRESS_BOARD.z));
     P.add(board);
     this.board = { obj: board, x: PRESS_BOARD.x, z: PRESS_BOARD.z, layers: [], food: null, foodKey: "", on: false };
-    this.proxy(new THREE.BoxGeometry(BOARD.w, 0.7, BOARD.d), at(PRESS_BOARD.x, 0.3, PRESS_BOARD.z), { type: "board" }, board);
+    this.boardProxy = this.proxy(new THREE.BoxGeometry(BOARD.w, 0.7, BOARD.d), at(PRESS_BOARD.x, 0.3, PRESS_BOARD.z), { type: "board" }, board);
+  }
+
+  /** The oven page (Orchard Isle): see OVEN_Z. Built once, shown in place of the grill. */
+  private buildOven(): void {
+    const O = this.ovenGroup;
+    const at = (x: number, y: number, z: number) => this.world(1, x, y, z);
+    const oven = makeHearthOven();
+    oven.position.copy(at(0, 0, 0));
+    O.add(oven);
+    this.oven = oven;
+    for (let i = 0; i < MAX_OVEN; i++) {
+      const marker = new THREE.Object3D();
+      O.add(marker);
+      const s: OvenSpot = { x: 0, z: OVEN_Z, turnT: -1, marker, layers: [], food: null, foodKey: "" };
+      this.proxy(new THREE.BoxGeometry(PIE.rx * 2 * GRILL_SCALE + 0.1, 0.8, PIE.rz * 2 * GRILL_SCALE + 0.3), new THREE.Vector3(), { type: "spot", idx: i }, marker);
+      this.ovenSpots.push(s);
+    }
+    this.layoutOven();
+    const dough = makeDoughStack();
+    dough.position.copy(at(DOUGH_AT.x, 0, DOUGH_AT.z));
+    O.add(dough);
+    this.proxy(new THREE.BoxGeometry(DOUGH.w, 0.8, DOUGH.d + 0.2), at(DOUGH_AT.x, 0.3, DOUGH_AT.z), { type: "dough" }, O);
+    const pot = makeSaucePot();
+    pot.position.copy(at(POT_AT.x, 0, POT_AT.z));
+    O.add(pot);
+    this.proxy(new THREE.BoxGeometry(POT.r * 2 + 0.4, 1.2, POT.r * 2 + 0.4), at(POT_AT.x, 0.5, POT_AT.z), { type: "pot" }, pot);
+    const peel = makePeel();
+    peel.position.copy(at(PEEL_AT.x, 0, PEEL_AT.z));
+    O.add(peel);
+    this.proxy(new THREE.BoxGeometry(PEEL.rx * 2 + 0.1, 0.7, PEEL.rz * 2 + 0.25), at(PEEL_AT.x, 0.25, PEEL_AT.z), { type: "peel" }, O);
+  }
+
+  /** Spread the oven spots that are out across the hearth, and hide the rest. */
+  private layoutOven(): void {
+    const xs = OVEN_XS[this.ovenCount] ?? OVEN_XS[2];
+    this.ovenSpots.forEach((s, i) => {
+      s.marker.visible = i < this.ovenCount;
+      s.x = xs[i] ?? xs[0];
+      const m = this.hitMeshes.find((h) => (h.userData.hit as Hit).type === "spot" && (h.userData.hit as { idx: number }).idx === i);
+      m?.position.copy(this.world(1, s.x, HEARTH.y + 0.25, s.z));
+    });
+  }
+
+  /** The oven's caddy: olive oil and honey, where the town's menu uses them. */
+  private setOvenCaddy(sauces: SauceKind[]): void {
+    if (this.ovenCaddy) {
+      for (const k of this.ovenCaddy.userData.kinds) delete this.bottles[k];
+      const old = this.ovenCaddy;
+      this.ovenGroup.remove(old);
+      disposeObject(old);
+      this.ovenCaddy = null;
+      this.hitMeshes = this.hitMeshes.filter((m) => {
+        const keep = m.userData.owner !== old;
+        if (!keep) this.scene.remove(m);
+        return keep;
+      });
+    }
+    if (!sauces.length) return;
+    const caddy = makeSauceCaddy(sauces.slice(0, 2));
+    caddy.position.copy(this.world(1, OVEN_CADDY.x, 0, OVEN_CADDY.z));
+    this.ovenGroup.add(caddy);
+    this.ovenCaddy = caddy;
+    Object.assign(this.bottles, caddy.userData.bottles);
+    for (const k of caddy.userData.kinds) {
+      const b = caddy.userData.spots.bottles[k]!;
+      this.proxy(new THREE.BoxGeometry(0.55, 1.6, 0.85), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k }, caddy);
+    }
+  }
+
+  /** Put a pie on the peel (or clear it). */
+  setPeel(layers: Layer[]): void {
+    this.peel.layers = layers;
+    this.syncFood(this.peel, this.world(1, PEEL_AT.x, PEEL.y + 0.01, PEEL_AT.z));
+  }
+  /** Put a pie in an oven spot (or empty it). */
+  setSpot(i: number, layers: Layer[]): void {
+    const s = this.ovenSpots[i];
+    s.layers = layers;
+    s.turnT = -1;
+    s.warned = false;
+    this.syncFood(s, this.world(1, s.x, HEARTH.y, s.z));
+  }
+  /** Start turning the pie in an oven spot round; false if there's nothing to turn or it's mid-turn. */
+  turnPie(i: number): boolean {
+    const s = this.ovenSpots[i];
+    if (!s || i >= this.ovenCount || !s.layers.length || s.turnT >= 0) return false;
+    s.turnT = 0;
+    return true;
+  }
+  /** The free oven spot nearest a world point (at hearth height), or -1 if it isn't over the hearth. */
+  overSpot(world: THREE.Vector3): number {
+    const x = world.x - pageX(1);
+    if (world.z < HEARTH.z0 || world.z > HEARTH.z1 + 0.5 || x < HEARTH.x0 - 0.2 || x > HEARTH.x1 + 0.2) return -1;
+    let best = -1;
+    let bestD = Infinity;
+    for (let i = 0; i < this.ovenCount; i++) {
+      const d = Math.abs(this.ovenSpots[i].x - x);
+      if (d < bestD) [best, bestD] = [i, d];
+    }
+    return best;
+  }
+  /** True when a world point is over the peel. */
+  overPeel(world: THREE.Vector3): boolean {
+    return this.middle === "oven" && Math.abs(world.x - pageX(1) - PEEL_AT.x) < PEEL.rx + 0.15 && Math.abs(world.z - PEEL_AT.z) < PEEL.rz + 0.3;
+  }
+  /** A world point over the pie on the peel, in the pie's unit oval (where its sauce is painted), or null if it's off the pie. */
+  peelPoint(world: THREE.Vector3, reach = 1.15): { x: number; z: number } | null {
+    const d = this.peel.layers[0]?.piece;
+    const flip = d && fireHalf(d) ? -1 : 1;
+    const x = ((world.x - pageX(1) - PEEL_AT.x) / (INNER_RX * GRILL_SCALE)) * flip;
+    const z = ((world.z - PEEL_AT.z) / (INNER_RZ * GRILL_SCALE)) * flip;
+    return Math.hypot(x, z) > reach ? null : { x, z };
+  }
+  /** World points, for hints, tags and the playtest bot. */
+  peelPointWorld(): THREE.Vector3 {
+    return this.world(1, PEEL_AT.x, PEEL.y, PEEL_AT.z);
+  }
+  spotPoint(i: number): THREE.Vector3 {
+    const s = this.ovenSpots[i];
+    return this.world(1, s.x, HEARTH.y, s.z);
+  }
+  spotTagPoint(i: number): THREE.Vector3 {
+    const s = this.ovenSpots[i];
+    return this.world(1, s.x, HEARTH.y, s.z + PIE.rz * GRILL_SCALE + 0.12);
+  }
+  doughPoint(): THREE.Vector3 {
+    return this.world(1, DOUGH_AT.x, 0.4, DOUGH_AT.z);
+  }
+  potPoint(): THREE.Vector3 {
+    return this.world(1, POT_AT.x, 0.5, POT_AT.z);
+  }
+  batterPoint(): THREE.Vector3 {
+    return this.world(2, BATTER_AT.x, 0.4, BATTER_AT.z);
+  }
+  /** True when a world point (fryer page) is over the batter bowl. */
+  overBatter(world: THREE.Vector3): boolean {
+    return this.orchard && Math.hypot(world.x - pageX(2) - BATTER_AT.x, world.z - BATTER_AT.z) < BATTER.r + 0.35;
   }
 
   /** The comal page (Red Rock): see COMAL. Built once, shown in place of the grill. */
@@ -621,11 +818,16 @@ export class CounterView {
    * Put out this town's middle counter: the grill, or the panini press with its bays and (at
    * Harbor City) the cutting board. Empties the press.
    */
-  setMiddle(mode: MiddleCounter, bays = 2, board = false, tpress = false): void {
+  setMiddle(mode: MiddleCounter, bays = 2, board = false, tpress = false, oven = 2): void {
     this.middle = mode;
     this.grillGroup.visible = mode === "grill";
     this.pressGroup.visible = mode === "press";
     this.comalGroup.visible = mode === "comal";
+    this.ovenGroup.visible = mode === "oven";
+    this.ovenCount = Math.max(1, Math.min(MAX_OVEN, oven));
+    this.layoutOven();
+    this.setPeel([]);
+    for (let i = 0; i < MAX_OVEN; i++) this.setSpot(i, []);
     // The comal has no buttons: hot under the left two thirds, warm at the right end.
     if (mode === "comal") this.zones = ["hot", "hot", "warm"];
     this.tpressOn = mode === "comal" && tpress;
@@ -637,8 +839,19 @@ export class CounterView {
     for (const b of this.bays) Object.assign(b, { closed: false, open: 1 });
     this.layoutBays();
     if (this.board) {
-      this.board.on = board;
-      this.board.obj.visible = board;
+      // The one board moves to the oven page at Port Amber.
+      const bd = this.board;
+      const spot = mode === "oven" ? OVEN_BOARD : PRESS_BOARD;
+      (mode === "oven" ? this.ovenGroup : this.pressGroup).add(bd.obj);
+      bd.x = spot.x;
+      bd.z = spot.z;
+      const k = mode === "oven" ? OVEN_BOARD.scale : 1;
+      bd.obj.position.copy(this.world(1, spot.x, 0, spot.z));
+      bd.obj.scale.setScalar(k);
+      this.boardProxy?.position.copy(this.world(1, spot.x, 0.3, spot.z));
+      this.boardProxy?.scale.set(k, 1, k);
+      bd.on = board;
+      bd.obj.visible = board;
       this.setBoard([]);
     }
   }
@@ -651,32 +864,52 @@ export class CounterView {
    */
   setFryerSides(poutine: boolean, fryer: readonly FryKind[]): void {
     const red = fryer.includes("chips");
+    const isle = fryer.includes("zucchini");
     this.redRock = red;
-    this.freezer.visible = fryer.includes("fries");
+    this.orchard = isle;
+    this.batterBowl.visible = isle;
+    // On the isle the frozen fries come from a tray, so the fritter dough can share the freezer's spot.
+    this.freezer.visible = fryer.includes("fries") && !isle;
     this.curdTray.visible = this.gravyWell.visible = poutine && !red;
     this.jalTray.visible = this.quesoWell.visible = poutine && red;
-    this.sugarShaker.visible = fryer.includes("churros");
-    for (const [k, t] of Object.entries(this.fryTrays)) t!.visible = fryer.includes(k as FryKind);
+    this.sugarShaker.visible = fryer.includes("churros") || fryer.includes("fritters");
+    for (const [k, t] of Object.entries(this.fryTrays)) t!.visible = fryer.includes(k as FryKind) && (k !== "fries" || isle);
     // Two trays share the freezer's spot when both are out.
     const both = fryer.includes("chips") && fryer.includes("churros");
     const F = FRYER;
-    const place = (k: FryKind, z: number) => {
+    const place = (k: FryKind, z: number, x: number = F.freezer.x) => {
       const t = this.fryTrays[k];
       if (!t) return;
-      t.position.copy(this.world(2, F.freezer.x, 0, z));
-      this.fryBinAt[k] = this.world(2, F.freezer.x, 0.4, z);
+      t.position.copy(this.world(2, x, 0, z));
+      this.fryBinAt[k] = this.world(2, x, 0.4, z);
       const m = this.hitMeshes.find((h) => (h.userData.hit as Hit).type === "fryBin" && (h.userData.hit as { fry: FryKind }).fry === k);
-      m?.position.copy(this.world(2, F.freezer.x, 0.3, z));
+      m?.position.copy(this.world(2, x, 0.3, z));
     };
     if (red) {
       place("chips", both ? F.freezer.z - 0.65 : F.freezer.z);
       place("churros", F.freezer.z + 0.6);
+    } else if (isle) {
+      // Orchard Isle: fries (and from Larkvale the apple fritter dough) in trays at the freezer's
+      // spot, zucchini where the curds go, the batter bowl at the gravy well's spot.
+      const fritters = fryer.includes("fritters");
+      place("fries", fritters ? F.freezer.z - 0.65 : F.freezer.z);
+      place("fritters", F.freezer.z + 0.6);
+      place("zucchini", F.curds.z);
     } else place("sweet", F.curds.z);
   }
 
   /** Build the food drawn for a stack of layers (bottom first), at the counter food scale. */
   private stackObject(layers: Layer[]): THREE.Group {
     const g = new THREE.Group();
+    if (layers[0]?.piece.kind === "dough") {
+      // A flatbread or calzone is one object, turned to face the way it's been turned.
+      const fb = makeFlatbread(layers.map((l) => l.piece));
+      fb.rotation.y = pieYaw(layers[0].piece);
+      g.add(fb);
+      g.userData.pie = fb;
+      g.scale.setScalar(GRILL_SCALE);
+      return g;
+    }
     const { bases, yaw, back } = stackBases(layers.map((l) => l.piece));
     layers.forEach((l, i) => {
       const o = makeFood(l.piece, i === 0 ? "bottom" : "top");
@@ -698,11 +931,16 @@ export class CounterView {
     const bd = this.board;
     if (!bd) return;
     bd.layers = layers;
-    this.syncFood(bd, this.world(1, bd.x - 0.12, BOARD.h, bd.z));
+    const pie = layers[0]?.piece.kind === "dough";
+    this.syncFood(bd, this.world(1, bd.x - (pie ? 0 : 0.12), BOARD.h, bd.z));
   }
   /** Redraw what sits in a bay or on the board when its pieces change. */
   syncFood(holder: { layers: Layer[]; food: THREE.Group | null; foodKey: string }, at: THREE.Vector3): void {
-    const key = holder.layers.map((l) => `${l.piece.uid}${l.piece.cut ? "c" : ""}${l.piece.stroke?.length ?? ""}`).join(",");
+    // A pie redraws its own sauce and colour as they change (FlatbreadObject.update), so only its pieces and shape are keyed.
+    const pie = holder.layers[0]?.piece.kind === "dough";
+    const key = pie
+      ? holder.layers.map((l) => l.piece.uid).join(",") + `|${holder.layers[0].piece.folded ? "f" : ""}`
+      : holder.layers.map((l) => `${l.piece.uid}${l.piece.cut ? "c" : ""}${l.piece.stroke?.length ?? ""}`).join(",");
     if (key === holder.foodKey && holder.food) return;
     holder.foodKey = key;
     if (holder.food) {
@@ -716,6 +954,12 @@ export class CounterView {
     holder.food.userData.h = new THREE.Box3().setFromObject(holder.food).getSize(new THREE.Vector3()).y;
     holder.food.userData.y0 = at.y;
     this.scene.add(holder.food);
+  }
+
+  /** Redraw a pie's crust colour, sauce and cuts (call every frame for pies that change). */
+  updatePie(holder: PieHolder): void {
+    const fb = holder.food?.userData.pie as FlatbreadObject | undefined;
+    if (fb) fb.userData.update(holder.layers.map((l) => l.piece));
   }
 
   /** The bay under a world point on the press (at plate height), or -1. */
@@ -829,6 +1073,13 @@ export class CounterView {
     this.scene.add(well);
     this.gravyWell = well;
     this.proxy(new THREE.BoxGeometry(GRAVY_WELL.w + 0.1, 1.2, GRAVY_WELL.d + 0.2), at(F.gravy.x, 0.5, F.gravy.z), { type: "gravy" }, well);
+    // Orchard Isle's batter bowl, at the gravy well's spot: zucchini is dipped in it before it fries.
+    const bowl = makeBatterBowl();
+    bowl.position.copy(at(BATTER_AT.x, 0, BATTER_AT.z));
+    bowl.visible = false;
+    this.scene.add(bowl);
+    this.batterBowl = bowl;
+    this.proxy(new THREE.BoxGeometry(BATTER.r * 2 + 0.3, 1.0, BATTER.r * 2 + 0.3), at(BATTER_AT.x, 0.4, BATTER_AT.z), { type: "batter" }, bowl);
     // Red Rock's nacho toppings in the same spots: jalapeños for curds, queso for gravy.
     const jal = makeJalapenoTray();
     jal.position.copy(at(F.curds.x, 0, F.curds.z));
@@ -844,7 +1095,7 @@ export class CounterView {
     this.proxy(new THREE.BoxGeometry(GRAVY_WELL.w + 0.1, 1.2, GRAVY_WELL.d + 0.2), at(F.gravy.x, 0.5, F.gravy.z), { type: "gravy" }, queso);
     // Trays of other things to fry: sweet potato fries (the coast, from Driftwood) where the curds
     // are in the Pines; tortilla wedges and churro dough at the freezer's spot in Red Rock.
-    for (const fry of ["sweet", "chips", "churros"] as FryKind[]) {
+    for (const fry of ["sweet", "chips", "churros", "zucchini", "fritters", "fries"] as FryKind[]) {
       const tray = makeFryTray(fry);
       tray.visible = false;
       this.scene.add(tray);
@@ -1194,13 +1445,18 @@ export class CounterView {
       return keep;
     });
     const press = this.middle === "press";
-    const comal = this.middle === "comal";
+    const comal = this.middle === "comal" || this.middle === "oven";
+    const oven = this.middle === "oven";
     // At the press the back rail holds what goes in the press first (breads, proteins) and the
     // tuna well; the side rail the cold fillings. Sauces are in the caddy, never in a pan. At the
     // comal the back rail holds the tortillas, pork, beans and pineapple.
-    const back = (k: Kind) => (press ? PRESS_BACK(k) : comal ? COMAL_BACK(k) : GRILLABLE.has(k));
-    const usable = kinds.filter((k) => !((press || comal) && isSauce(k)));
-    if (comal) this.setComalCaddy(kinds.filter(isSauce) as SauceKind[]);
+    // At the oven the dough and the tomato pot have their own spots and nothing goes in a back rail.
+    const back = (k: Kind) => (oven ? false : press ? PRESS_BACK(k) : comal ? COMAL_BACK(k) : GRILLABLE.has(k));
+    const usable = kinds.filter((k) => !((press || comal) && isSauce(k)) && k !== "dough");
+    if (oven) {
+      this.setOvenCaddy(kinds.filter((k) => k === "oil" || k === "honey") as SauceKind[]);
+      this.setComalCaddy([]);
+    } else if (comal) this.setComalCaddy(kinds.filter(isSauce) as SauceKind[]);
     const hot = usable.filter(back).slice(0, 5);
     const cold = usable.filter((k) => !back(k)).slice(0, press || comal ? 8 : 6);
     const group = new THREE.Group();
@@ -1216,7 +1472,7 @@ export class CounterView {
         this.proxy(new THREE.BoxGeometry(pan.w, 0.9, pan.d), this.world(1, b.x, b.y - 0.2, b.z), { type: "bin", kind: b.kind });
       }
     };
-    fill(makeColdRail({ cols: Math.max(press || comal ? 2 : 3, hot.length), rows: 1, kinds: hot }), GRILL_PANS);
+    if (!oven) fill(makeColdRail({ cols: Math.max(press || comal ? 2 : 3, hot.length), rows: 1, kinds: hot }), GRILL_PANS);
     if (press || comal) {
       // Down from the same back edge as the grill's side rail, as many rows as it takes.
       const rows = Math.max(3, Math.ceil(cold.length / 2));
@@ -1340,7 +1596,7 @@ export class CounterView {
 
   /** Grill-local position if the world point is over the grill plate. */
   overGrill(world: THREE.Vector3): { x: number; z: number } | null {
-    if (this.middle === "press") return null;
+    if (this.middle === "press" || this.middle === "oven") return null;
     const x = world.x - pageX(1);
     const { x0, x1, z0, z1 } = GRILL_BOUNDS;
     if (x < x0 - 0.3 || x > x1 + 0.3 || world.z < z0 - 0.5 || world.z > z1 + 0.4) return null;
@@ -1540,7 +1796,7 @@ export class CounterView {
 
   /** Where the sauce caddy stands, for the in-hand mask. */
   caddyPoint(): THREE.Vector3 {
-    const c = this.middle === "press" ? this.pressCaddy : this.middle === "comal" ? this.comalCaddy ?? this.caddy : this.caddy;
+    const c = this.middle === "press" ? this.pressCaddy : this.middle === "comal" ? this.comalCaddy ?? this.caddy : this.middle === "oven" ? this.ovenCaddy ?? this.caddy : this.caddy;
     return c.position.clone().setY(0.8);
   }
 
@@ -1557,7 +1813,8 @@ export class CounterView {
   sizzleLevel(): number {
     const on = this.grillItems.filter((g) => !g.held && !g.below && g.flipT < 0);
     const pressing = this.middle === "press" ? this.bays.filter((b) => b.closed && b.layers.length).length : 0;
-    return on.filter((g) => this.heatOf(g) === "hot").length * 0.35 + on.filter((g) => this.heatOf(g) === "warm").length * 0.08 + pressing * 0.3;
+    const baking = this.middle === "oven" ? this.ovenSpots.filter((s, i) => i < this.ovenCount && s.layers.length).length : 0;
+    return on.filter((g) => this.heatOf(g) === "hot").length * 0.35 + on.filter((g) => this.heatOf(g) === "warm").length * 0.08 + pressing * 0.3 + baking * 0.12;
   }
 
   /** Which grill zone a page-local x is over (nearest at the ends). */
@@ -1716,6 +1973,49 @@ export class CounterView {
           b.food.scale.set(GRILL_SCALE, GRILL_SCALE * (1 - (1 - fit) * lidDown), GRILL_SCALE);
         }
       }
+    }
+    // Oven: each pie bakes, the half facing the fire at twice the pace; a tap turns it round.
+    if (this.middle === "oven") {
+      this.oven.userData.tick(this.time);
+      for (let i = 0; i < this.ovenCount; i++) {
+        const s = this.ovenSpots[i];
+        const d = s.layers[0]?.piece;
+        if (!d) continue;
+        if (s.turnT >= 0) {
+          s.turnT += dt / TURN_TIME;
+          if (s.turnT >= 1) {
+            s.turnT = -1;
+            d.turns = (d.turns ?? 0) + 1;
+            s.warned = false;
+          }
+        }
+        if (d.kind === "dough") {
+          const before = cookLevel(d);
+          const top = Math.max(...d.cook);
+          // The fire side running too far ahead of the other scorches it (warned once per run).
+          if (bakeStep(d, dt, this.grillBoost) && !s.warned) {
+            s.warned = true;
+            anyBurning = true;
+          }
+          for (const l of s.layers.slice(1)) bakeTopping(l.piece, dt, OVEN_CHEESE.has(l.piece.kind), this.grillBoost);
+          const sc = COOK_SCALE.dough;
+          if (before < sc.done && cookLevel(d) >= sc.done) anyDone = true;
+          if (top <= sc.burnt - 0.05 && Math.max(...d.cook) > sc.burnt - 0.05) anyBurning = true;
+          smokes.push({ x: pageX(1) + s.x, z: s.z, y: HEARTH.y + 0.4, cook: Math.max(...d.cook), light: Math.max(...d.cook) < 0.9 });
+        }
+        this.syncFood(s, this.world(1, s.x, HEARTH.y, s.z));
+        if (s.food) {
+          this.updatePie(s);
+          const fb = s.food.userData.pie as FlatbreadObject | undefined;
+          // Turning: the peel lifts it a little and spins it round half a turn.
+          const t = s.turnT >= 0 ? s.turnT : 0;
+          const e = t * t * (3 - 2 * t);
+          if (fb) fb.rotation.y = pieYaw(d) + Math.PI * e;
+          s.food.position.y = HEARTH.y + Math.sin(Math.PI * t) * 0.25;
+        }
+      }
+      this.updatePie(this.peel);
+      if (this.board?.on) this.updatePie(this.board);
     }
     if (anyBurning) this.events.burning();
     if (anyDone) this.events.done();

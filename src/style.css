@@ -684,6 +684,16 @@ html, body {
 .cmeter.flour { --f0: #fbf3df; --f1: #ebc98a; --f2: #b9803e; }
 .cmeter.tostada, .cmeter.chips { --f0: #f6e6a6; --f1: #ebb53c; --f2: #a8662a; }
 .cmeter.churros { --f0: #f7e4b6; --f1: #d6913e; --f2: #8a4e1c; }
+/* Orchard Isle: a flatbread's crust, the zucchini fritti and the apple fritters. */
+.cmeter.dough { --f0: #f4e8ce; --f1: #e3ad5a; --f2: #8a5424; }
+.cmeter.zucchini { --f0: #eadfa8; --f1: #d9a648; --f2: #8a5a24; }
+.cmeter.fritters { --f0: #f3dcae; --f1: #cf8a3e; --f2: #7a4419; }
+/* A pie in the oven: when to turn it (soon, now, done). */
+.gtag.pt.bay .turn { font: 800 9.5px/1.2 var(--bv-font-ui); font-style: normal; color: #6b3a00; background: #ffd99a; border-radius: 4px; padding: 0 4px; box-shadow: 0 0 0 1px rgb(42 38 34 / 0.6); }
+.gtag.pt.bay .turn.hot { color: #fff; background: #e0442e; animation: turn-pulse 0.6s ease-in-out infinite alternate; }
+.gtag.pt.bay .turn.on { color: #2f5a1e; background: #cfe9b6; opacity: 0.85; }
+@keyframes turn-pulse { from { transform: scale(1); } to { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .gtag.pt.bay .turn.hot { animation: none; } }
 /* A quesadilla's cheese on the comal: melting, then melted. */
 .gtag.pt .mlt { position: absolute; left: 50%; top: 100%; transform: translate(-50%, 2px); font: 800 9.5px/1.2 var(--bv-font-ui); color: #6b5200; background: #fbeec0; border-radius: 4px; padding: 0 4px; box-shadow: 0 0 0 1px rgb(42 38 34 / 0.6); opacity: 0.75; white-space: nowrap; }
 .gtag.pt .mlt.on { background: #f9d95b; opacity: 1; }

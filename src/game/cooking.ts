@@ -61,7 +61,7 @@ export interface CookScale {
   burnt: number;
   perfect: number;
 }
-export type Cookable = "patty" | "bacon" | "egg" | "bun" | "pineapple" | "fries" | "ciabatta" | "sourdough" | "chicken" | "veggie" | "sweet" | "corn" | "flour" | "tostada" | "chips" | "churros";
+export type Cookable = "patty" | "bacon" | "egg" | "bun" | "pineapple" | "fries" | "ciabatta" | "sourdough" | "chicken" | "veggie" | "sweet" | "corn" | "flour" | "tostada" | "chips" | "churros" | "dough" | "zucchini" | "fritters";
 export const COOK_SCALE: Record<Cookable, CookScale> = {
   // Under: raw and rare. Done: medium. Over: well done, then burnt.
   // Medium is generous: about 50% longer than it used to be (0.43-0.67).
@@ -88,7 +88,58 @@ export const COOK_SCALE: Record<Cookable, CookScale> = {
   // Chips fry fast with a narrower band; churros are like fries.
   chips: { done: 0.5, over: 0.85, burnt: 1.15, perfect: 0.675 },
   churros: { done: 0.5, over: 0.9, burnt: 1.25, perfect: 0.7 },
+  // Orchard Isle's hearth oven: a flatbread's crust, read on its paler side. Pale and doughy, then
+  // golden and blistered (done), then dark, then charred.
+  dough: { done: 0.35, over: 0.8, burnt: 1.0, perfect: 0.56 },
+  // The isle's fryer: battered zucchini fritti and apple fritters.
+  zucchini: { done: 0.5, over: 0.9, burnt: 1.2, perfect: 0.7 },
+  fritters: { done: 0.5, over: 0.9, burnt: 1.25, perfect: 0.7 },
 };
+
+/**
+ * Orchard Isle's hearth oven (DESIGN §24, phase 4). The fire is at the back: the half of a pie
+ * facing it bakes at twice the pace of the half facing the mouth (OVEN_RATE per second, against
+ * the dough's scale). Turned once near halfway, both halves are golden at about 21 s and stay in
+ * the band until about 28 s. Left unturned, the fire side runs more than OVEN_LEAD ahead of the
+ * pale side by about 17 s, before the pale side is done, and scorches. A folded calzone is
+ * thicker: it bakes at OVEN_FOLDED of the pace and scorches with a smaller lead, so one turn can't
+ * see it through: turned at about 6 s and again at about 16 s, it's done from about 19 s to 26 s.
+ */
+export const OVEN_RATE = 0.0176;
+export const OVEN_FIRE = 2;
+export const OVEN_FOLDED = 0.75;
+export const OVEN_LEAD = { open: 0.3, folded: 0.08 };
+/** Seconds a fire side can run over the lead before it counts as scorched. */
+export const SCORCHED = 1;
+/** On a pie in the oven: cheese melts (melted at 0.5, about 6 s); other toppings roast. Mushrooms want a long bake (roasted at 1, about 24 s). */
+export const OVEN_MELT = 0.09;
+export const OVEN_ROAST = 0.042;
+/** A flatbread's paler side, and how far its fire side has run ahead (negative: the other half leads). */
+export const paleSide = (p: Piece): number => Math.min(p.cook[0], p.cook[1]);
+/** Which half of a pie faces the fire: 0 until it's turned, then 1, and so on. */
+export const fireHalf = (p: Piece): 0 | 1 => ((p.turns ?? 0) % 2) as 0 | 1;
+export const fireLead = (p: Piece): number => p.cook[fireHalf(p)] - p.cook[1 - fireHalf(p)];
+export const ovenLead = (p: Piece): number => (p.folded ? OVEN_LEAD.folded : OVEN_LEAD.open);
+
+/**
+ * A second in the oven for a pie's dough (`boost` is the Hot plate upgrade): the fire half bakes at
+ * OVEN_FIRE times the pace of the other, and while it runs more than its lead ahead it scorches.
+ * True while it's scorching.
+ */
+export function bakeStep(d: Piece, dt: number, boost = 1): boolean {
+  const r = OVEN_RATE * boost * (d.folded ? OVEN_FOLDED : 1) * dt;
+  const f = fireHalf(d);
+  d.cook[f] += r * OVEN_FIRE;
+  d.cook[1 - f] += r;
+  if (fireLead(d) <= ovenLead(d)) return false;
+  d.scorch = (d.scorch ?? 0) + dt;
+  return true;
+}
+/** What's on a pie in the oven: cheese melts, everything else warms and roasts (mushrooms want a long bake). */
+export function bakeTopping(p: Piece, dt: number, cheese: boolean, boost = 1): void {
+  if (cheese) p.melt = Math.min(1, (p.melt ?? 0) + OVEN_MELT * boost * dt);
+  p.cook[0] = (p.cook[0] ?? 0) + OVEN_ROAST * boost * dt;
+}
 
 /**
  * Red Rock's comal. Tortillas warm on the face down against GRILL_RATE: about 6 s to soft and
@@ -130,6 +181,9 @@ export function cookLevel(p: Piece): number {
       return avgCook(p);
     case "egg":
       return p.cook[0] + p.cook[1];
+    case "dough":
+      // A flatbread reads on its paler half.
+      return paleSide(p);
     case "corn":
     case "flour":
       // A taco tortilla warms on whichever face went down; a folded quesadilla is the average of its sides.
@@ -170,13 +224,16 @@ export const FRY_ZONE: Record<FryKind, { done: number; over: number; burnt: numb
   sweet: SWEET_ZONE,
   chips: { done: COOK_SCALE.chips.done, over: COOK_SCALE.chips.over, burnt: COOK_SCALE.chips.burnt },
   churros: { done: COOK_SCALE.churros.done, over: COOK_SCALE.churros.over, burnt: COOK_SCALE.churros.burnt },
+  zucchini: { done: COOK_SCALE.zucchini.done, over: COOK_SCALE.zucchini.over, burnt: COOK_SCALE.zucchini.burnt },
+  fritters: { done: COOK_SCALE.fritters.done, over: COOK_SCALE.fritters.over, burnt: COOK_SCALE.fritters.burnt },
 };
 export const fryPerfect = (fry: FryKind): number => (FRY_ZONE[fry].done + FRY_ZONE[fry].over) / 2;
 /**
  * How fast each kind fries against plain fries: sweet potato fries 1.3x; chips (tortilla wedges)
  * golden in about 8 s; churros a little quicker than fries. A tostada shell crisps in about 10 s.
+ * Battered zucchini fritti are golden in about 11 s; apple fritters take about 15 s.
  */
-export const FRY_SPEED: Record<FryKind | "tostada", number> = { fries: 1, sweet: 1.3, chips: 2.5, churros: 1.4, tostada: 2 };
+export const FRY_SPEED: Record<FryKind | "tostada", number> = { fries: 1, sweet: 1.3, chips: 2.5, churros: 1.4, tostada: 2, zucchini: 1.8, fritters: 1.3 };
 const zoneOf = (fry: FryKind | boolean) => FRY_ZONE[fry === true ? "sweet" : fry === false ? "fries" : fry];
 
 export function friesZone(t: number, fry: FryKind | boolean = "fries"): "under" | "done" | "over" {

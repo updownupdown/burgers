@@ -16,7 +16,6 @@
   --gh: 100vh;
   --cust-h: 190px;
   --tray-h: 150px;
-  --tabs-h: 64px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
 }
@@ -442,63 +441,39 @@ html, body {
 .hint-x:active { background: rgb(255 255 255 / 0.12); }
 .hint[hidden] { display: flex !important; opacity: 0; pointer-events: none; }
 
-/* ---- Counter tabs: tap one, or swipe along the bar -------------------- */
-/* Paper index tabs hanging under the counter: the one you're on is raised, bright and in full
-   colour, as if it's the page showing above; the others sit back, faded. */
-.tabs {
+/* ---- Counter buttons (T17 from the tabs study) ----------------------------
+   No tab bar. The next counter each way is a round paper button at the screen edge, level with the
+   trash chute. Buttons track where their counter is (placeNav in main.ts): the one you press glides
+   to the middle and fades as that counter arrives, and the counter you left grows back out of the
+   middle on the other side. The lamp is the inner ring: pale when quiet, amber when that counter
+   wants you, blinking coral when something there is about to spoil. */
+.cnav { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.cbtn {
+  --lamp: #e6dfd2; --glow: transparent;
   position: absolute;
   left: 0;
-  right: 0;
-  bottom: 0;
-  height: calc(var(--tabs-h) + var(--safe-b));
-  padding: 0 8px calc(6px + var(--safe-b));
-  background: #e3dccf;
-  border-top: 1px solid #cbc2b2;
-  box-shadow: inset 0 7px 9px -7px rgb(42 38 34 / 0.4);
-  display: flex;
-  gap: 6px;
-  align-items: flex-start;
-  pointer-events: auto;
-  touch-action: none;
-  font-family: var(--bv-font-ui);
-}
-.tab {
-  flex: 1;
-  height: calc(var(--tabs-h) - 16px);
-  margin-top: -1px;
+  top: 0;
+  width: 60px;
+  height: 60px;
+  padding: 0;
   border: 0;
-  border-radius: 0 0 12px 12px;
-  background: #ebe5d9;
-  box-shadow: inset 0 0 0 1px #d3cbbc;
-  position: relative;
+  border-radius: 50%;
   display: grid;
   place-items: center;
-  padding: 0;
-  transition: height var(--bv-fast) var(--bv-ease), background var(--bv-fast);
-}
-.tab .tab-art { width: 44px; height: 33px; filter: grayscale(0.75); opacity: 0.55; transition: filter var(--bv-fast), opacity var(--bv-fast), transform var(--bv-fast); }
-.tab .bv-icon { width: 24px; height: 24px; color: var(--bv-mute); }
-.tab:active { background: #e4ddd0; }
-.tab[aria-selected="true"] {
-  height: calc(var(--tabs-h) - 4px);
   background: #fffdf7;
-  box-shadow: inset 0 0 0 1px #d3cbbc, 0 5px 9px rgb(42 38 34 / 0.18);
-  z-index: 1;
+  box-shadow: inset 0 0 0 3px #fffdf7, inset 0 0 0 7px var(--lamp), 0 0 12px 2px var(--glow), 0 0 0 1px #d3cbbc, 0 6px 14px rgb(35 42 51 / 0.28);
+  pointer-events: auto;
+  touch-action: none;
+  will-change: transform, opacity;
 }
-/* Hides the bar's top line under the raised tab, so it reads as joined to the counter. */
-.tab[aria-selected="true"]::before { content: ""; position: absolute; left: 1px; right: 1px; top: 0; height: 2px; background: #fffdf7; }
-.tab[aria-selected="true"] .tab-art { filter: none; opacity: 1; transform: scale(1.08); }
-.tab .dot {
-  position: absolute;
-  top: 5px;
-  right: calc(50% - 28px);
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--bv-amber);
-  box-shadow: 0 0 0 2px var(--bv-paper);
-}
-.tab .dot.hot { background: var(--bv-paprika); animation: blink 0.6s infinite alternate; }
+.cbtn .tab-art { width: 38px; height: 28px; }
+.cbtn:active { background: #f3ede2; }
+.cbtn[data-lamp="amber"] { --lamp: #e3a52c; --glow: rgb(227 165 44 / 0.5); }
+.cbtn[data-lamp="coral"] { --lamp: #e0553a; --glow: rgb(224 85 58 / 0.55); animation: cbtn-blink 0.55s steps(1) infinite; }
+@keyframes cbtn-blink { 50% { --lamp: #e6dfd2; --glow: transparent; } }
+@property --lamp { syntax: "<color>"; inherits: true; initial-value: #e6dfd2; }
+@property --glow { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@media (prefers-reduced-motion: reduce) { .cbtn[data-lamp="coral"] { animation: none; } }
 @keyframes blink { to { opacity: 0.35; } }
 
 /* ---- Screens --------------------------------------------------------- */
@@ -654,37 +629,37 @@ html, body {
  * and a pale veil over what's still ahead so the filled part is the reading.
  */
 /*
- * The doneness meter: under | done | over. The done band is always green so the safe zone reads at
- * a glance on every food; under and over take the food's own tints. Pale gaps split the bands, the
- * perfect point is a faint tick, and a big caret shows where the food is now.
+ * The doneness meter (cookMeter in ui.ts; M14 from the meter study): a dark pill in a thin black
+ * rim, the done range hatched in the same dark grey, a flush fill in one colour per food and zone,
+ * and thin 50% black lines over the zone edges.
  */
 .cmeter {
-  --mu: #e9e2c4; --md: #4fae6e; --mo: #9a5a22; --gap: rgb(255 255 255 / 0.9);
+  --f0: #ff8197; --f1: #c0713f; --f2: #8f4a28; --f: var(--f0);
   position: relative;
   display: block;
-  width: 56px;
+  width: 80px;
   height: 12px;
-  margin-top: 10px;
+  margin-top: 6px;
   border-radius: 999px;
-  background: linear-gradient(90deg,
-    var(--mu) 0 calc(var(--u) - 1px), var(--gap) calc(var(--u) - 1px) calc(var(--u) + 1px),
-    var(--md) calc(var(--u) + 1px) calc(var(--d) - 1px), var(--gap) calc(var(--d) - 1px) calc(var(--d) + 1px),
-    var(--mo) calc(var(--d) + 1px) 100%);
-  box-shadow: 0 0 0 2px rgb(42 38 34 / 0.85), 0 2px 4px rgb(0 0 0 / 0.3);
+  overflow: hidden;
+  background: #2c2f33;
+  box-shadow: 0 0 0 1.5px #0f1012, 0 1px 3px rgb(0 0 0 / 0.45);
 }
-.cmeter::after { content: ""; position: absolute; left: var(--v); right: 0; top: 0; bottom: 0; background: rgb(250 248 242 / 0.55); border-radius: 0 999px 999px 0; transition: left 0.2s linear; }
-.cmeter::before { content: ""; position: absolute; z-index: 1; left: var(--p); top: 2px; bottom: 2px; width: 1px; margin-left: -0.5px; background: rgb(255 255 255 / 0.55); }
-.cmeter i { position: absolute; z-index: 2; left: var(--v); top: -10px; width: 0; height: 0; margin-left: -7px; border: 7px solid transparent; border-bottom: 0; border-top: 9px solid var(--bv-ink); filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff); transition: left 0.2s linear; }
-.cmeter.done { box-shadow: 0 0 0 2px #2f7a4a, 0 0 6px rgb(79 174 110 / 0.8), 0 2px 4px rgb(0 0 0 / 0.3); }
-.cmeter.patty { --mu: #e58c94; --mo: #4a2a1a; }
-.cmeter.egg { --mu: #e4ded2; --mo: #b9772e; }
-.cmeter.bacon { --mu: #ec8a94; --mo: #5e2716; }
-.cmeter.bun { --mu: #f6e0b0; --mo: #7a4a22; }
-.cmeter.pineapple { --mu: #f9e27a; --mo: #8a5020; }
-.cmeter.fries { --mu: #f3e6a8; --mo: #8a5020; }
-.cmeter.burnt { animation: fmeter-hot 0.5s ease-in-out infinite alternate; }
-.cmeter.burnt i { border-top-color: var(--bv-paprika); }
+.cmeter::before { content: ""; position: absolute; top: 0; bottom: 0; left: var(--u); width: calc(var(--d) - var(--u)); background: repeating-linear-gradient(-45deg, #4d5157 0 1.3px, #2c2f33 1.3px 3.2px); }
+.cmeter b { position: absolute; z-index: 1; left: 0; top: 0; bottom: 0; width: var(--v); border-radius: 0 999px 999px 0; background: var(--f); box-shadow: inset 0 1.5px 0 rgb(255 255 255 / 0.3); }
+.cmeter::after { content: ""; position: absolute; z-index: 2; inset: 0; background: linear-gradient(90deg, transparent calc(var(--u) - 0.6px), rgb(0 0 0 / 0.5) calc(var(--u) - 0.6px) calc(var(--u) + 0.6px), transparent calc(var(--u) + 0.6px) calc(var(--d) - 0.6px), rgb(0 0 0 / 0.5) calc(var(--d) - 0.6px) calc(var(--d) + 0.6px), transparent calc(var(--d) + 0.6px)); }
+.cmeter.done { --f: var(--f1); }
+.cmeter.over { --f: var(--f2); }
+.cmeter.burnt { --f: #2a1410; }
+.cmeter.burnt.flash { --f: #ff3b2a; }
+.cmeter.patty { --f0: #ff8197; --f1: #c0713f; --f2: #8f4a28; }
+.cmeter.bacon { --f0: #ff94a8; --f1: #e8623c; --f2: #a03c20; }
+.cmeter.egg { --f0: #f7f4ee; --f1: #ffcf2e; --f2: #d4842a; }
+.cmeter.bun { --f0: #fde9bb; --f1: #f2a33c; --f2: #ad6630; }
+.cmeter.pineapple { --f0: #fff27c; --f1: #f6b21f; --f2: #bc742e; }
+.cmeter.fries { --f0: #f8f0cc; --f1: #ffc62e; --f2: #c47a26; }
 /* A stack on the grill: how many are in it, beside its meter. */
+.gtag.pt .sc { position: absolute; right: -8px; top: -6px; }
 .gtag .sc { font: 800 11px/1 var(--bv-font-mono); background: var(--bv-ink); color: var(--bv-paper); border-radius: 4px; padding: 2px 4px; align-self: flex-end; }
 .gtag.pt.warm .cmeter, .gtag.pt.off .cmeter { opacity: 0.85; }
 .ftag .scoops { display: flex; gap: 3px; }

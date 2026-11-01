@@ -86,10 +86,10 @@ function sections(): Sec[] {
         <li>${icon("burger")}<b>Stack</b><span>on the tray</span></li>
         <li>${icon("arrow-up")}<b>Swipe up</b><span>to serve</span></li>
       </ol>
-      <div class="hw-tabs" aria-hidden="true">
-        <span>${icon("drink")}Drinks</span><span class="on">${icon("grill")}Grill</span><span>${icon("fryer")}Fryer</span>
+      <div class="hw-nav" aria-hidden="true">
+        <span class="b">${icon("drink")}</span><span class="chute"></span><span class="b lit">${icon("fryer")}</span>
       </div>
-      <p class="hw-cap">${icon("swap")}Tap a counter in the bottom bar, or swipe along the bar to move between them. The fryer is wide: tap its tab again for the other end.</p>`,
+      <p class="hw-cap">${icon("swap")}The round buttons at the edges take you to the next counter; a glowing ring means it needs you. You can also swipe along the trash chute with empty hands.</p>`,
       points: [
         "<b>Customers and trays stay put</b> while you switch counters, so you never lose an order.",
         "Most things are a <b>drag</b>: from a bin, the grill or a counter up to a tray.",

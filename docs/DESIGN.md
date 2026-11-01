@@ -572,3 +572,13 @@ Open towns whose bonus is still to unlock carry a small gold diamond on the map,
 - **Grill zones**: each zone has a round power button and two lamps (off: both dark; warm: first orange; hot: both red) in place of the OFF/WARM/HOT caps.
 - **Bell**: one ring calls the next person. Rings within 1.5 s of the last one only ring, so a quick double ring still calls one.
 - **Counters**: the sauce caddy sits centred in the space left of the grill; the cold rails have no open lids behind them; the potato freezer has no lid, and it and the curd tray are deep wells with flanges, food well below the rim. The trash chute stops just short of the outer edges of the drinks and fryer views, bookending the three counters, and a sideways swipe along it with empty hands changes counter.
+
+## 23. The doneness meter and counter buttons (study picks)
+
+From the meter and tabs study (project files `meter-tabs-study/`, four rounds). James picked **M14** and **T17**.
+
+- **Doneness meter (M14)**, `cookMeter` in `src/ui.ts`, `.cmeter` in `style.css`: an 80 x 12 px pill in a thin black rim. The bar is dark grey (#2c2f33), the done range hatched in the same grey, and the fill runs edge to edge in one flat colour for the food and its zone (patty pink / brown / dark brown; egg white / yolk / amber; and so on), flashing red and black once burnt. Thin 50% black lines mark the two zone edges on top. No perfect line, no caret, no words. Stack counts sit at the meter's top right.
+- **Meters always sit below the food**, fries included: each basket's meter is on the fryer deck just in front of its well.
+- **No tab bar.** The counter band runs to the bottom of the screen. Only the next counter each way is a button (Drinks to Fryer is two taps): round paper buttons with the station drawing at the screen edges, level with the trash chute (`placeNav` in `main.ts`, `.cbtn`). The lamp is the inner ring: pale when quiet, amber when that counter wants you, blinking coral when something there is about to spoil.
+- **Buttons follow their counters** (`counter.viewPage`, the camera position as a fractional counter index): a counter d screens away sits at the middle, faded, at d = 0, at the edge at d = ±1, and just off screen at d = ±2. So the button you press glides to the middle and fades as you arrive, the counter you left grows back out of the middle on the other side, and one two counters away slides in from off screen. Holding something over a button for a moment still switches counter.
+- **Trash chute**: deeper (z 3.05-3.75), unlit so it stays dark, with two rows of black rubber flaps meeting in the middle, a pale steel lip with a darker edge, and rounded end caps that bookend the line. Swiping along it with empty hands still changes counter.

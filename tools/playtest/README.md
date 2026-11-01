@@ -14,3 +14,4 @@ Needs Playwright with Chromium available (`require('playwright')`).
 - `STOP=1 node tools/playtest/bot.cjs` plays a given road-trip stop (0-2) with the tutorial skipped.
 - `PORT=4175 node tools/playtest/pages-shots.cjs [tag]` screenshots each counter mid-shift (`out/page-<tag>-<n>.png`).
 - `PORT=4175 node tools/playtest/kitchen-shots.cjs [tag]` screenshots the kitchen with the longest receipts and a burger on every plate (`out/kitchen-<tag>-*.png`). `PORT` points any script at another preview port.
+- `PORT=4175 node tools/playtest/nav-shots.cjs [tag]` screenshots the doneness meters on the grill and fryer and the counter buttons on each counter and mid-move (`out/nav-<tag>-*.png`).

@@ -80,7 +80,7 @@ export const GRILL_STACK_MAX = 6;
 /** Kinds that stack on the grill. */
 const STACKS: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon"]);
 /** Trash slot running along the front edge of every counter, page-local z. */
-const TRASH = { z0: 3.05, z1: 3.5 };
+const TRASH = { z0: 3.05, z1: 3.75 };
 /** The slot runs the full width of every counter (page-local x), and on between them. */
 const TRASH_HALF = 4.4;
 /** The chute's two ends (world x): just inside the left edge of the first view and the right edge of the last. */
@@ -540,7 +540,7 @@ export class CounterView {
   private buildTrash(): void {
     const x0 = TRASH_X0();
     const x1 = TRASH_X1();
-    const chute = makeTrashChute(x1 - x0);
+    const chute = makeTrashChute(x1 - x0, TRASH.z1 - TRASH.z0);
     chute.position.set((x0 + x1) / 2, 0, (TRASH.z0 + TRASH.z1) / 2);
     this.scene.add(chute);
     PAGES.forEach((_, page) => {
@@ -803,10 +803,23 @@ export class CounterView {
     this.setStop(this.stopsOf(THREE.MathUtils.clamp(i, 0, PAGES.length - 1))[0]);
   }
 
-  /** Move to a camera stop. Swipes along the tab bar step one stop at a time. */
+  /** Move to a camera stop. Swipes along the trash chute step one stop at a time. */
   setStop(s: number): void {
     this.stop = THREE.MathUtils.clamp(s, 0, STOPS.length - 1);
     this.page = STOPS[this.stop].page;
+  }
+
+  /**
+   * Where the camera is right now as a fractional counter index (1.5 = halfway from the grill to
+   * the fryer). The counter buttons track it, so they move with the view.
+   */
+  get viewPage(): number {
+    const xs = STOPS.map((s) => s.x);
+    if (this.camX <= xs[0]) return STOPS[0].page;
+    for (let i = 1; i < xs.length; i++) {
+      if (this.camX <= xs[i]) return STOPS[i - 1].page + ((this.camX - xs[i - 1]) / (xs[i] - xs[i - 1])) * (STOPS[i].page - STOPS[i - 1].page);
+    }
+    return STOPS[xs.length - 1].page;
   }
 
   /** The camera stops on a counter, left to right. */

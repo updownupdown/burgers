@@ -493,3 +493,19 @@ James asked (after build #53) for less clutter around the shift. What changed:
 - **Map dashboard.** One row: the Day tile, then Popularity and Rating side by side as one button that opens **Popularity & reviews** (both numbers explained, then the reviews and filters), then Menu (Results in the evening). Budget and Supplies are gone from it; Sleep and Drive no longer show a price.
 - **The night.** Sleep no longer opens a card to tap through. The map dims to night where it is, a moon, *Night in <town>*, the day counter rolls over (Day 4 → 5), today's popularity and rating changes count up, then dawn washes the map back to morning and the overlay fades (about 3.8 s; a tap skips it). `playNight` in `src/screens/home.ts`.
 - **Dev mode** (bottom of Settings, from the map). Turning it on shows **Simulate progress: Off · 0% · 50% · 100%**, which swaps in a made-up trip (towns worked breadth-first along the roads, matching day, popularity, ratings, reviews and upgrades; `src/game/devmode.ts`). The real save is kept in `bv-save-real` and comes back with Off or when dev mode is turned off. A dashed *Sim 50%* badge by the logo says when a simulated trip is in play.
+
+## 20. After build #54: grill, tickets and the kitchen
+
+James's build #53 gameplay notes, as built.
+
+- **Tickets.** Counts sit right after the name ("Pickles x3", "2/3" while short). Leave-offs read "NO Lettuce", add-ons "ADD Bacon" / "ADD Tomato x2"; a counted topping asked for extra keeps one line with its full count and an "ADD n" chip. A folded stub is the patience bar, the short name and its exceptions (`exceptions()` in `src/ui.ts`). Eggs carry a Sunny or Flip chip.
+- **One doneness meter** for patties, eggs, bacon, buns, pineapple and fries (`cookMeter`, `COOK_SCALE`, `cookLevel`): three regions in the ingredient's colours (not done, done, over; the end is burnt), a dark line at perfect, a caret over the reading and a pale veil over what's still ahead. No words.
+- **Grill zones.** Left is a ridged grille: patties searing there gain grill marks (`Piece.marks`, `MARK_RATE`), each marked patty adds `GRILL_MARK_BONUS` (two at most, "grill marks" perk). An egg cracked on the grille is a mess to rub off (`counter.messes`). Middle is flat (eggs only here). Right starts on WARM, which no longer cooks at all; nothing goes stale on the grill.
+- **Flips.** Tap or flick up to flip patties, bacon and eggs (not buns). Faces cook at full heat down and 35% up; patty doneness is the average, and a face past `CHAR_FACE` is "charred on one side". Eggs: sunny side up unless the recipe says `egg: "over"` (Ranch Breakfast); the wrong style scores 0.75.
+- **Timings.** Patty medium ~21-33 s, bacon crisp from 18 s, egg set from 18 s (overdone 44 s), bun toast ~10 s, cheese melts in ~3.3 s on hot (a third of the old pace).
+- **Stacks.** Drop a bun on a bun or a patty on a patty on the grill to stack them (up to 6); only the bottom cooks, the meter shows the top with a ×N count.
+- **Toast.** Only 7 recipes come toasted; 5% of other orders after the first fifth of a shift ask for it (`TOAST_CHANCE`, modifier type "toast").
+- **Scale.** Counter food is 1.15× life (`COUNTER_FOOD`, was 1.5×); the cold rail fits heaps evenly so pans match the piece in hand; the griddle is 87 cm and holds about six patties a zone.
+- **Fryer.** No knobs; gravy in a heated well at the back right, curds in a cooled tray in front of the potato freezer, salt below the gravy.
+- **Carrying.** Held things hover at the point under the finger at hover height, so they don't jump on release. Over the trays a cup or carton previews at its landing spot and size; dashed outlines mark where ordered sides go. A leaving customer takes the plate.
+- **Tray study.** `?tray=kraft|diner|sheet|board|basket` (or the bv-tray setting); default kraft until James picks.

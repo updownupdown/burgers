@@ -331,7 +331,8 @@
 }
 
 /* ---- the night passing (after Sleep) ---------------------------------- */
-/* Night falls over the evening map, the day rolls over, then dawn washes it back to morning. */
+/* Night falls over the evening map, the day rolls over, then dawn washes it back to morning. The
+   words sit on a dark Dusk card, so they stay readable however light the sky behind gets. */
 .home-night { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; cursor: pointer; }
 .home-night .sky {
   position: absolute; inset: 0; opacity: 0;
@@ -341,14 +342,19 @@
 .home-night.in .sky { opacity: 1; }
 .home-night.dawn .sky { background: radial-gradient(ellipse 120% 70% at 50% 60%, rgb(255 206 150 / 0.55), rgb(246 170 120 / 0.28)); }
 .home-night.out .sky, .home-night.out .home-night-c { opacity: 0; transition: opacity 0.5s var(--bv-ease); }
-.home-night-c { position: relative; display: grid; justify-items: center; gap: 10px; padding: 24px; text-align: center; color: #f1ece2; opacity: 0; transform: translateY(8px); transition: opacity 0.5s var(--bv-ease) 0.15s, transform 0.5s var(--bv-ease) 0.15s; }
+.home-night-c {
+  position: relative; display: grid; justify-items: center; gap: 10px; width: min(330px, calc(100vw - 40px)); box-sizing: border-box; padding: 22px 20px 24px; text-align: center;
+  color: #f1ece2; background: var(--bv-night); border: 1px solid rgb(246 242 234 / 0.12); border-radius: 18px; box-shadow: 0 18px 40px rgb(10 14 20 / 0.45);
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 0.5s var(--bv-ease) 0.15s, transform 0.5s var(--bv-ease) 0.15s, border-color 0.9s ease, box-shadow 0.9s ease;
+}
 .home-night.in .home-night-c { opacity: 1; transform: none; }
-.home-night.dawn .home-night-c { color: #2b2620; }
-.home-night-c .bv-eyebrow { color: #aab2bd; transition: color 0.6s; }
-.home-night.dawn .home-night-c .bv-eyebrow { color: #6d5a48; }
+/* Dawn only warms the card's edge; the words keep their colours. */
+.home-night.dawn .home-night-c { border-color: rgb(255 200 140 / 0.45); box-shadow: 0 18px 40px rgb(120 70 40 / 0.35), 0 0 0 4px rgb(255 206 150 / 0.18); }
+.home-night-c .bv-eyebrow { color: #aab2bd; }
 .home-night .orb { position: relative; width: 52px; height: 52px; margin-bottom: 4px; }
 .home-night .orb i { position: absolute; inset: 0; border-radius: 50%; transition: opacity 0.8s ease, transform 0.9s var(--bv-ease); }
-.home-night .moon { background: #f2e4bf; box-shadow: -13px -7px 0 0 #1c232e inset, 0 0 36px rgb(242 228 191 / 0.3); }
+.home-night .moon { background: #f2e4bf; box-shadow: -13px -7px 0 0 var(--bv-night) inset, 0 0 36px rgb(242 228 191 / 0.3); }
 .home-night .sun { background: radial-gradient(circle, #ffd27a 0 55%, #f4a54a 100%); box-shadow: 0 0 40px rgb(255 190 110 / 0.7); opacity: 0; transform: translateY(18px) scale(0.8); }
 .home-night.dawn .moon { opacity: 0; transform: translateY(-14px) scale(0.85); }
 .home-night.dawn .sun { opacity: 1; transform: none; }
@@ -360,14 +366,11 @@
 .home-night-deltas { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; opacity: 0; transform: translateY(6px); transition: opacity 0.4s var(--bv-ease), transform 0.4s var(--bv-ease); }
 .home-night.roll .home-night-deltas { opacity: 1; transform: none; }
 .home-night-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--bv-r-pill); background: rgb(246 242 234 / 0.12); border: 1px solid rgb(246 242 234 / 0.2); font-size: 13px; font-weight: 700; transition: background 0.6s, border-color 0.6s; }
-.home-night.dawn .home-night-chip { background: rgb(246 242 234 / 0.75); border-color: rgb(43 38 32 / 0.12); }
 .home-night-chip .bv-icon { font-size: 15px; color: var(--bv-amber); }
 .home-night-chip b { font-weight: 500; font-size: 14px; }
 .home-night-chip em { font-style: normal; font-family: var(--bv-font-mono); font-size: 12px; opacity: 0.75; }
 .home-night-chip em.up { color: #8fd0ae; opacity: 1; }
 .home-night-chip em.dn { color: #f09a85; opacity: 1; }
-.home-night.dawn .home-night-chip em.up { color: var(--bv-olive); }
-.home-night.dawn .home-night-chip em.dn { color: var(--bv-paprika); }
 @media (prefers-reduced-motion: reduce) {
   .home-dayroll .track, .home-night .orb i { transition: none; }
 }

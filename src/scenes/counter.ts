@@ -73,8 +73,8 @@ const CADDY = { x: -2.82, z: 2.2 };
  * pesto and aioli caddy at the front, and at Harbor City a cutting board front right.
  */
 const PRESS = { x: 1.2, z: 0.3, gap: 0.12 };
-const PRESS_CADDY = { x: -0.62, z: 2.42 };
-const PRESS_BOARD = { x: 2.5, z: 2.4 };
+const PRESS_CADDY = { x: -0.62, z: 2.22 };
+const PRESS_BOARD = { x: 2.5, z: 1.98 };
 /**
  * The comal page (Red Rock), in the grill page's place: the comal on the griddle's footprint
  * (hot left two thirds, warm right third), tortillas, pork, beans and pineapple in the row of pans
@@ -89,6 +89,8 @@ const TPRESS_SCALE = 0.85;
 const COMAL_BACK = (k: Kind) => TORTILLAS.has(k) || SCOOPED.has(k) || k === "pineapple";
 /** The left rail's back edge stays put whatever its row count, so the pans line up with the grill page's. */
 const SIDE_BACK_Z = SIDE_PANS.z - 2.1;
+/** How long a refused lid takes to settle back open. */
+const SHAKE_S = 0.42;
 /** Most bays a press has (Harbor City); fewer are hidden. */
 export const MAX_BAYS = 3;
 /** Kinds that go in the row of pans behind the press. */
@@ -382,6 +384,8 @@ export interface PressBay {
   handleProxy: THREE.Mesh;
   /** Seconds since the lid last moved, for its thunk. */
   moved: number;
+  /** Seconds left of a refused close (the lid dips and bounces back up), 0 when still. */
+  shake?: number;
   /** What the lamp and the ooze show now (so materials only change when they need to). */
   lit?: boolean;
   oozing?: boolean;
@@ -495,6 +499,9 @@ export class CounterView {
   ovenCount = 2;
   private boardProxy: THREE.Mesh | null = null;
   batterBowl!: THREE.Object3D;
+  /** Zucchini sitting battered in the bowl (a share of a basket, 0 when empty), and its drawing. */
+  batter = 0;
+  private batterFood: FriesObject | null = null;
   /** Orchard Isle's fryer kit (zucchini fritti, apple fritters) is out. */
   orchard = false;
   private curdTray!: THREE.Object3D;
@@ -742,6 +749,23 @@ export class CounterView {
   batterPoint(): THREE.Vector3 {
     return this.world(2, BATTER_AT.x, 0.4, BATTER_AT.z);
   }
+  /** Put this much zucchini in the batter bowl (0 empties it): it sits there battered until it's picked up. */
+  setBatter(amount: number): void {
+    this.batter = amount;
+    if (this.batterFood) {
+      this.batterBowl.remove(this.batterFood);
+      disposeObject(this.batterFood);
+      this.batterFood = null;
+    }
+    if (amount <= 0) return;
+    const f = makeFries(false, "L", amount, { fry: "zucchini" });
+    f.userData.setCook(0);
+    // Sunk in the batter, so only their coated backs show over the rim.
+    f.scale.setScalar(SCALE.fries * 0.62);
+    f.position.y = BATTER.h - 0.16;
+    this.batterBowl.add(f);
+    this.batterFood = f;
+  }
   /** True when a world point (fryer page) is over the batter bowl. */
   overBatter(world: THREE.Vector3): boolean {
     return this.orchard && Math.hypot(world.x - pageX(2) - BATTER_AT.x, world.z - BATTER_AT.z) < BATTER.r + 0.35;
@@ -868,6 +892,7 @@ export class CounterView {
     this.redRock = red;
     this.orchard = isle;
     this.batterBowl.visible = isle;
+    this.setBatter(0);
     // On the isle the frozen fries come from a tray, so the fritter dough can share the freezer's spot.
     this.freezer.visible = fryer.includes("fries") && !isle;
     this.curdTray.visible = this.gravyWell.visible = poutine && !red;
@@ -1002,14 +1027,22 @@ export class CounterView {
     b.closed = closed;
     b.moved = 0;
   }
+  /** The lid won't come down on what's in this bay: it dips and springs back up. */
+  refuseLid(i: number): void {
+    const b = this.bays[i];
+    if (b && !b.closed) b.shake = SHAKE_S;
+  }
   /** What a bay's meter reads: its bread if a sandwich, else the lone piece. */
   bayReading(b: PressBay): Piece | null {
     return b.layers.find((l) => BREADS.has(l.piece.kind))?.piece ?? b.layers[0]?.piece ?? null;
   }
-  /** Where a bay's meter sits: on the counter in front of the bay, clear of any cheese oozing out. */
+  /**
+   * Where a bay's meter sits: on the shut lid, over the food it hides (well clear of the sauce
+   * caddy and the board in front); with the lid up, on the front lip just in front of the food.
+   */
   bayTagPoint(i: number): THREE.Vector3 {
     const b = this.bays[i];
-    return this.world(1, b.x, 0, b.z + BAY.d / 2 + 0.5);
+    return b.open < 0.5 ? this.world(1, b.x, PLATE.y + CLOSED_GAP + 0.3, b.z + 0.3) : this.world(1, b.x, PLATE.y, b.z + PLATE.z + PLATE.d / 2 + 0.1);
   }
   /** The middle of a bay's handle grip, world space (for hints and the playtest bot). */
   handlePoint(i: number): THREE.Vector3 {
@@ -1935,7 +1968,14 @@ export class CounterView {
         b.moved += dt;
         b.open += ((b.closed ? 0 : 1) - b.open) * Math.min(1, dt * 11);
         if (Math.abs(b.open - (b.closed ? 0 : 1)) < 0.002) b.open = b.closed ? 0 : 1;
-        b.obj.userData.setOpen(b.open);
+        // A refused close: the lid starts down, then bounces back up twice.
+        let dip = 0;
+        if (b.shake) {
+          b.shake = Math.max(0, b.shake - dt);
+          const k = b.shake / SHAKE_S;
+          dip = 0.16 * k * Math.abs(Math.sin((1 - k) * Math.PI * 3));
+        }
+        b.obj.userData.setOpen(b.open - dip);
         this.placeHandle(b);
         const pressing = b.closed && b.open < 0.2 && b.layers.length > 0;
         let melted = false;

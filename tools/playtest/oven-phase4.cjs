@@ -190,15 +190,19 @@ const want = (n) => !ONLY || ONLY.includes(n);
     await t.p.waitForTimeout(800);
     await t.p.screenshot({ path: `${out}howto-oven.png` });
     await t.ev(() => window.__bv.menu.closeAll());
-    // The fryer: zucchini through the batter, fried and salted.
+    // The fryer: zucchini dropped in the batter and picked up again, fried and salted.
     await t.ev(() => window.__bv.goToPage(2));
     await step(t.p, 1);
     const f = await t.oven();
     const zb = await t.proj(f.fryBins.zucchini);
     const bat = await t.proj(f.batter);
     const b0 = await t.hp('basket', { idx: 0 });
-    await t.drag([...line(...zb, ...bat, 10), ...line(...bat, ...b0, 10)]);
-    await t.drag([...line(...zb, ...bat, 10), ...line(...bat, ...b0, 10)]);
+    // Drop each scoop in the batter bowl, then pick it up again for the basket.
+    await t.drag(line(...zb, ...bat, 10));
+    await shot(t, 'fryer-zucchini-in-batter');
+    await t.drag(line(...bat, ...b0, 10));
+    await t.drag(line(...zb, ...bat, 10));
+    await t.drag(line(...bat, ...b0, 10));
     await t.tap(b0);
     await step(t.p, 6);
     await shot(t, 'fryer-zucchini-frying');

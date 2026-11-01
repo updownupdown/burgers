@@ -95,9 +95,11 @@ async function closeBay(t, i) {
   const [hx, hy] = await t.proj(pr.bays[i].handle);
   await t.drag(line(hx, hy, hx, hy + 70, 6));
 }
+/** Swipe the handle up to lift the lid. */
 async function openBay(t, i) {
   const pr = await t.press();
-  await t.tap(await t.proj(pr.bays[i].handle));
+  const [hx, hy] = await t.proj(pr.bays[i].handle);
+  await t.drag(line(hx, hy, hx, hy - 70, 6));
   await step(t.p, 0.5);
 }
 async function bayToTray(t, i) {

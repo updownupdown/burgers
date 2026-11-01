@@ -271,7 +271,7 @@ export const STOPS: Stop[] = [
     press: { bays: 2, slice: false },
     customers: 10,
     shiftLength: 190,
-    newThing: "New here: the panini press. Build the sandwich on the tray, drag it into a bay and pull the handle down. Tap the handle to lift it when the meter is golden.",
+    newThing: "New here: the panini press. Build the sandwich in a bay (or on the tray), pull the handle down, and swipe it up to lift the lid when the meter is golden.",
     menu: [CAPRESE, AVO_TOAST],
   },
   {

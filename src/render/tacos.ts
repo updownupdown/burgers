@@ -147,11 +147,16 @@ function spots(kind: "corn" | "flour", which: 0 | 1, half: boolean): Baked {
 
 /* ---- fillings ------------------------------------------------------------------- */
 
-const PORK = ["#c0622e", "#b4552a", "#cf7238"];
+const PORK = ["#a9532b", "#9a4826", "#b9622f"];
 const chunkGeo = shareGeometry(faceted(new THREE.BoxGeometry(0.16, 0.11, 0.13)));
 const crumbGeo = shareGeometry(faceted(new THREE.IcosahedronGeometry(0.07, 0)));
 const leafGeo = shareGeometry(faceted(new THREE.CircleGeometry(0.07, 5).rotateX(-Math.PI / 2)));
 const shredGeo = shareGeometry(faceted(new THREE.BoxGeometry(0.34, 0.035, 0.05)));
+/** A strand of shredded cheese: long, thin and a little bent, so it never reads as a chunk of pork. */
+const strandGeo = shareGeometry(
+  faceted(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(new THREE.Vector3(-0.22, 0, 0), new THREE.Vector3(0, 0.02, 0.07), new THREE.Vector3(0.22, 0, 0)), 5, 0.03, 4, false)),
+);
+const CHEESE = ["#f9de6e", "#f4cb4c", "#fbe896", "#efbb3e"];
 const beanGeo = shareGeometry(faceted(new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2)));
 const ringGeo = shareGeometry(faceted(new THREE.TorusGeometry(0.11, 0.035, 4, 10).rotateX(Math.PI / 2)));
 
@@ -187,8 +192,9 @@ export function fillParts(kind: Kind, rx: number, rz: number, seed = 1, n = 1, i
       spread(Math.round(12 * n), (x, z, i) => p.add(crumbGeo, i % 4 ? "#f6eff4" : "#e3cde6", { p: [x, 0.03 + r() * 0.02, z], s: [0.75, 0.55, 0.75], r: [r(), r(), r()], ink: ink * 0.6 }));
       break;
     case "jack":
-      // Shredded cheese: short, curly, orange-yellow strands.
-      spread(Math.round(18 * n), (x, z, i) => p.add(shredGeo, i % 3 ? "#f7c843" : "#f2a83a", { p: [x, 0.02 + r() * 0.04, z], r: [r() * 0.6, r() * 6, r() * 0.6], s: [0.38 + r() * 0.25, 1.3, 1.2], ink: ink * 0.6 }));
+      // Shredded cheese: long, thin, pale strands lying every which way, like a pinch of grated
+      // jack or mozzarella (pork is chunky and brown).
+      spread(Math.round(22 * n), (x, z, i) => p.add(strandGeo, CHEESE[i % 4], { p: [x, 0.03 + r() * 0.05, z], r: [(r() - 0.5) * 0.5, r() * 6.3, (r() - 0.5) * 0.5], s: [0.8 + r() * 0.45, 1, 1], ink: ink * 0.45 }));
       break;
     case "lettuce":
       spread(Math.round(12 * n), (x, z, i) => p.add(shredGeo, i % 2 ? "#7ccc55" : "#62b443", { p: [x, 0.02 + r() * 0.05, z], r: [r() * 0.5, r() * 6, r() * 0.5], s: [0.7, 1.4, 1.6], ink: ink * 0.6 }));

@@ -50,44 +50,39 @@
 .home-brand .bv-eyebrow:empty { display: none; }
 
 /* ---- dashboard card (floats over the top of the map) ------------------ */
-/* Four numbers, then the three doors. Slate on slate: the card is a tone lighter than the frame. */
+/* One row: the Day tile, popularity and rating as one button, and the menu. Slate on slate. */
 .home-stats {
   position: absolute;
   top: 10px;
   left: 10px;
   right: 10px;
   display: grid;
-  grid-template-columns: 1.05fr 1fr 1.15fr 0.9fr;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   background: var(--bv-paper-2);
   border-radius: var(--bv-r-lg);
   box-shadow: var(--bv-shadow-3);
   overflow: hidden;
 }
-.home-stat { display: grid; gap: 1px; padding: 8px 9px; min-width: 0; border-right: 1px solid var(--bv-rule); pointer-events: none; }
-.home-stat:nth-child(4) { border-right: 0; }
+.home-stat { display: grid; gap: 1px; padding: 9px 10px; min-width: 0; pointer-events: none; text-align: left; }
 .home-stat .bv-eyebrow { font-size: 9.5px; letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.home-stat b { display: flex; align-items: baseline; gap: 4px; font-family: var(--bv-font-mono); font-weight: 500; font-size: 14px; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+.home-stat b { display: flex; align-items: baseline; gap: 4px; font-family: var(--bv-font-mono); font-weight: 500; font-size: 15px; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
 .home-stat b .bv-icon { align-self: center; font-size: 13px; color: var(--bv-amber); }
 .home-stat small { font-family: var(--bv-font-ui); font-size: 10px; font-weight: 600; color: var(--bv-mute); }
-.home-stat.low b { color: var(--bv-paprika); }
 /* The Day tile is coral: it is the thing that changed since the player last looked. */
-.home-stat.time { background: var(--bv-paprika-2); color: #fff7f2; border-right-color: transparent; }
+.home-stat.time { background: var(--bv-paprika-2); color: #fff7f2; padding-right: 14px; }
 .home-stat.time .bv-eyebrow { color: #ffd9cc; }
-.home-stat.time b { font-family: var(--bv-font-mono); font-weight: 500; font-size: 14px; }
 .home-stat.time b .bv-icon { color: #ffd9cc; }
 .home.evening .home-stat.time { background: #3f4d73; }
 .home.evening .home-stat.time .bv-eyebrow, .home.evening .home-stat.time b .bv-icon { color: #c9d4f2; }
-.home-stats-acts { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--bv-rule); }
-.home-stats-acts button {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 6px;
-  font-size: 13px; font-weight: 700; color: var(--bv-ink); border-right: 1px solid var(--bv-rule); white-space: nowrap;
-  transition: background var(--bv-fast);
-}
-.home-stats-acts button:last-child { border-right: 0; }
-.home-stats-acts button:active { background: var(--bv-paper-3); }
-.home-stats-acts button:disabled { color: var(--bv-mute); }
-.home-stats-acts button .bv-icon { font-size: 15px; color: var(--bv-amber); }
-.home-stats-acts button:disabled .bv-icon { color: var(--bv-mute); }
+/* Popularity and rating: two numbers, one door. */
+.home-fame { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; min-width: 0; color: var(--bv-ink); transition: background var(--bv-fast); }
+.home-fame .home-stat + .home-stat { border-left: 1px solid var(--bv-rule); }
+.home-fame .chev { display: grid; place-items: center; padding: 0 8px 0 2px; color: var(--bv-mute); font-size: 16px; }
+.home-fame:active, .home-door:active { background: var(--bv-paper-3); }
+.home-door { display: grid; justify-items: center; align-content: center; gap: 2px; padding: 6px 14px; border-left: 1px solid var(--bv-rule); color: var(--bv-ink); font-size: 12px; font-weight: 700; transition: background var(--bv-fast); }
+.home-door .bv-icon { font-size: 18px; color: var(--bv-amber); }
+.home-door:disabled { color: var(--bv-mute); }
+.home-door:disabled .bv-icon { color: var(--bv-mute); }
 
 /* ---- map -------------------------------------------------------------- */
 .home-map {
@@ -326,9 +321,8 @@
 }
 @media (max-width: 379px) {
   .home-logo { font-size: 17px; }
-  .home-stat { padding: 6px 7px; }
-  .home-stat b, .home-stat.time b { font-size: 13px; }
-  .home-stats-acts button { font-size: 12px; }
+  .home-stat { padding: 7px 8px; }
+  .home-stat b { font-size: 13px; }
   .home-dock-info b { font-size: 20px; }
   .home-sheet-head .bv-title { font-size: 23px; }
 }
@@ -341,3 +335,47 @@
 @media (prefers-reduced-motion: reduce) {
   .home *, .home *::before, .home *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---- the night passing (after Sleep) ---------------------------------- */
+/* Night falls over the evening map, the day rolls over, then dawn washes it back to morning. */
+.home-night { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; cursor: pointer; }
+.home-night .sky {
+  position: absolute; inset: 0; opacity: 0;
+  background: radial-gradient(ellipse 120% 70% at 50% 42%, rgb(30 38 52 / 0.86), rgb(14 18 26 / 0.96));
+  transition: opacity 0.5s var(--bv-ease), background 0.9s ease;
+}
+.home-night.in .sky { opacity: 1; }
+.home-night.dawn .sky { background: radial-gradient(ellipse 120% 70% at 50% 60%, rgb(255 206 150 / 0.55), rgb(246 170 120 / 0.28)); }
+.home-night.out .sky, .home-night.out .home-night-c { opacity: 0; transition: opacity 0.5s var(--bv-ease); }
+.home-night-c { position: relative; display: grid; justify-items: center; gap: 10px; padding: 24px; text-align: center; color: #f1ece2; opacity: 0; transform: translateY(8px); transition: opacity 0.5s var(--bv-ease) 0.15s, transform 0.5s var(--bv-ease) 0.15s; }
+.home-night.in .home-night-c { opacity: 1; transform: none; }
+.home-night.dawn .home-night-c { color: #2b2620; }
+.home-night-c .bv-eyebrow { color: #aab2bd; transition: color 0.6s; }
+.home-night.dawn .home-night-c .bv-eyebrow { color: #6d5a48; }
+.home-night .orb { position: relative; width: 52px; height: 52px; margin-bottom: 4px; }
+.home-night .orb i { position: absolute; inset: 0; border-radius: 50%; transition: opacity 0.8s ease, transform 0.9s var(--bv-ease); }
+.home-night .moon { background: #f2e4bf; box-shadow: -13px -7px 0 0 #1c232e inset, 0 0 36px rgb(242 228 191 / 0.3); }
+.home-night .sun { background: radial-gradient(circle, #ffd27a 0 55%, #f4a54a 100%); box-shadow: 0 0 40px rgb(255 190 110 / 0.7); opacity: 0; transform: translateY(18px) scale(0.8); }
+.home-night.dawn .moon { opacity: 0; transform: translateY(-14px) scale(0.85); }
+.home-night.dawn .sun { opacity: 1; transform: none; }
+.home-dayroll { display: flex; align-items: baseline; gap: 10px; font-family: var(--bv-font-serif); font-size: 40px; line-height: 1; }
+.home-dayroll .num { display: inline-block; height: 1em; overflow: hidden; font-family: var(--bv-font-mono); font-weight: 500; }
+.home-dayroll .track { display: grid; transition: transform 0.6s cubic-bezier(0.5, -0.3, 0.3, 1.3); }
+.home-dayroll .track b { display: block; height: 1em; font-weight: 500; }
+.home-night.roll .home-dayroll .track { transform: translateY(-1em); }
+.home-night-deltas { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; opacity: 0; transform: translateY(6px); transition: opacity 0.4s var(--bv-ease), transform 0.4s var(--bv-ease); }
+.home-night.roll .home-night-deltas { opacity: 1; transform: none; }
+.home-night-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--bv-r-pill); background: rgb(246 242 234 / 0.12); border: 1px solid rgb(246 242 234 / 0.2); font-size: 13px; font-weight: 700; transition: background 0.6s, border-color 0.6s; }
+.home-night.dawn .home-night-chip { background: rgb(246 242 234 / 0.75); border-color: rgb(43 38 32 / 0.12); }
+.home-night-chip .bv-icon { font-size: 15px; color: var(--bv-amber); }
+.home-night-chip b { font-weight: 500; font-size: 14px; }
+.home-night-chip em { font-style: normal; font-family: var(--bv-font-mono); font-size: 12px; opacity: 0.75; }
+.home-night-chip em.up { color: #8fd0ae; opacity: 1; }
+.home-night-chip em.dn { color: #f09a85; opacity: 1; }
+.home-night.dawn .home-night-chip em.up { color: var(--bv-olive); }
+.home-night.dawn .home-night-chip em.dn { color: var(--bv-paprika); }
+@media (prefers-reduced-motion: reduce) {
+  .home-dayroll .track, .home-night .orb i { transition: none; }
+}
+/* Dev mode's progress simulation is on: say so by the logo, so a simulated trip is never mistaken for the real one. */
+.home-dev { align-self: center; padding: 2px 7px; border-radius: var(--bv-r-pill); border: 1px dashed var(--bv-amber); color: var(--bv-amber); font-size: 11px; letter-spacing: 0.02em; }

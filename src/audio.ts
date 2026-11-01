@@ -132,6 +132,39 @@ export class Sfx {
     this.tone(2637, 0.6, "sine", 0.1);
     this.tone(3951, 0.3, "sine", 0.04);
   }
+  /**
+   * The service bell on the counter: a struck steel dome. A click of the striker, then a few
+   * inharmonic partials that die away at different rates, the fundamental doubled a few hertz
+   * apart so it shimmers as it rings out. `call` (the second tap, which calls someone up) rings
+   * a touch brighter.
+   */
+  bell(call = false): void {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const f0 = 2093 * (1 + (Math.random() - 0.5) * 0.012);
+    const partials: [ratio: number, vol: number, decay: number][] = [
+      [1, 0.22, 1.9],
+      [1.0016, 0.12, 2.2],
+      [2.32, 0.07, 0.9],
+      [4.25, call ? 0.05 : 0.03, 0.45],
+      [6.63, 0.015, 0.22],
+    ];
+    for (const [ratio, vol, decay] of partials) {
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.value = f0 * ratio;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.003);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+      o.connect(g).connect(this.master);
+      o.start(t);
+      o.stop(t + decay + 0.05);
+    }
+    // The striker's tick.
+    this.burst(7500, 0.025, 0.12, "highpass");
+  }
   squirt(): void {
     this.burst(1400 + Math.random() * 400, 0.08, 0.12, "bandpass", 700);
   }

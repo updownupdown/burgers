@@ -138,21 +138,6 @@
 .day-press q { font-size: 13.5px; color: var(--bv-ink-2); quotes: "“" "”"; }
 .day-press small { font-size: var(--bv-fs-sm); color: var(--bv-mute); font-weight: 700; }
 
-/* ---- night -------------------------------------------------------------------------------- */
-.day-screen.night { background: radial-gradient(ellipse at 50% 30%, #3a4452 0%, #1f2630 70%); color: #f1ece2; cursor: pointer; }
-.day-night { flex: 1; display: grid; align-content: center; justify-items: center; gap: 14px; padding: 24px; text-align: center; }
-.day-night .moon { width: 56px; height: 56px; border-radius: 50%; background: #f2e4bf; box-shadow: -14px -8px 0 0 #222a35 inset, 0 0 40px rgb(242 228 191 / 0.25); }
-.day-night .bv-eyebrow { color: #aab2bd; }
-.day-night .bv-title { color: #f1ece2; font-size: 30px; }
-.day-night dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 18px; margin: 0; width: 100%; max-width: 280px; font-size: 13.5px; text-align: left; }
-.day-night dt { color: #d5d0c6; font-weight: 600; }
-.day-night dd { margin: 0; font-family: var(--bv-font-mono); font-weight: 500; color: #f1ece2; text-align: right; }
-.day-night dd.ok { color: #9fc2ae; }
-.day-night dd.neg { color: #e8735a; }
-.day-night .tot { width: 100%; max-width: 280px; border-top: 1px solid #586579; padding-top: 8px; display: flex; justify-content: space-between; gap: 10px; font-weight: 800; font-size: 14px; }
-.day-night .tot span:last-child { font-family: var(--bv-font-serif); font-weight: 400; font-size: 17px; }
-.day-night p { margin: 0; font-size: 13px; color: #aab2bd; }
-
 /* ---- reviews ------------------------------------------------------------------------------- */
 .day-filters { display: flex; gap: 6px; flex-wrap: wrap; }
 .day-filters button { font-size: var(--bv-fs-sm); font-weight: 700; padding: 6px 10px; border-radius: var(--bv-r-pill); border: 1px solid var(--bv-rule-2); color: var(--bv-ink-2); background: var(--bv-paper); min-height: 32px; }
@@ -186,3 +171,5 @@
 @media (prefers-reduced-motion: reduce) {
   .day-screen *, .day-screen *::before { transition: none !important; animation: none !important; }
 }
+.day-kpi .bv-eyebrow .bv-icon { font-size: 12px; vertical-align: -0.15em; margin-right: 4px; color: var(--bv-amber); }
+.day-kpi b small.of { font-size: 12px; color: var(--bv-mute); margin-left: 2px; }

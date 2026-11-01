@@ -38,6 +38,8 @@ export interface MenuDeps {
   setGfx(level: GfxLevel): void;
   complexity(): Complexity;
   setComplexity(c: Complexity): void;
+  /** How the shift is going, for the pause menu. */
+  shift?(): ShiftSummary;
   /** Which towns are open and how many shifts each has, for the menu's locked dishes. */
   progress?(): { unlocked: string[]; shiftsIn: Record<string, number> };
   canInstall(): boolean;
@@ -50,6 +52,34 @@ export interface MenuDeps {
   quit(): void;
   /** Wipe the trip and start over (already confirmed). */
   newTrip(): void;
+  /** Dev mode: swap in a simulated trip at 0, 50 or 100% of the road, or bring the real one back (null). */
+  simulate?(level: number | null): void;
+}
+
+/** The pause menu's picture of the shift so far. */
+export interface ShiftSummary {
+  /** Clock hours of the window, and the clock now. */
+  start: number;
+  end: number;
+  now: number;
+  /** 0..1 through the window; true once the window has shut and the last orders are going out. */
+  progress: number;
+  closing: boolean;
+  /** Pacing for this shift, fixed when it opened. */
+  pacing: string;
+  pacingBlurb: string;
+  /** People: expected today, served, at the window, waiting in line, and gone without food. */
+  expected: number;
+  served: number;
+  atWindow: number;
+  inLine: number;
+  left: number;
+  /** Stars (0–3) of every served order, in order. */
+  stars: number[];
+  /** Takings so far (sales and tips, less spills), or null if the game doesn't count money. */
+  takings: number | null;
+  /** Written reviews so far, newest first. */
+  reviews: { stars: number; text: string }[];
 }
 
 let deps: MenuDeps | null = null;

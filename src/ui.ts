@@ -8,9 +8,10 @@ import { icon } from "./ui/icons";
 
 export interface Ui {
   root: HTMLElement;
+  /** Time of day on the truck's clock, and the bar for how far through the shift it is. */
   timer: HTMLElement;
+  clockFill: HTMLElement;
   money: HTMLElement;
-  stop: HTMLElement;
   rail: HTMLElement;
   tickets: HTMLElement[];
   /** "Sent back" notes, one over each customer. */
@@ -64,12 +65,14 @@ const tabArt = (page: string) => `<svg class="tab-art" viewBox="0 0 48 36" aria-
 export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   root.innerHTML = `
   <div class="hud">
-    <span class="chip" data-r="stop"></span>
-    <span class="chip" data-r="timer">3:00</span>
+    <div class="hud-clock" role="timer" aria-label="Shift time">
+      <span class="chip" data-r="timer">11:00am</span>
+      <span class="hud-bar" aria-hidden="true"><i data-r="clockFill"></i></span>
+    </div>
     <span class="chip money" data-r="money">$0</span>
     <span class="spacer"></span>
     <button class="bell-btn" data-r="bell" hidden aria-label="Ring the bell for the next customer">
-      <span class="bell-count" data-r="bellCount">0</span>${icon("bell")}<span class="bell-label" data-r="bellLabel">line</span>
+      <span class="bell-count" data-r="bellCount">0</span>${icon("bell")}<span class="bell-label" data-r="bellLabel">Next</span>
     </button>
     <button class="icon-btn" data-r="menuBtn" aria-label="Menu">${icon("menu")}</button>
   </div>
@@ -95,8 +98,8 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   return {
     root,
     timer: q("timer"),
+    clockFill: q("clockFill"),
     money: q("money"),
-    stop: q("stop"),
     rail: q("rail"),
     tickets: [...root.querySelectorAll<HTMLElement>('[data-r="ticket"]')],
     sentBack: [...root.querySelectorAll<HTMLElement>('[data-r="sentback"]')],

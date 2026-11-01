@@ -51,7 +51,7 @@ html, body {
 #ui button:focus-visible { outline: 2px solid var(--bv-paprika); outline-offset: 2px; }
 
 /* ---- HUD -------------------------------------------------------------- */
-/* One paper bar (see .bv-hud in components.css): town in serif, time and money in mono. */
+/* One paper bar (see .bv-hud in components.css): the clock and its bar, money in mono, the bell, the menu. */
 .hud {
   position: absolute;
   top: calc(var(--safe-t) + 6px);
@@ -76,7 +76,12 @@ html, body {
   gap: 4px;
 }
 .chip .bv-icon { width: 15px; height: 15px; color: var(--bv-mute); }
-.chip[data-r="stop"] { font: 400 14px var(--bv-font-serif); min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+/* The clock: time of day over a thin bar for how far through the shift it is. */
+.hud-clock { flex: 1; min-width: 0; display: grid; gap: 3px; align-content: center; }
+.hud-clock .chip { line-height: 1; }
+.hud-bar { position: relative; height: 4px; border-radius: 2px; background: var(--bv-paper-3); overflow: hidden; }
+.hud-bar i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: inherit; background: var(--bv-olive); transition: width 0.4s linear; }
+.hud-clock.closing .hud-bar i { background: var(--bv-paprika); }
 .chip.money { color: var(--bv-ink); }
 .chip.closing { color: var(--bv-paprika); }
 .chip.closing .bv-icon { color: inherit; animation: blink 0.7s ease-in-out infinite alternate; }

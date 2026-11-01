@@ -17,7 +17,12 @@ import { buildLabel, CURRENT, reloadTo } from "../update";
 import { icon } from "../ui/icons";
 import { openHowTo } from "./howto";
 import { openMenuRef } from "./menuref";
-import { closeAllModals, esc, getDeps, modalDepth, modalOpen, popModal, pushModal, setDeps, type GfxLevel, type MenuDeps } from "./modal";
+import { closeAllModals, esc, getDeps, modalDepth, modalOpen, popModal, price, pushModal, setDeps, type GfxLevel, type MenuDeps, type ShiftSummary } from "./modal";
+import { stackArt } from "./menuref";
+import { clockLabel } from "../game/shift";
+import { recipeCount, type Recipe, type Stop } from "../game/stops";
+import { COUNTED, KIND_LABEL } from "../game/types";
+import { devOn, setDevOn, SIM_LEVELS, simLevel } from "../game/devmode";
 
 export type { GfxLevel, MenuDeps } from "./modal";
 export { openHowTo } from "./howto";
@@ -89,7 +94,7 @@ function pickSeg(card: HTMLElement, btn: HTMLElement, note: string): void {
 // ---------------------------------------------------------------------------
 // The pause menu
 
-/** Open the pause menu. Closing it (Resume, ×, Escape, Back or a tap outside) resumes. */
+/** Open the pause menu. Closing it (Resume, Escape, Back or a tap outside) resumes. */
 export function openMenu(over: Partial<MenuDeps> = {}): void {
   const d = resolveDeps(over);
   if (modalOpen("menu")) return;
@@ -97,47 +102,32 @@ export function openMenu(over: Partial<MenuDeps> = {}): void {
   const town = d.town();
   const card = pushModal({
     key: "menu",
-    label: "Menu",
-    cls: "gamemenu",
+    label: inShift ? "Paused" : "Menu",
+    cls: inShift ? "gamemenu pause tall" : "gamemenu",
     onDismiss: () => {
       if (inShift) d.resume();
     },
-    html: `${head(inShift ? "Paused" : (d.subtitle?.() ?? "Menu"), town.name, false, inShift ? "Close and resume" : "Close")}
+    html: inShift
+      ? pauseHtml(d, town)
+      : `${head(d.subtitle?.() ?? "Menu", town.name, false)}
       <div class="menu-body menu-scroll menu-general">
-        ${
-          inShift
-            ? `<button class="bv-btn primary lg block" data-m="resume">${icon("play")}Resume</button>
-          <div class="bv-btn-row inline">
-            <button class="bv-btn" data-m="restart">${icon("restart")}Restart shift</button>
-            <button class="bv-btn" data-m="quit">${icon("map")}Quit to map</button>
-          </div>
-          ${confirmBox("restart", "Start this shift again from the top? Today's customers and takings so far are lost.", "Restart")}
-          ${confirmBox("quit", `Leave ${esc(town.name)} for the map? This shift's takings are lost and it won't count.`, "Quit to map")}
-          <h3 class="menu-h">${icon("sun")}This shift</h3>
-          ${row("menuref", "menu-book", "Today's menu", `${esc(town.name)} · ${town.menu.length} burgers, sides and drinks`)}
-          ${field("difficulty", "clock", "Pacing", DIFFICULTY[d.difficulty()].blurb + " New customers feel it straight away.", DIFFICULTIES.map((k) => ({ v: k, label: DIFFICULTY[k].label })), d.difficulty())}
-          ${field("complexity", "chart", "Complexity", COMPLEXITY[d.complexity()].blurb + " Takes effect with your next shift.", COMPLEXITIES.map((k) => ({ v: k, label: COMPLEXITY[k].label })), d.complexity())}
-          <div class="bv-btn-row inline menu-doors">
-            <button class="bv-btn" data-m="settings">${icon("settings")}Settings</button>
-            <button class="bv-btn" data-m="howto">${icon("help")}How to play</button>
-          </div>`
-            : `${row("menuref", "menu-book", "Menu", `${esc(town.name)} · ${town.menu.length} burgers, sides and drinks`)}
+        ${row("menuref", "menu-book", "Menu", `${esc(town.name)} · ${town.menu.length} burgers, sides and drinks`)}
         <h3 class="menu-h">${icon("truck")}Bun Voyage</h3>
-        ${row("settings", "settings", "Settings", "Pacing, complexity, sound, graphics")}
-        ${row("howto", "help", "How to Play", "The grill, the fryer, the drinks, the road")}`
-        }
+        ${row("settings", "settings", "Settings", "Sound, graphics, the app")}
+        ${row("howto", "help", "How to Play", "The grill, the fryer, the drinks, the road")}
         <p class="menu-build bv-mono">${esc(buildLabel())}</p>
       </div>`,
   });
 
-  const confirm = (id: string | null) =>
-    card.querySelectorAll<HTMLElement>("[data-confirm]").forEach((c) => {
-      const show = c.dataset.confirm === id;
-      if (show && c.hidden) {
-        c.hidden = false;
-        c.scrollIntoView({ block: "nearest" });
-      } else if (!show) c.hidden = true;
-    });
+  // Restart and Quit ask first, in the footer's own space: the confirm takes the buttons' place.
+  const confirm = (id: string | null) => {
+    const foot = card.querySelector<HTMLElement>(".pause-foot");
+    if (!foot) return;
+    foot.dataset.state = id ?? "";
+    foot.querySelectorAll<HTMLElement>("[data-confirm]").forEach((c) => (c.hidden = c.dataset.confirm !== id));
+    foot.querySelector<HTMLElement>(".pause-acts")!.toggleAttribute("inert", !!id);
+    (foot.querySelector<HTMLElement>(id ? `[data-confirm="${id}"] [data-m="${id}-yes"]` : `[data-m="resume"]`))?.focus({ preventScroll: true });
+  };
 
   card.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-m]");
@@ -171,20 +161,100 @@ export function openMenu(over: Partial<MenuDeps> = {}): void {
       case "howto":
         openHowTo();
         break;
-      case "difficulty": {
-        const v = btn.dataset.v as Difficulty;
-        d.setDifficulty(v);
-        pickSeg(card, btn, DIFFICULTY[v].blurb + " New customers feel it straight away.");
-        break;
-      }
-      case "complexity": {
-        const v = btn.dataset.v as Complexity;
-        d.setComplexity(v);
-        pickSeg(card, btn, COMPLEXITY[v].blurb + " Takes effect with your next shift.");
-        break;
-      }
     }
   });
+}
+
+const starRow = (n: number) => `<span class="pause-stars" aria-label="${n} star${n === 1 ? "" : "s"}">${"★".repeat(n)}<span class="off">${"★".repeat(Math.max(0, 3 - n))}</span></span>`;
+
+/** The pause card in a shift: how it's going, today's menu in brief, and the way out at the bottom. */
+function pauseHtml(d: MenuDeps, town: Stop): string {
+  const sh = d.shift?.();
+  return `<header class="menu-head">
+      <div class="menu-headtext"><span class="bv-eyebrow">Paused${d.subtitle ? ` · ${esc(d.subtitle())}` : ""}</span><h2 class="bv-title">${esc(town.name)}</h2></div>
+      <button class="bv-btn icon sm ghost" data-m="howto" aria-label="How to play" title="How to play">${icon("help")}</button>
+      <button class="bv-btn icon sm ghost" data-m="settings" aria-label="Settings" title="Settings">${icon("settings")}</button>
+    </header>
+    <div class="menu-body menu-scroll pause-body">
+      ${sh ? shiftHtml(sh) : ""}
+      ${todayMenuHtml(town, d.priceMult?.() ?? 1, sh)}
+    </div>
+    <footer class="pause-foot">
+      <div class="pause-acts">
+        <div class="bv-btn-row inline">
+          <button class="bv-btn" data-m="restart">${icon("restart")}Restart shift</button>
+          <button class="bv-btn" data-m="quit">${icon("map")}Quit to map</button>
+        </div>
+        <button class="bv-btn primary lg block" data-m="resume">${icon("play")}Resume</button>
+      </div>
+      ${pauseConfirm("restart", "restart", "Start this shift again from the top?", "Today's customers so far are lost.", "Restart")}
+      ${pauseConfirm("quit", "map", `Leave ${esc(town.name)} for the map?`, "This shift won't count.", "Quit to map")}
+    </footer>`;
+}
+
+const pauseConfirm = (id: string, ic: string, q: string, note: string, yes: string) =>
+  `<div class="pause-confirm" data-confirm="${id}" hidden role="alertdialog" aria-label="${esc(q)}">
+    <p><b>${q}</b><span>${note}</span></p>
+    <div class="bv-btn-row inline">
+      <button class="bv-btn" data-m="cancel">${icon("close")}Cancel</button>
+      <button class="bv-btn accent" data-m="${id}-yes">${icon(ic)}${yes}</button>
+    </div>
+  </div>`;
+
+function shiftHtml(sh: ShiftSummary): string {
+  const pct = Math.round(sh.progress * 100);
+  const avg = sh.stars.length ? sh.stars.reduce((a, b) => a + b, 0) / sh.stars.length : null;
+  const tally = [3, 2, 1, 0].map((n) => ({ n, count: sh.stars.filter((x) => x === n).length }));
+  const phase = sh.closing ? "Window shut · last orders" : pct < 25 ? "Opening hour" : pct < 70 ? "The rush" : "Winding down";
+  return `<section class="pause-shift" aria-label="This shift">
+    <div class="pause-clock">
+      <div class="t"><span class="bv-eyebrow">${phase}</span><b class="bv-mono">${sh.closing ? "Closing" : clockLabel(sh.now)}</b></div>
+      <span class="bv-chip pill" title="${esc(sh.pacingBlurb)}">${icon("clock")}${esc(sh.pacing)} pacing</span>
+    </div>
+    <div class="pause-bar ${sh.closing ? "closing" : ""}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>
+    <div class="pause-ends bv-mono"><span>${clockLabel(sh.start)}</span><span>${clockLabel(sh.end)}</span></div>
+    <div class="pause-kpis">
+      <div><b class="bv-mono">${sh.served}</b><small>served</small></div>
+      <div><b class="bv-mono">${sh.atWindow + sh.inLine}</b><small>waiting</small></div>
+      <div><b class="bv-mono">${sh.left}</b><small>left hungry</small></div>
+      <div><b class="bv-mono">${avg === null ? "–" : avg.toFixed(1)}</b><small>avg stars</small></div>
+    </div>
+    <p class="pause-note">About ${sh.expected} people today${sh.takings !== null ? ` · <b class="bv-mono">$${Math.round(sh.takings)}</b> taken so far` : ""}.</p>
+    ${
+      sh.stars.length
+        ? `<div class="pause-tally" aria-label="Ratings so far">${tally.map((t) => `<span class="${t.count ? "" : "zero"}">${t.n ? starRow(t.n) : `<span class="pause-zero">${icon("frown")}</span>`}<b class="bv-mono">${t.count}</b></span>`).join("")}</div>`
+        : `<p class="pause-note mute">No one has been served yet.</p>`
+    }
+    ${sh.reviews.length ? `<ul class="pause-revs">${sh.reviews.slice(0, 2).map((r) => `<li>${starRow(r.stars)}<q>${esc(r.text)}</q></li>`).join("")}</ul>` : ""}
+  </section>`;
+}
+
+/** Today's menu in brief: only what's served today, each burger as a little stack and its build. */
+function todayMenuHtml(town: Stop, mult: number, sh: ShiftSummary | undefined): string {
+  const at = (f: number) => (sh ? clockLabel(sh.start + (sh.end - sh.start) * f) : `${Math.round(f * 100)}% in`);
+  const later = (r: Recipe) => !!r.from && (!sh || sh.progress < r.from);
+  const items = town.menu
+    .map((r) => {
+      const notes: string[] = [];
+      if (r.toasted) notes.push("toasted");
+      if (r.melt) notes.push("melted");
+      if (r.smash) notes.push("smashed");
+      // Bottom to top, between the buns; counted toppings once, with their count.
+      const inner = r.layers.slice(1, -1);
+      const uniq = inner.filter((k, i) => !COUNTED.has(k) || inner.indexOf(k) === i).map((k) => (COUNTED.has(k) ? `${KIND_LABEL[k]} ×${recipeCount(r, k)}` : KIND_LABEL[k]));
+      return `<li class="pause-dish ${later(r) ? "later" : ""}">
+        ${stackArt(r)}
+        <div class="pd-main"><b>${esc(r.name)}</b><small>${uniq.map(esc).join(" · ")}</small>${notes.length || later(r) ? `<span class="tags">${later(r) ? `<span class="bv-chip pill">${icon("clock")}from ${at(r.from!)}</span>` : ""}${notes.map((n) => `<span class="bv-chip pill">${n}</span>`).join("")}</span>` : ""}</div>
+        <span class="bv-mono pr">${price(Math.round(r.price * mult))}</span>
+      </li>`;
+    })
+    .join("");
+  return `<section class="pause-menu" aria-label="Today's menu">
+    <h3 class="menu-h">${icon("menu-book")}Today's menu <span>${town.menu.length}</span></h3>
+    <ul class="pause-dishes">${items}</ul>
+    <p class="pause-note mute">Fries S, M, L · Drinks S, M, L, with ice and a lid unless asked.</p>
+    <button class="bv-btn sm ghost" data-m="menuref">${icon("menu-book")}Full menu and prices</button>
+  </section>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -216,6 +286,7 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
         ${d.canInstall() ? row("install", "pin", "Install the app", "Add Bun Voyage to your home screen and play offline", "") : ""}
         ${row("newtrip", "flag", "Start a new trip", "Back to the first town. Upgrades and savings reset.", "", 'data-tone="danger"')}
         ${confirmBox("newtrip", inShift ? "End this shift and wipe the trip? Towns, upgrades and savings reset; best scores are kept." : "Wipe the trip and start again from the first town? Towns, upgrades and savings reset; best scores are kept.", "Start over")}
+        ${inShift || !d.simulate ? "" : devHtml()}
         <p class="menu-build bv-mono">${esc(buildLabel())}</p>
       </div>`,
   });
@@ -272,6 +343,24 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
         pickSeg(card, btn, COMPLEXITY[v].blurb);
         break;
       }
+      case "dev": {
+        const on = !devOn();
+        setDevOn(on);
+        setToggle(btn, on);
+        card.querySelector<HTMLElement>(".menu-dev")!.hidden = !on;
+        if (!on && simLevel() !== null) {
+          d.simulate?.(null);
+          const off = card.querySelector<HTMLElement>('[data-m="sim"][data-v="off"]');
+          if (off) pickSeg(card, off, SIM_NOTE.off);
+        }
+        break;
+      }
+      case "sim": {
+        const v = btn.dataset.v!;
+        d.simulate?.(v === "off" ? null : Number(v));
+        pickSeg(card, btn, SIM_NOTE[v]);
+        break;
+      }
       case "gfx": {
         const v = btn.dataset.v as GfxLevel;
         d.setGfx(v);
@@ -290,6 +379,25 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
         break;
     }
   });
+}
+
+const SIM_NOTE: Record<string, string> = {
+  off: "Playing your real trip.",
+  "0": "A fresh trip: the first town, nothing earned yet. Your real trip is kept aside.",
+  "50": "Halfway down the road: half the towns worked, two upgrades, a fair name. Your real trip is kept aside.",
+  "100": "The whole road worked: every town open, every upgrade, well known. Your real trip is kept aside.",
+};
+
+/** The bottom of Settings: dev mode, and with it the progress simulator. */
+function devHtml(): string {
+  const on = devOn();
+  const lvl = simLevel();
+  const cur = lvl === null ? "off" : String(lvl);
+  return `<h3 class="menu-h">${icon("spatula")}Developer</h3>
+    ${toggle("dev", "settings", "Dev mode", on, "Testing tools")}
+    <div class="menu-dev" ${on ? "" : "hidden"}>
+      ${field("sim", "chart", "Simulate progress", SIM_NOTE[cur], [{ v: "off", label: "Off" }, ...SIM_LEVELS.map((l) => ({ v: String(l), label: `${l}%` }))], cur)}
+    </div>`;
 }
 
 function setToggle(btn: HTMLElement, on: boolean): void {

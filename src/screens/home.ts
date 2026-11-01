@@ -1,9 +1,10 @@
 import { CROWD } from "../game/business";
-import { expectedCustomers, rangeMiles, rangeUnits, runningCost } from "../game/day";
+import { expectedCustomers, rangeMiles, rangeUnits } from "../game/day";
 import { UPGRADES, type Save, type UpgradeId } from "../game/progress";
 import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent, type Stop } from "../game/stops";
 import { applyTrip, canAfford, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Legs, type Trip } from "../game/travel";
 import { icon } from "../ui/icons";
+import { simLevel } from "../game/devmode";
 import { dropBack, pushBack } from "./nav";
 import { renderMap, roadPath, routePoints, SEA, townPoint, VIEW } from "./map";
 import { PanZoom } from "./panzoom";
@@ -21,10 +22,9 @@ export interface HomeDeps {
   save: Save;
   /** The Prep screen, then the shift, in the current town. */
   startShift(): void;
-  /** Evening: the Closing screen again, the Reviews screen, the supply yard, today's menu, and sleep. */
+  /** Evening: the Closing screen again; any time: Popularity & reviews, today's menu; and sleep. */
   openResults(): void;
   openReviews(): void;
-  openSupplies(): void;
   openMenuRef(): void;
   sleep(): void;
   /** The save changed here (a drive, an upgrade picked): persist it and sync the truck's town. */
@@ -35,7 +35,19 @@ export interface HomeDeps {
   openHowTo(): void;
   /** A town to open the sheet on straight away, e.g. one the last shift unlocked. */
   focus?: string | null;
+  /** Just slept: play the night passing over the map before handing it over. */
+  night?: NightShow | null;
   sfx?: { whoosh(): void; coin(): void; tap(): void };
+}
+
+/** What the night transition shows: the day turning, and how today moved popularity and rating. */
+export interface NightShow {
+  fromDay: number;
+  toDay: number;
+  town: string;
+  /** Before and after today; null when there was no shift today. */
+  pop: [number, number] | null;
+  rating: [number, number] | null;
 }
 
 interface Mounted {
@@ -49,6 +61,8 @@ interface Mounted {
   selected: string | null;
   at: number;
   driving: boolean;
+  /** The night is still drawn while the night transition plays. */
+  night: boolean;
   observer: MutationObserver;
   onResize: () => void;
 }
@@ -68,7 +82,7 @@ export function mountHome(root: HTMLElement, deps: HomeDeps): void {
   root.classList.add("home-host");
   root.innerHTML = shellHtml(deps.save);
   const el = root.querySelector<HTMLElement>(".home")!;
-  el.classList.toggle("evening", deps.save.time === "evening");
+  el.classList.toggle("evening", deps.save.time === "evening" || !!deps.night);
   const map = el.querySelector<HTMLElement>(".home-map")!;
   const world = el.querySelector<HTMLElement>(".home-world")!;
   const pz = new PanZoom({
@@ -84,7 +98,7 @@ export function mountHome(root: HTMLElement, deps: HomeDeps): void {
     // Only the map itself pans; the dock, sheet, stats and buttons float over it.
     ignore: (target) => target !== map && !world.contains(target),
   });
-  const m: Mounted = { root, el, map, world, pz, base: 1, deps, selected: null, at: performance.now(), driving: false, observer: null!, onResize: () => fitMap(true) };
+  const m: Mounted = { root, el, map, world, pz, base: 1, deps, selected: null, at: performance.now(), driving: false, night: !!deps.night, observer: null!, onResize: () => fitMap(true) };
   cur = m;
   // If something else takes over the root (the business plan card), let go of it.
   m.observer = new MutationObserver(() => {
@@ -98,7 +112,8 @@ export function mountHome(root: HTMLElement, deps: HomeDeps): void {
   fitMap(false);
   renderDock(m);
   renderOffer(m);
-  const focus = deps.focus && deps.focus !== deps.save.town && STOPS.some((t) => t.id === deps.focus) ? deps.focus : null;
+  if (deps.night) playNight(m, deps.night);
+  const focus = !deps.night && deps.focus && deps.focus !== deps.save.town && STOPS.some((t) => t.id === deps.focus) ? deps.focus : null;
   if (focus) select(m, focus, false);
   // Layout may not be final on the first frame (fonts, safe areas), so settle once more.
   requestAnimationFrame(() => {
@@ -135,7 +150,7 @@ function shellHtml(save: Save): string {
   return `<div class="home bv bv-night">
     <header class="home-top">
       <div class="home-brand">
-        <span class="home-logo" aria-label="Bun Voyage"><img class="mark" src="./logo.svg" alt="" width="30" height="30" /><span class="w1">Bun</span><span class="w2">Voyage</span></span>${save.trips > 0 ? `<span class="bv-eyebrow">Trip ${save.trips + 1}</span>` : ""}
+        <span class="home-logo" aria-label="Bun Voyage"><img class="mark" src="./logo.svg" alt="" width="30" height="30" /><span class="w1">Bun</span><span class="w2">Voyage</span></span>${save.trips > 0 ? `<span class="bv-eyebrow">Trip ${save.trips + 1}</span>` : ""}${simLevel() !== null ? `<span class="home-dev bv-mono" title="Simulated progress (dev mode, in Settings)">Sim ${simLevel()}%</span>` : ""}
       </div>
       <div class="home-actions">
         <button class="bv-btn icon" data-home="howto" aria-label="How to play" title="How to play">${icon("help")}</button>
@@ -158,9 +173,9 @@ function shellHtml(save: Save): string {
 }
 
 /**
- * The dashboard card: the truck's four numbers, with the Day tile in coral because it is the one
- * that changes every morning, and the three doors (Menu or Results, Reviews, Supplies) in a row
- * under them. One card, so the map below it is the only other thing on the screen.
+ * The dashboard card, one row: the Day tile in coral because it is the one that changes every
+ * morning; popularity and rating side by side as one button that opens "Popularity & reviews";
+ * and the menu (or, in the evening, today's results).
  */
 function statsHtml(save: Save): string {
   const avg = save.ratingCount ? save.ratingSum / save.ratingCount : null;
@@ -168,14 +183,16 @@ function statsHtml(save: Save): string {
   const last = save.last && save.last.town === save.town ? save.last : null;
   return `<div class="home-stats" role="group" aria-label="Your truck">
     <div class="home-stat time"><span class="bv-eyebrow">${evening ? "Evening" : "Morning"}</span><b>${icon(evening ? "moon" : "sun")}Day ${save.day}</b></div>
-    <div class="home-stat ${save.bank < 15 ? "low" : ""}"><span class="bv-eyebrow">Budget</span><b>${icon("coin")}$${save.bank}</b></div>
-    <div class="home-stat"><span class="bv-eyebrow">Popularity</span><b>${icon("people")}${save.popularity}</b></div>
-    <div class="home-stat"><span class="bv-eyebrow">Rating</span><b>${icon("star")}${avg === null ? "–" : avg.toFixed(1)}${save.ratingCount ? `<small>· ${save.ratingCount}</small>` : ""}</b></div>
-    <div class="home-stats-acts">
-      ${evening ? `<button data-home="results" ${last ? "" : "disabled"}>${icon("receipt")}Results</button>` : `<button data-home="menuref">${icon("menu")}Menu</button>`}
-      <button data-home="reviews">${icon("star")}Reviews</button>
-      <button data-home="supplies">${icon("box")}Supplies</button>
-    </div>
+    <button class="home-fame" data-home="reviews" aria-label="Popularity ${save.popularity}, rating ${avg === null ? "none yet" : avg.toFixed(1)}: see popularity and reviews">
+      <span class="home-stat"><span class="bv-eyebrow">Popularity</span><b>${icon("people")}${save.popularity}</b></span>
+      <span class="home-stat"><span class="bv-eyebrow">Rating</span><b>${icon("star")}${avg === null ? "–" : avg.toFixed(1)}${save.ratingCount ? `<small>· ${save.ratingCount}</small>` : ""}</b></span>
+      <span class="chev">${icon("forward")}</span>
+    </button>
+    ${
+      evening
+        ? `<button class="home-door" data-home="results" ${last ? "" : "disabled"}>${icon("receipt")}<span>Results</span></button>`
+        : `<button class="home-door" data-home="menuref">${icon("menu-book")}<span>Menu</span></button>`
+    }
   </div>`;
 }
 
@@ -200,7 +217,8 @@ function reachable(s: Save): { id: string; path: string[] }[] {
 
 function renderMapInto(m: Mounted): void {
   const s = m.deps.save;
-  m.world.innerHTML = renderMap({ town: s.town, unlocked: s.unlocked, shiftsIn: s.shiftsIn, day: s.day, selected: m.selected, night: s.time === "evening", reach: reachable(s) });
+  const night = s.time === "evening" || m.night;
+  m.world.innerHTML = renderMap({ town: s.town, unlocked: s.unlocked, shiftsIn: s.shiftsIn, day: s.day, selected: m.selected, night, reach: m.night ? [] : reachable(s) });
   for (const t of m.world.querySelectorAll<SVGGElement>(".home-town")) t.classList.toggle("sel", t.dataset.town === m.selected);
 }
 
@@ -252,7 +270,7 @@ function fitMap(keepView: boolean, lookAt?: string): void {
 
 function onMapTap(target: Element): void {
   const m = cur;
-  if (!m || m.driving) return;
+  if (!m || m.driving || m.night) return;
   const id = target.closest<HTMLElement>("[data-town]")?.dataset.town;
   if (id) {
     m.deps.sfx?.tap();
@@ -318,8 +336,7 @@ function renderDock(m: Mounted): void {
   const dock = m.el.querySelector<HTMLElement>(".home-dock")!;
   const evening = s.time === "evening";
   const last = s.last && s.last.town === s.town ? s.last : null;
-  const today = last ? `${last.profit >= 0 ? "+" : "−"}$${Math.abs(Math.round(last.profit))} today` : "A day on the road";
-  const due = runningCost(s.gear);
+  const today = last ? `${last.stars.length ? `${(last.stars.reduce((a, b) => a + b, 0) / last.stars.length).toFixed(1)}★ · ` : ""}${last.served} served today` : "A day on the road";
   dock.innerHTML = `
     <div class="home-dock-row">
       <button class="home-dock-info" data-home="here" aria-label="About ${esc(here.name)}">
@@ -329,7 +346,7 @@ function renderDock(m: Mounted): void {
       </button>
       ${
         evening
-          ? `<button class="bv-btn primary lg" data-home="sleep">${icon("moon")}Sleep<span class="cost">${due ? `−$${due}` : "free"}</span></button>`
+          ? `<button class="bv-btn primary lg" data-home="sleep">${icon("moon")}Sleep</button>`
           : `<button class="bv-btn primary lg" data-home="open" ${s.offer.length ? "disabled" : ""}>${icon("bell")}Prep &amp; Open</button>`
       }
     </div>`;
@@ -381,7 +398,7 @@ function renderSheet(m: Mounted, id: string): void {
   let action: string;
   if (here) {
     action = evening
-      ? `<button class="bv-btn primary lg block" data-home="sleep">${icon("moon")}Sleep here<span class="cost">${runningCost(s.gear) ? `−$${runningCost(s.gear)}` : "free"}</span></button>
+      ? `<button class="bv-btn primary lg block" data-home="sleep">${icon("moon")}Sleep here</button>
       <span class="bv-caption">Tomorrow: ${eventOn(id, s.day + 1) ? `${esc(eventOn(id, s.day + 1)!.name)} here.` : `shift ${(s.shiftsIn[id] ?? 0) + 1} here, or set off.`}</span>`
       : `<button class="bv-btn primary lg block" data-home="open" ${busy ? "disabled" : ""}>${icon("bell")}Prep &amp; Open${ev ? ` · ${esc(ev.name)}` : ""}</button>
       <span class="bv-caption">${busy ? "Pick your upgrade first." : ev ? "Event day: a longer, busier shift with its own crowd." : `Shift ${(s.shiftsIn[id] ?? 0) + 1} here. A shift fills the day.`}</span>`;
@@ -392,7 +409,7 @@ function renderSheet(m: Mounted, id: string): void {
     const roads = `${trip.hops} road${trip.hops === 1 ? "" : "s"}, ${miles(trip.distance)} mi`;
     const range = rangeMiles(s.gear);
     const left = Math.max(0, Math.round(range - s.driven * 3));
-    action = `<button class="bv-btn primary lg block" data-home="drive" data-id="${id}" ${can ? "" : "disabled"}>${icon("truck")}Drive here · ${how}<span class="cost">$${trip.cost}</span></button>
+    action = `<button class="bv-btn primary lg block" data-home="drive" data-id="${id}" ${can ? "" : "disabled"}>${icon("truck")}Drive here · ${how}</button>
       <span class="bv-caption ${afford ? "" : "warn"}">${
         !afford
           ? `Not enough gas money: $${trip.cost} needed, $${s.bank} in the tin.`
@@ -449,7 +466,7 @@ function onClick(e: Event): void {
   const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-home]");
   if (!btn || btn.hasAttribute("disabled")) return;
   // A double tap on the screen before this one shouldn't press a button here.
-  if (performance.now() - m.at < 450) return;
+  if (performance.now() - m.at < 450 || m.night) return;
   const act = btn.dataset.home!;
   const s = m.deps.save;
   switch (act) {
@@ -471,9 +488,6 @@ function onClick(e: Event): void {
       break;
     case "reviews":
       m.deps.openReviews();
-      break;
-    case "supplies":
-      m.deps.openSupplies();
       break;
     case "menuref":
       m.deps.openMenuRef();
@@ -597,7 +611,7 @@ function renderOffer(m: Mounted): void {
   const box = m.el.querySelector<HTMLElement>(".home-offer")!;
   const offers = s.offer.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean);
   // In the evening the pick lives on the Closing screen (Results); the card here catches a pick left until morning.
-  if (!offers.length || s.time === "evening") {
+  if (!offers.length || s.time === "evening" || m.night) {
     box.hidden = true;
     box.innerHTML = "";
     return;
@@ -609,4 +623,95 @@ function renderOffer(m: Mounted): void {
     <div class="home-offers">${offers.map((u) => `<button class="home-offer-btn" data-home="pick" data-id="${u.id}"><b>${icon(UPGRADE_ICON[u.id] ?? "sparkle")}${esc(u.name)}</b><span>${esc(u.text)}</span></button>`).join("")}</div>
   </div>`;
   box.hidden = false;
+}
+
+// ---------------------------------------------------------------------------
+// The night passing
+
+const NIGHT_MS = { roll: 900, dawn: 2400, out: 3300, end: 3800 };
+
+/**
+ * Sleep, shown on the map itself: the evening map dims to night, the day counter rolls over,
+ * today's change in popularity and rating counts up, then dawn washes the map back to morning.
+ * No tap needed; a tap skips to the morning.
+ */
+function playNight(m: Mounted, n: NightShow): void {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const box = document.createElement("div");
+  box.className = "home-night";
+  box.setAttribute("role", "status");
+  box.setAttribute("aria-live", "polite");
+  const delta = (pair: [number, number], digits: number) => {
+    const d = pair[1] - pair[0];
+    const r = Number(d.toFixed(digits));
+    return r === 0 ? `<em>no change</em>` : `<em class="${r > 0 ? "up" : "dn"}">${r > 0 ? "+" : "−"}${Math.abs(r).toFixed(digits)}</em>`;
+  };
+  const chip = (ic: string, label: string, pair: [number, number], digits: number) =>
+    `<span class="home-night-chip">${icon(ic)}<span>${label}</span><b class="bv-mono" data-from="${pair[0]}" data-to="${pair[1]}" data-digits="${digits}">${pair[0].toFixed(digits)}</b>${delta(pair, digits)}</span>`;
+  box.innerHTML = `<div class="sky"></div>
+    <div class="home-night-c">
+      <div class="orb" aria-hidden="true"><i class="moon"></i><i class="sun"></i></div>
+      <span class="bv-eyebrow">Night in ${esc(n.town)}</span>
+      <div class="home-dayroll" aria-label="Day ${n.toDay}"><span>Day</span><span class="num"><span class="track"><b>${n.fromDay}</b><b>${n.toDay}</b></span></span></div>
+      <div class="home-night-deltas">${
+        n.pop || n.rating
+          ? `${n.pop ? chip("people", "Popularity", n.pop, 0) : ""}${n.rating ? chip("star", "Rating", n.rating, 1) : ""}`
+          : `<span class="home-night-chip quiet">${icon("road")}<span>A day on the road</span></span>`
+      }</div>
+    </div>`;
+  m.el.appendChild(box);
+  const timers: number[] = [];
+  let done = false;
+  const later = (ms: number, f: () => void) => timers.push(window.setTimeout(f, reduce ? Math.min(ms, 300) + ms * 0.15 : ms));
+  const countUp = () => {
+    for (const b of box.querySelectorAll<HTMLElement>("b[data-from]")) {
+      const from = Number(b.dataset.from);
+      const to = Number(b.dataset.to);
+      const digits = Number(b.dataset.digits);
+      const t0 = performance.now();
+      const stepFn = (now: number) => {
+        const k = Math.min(1, (now - t0) / 800);
+        const e = 1 - (1 - k) ** 3;
+        b.textContent = (from + (to - from) * e).toFixed(digits);
+        if (k < 1 && !done) requestAnimationFrame(stepFn);
+        else b.textContent = to.toFixed(digits);
+      };
+      requestAnimationFrame(stepFn);
+    }
+  };
+  const dawn = () => {
+    if (!m.night) return;
+    m.night = false;
+    box.classList.add("dawn");
+    m.el.classList.toggle("evening", m.deps.save.time === "evening");
+    renderMapInto(m);
+    fitMap(true);
+    renderOffer(m);
+  };
+  const finish = () => {
+    if (done) return;
+    done = true;
+    for (const t of timers) clearTimeout(t);
+    dawn();
+    box.remove();
+    m.at = performance.now();
+  };
+  requestAnimationFrame(() => box.classList.add("in"));
+  later(NIGHT_MS.roll, () => {
+    box.classList.add("roll");
+    countUp();
+  });
+  later(NIGHT_MS.dawn, dawn);
+  later(NIGHT_MS.out, () => box.classList.add("out"));
+  later(NIGHT_MS.end, finish);
+  box.addEventListener("click", finish);
+  // Leaving the map mid-transition (back, a screen over it) just ends it.
+  const stop = new MutationObserver(() => {
+    if (!m.el.isConnected) {
+      stop.disconnect();
+      done = true;
+      for (const t of timers) clearTimeout(t);
+    }
+  });
+  stop.observe(m.root, { childList: true });
 }

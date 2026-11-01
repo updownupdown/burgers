@@ -42,14 +42,16 @@ import { SauceZoom } from "./scenes/saucezoom";
 import { makeEgg, type EggStage } from "./render/egg";
 import "./ui/components.css";
 import "./style.css";
-import { mountHome, refreshHome } from "./screens/home";
-import { closeBoxes, closingHtml, nightHtml, prepHtml, reviewsHtml, suppliesHtml, toggleBox, type ReviewFilter } from "./screens/day";
+import { mountHome, refreshHome, type NightShow } from "./screens/home";
+import { closeBoxes, closingHtml, prepHtml, reviewsHtml, suppliesHtml, toggleBox, type ReviewFilter } from "./screens/day";
 import { buildUi, donenessPill, patienceMood, ticketHtml } from "./ui";
 import { DRINK_TINT } from "./render/machines";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 import { closeAll, initMenu, openHowTo, openMenu, openMenuRef, openSettings } from "./screens/menu";
 import { dropBack, pushBack } from "./screens/nav";
 import { complexityOf, setComplexity } from "./game/complexity";
+import { simulate, type SimLevel } from "./game/devmode";
+import { clockAt, clockLabel, DEFAULT_SHIFT, shiftProgress, type ShiftWindow } from "./game/shift";
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -178,8 +180,10 @@ const game = {
   /** What Prep projected for today's net, shown again on the Closing screen. */
   projected: null as [number, number] | null,
   /** Which screen is up over the map, so its buttons redraw the right one. */
-  overlay: null as null | "closing" | "night" | "reviews" | "supplies",
+  overlay: null as null | "closing" | "reviews" | "supplies",
   reviewFilter: "all" as ReviewFilter,
+  /** Today's window on the clock (the HUD shows game time as a time of day inside it). */
+  shift: { ...DEFAULT_SHIFT } as ShiftWindow,
 };
 
 /** A critic's verdict counts like this many ordinary reviews. */
@@ -364,23 +368,23 @@ function ringBell(): void {
   void ui.bell.offsetWidth;
   ui.bell.classList.add("ring");
   if (!game.line.length) {
-    sfx.ding();
+    sfx.bell();
     hintOnce("bell-empty", "Nobody in line right now. The bell calls up the next person when there is one.", 3);
     return;
   }
   if (atWindow >= WINDOW[difficulty]) {
-    sfx.ding();
+    sfx.bell();
     hintOnce("bell-full", `No room at the window: ${WINDOW[difficulty]} at a time on ${DIFFICULTY[difficulty].label}. Serve someone first.`, 3.5);
     return;
   }
   if (game.bellTaps === 0 || game.time - game.bellAt > BELL_WINDOW) {
     game.bellTaps = 1;
     game.bellAt = game.time;
-    sfx.ding();
+    sfx.bell();
     return;
   }
   game.bellTaps = 0;
-  sfx.ding();
+  sfx.bell(true);
   if (callNext()) hintOnce("bell-called", "Next! More people at the window means more money, if you can keep up.", 3.5);
 }
 ui.bell.addEventListener("click", ringBell);
@@ -1985,10 +1989,6 @@ ui.root.addEventListener("click", (e) => {
       showSupplies();
       break;
     }
-    case "wake":
-      if (game.overlay !== "night") break;
-      showTitle();
-      break;
     case "new-trip":
       if (btn!.dataset.armed !== "1") {
         btn!.dataset.armed = "1";
@@ -2015,7 +2015,7 @@ initMenu({
   inShift,
   town: () => (inShift() ? shopStop() : withEvent(townById(game.mapSel), eventOn(game.mapSel, save.day))),
   priceMult: () => (inShift() && game.plan ? PRICE[game.plan.price].mult : 1),
-  subtitle: () => `Day ${save.day} · ${townById(save.town).name}`,
+  subtitle: () => `Day ${save.day}`,
   sound: () => !sfx.muted,
   setSound: (on) => {
     sfx.unlock();
@@ -2052,6 +2052,26 @@ initMenu({
     if (game.phase === "title") showTitle();
   },
   progress: () => ({ unlocked: save.unlocked, shiftsIn: save.shiftsIn }),
+  shift: () => {
+    const len = stop().shiftLength;
+    return {
+      start: game.shift.start,
+      end: game.shift.end,
+      now: clockAt(game.time, game.shift, len),
+      progress: shiftProgress(game.time, len),
+      closing: game.time >= len,
+      pacing: DIFFICULTY[difficulty].label,
+      pacingBlurb: DIFFICULTY[difficulty].blurb,
+      expected: game.customers,
+      served: game.served,
+      atWindow: game.slots.filter((s) => s.order && !s.leaving).length,
+      inLine: game.line.length,
+      left: game.lost + game.leftLine,
+      stars: game.stars,
+      takings: game.money + game.tips - spills(),
+      reviews: [...game.reviews].reverse(),
+    };
+  },
   canInstall: () => !!installPrompt,
   install: () => void installPrompt?.prompt(),
   checkUpdate: () => checkNow(),
@@ -2063,6 +2083,12 @@ initMenu({
     else startShift();
   },
   quit: () => showTitle(),
+  simulate: (level) => {
+    simulate(save, level === null ? null : (level as SimLevel));
+    game.mapSel = save.town;
+    writeSave(save);
+    if (game.phase === "title") showTitle();
+  },
   newTrip: () => {
     Object.assign(save, freshSave(), { tutorialDone: save.tutorialDone, trips: save.trips, best: save.best });
     game.mapSel = save.town;
@@ -2175,7 +2201,6 @@ function applyStop(): void {
   const st = stop();
   counter.setPantry(st.pantry);
   customersView.setBackdrop(st.backdrop);
-  ui.stop.textContent = game.event ? `${st.name} · ${game.event.name}` : st.name;
 }
 
 const offerList = () => save.offer.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean);
@@ -2242,23 +2267,33 @@ function showSupplies(): void {
   showOverlay("supplies", suppliesHtml(save));
 }
 
-/** Night falls: charge the running cost, turn the day, and show the card until it's tapped. */
+/**
+ * Night falls: the day turns (see game/day.ts) and the map plays the night passing, with the
+ * day counter rolling over and today's change in popularity and rating. No tap needed.
+ */
 function sleepNow(): void {
   if (save.time !== "evening") return;
-  const night = sleep(save);
+  const last = save.last && save.last.town === save.town ? save.last : null;
+  const fromDay = save.day;
+  let rating: [number, number] | null = null;
+  if (last && last.stars.length && save.ratingCount) {
+    const after = save.ratingSum / save.ratingCount;
+    const n = save.ratingCount - last.stars.length;
+    const before = n > 0 ? (save.ratingSum - last.stars.reduce((a, b) => a + b, 0)) / n : after;
+    rating = [before, after];
+  }
+  sleep(save);
   save.last = null;
   writeSave(save);
-  game.phase = "summary";
-  ui.title.hidden = false;
-  showOverlay("night", nightHtml(night, save));
   sfx.chime();
+  showTitle({ fromDay, toDay: save.day, town: townById(save.town).name, pop: last ? [last.pop[0], save.popularity] : null, rating });
 }
 
 /**
  * The home screen: the road map with the truck's numbers, where the player drives, opens the
  * window or picks a pending upgrade. Lives in src/screens/home.ts; this only hands it what it needs.
  */
-function showTitle(): void {
+function showTitle(night: NightShow | null = null): void {
   game.town = save.town;
   game.event = eventOn(save.town, save.day);
   applyStop();
@@ -2273,6 +2308,7 @@ function showTitle(): void {
   mountHome(ui.title, {
     save,
     focus: game.mapSel,
+    night,
     startShift: () => {
       if (save.tutorialDone) {
         showPrep();
@@ -2281,7 +2317,6 @@ function showTitle(): void {
     },
     openResults: () => showClosing(),
     openReviews: () => showReviews(game.reviewFilter),
-    openSupplies: () => showSupplies(),
     openMenuRef: () => openMenuRef(withEvent(townById(save.town), eventOn(save.town, save.day))),
     sleep: () => sleepNow(),
     commit: () => {
@@ -2527,13 +2562,17 @@ function spills(): number {
 
 let lastTimerText = "";
 function updateUi(dt = 0): void {
-  const left = Math.max(0, stop().shiftLength - game.time);
-  const tText = left > 0 ? `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, "0")}` : "Closing";
+  const len = stop().shiftLength;
+  const left = Math.max(0, len - game.time);
+  const tText = left > 0 ? clockLabel(clockAt(game.time, game.shift, len)) : "Closing";
   if (tText !== lastTimerText) {
     ui.timer.textContent = tText;
     ui.timer.classList.toggle("closing", left <= 0);
+    ui.timer.parentElement!.classList.toggle("closing", left <= 0);
     lastTimerText = tText;
   }
+  const pct = `${(shiftProgress(game.time, len) * 100).toFixed(1)}%`;
+  if (ui.clockFill.style.width !== pct) ui.clockFill.style.width = pct;
   const net = Math.round(game.money + game.tips - spills() - game.costs);
   const money = net < 0 ? `−$${-net}` : `$${net}`;
   if (ui.money.textContent !== money) ui.money.textContent = money;
@@ -2542,7 +2581,7 @@ function updateUi(dt = 0): void {
   ui.bell.hidden = game.phase === "title" || game.phase === "summary";
   const inLine = String(game.line.length);
   if (ui.bellCount.textContent !== inLine) ui.bellCount.textContent = inLine;
-  const bellLabel = game.bellTaps ? "again" : "line";
+  const bellLabel = game.bellTaps ? "Again" : "Next";
   if (ui.bellLabel.textContent !== bellLabel) ui.bellLabel.textContent = bellLabel;
   ui.bell.classList.toggle("empty", !game.line.length);
   ui.bell.classList.toggle("armed", game.bellTaps > 0);

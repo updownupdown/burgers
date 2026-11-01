@@ -1,5 +1,5 @@
 import { CROWD, menuOf, PRICE, QUALITY, recipeCost, type Plan } from "../game/business";
-import { GEAR, gearBlocker, projectShift, rangeMiles, RUNNING_COST, runningCost, solarSaving, type Night, type Projection } from "../game/day";
+import { GEAR, gearBlocker, projectShift, rangeMiles, RUNNING_COST, runningCost, solarSaving, type Projection } from "../game/day";
 import { ADS, type AdLevel } from "../game/line";
 import { criticChance, willingnessToPay, type PressPiece } from "../game/press";
 import { UPGRADES, type Closing, type Save, type Upgrade } from "../game/progress";
@@ -330,29 +330,6 @@ export function pressHtml(p: PressPiece): string {
 }
 
 // ---------------------------------------------------------------------------
-// Night
-
-export function nightHtml(n: Night, save: Save): string {
-  const town = townById(save.town);
-  const ev = eventOn(town.id, save.day);
-  return `<div class="day-screen bv night" data-act="wake" role="button" tabindex="0" aria-label="Tap to wake up">
-    <div class="day-night">
-      <div class="moon"></div>
-      <span class="bv-eyebrow">Night · ${esc(town.name)}</span>
-      <h2 class="bv-title">Day ${n.day} ends</h2>
-      <dl>
-        <dt>Generator and propane</dt><dd class="neg">−$${n.charge}</dd>
-        ${n.saving ? `<dt>Solar</dt><dd class="ok">+$${n.saving}</dd>` : ""}
-        ${n.waived ? `<dt>Couldn't cover it</dt><dd class="ok">$${n.waived} waived</dd>` : ""}
-        <dt>In the tin</dt><dd>$${save.bank}</dd>
-      </dl>
-      <div class="tot"><span>Day ${save.day} begins</span><span>${ev ? esc(ev.name) : `Morning in ${esc(town.name)}`}</span></div>
-      <p>Tap to wake up.</p>
-    </div>
-  </div>`;
-}
-
-// ---------------------------------------------------------------------------
 // Reviews
 
 export type ReviewFilter = "all" | "critics" | "good" | "bad" | "here";
@@ -370,18 +347,18 @@ export function reviewsHtml(save: Save, filter: ReviewFilter): string {
   return `<div class="day-screen bv">
     <header class="day-top">
       <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("back")}</button>
-      <div class="where"><span class="bv-eyebrow">${reviews.length} review${reviews.length === 1 ? "" : "s"} · ${press.length} clipping${press.length === 1 ? "" : "s"}</span><b>Reviews</b></div>
+      <div class="where"><span class="bv-eyebrow">${reviews.length} review${reviews.length === 1 ? "" : "s"} · ${press.length} clipping${press.length === 1 ? "" : "s"}</span><b>Popularity &amp; reviews</b></div>
     </header>
     <div class="day-scroll">
       <div class="day-kpis two">
-        <div class="day-kpi"><span class="bv-eyebrow">Reputation</span><b>${save.biz ? `${save.rep.toFixed(1)} <span class="st">★</span>` : save.ratingCount ? (save.ratingSum / save.ratingCount).toFixed(1) : "–"}</b><small>${save.biz ? "Recent reviews. Brings customers back." : "Average stars over every order."}</small></div>
-        <div class="day-kpi"><span class="bv-eyebrow">Popularity</span><b>${save.popularity}</b><small>Who has heard of you. Brings people, and lets you charge more.</small></div>
+        <div class="day-kpi"><span class="bv-eyebrow">${icon("people")}Popularity</span><b>${save.popularity}<small class="of">/100</small></b><small>How many people have heard of the truck. More people come to the window.</small></div>
+        <div class="day-kpi"><span class="bv-eyebrow">${icon("star")}Rating</span><b>${save.ratingCount ? (save.ratingSum / save.ratingCount).toFixed(1) : "–"} <span class="st">★</span></b><small>${save.ratingCount ? `Average over ${save.ratingCount} order${save.ratingCount === 1 ? "" : "s"}.` : "No orders yet."} Good ratings bring people back and spread the word.</small></div>
       </div>
       <div class="day-filters">${f("all", "All")}${f("critics", "Critics")}${f("good", "3★")}${f("bad", "1★")}${f("here", esc(here))}</div>
       <div class="day-rlist">
         ${showPress ? press.map((p) => `<div class="day-rcard critic">${pressHtml(p)}</div>`).join("") : ""}
         ${list.map((r) => `<div class="day-rcard"><div class="h">${stars(r.stars)}<span class="who">${esc(r.stop)}</span></div><q>${esc(r.text)}</q></div>`).join("")}
-        ${!list.length && !(showPress && press.length) ? `<span class="day-hint">${reviews.length || press.length ? "Nothing here yet." : save.biz ? "No reviews yet. Customers write one after they eat." : "Written reviews come with Balanced or Complex complexity (in Settings). Critics write at any level."}</span>` : ""}
+        ${!list.length && !(showPress && press.length) ? `<span class="day-hint">${reviews.length || press.length ? "Nothing here yet." : "No reviews yet. Customers write one after they eat, and critics turn up at events and in foodie towns."}</span>` : ""}
       </div>
     </div>
   </div>`;

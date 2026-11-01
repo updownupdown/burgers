@@ -518,7 +518,6 @@
 .pause-dish .tags .bv-chip { font-size: 11px; padding: 2px 7px; gap: 3px; }
 .pause-dish .tags .bv-icon { font-size: 11px; }
 .pause-dish .pr { font-size: 14px; color: var(--bv-ink-2); }
-.pause-dish.later { opacity: 0.6; }
 
 /* The footer holds the three buttons or a confirm, in one grid cell, so swapping them never moves anything. */
 .pause-foot { flex: none; display: grid; padding: 12px 18px calc(16px + var(--safe-b, 0px) * 0); border-top: 1px solid var(--bv-rule); background: var(--bv-paper); }

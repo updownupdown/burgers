@@ -1,9 +1,9 @@
 /**
  * When the window is open. The player picks a window of whole clock hours on the Prep screen;
- * the default is the lunch rush, 11:00 to 14:00. People arrive along a lunch curve, busiest
- * from noon to one and quiet at either end, so an early start warms up gently and a late
- * close winds down. A town's `shiftLength` is the play time of the default three hours; every
- * hour of the window plays for a third of it.
+ * the default is the lunch rush, 11:00 to 15:00, and a shift is at least four hours. People arrive
+ * along a lunch curve, busiest from noon to one and quiet at either end, so an early start warms
+ * up gently and a late close winds down. A town's `shiftLength` is the play time of the default
+ * four hours; every hour of the window plays for a quarter of it.
  */
 
 export interface ShiftWindow {
@@ -12,7 +12,9 @@ export interface ShiftWindow {
   end: number;
 }
 
-export const DEFAULT_SHIFT: ShiftWindow = { start: 11, end: 14 };
+export const DEFAULT_SHIFT: ShiftWindow = { start: 11, end: 15 };
+/** The shortest shift, in hours. */
+export const MIN_SHIFT = 4;
 /** The earliest opening and the latest closing. */
 export const FIRST_HOUR = 9;
 export const LAST_HOUR = 17;
@@ -24,12 +26,12 @@ export function hourRate(hour: number): number {
   return HOUR_RATE[Math.floor(hour)] ?? 0.25;
 }
 
-/** A saved window made valid: whole hours inside the day, at least one hour long. */
+/** A saved window made valid: whole hours inside the day, at least MIN_SHIFT hours long. */
 export function validShift(w: Partial<ShiftWindow> | null | undefined): ShiftWindow {
   let start = Math.round(w?.start ?? DEFAULT_SHIFT.start);
   let end = Math.round(w?.end ?? DEFAULT_SHIFT.end);
-  start = Math.max(FIRST_HOUR, Math.min(LAST_HOUR - 1, start));
-  end = Math.max(start + 1, Math.min(LAST_HOUR, end));
+  start = Math.max(FIRST_HOUR, Math.min(LAST_HOUR - MIN_SHIFT, start));
+  end = Math.max(start + MIN_SHIFT, Math.min(LAST_HOUR, end));
   return { start, end };
 }
 
@@ -49,7 +51,7 @@ function weight(w: ShiftWindow): number {
   return sum;
 }
 
-/** How many people a window brings compared with the lunch rush (1 for 11:00 to 14:00). */
+/** How many people a window brings compared with the lunch rush (1 for 11:00 to 15:00). */
 export function crowdShare(w: ShiftWindow): number {
   return weight(w) / weight(DEFAULT_SHIFT);
 }

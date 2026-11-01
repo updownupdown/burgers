@@ -101,7 +101,7 @@ function looksHtml(save: Save, v: GarageView): string {
     })
     .join("");
   return `${tabs}<div class="gar-looks">${cards}</div>
-    <p class="day-hint">Looks change nothing in the kitchen. They show on the road map, at night, and here.</p>`;
+    <p class="day-hint">Looks change nothing in the cooking. They show on the road map, at night, here, and around the kitchen window.</p>`;
 }
 
 /** Under the truck, for the look being tried on: what it is, and buy or wear. */

@@ -4,20 +4,22 @@ import { expectedCustomers } from "../game/day";
 import { DIFFICULTIES, DIFFICULTY, type Difficulty } from "../game/difficulty";
 import { criticChance, type PressPiece } from "../game/press";
 import type { Closing, Save } from "../game/progress";
-import { clockLabel, FIRST_HOUR, hourRate, LAST_HOUR, shiftHours, type ShiftWindow } from "../game/shift";
+import { clockLabel, FIRST_HOUR, hourRate, LAST_HOUR, MIN_SHIFT, shiftHours, type ShiftWindow } from "../game/shift";
 import { eventOn, townById, type Stop } from "../game/stops";
 import { SHIFTS_TO_UNLOCK } from "../game/travel";
 import { icon } from "../ui/icons";
 import { buildLabel } from "../update";
-import { stackArt } from "./menuref";
+import { layerLabel, stackArt } from "./menuref";
+import { KIND_COLOR } from "../game/types";
 import "./day.css";
 
 /**
  * The screens on either side of a shift, and the small ones off the map (see game/day.ts):
  *
  * - **Prep & Open**, before opening: one scrolling page around one big number, the people to
- *   expect. Under it: the shift window on the day's lunch curve, the menu as recipe cards to
- *   show or hide, pacing, and the one bonus to bring. Everything here is fixed once the window opens.
+ *   expect and who they are, beside what draws them. Under it: the shift window on the day's lunch
+ *   curve with a two-thumb slider, the menu one burger a row (a chevron opens its recipe), pacing,
+ *   and the one bonus to bring. Everything here is fixed once the window opens.
  * - **Closing**, after the shift: the town's bonus, when a great shift unlocked it (with a Buy
  *   button when savings cover it), then the stars, the takings, today's reviews, the press and the road.
  * - **Reviews**, reached from the map.
@@ -68,8 +70,15 @@ function seg(act: string, cur: string, opts: { v: string; label: string; small?:
 
 const hourLabel = (h: number) => clockLabel(h);
 
-/** The day's arrivals as bars by the hour, with the shift's window lit. */
-function curveHtml(w: ShiftWindow): string {
+/** The shift's hours as one label: "11:00am – 3:00pm · 4 h". */
+export const shiftLabel = (w: ShiftWindow) => `${hourLabel(w.start)} – ${hourLabel(w.end)} · ${shiftHours(w)} h`;
+
+/**
+ * The day's arrivals as bars by the hour, with the shift's window lit, over a two-thumb slider
+ * for opening and closing. Thumbs sit on the hour lines between bars; the window is at least
+ * MIN_SHIFT hours.
+ */
+function rangeHtml(w: ShiftWindow): string {
   const hours: number[] = [];
   for (let h = FIRST_HOUR; h < LAST_HOUR; h++) hours.push(h);
   const bw = 100 / hours.length;
@@ -78,20 +87,57 @@ function curveHtml(w: ShiftWindow): string {
       const r = hourRate(h);
       const on = h >= w.start && h < w.end;
       const ht = 8 + r * 40;
-      return `<rect class="${on ? "on" : ""}" x="${i * bw + 1}" y="${50 - ht}" width="${bw - 2}" height="${ht}" rx="1.5"/>`;
+      return `<rect class="${on ? "on" : ""}" data-h="${h}" x="${i * bw + 1}" y="${50 - ht}" width="${bw - 2}" height="${ht}" rx="1.5"/>`;
     })
     .join("");
-  const ticks = [FIRST_HOUR, 11, 13, 15, LAST_HOUR]
-    .map((h) => `<span style="left:${((h - FIRST_HOUR) / (LAST_HOUR - FIRST_HOUR)) * 100}%">${h}</span>`)
-    .join("");
-  return `<div class="prep-curve"><svg viewBox="0 0 100 50" preserveAspectRatio="none" aria-hidden="true">${bars}</svg><div class="ticks">${ticks}</div></div>`;
+  const span = LAST_HOUR - FIRST_HOUR;
+  const pos = (h: number) => ((h - FIRST_HOUR) / span).toFixed(4);
+  const input = (end: "start" | "end", v: number) =>
+    `<input type="range" min="${FIRST_HOUR}" max="${LAST_HOUR}" step="1" value="${v}" data-range="${end}" aria-label="${end === "start" ? "Open at" : "Close at"}" aria-valuetext="${hourLabel(v)}">`;
+  return `<div class="prep-range" style="--a:${pos(w.start)};--b:${pos(w.end)}">
+    <svg viewBox="0 0 100 50" preserveAspectRatio="none" aria-hidden="true">${bars}</svg>
+    <div class="rng"><div class="track"><i></i></div>${input("start", w.start)}${input("end", w.end)}</div>
+  </div>`;
 }
 
-function stepper(act: string, label: string, value: number, canDown: boolean, canUp: boolean): string {
-  return `<div class="prep-step"><span class="bv-eyebrow">${label}</span>
-    <div class="row"><button class="bv-btn icon sm" data-act="${act}" data-v="-1" ${canDown ? "" : "disabled"} aria-label="${label} an hour earlier">${icon("minus")}</button>
-    <b class="bv-mono">${hourLabel(value)}</b>
-    <button class="bv-btn icon sm" data-act="${act}" data-v="1" ${canUp ? "" : "disabled"} aria-label="${label} an hour later">${icon("plus")}</button></div></div>`;
+/**
+ * Drag a thumb: keep the window at least MIN_SHIFT hours (the thumb being dragged stops), then
+ * light the bars and the label to match. Returns the window shown.
+ */
+export function syncRange(root: HTMLElement, moved: "start" | "end"): ShiftWindow {
+  const a = root.querySelector<HTMLInputElement>('input[data-range="start"]')!;
+  const b = root.querySelector<HTMLInputElement>('input[data-range="end"]')!;
+  let start = Number(a.value);
+  let end = Number(b.value);
+  if (end - start < MIN_SHIFT) {
+    if (moved === "start") start = end - MIN_SHIFT;
+    else end = start + MIN_SHIFT;
+    if (start < FIRST_HOUR) [start, end] = [FIRST_HOUR, FIRST_HOUR + MIN_SHIFT];
+    if (end > LAST_HOUR) [start, end] = [LAST_HOUR - MIN_SHIFT, LAST_HOUR];
+    a.value = String(start);
+    b.value = String(end);
+  }
+  a.setAttribute("aria-valuetext", hourLabel(start));
+  b.setAttribute("aria-valuetext", hourLabel(end));
+  const w = { start, end };
+  const box = root.querySelector<HTMLElement>(".prep-range");
+  const span = LAST_HOUR - FIRST_HOUR;
+  box?.style.setProperty("--a", ((start - FIRST_HOUR) / span).toFixed(4));
+  box?.style.setProperty("--b", ((end - FIRST_HOUR) / span).toFixed(4));
+  root.querySelectorAll<SVGRectElement>(".prep-range rect").forEach((r) => {
+    const h = Number(r.dataset.h);
+    r.classList.toggle("on", h >= start && h < end);
+  });
+  const label = root.querySelector(".prep-shift-label");
+  if (label) label.textContent = shiftLabel(w);
+  return w;
+}
+
+/** Which recipes are opened on Prep. Remembered while the app runs. */
+const openRecipes = new Set<string>();
+export function toggleRecipe(name: string): void {
+  if (openRecipes.has(name)) openRecipes.delete(name);
+  else openRecipes.add(name);
 }
 
 // ---------------------------------------------------------------------------
@@ -116,19 +162,29 @@ export function prepHtml(p: PrepInput): string {
   const menu = menuFor(stop, save.hidden);
   const critic = bonus === "press" ? 1 : criticChance(stop.crowd, ev);
 
-  const cards = stop.menu
+  const rows = stop.menu
     .map((r) => {
       const on = menu.includes(r);
       const locked = on && menu.length <= MIN_MENU;
       const layers = r.layers.length;
       const level = layers <= 5 ? 1 : layers <= 7 ? 2 : 3;
-      const tags = [r.toasted ? "Toasted" : "", r.smash ? "Smashed" : "", r.melt ? "Melted" : "", r.from ? "Later in the day" : ""].filter(Boolean).join(" · ");
-      return `<button class="prep-dish ${on ? "" : "off"}" data-act="prep-menu" data-v="${esc(r.name)}" aria-pressed="${on}" ${locked ? 'aria-disabled="true"' : ""}>
-        ${stackArt(r)}
-        <span class="nm">${esc(r.name)}</span>
-        <span class="meta"><span class="dots" aria-label="${["", "Easy", "Medium", "Tall"][level]}">${"<i class=on></i>".repeat(level)}${"<i></i>".repeat(3 - level)}</span>${tags ? `<small>${tags}</small>` : ""}</span>
-        <span class="tick">${icon(on ? "check" : "eye")}</span>
-      </button>`;
+      const open = openRecipes.has(r.name);
+      const chips = [
+        r.toasted ? `<span class="bv-chip pill">${icon("toast")}Toasted bun</span>` : "",
+        r.smash ? `<span class="bv-chip pill">${icon("smash")}Smashed patty</span>` : "",
+        r.melt ? `<span class="bv-chip pill">${icon("cheese")}Melted cheese</span>` : "",
+      ].join("");
+      const flow = r.layers.map((k) => `<li><i class="swc" style="--c:${KIND_COLOR[k]}"></i><span>${layerLabel(r, k)}</span></li>`).join("");
+      return `<div class="prep-row ${on ? "" : "off"} ${open ? "open" : ""}">
+        <button class="pick" data-act="prep-menu" data-v="${esc(r.name)}" aria-pressed="${on}" ${locked ? 'aria-disabled="true"' : ""}>
+          <span class="tick">${on ? icon("check") : ""}</span>
+          ${stackArt(r)}
+          <span class="nm">${esc(r.name)}</span>
+          <span class="dots" aria-label="${["", "Easy", "Medium", "Tall"][level]}">${"<i class=on></i>".repeat(level)}${"<i></i>".repeat(3 - level)}</span>
+        </button>
+        <button class="chev" data-act="prep-recipe" data-v="${esc(r.name)}" aria-expanded="${open}" aria-label="${open ? "Hide" : "Show"} the recipe for ${esc(r.name)}">${icon("down")}</button>
+        <div class="rec" ${open ? "" : "hidden"}>${chips ? `<div class="mref-tags">${chips}</div>` : ""}<span class="bv-eyebrow">Bottom to top</span><ol class="mref-flow">${flow}</ol></div>
+      </div>`;
     })
     .join("");
 
@@ -155,33 +211,31 @@ export function prepHtml(p: PrepInput): string {
     <header class="day-top">
       <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("back")}</button>
       <div class="where"><span class="bv-eyebrow">Day ${save.day} · Prep &amp; Open</span><b>${esc(stop.name)}</b></div>
-      <span class="bv-chip pill">${icon(CROWD_ICON[stop.crowd] ?? "people")}${crowd.label}</span>
     </header>
     <div class="day-scroll">
       <section class="prep-expect">
-        <span class="bv-eyebrow">Expect today</span>
-        <div class="big"><b class="bv-mono">${expect}</b><span>customers</span></div>
-        <div class="why">
-          <span>${icon("people")}Popularity <b class="bv-mono">${save.popularity}</b></span>
-          <span>${icon("star")}Rating <b class="bv-mono">${save.rep.toFixed(1)}</b></span>
-          <span>${icon("critic")}Critic ${critic >= 1 ? "booked" : critic >= 0.5 ? "likely" : critic >= 0.25 ? "possible" : "unlikely"}</span>
+        <div class="l">
+          <span class="bv-eyebrow">Expect today</span>
+          <div class="big"><b class="bv-mono">${expect}</b><span>customers</span></div>
+          <span class="bv-chip pill crowd">${icon(CROWD_ICON[stop.crowd] ?? "people")}${crowd.label}</span>
         </div>
+        <ul class="r">
+          <li>${icon("people")}<span>Popularity</span><b class="bv-mono">${save.popularity}</b></li>
+          <li>${icon("star")}<span>Rating</span><b class="bv-mono">${save.rep.toFixed(1)}</b></li>
+          <li>${icon("critic")}<span>Critic</span><b>${critic >= 1 ? "Booked" : critic >= 0.5 ? "Likely" : critic >= 0.25 ? "Possible" : "Unlikely"}</b></li>
+        </ul>
         ${ev ? `<div class="bv-callout">${icon("flag")}<span><b>${esc(ev.name)}.</b> ${esc(ev.blurb)}${ev.special ? ` Special: ${esc(ev.special.name)}.` : ""}</span></div>` : ""}
       </section>
 
       <section class="prep-sec">
-        <h3 class="prep-h">${icon("clock")}Shift <span>${hourLabel(w.start)} to ${hourLabel(w.end)} · ${shiftHours(w)} h</span></h3>
-        ${curveHtml(w)}
-        <div class="prep-steps">
-          ${stepper("prep-open", "Open", w.start, w.start > FIRST_HOUR, w.start < w.end - 1)}
-          ${stepper("prep-close", "Close", w.end, w.end > w.start + 1, w.end < LAST_HOUR)}
-        </div>
-        <span class="day-hint">Lunch peaks from noon to one. Opening early or closing late adds a few quieter hours.</span>
+        <h3 class="prep-h">${icon("clock")}Shift <span class="prep-shift-label bv-mono">${shiftLabel(w)}</span></h3>
+        ${rangeHtml(w)}
+        <span class="day-hint">Drag either end. Lunch peaks from noon to one; opening early or closing late adds quieter hours. At least ${MIN_SHIFT} hours.</span>
       </section>
 
       <section class="prep-sec">
-        <h3 class="prep-h">${icon("menu")}Menu <span>${menu.length} of ${stop.menu.length} shown</span></h3>
-        <div class="prep-dishes">${cards}</div>
+        <h3 class="prep-h">${icon("food-menu")}Menu <span>${menu.length} of ${stop.menu.length} shown</span></h3>
+        <div class="prep-rows">${rows}</div>
         <span class="day-hint">A longer menu brings more people, and more kinds of order. Keep at least ${MIN_MENU}.</span>
       </section>
 
@@ -198,7 +252,7 @@ export function prepHtml(p: PrepInput): string {
       </section>
     </div>
     <footer class="day-foot">
-      <div class="sum"><span class="bv-eyebrow">${hourLabel(w.start)} to ${hourLabel(w.end)}${bonus ? ` · ${esc(bonusById(bonus)!.name)}` : ""}</span><b>~${expect} customers</b></div>
+      <div class="sum"><span class="bv-eyebrow">${bonus ? esc(bonusById(bonus)!.name) : "No bonus"}</span><b>~${expect} customers</b></div>
       <button class="bv-btn primary lg" data-act="open">${icon("bell")}Open</button>
     </footer>
   </div>`;

@@ -30,7 +30,7 @@ import { mountHome, refreshHome, type NightShow } from "./screens/home";
 import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
-import { closingHtml, prepHtml, reviewsHtml, toggleBox, type ReviewFilter } from "./screens/day";
+import { closingHtml, prepHtml, reviewsHtml, syncRange, toggleBox, toggleRecipe, type ReviewFilter } from "./screens/day";
 import { buildUi, cookMeter, patienceMood, ticketHtml } from "./ui";
 import { DRINK_TINT } from "./render/machines";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
@@ -1937,6 +1937,22 @@ function fitTicket(t: HTMLElement, render: (fold: boolean) => string): void {
 // Screens
 
 let screenShownAt = 0;
+// The shift window's two-thumb slider on Prep: follow the drag, then keep the window when let go.
+ui.root.addEventListener("input", (e) => {
+  const el = e.target as HTMLInputElement;
+  const end = el.dataset?.range as "start" | "end" | undefined;
+  if (!end || !prepOpen) return;
+  syncRange(ui.title, end);
+});
+ui.root.addEventListener("change", (e) => {
+  const el = e.target as HTMLInputElement;
+  const end = el.dataset?.range as "start" | "end" | undefined;
+  if (!end || !prepOpen) return;
+  save.shift = validShift(syncRange(ui.title, end));
+  writeSave(save);
+  showPrep();
+});
+
 ui.root.addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-act]");
   const act = btn?.dataset.act;
@@ -1974,18 +1990,10 @@ ui.root.addEventListener("click", (e) => {
       showPrep();
       break;
     }
-    case "prep-open":
-    case "prep-close": {
-      // Move one end of the window by an hour.
-      const d = Number(btn!.dataset.v) || 0;
-      const w = { ...save.shift };
-      if (act === "prep-open") w.start = Math.min(w.end - 1, w.start + d);
-      else w.end = Math.max(w.start + 1, w.end + d);
-      save.shift = validShift(w);
-      writeSave(save);
+    case "prep-recipe":
+      toggleRecipe(btn!.dataset.v!);
       showPrep();
       break;
-    }
     case "prep-bonus": {
       const v = btn!.dataset.v as BonusId;
       save.bonus = save.bonus === v || !save.bonuses.includes(v) ? null : v;
@@ -2265,6 +2273,7 @@ function applyStop(): void {
   const st = stop();
   counter.setPantry(st.pantry);
   customersView.setBackdrop(st.backdrop);
+  customersView.setLook(save.look);
 }
 
 /** The best, a middling and the worst review of the shift, without repeats. */
@@ -2281,7 +2290,11 @@ function showPrep(): void {
   game.overlay = null;
   if (!prepOpen) pushBack("prep", () => showTitle());
   prepOpen = true;
+  // Redrawing Prep (a recipe opened, the window moved) keeps the page where it was.
+  const keep = prepOpen ? (ui.title.querySelector<HTMLElement>(".prep .day-scroll")?.scrollTop ?? 0) : 0;
   ui.title.innerHTML = prepHtml({ save, stop: stop(), pacing: difficulty });
+  const sc = ui.title.querySelector<HTMLElement>(".prep .day-scroll");
+  if (sc) sc.scrollTop = keep;
   ui.title.hidden = false;
   ui.summary.hidden = true;
 }

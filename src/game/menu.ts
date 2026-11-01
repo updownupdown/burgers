@@ -144,16 +144,34 @@ export function pickMods(recipe: Recipe, pantry: Kind[], rng: Rng, level: number
 }
 
 /**
+ * Every burger on the menu can be ordered all day. Tall ones, and the ones marked `from`, are
+ * just rarer early on and come up more as the shift goes on.
+ */
+export function recipeWeight(r: Recipe, level: number): number {
+  let w = 1;
+  if (r.from) w *= level >= r.from ? 1.2 : 0.3 + 0.7 * (level / r.from);
+  if (r.layers.length > 6) w *= 0.5 + Math.min(1, level / 0.4) * 0.5;
+  return w;
+}
+
+export function pickRecipe(menu: readonly Recipe[], level: number, rng: Rng): Recipe {
+  const ws = menu.map((r) => recipeWeight(r, level));
+  let t = rng() * ws.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < menu.length; i++) {
+    t -= ws[i];
+    if (t < 0) return menu[i];
+  }
+  return menu[menu.length - 1];
+}
+
+/**
  * `level` (0..1) ramps difficulty through the shift: early orders are simpler and rarely
  * come with sides.
  */
 export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Order {
   if (level >= 0.15 && rng() < POUTINE_CHANCE) return poutineOrder(id, rng, level);
   if (level >= 0.15 && rng() < SIDES_ONLY_CHANCE) return sidesOrder(id, rng);
-  let pool = stop.menu.filter((r) => (r.from ?? 0) <= level);
-  if (level < 0.25) pool = pool.filter((r) => r.layers.length <= 6);
-  if (!pool.length) pool = stop.menu;
-  const recipe = pool[Math.floor(rng() * pool.length)];
+  const recipe = pickRecipe(stop.menu, level, rng);
   const fries = rng() < 0.25 + level * 0.4;
   const drink = rng() < 0.2 + level * 0.5 ? DRINKS[Math.floor(rng() * DRINKS.length)] : null;
   // Modifiers keep tickets short: a known recipe plus "no pickles" rather than a new list.

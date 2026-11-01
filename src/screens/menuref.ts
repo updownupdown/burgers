@@ -36,7 +36,7 @@ export function stackArt(r: Recipe): string {
   return `<div class="mref-stack" aria-hidden="true">${parts.reverse().join("")}</div>`;
 }
 
-function layerLabel(r: Recipe, k: Kind): string {
+export function layerLabel(r: Recipe, k: Kind): string {
   const base = KIND_LABEL[k];
   if (COUNTED.has(k)) return `${base} <b class="bv-mono">×${recipeCount(r, k)}</b>`;
   return base;
@@ -55,7 +55,7 @@ export function recipeHtml(r: Recipe, mult: number, special: boolean, locked = f
     <div class="mref-main">
       <div class="mref-top"><h4 class="mref-name">${esc(r.name)}</h4><span class="mref-price bv-mono">${price(Math.round(r.price * mult))}</span></div>
       <div class="mref-tags">${tags.join("")}</div>
-      <p class="mref-caption">Bottom to top${r.from ? " · ordered later in the day" : ""}</p>
+      <p class="mref-caption">Bottom to top</p>
       <ol class="mref-flow">${flow}</ol>
     </div>
   </article>`;

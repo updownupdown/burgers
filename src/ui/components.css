@@ -53,7 +53,8 @@
 .bv-btn.ghost { border-color: transparent; color: var(--bv-ink-2); }
 .bv-btn.ghost:active { background: var(--bv-paper-2); }
 .bv-btn.sm { min-height: 36px; padding: 0 var(--bv-sp-3); font-size: var(--bv-fs-md); }
-.bv-btn.lg { min-height: 52px; font-size: 17px; }
+.bv-btn.lg { min-height: 58px; font-size: 21px; font-weight: 700; padding: 0 var(--bv-sp-5, 22px); }
+.bv-btn.lg .bv-icon { font-size: 1.35em; }
 .bv-btn.block { display: flex; width: 100%; }
 .bv-btn.icon { width: var(--bv-tap); padding: 0; border-radius: 50%; }
 .bv-btn.icon.sm { width: 36px; }

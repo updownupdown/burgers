@@ -48,6 +48,8 @@ html, body {
   pointer-events: none;
 }
 #ui button { font: inherit; cursor: pointer; }
+/* Main actions (Open, Back to the map...) read bigger; the reset above would flatten their size. */
+#ui .bv-btn.lg { font-size: 20px; font-weight: 700; letter-spacing: 0.01em; }
 #ui button:focus-visible { outline: 2px solid var(--bv-paprika); outline-offset: 2px; }
 
 /* ---- HUD -------------------------------------------------------------- */

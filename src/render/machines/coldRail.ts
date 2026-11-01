@@ -114,7 +114,9 @@ export function makeColdRail(o: { cols?: number; rows?: number; kinds?: (Kind | 
     // Heaps from the bins, fitted to the 1/6 pans: their pan is 1.18 x 1.0, these are 1.07 x 1.17.
     const sx = (PW * STUDY) / PAN.w;
     const sz = (PD * STUDY) / PAN.d;
-    for (const s of pans) if (s.kind) all.addParts(heapParts(s.kind), { p: [s.x, s.floor - PAN.floor, s.z], s: [sx * 0.95, 1, sz * 0.92] });
+    // Fitted evenly (no squash), so a piece in the pan is the size of the one you pull out.
+    const fit = Math.min(sx, sz) * 0.95;
+    for (const s of pans) if (s.kind) all.addParts(heapParts(s.kind), { p: [s.x, s.floor - PAN.floor, s.z], s: fit });
     b = bakeShared(all);
     cache.set(key, b);
   }

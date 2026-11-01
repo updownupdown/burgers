@@ -25,6 +25,9 @@ function poutineOrder(id: number, rng: Rng, level: number): Order {
   return order;
 }
 
+/** Share of orders on an untoasted burger that ask for a toasted bun anyway: rare, so toasting stays a treat. */
+export const TOAST_CHANCE = 0.05;
+
 /** Share of orders, once the shift is going, from someone who only wants a drink or fries: rare, but it happens. */
 export const SIDES_ONLY_CHANCE = 0.06;
 
@@ -65,6 +68,7 @@ export function seededRng(seed: number): Rng {
 export function applyMods(base: Kind[], mods: Modifier[]): Kind[] {
   let out = base.slice();
   for (const m of mods) {
+    if (m.type === "toast") continue;
     if (m.type === "no") out = out.filter((k) => k !== m.kind);
     else if (m.type === "extra") {
       const i = out.lastIndexOf(m.kind);
@@ -100,12 +104,13 @@ export function orderFromRecipe(
   }
   const layers: ExpectedLayer[] = kinds.map((kind, i) => {
     if (kind === "patty") return recipe.smash ? { kind, smashed: true } : { kind };
-    if (kind === "bun") return { kind, toasted: recipe.toasted };
+    if (kind === "bun") return { kind, toasted: recipe.toasted || mods.some((m) => m.type === "toast") };
+    if (kind === "egg") return recipe.egg === "over" ? { kind, flipped: true } : { kind };
     if (kind === "cheese" && recipe.melt && kinds[i - 1] === "patty") return { kind, melted: true };
     if (COUNTED.has(kind)) return { kind, count: recipeCount(recipe, kind) + (more.has(kind) ? extraCount(kind) : 0) };
     return { kind };
   });
-  const extras = mods.filter((m) => m.type !== "no").reduce((n, m) => n + (m.type === "extra" && COUNTED.has(m.kind) ? EXTRA_PRICE : ADD_PRICE), 0);
+  const extras = mods.filter((m) => m.type !== "no" && m.type !== "toast").reduce((n, m) => n + (m.type === "extra" && COUNTED.has(m.kind) ? EXTRA_PRICE : ADD_PRICE), 0);
   const price = recipe.price + extras + (fries ? FRIES_PRICE[friesSize] : 0) + (drink ? DRINK_PRICE[drinkSize] : 0);
   return { id, name: recipe.name, price, mods, ...(removed.length ? { removed } : {}), layers, fries, drink, friesSize, drinkSize };
 }
@@ -153,6 +158,8 @@ export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Orde
   const drink = rng() < 0.2 + level * 0.5 ? DRINKS[Math.floor(rng() * DRINKS.length)] : null;
   // Modifiers keep tickets short: a known recipe plus "no pickles" rather than a new list.
   const mods = level < 0.1 ? [] : pickMods(recipe, stop.pantry, rng, level);
+  // Now and then someone wants their bun toasted on a burger that doesn't usually come that way.
+  if (!recipe.toasted && level >= 0.2 && rng() < TOAST_CHANCE) mods.push({ type: "toast", kind: "bun" });
   const f = rng();
   const friesSize: FriesSize = f < 0.35 ? "S" : f < 0.75 ? "M" : "L";
   const r = rng();

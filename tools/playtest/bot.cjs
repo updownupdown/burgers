@@ -26,7 +26,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
   }, [type, f]);
   // The burger's spot on a tray (it sits left of the tray's middle, beside the sides).
   const plate = (i) => ev((i) => { const b = window.__bv.trayView.plates[i].burger; b.updateWorldMatrix(true, false); const e = b.matrixWorld.elements; return window.__bv.project('tray', e[12], 0.3, e[14]); }, i);
-  const items = () => ev(() => window.__bv.counter.grillItems.map((it, i) => ({ i, kind: it.piece.kind, cook: it.piece.cook.slice(), flipping: it.flipT >= 0, uid: it.piece.uid, melt: it.topping ? (it.topping.piece.melt ?? 0) : -1, x: it.x, z: it.z, scr: window.__bv.project('counter', it.x, 0.95, it.z) })));
+  const items = () => ev(() => window.__bv.counter.grillItems.map((it, i) => ({ i, kind: it.piece.kind, cook: it.piece.cook.slice(), level: window.__bv.cookLevel(it.piece), flips: it.piece.flips || 0, flipping: it.flipT >= 0, uid: it.piece.uid, melt: it.topping ? (it.topping.piece.melt ?? 0) : -1, x: it.x, z: it.z, scr: window.__bv.project('counter', it.x, 0.95, it.z) })));
   const stop = async (s) => { await ev((s) => window.__bv.goToStop(s), s); await step(p, 0.6); };
   const page = async (n) => { await p.evaluate((n) => document.querySelectorAll('.tab')[n].click(), n); await step(p, 0.6); };
   const act = async (pts, ms) => { await gesture(p, pts, ms); await step(p, ACTION); };
@@ -50,6 +50,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
   // finished food there until its layer comes up.
   const zoneSpots = (z) => ev((z) => window.__bv.counter.zoneSpots(z).map((q) => [q.x, q.z]), z);
   const spots = [...(await zoneSpots(0)), ...(await zoneSpots(1))];
+  const flatSpots = await zoneSpots(1);
   const warmSpots = await zoneSpots(2);
   const setZone = async (i, heat) => {
     for (let n = 0; n < 3 && (await ev((i) => window.__bv.counter.zones[i], i)) !== heat; n++) await tap(await hp('zone', { idx: i }));
@@ -77,7 +78,9 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
       const [bx, by] = await hp('bin', { kind: n.kind });
       const occupied = await items();
       let sp, tries = 0;
-      do { sp = spots[si++ % spots.length]; } while (occupied.some(o => Math.hypot(o.x - sp[0], o.z - sp[1]) < 1) && tries++ < spots.length);
+      // Eggs only go on the flat middle (the grille would make a mess).
+      const pool = n.kind === 'egg' ? flatSpots : spots;
+      do { sp = pool[si++ % pool.length]; } while (occupied.some(o => Math.hypot(o.x - sp[0], o.z - sp[1]) < 0.9) && tries++ < pool.length);
       const [gx, gy] = await ev(([x, z]) => window.__bv.project('counter', x, 0.9, z), sp);
       if (n.kind === 'egg') {
         // Pick one up, one crisp tap on the grill, shells in the trash.
@@ -131,11 +134,13 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
             if (!ln) continue;
             const ex = order.layers[+ln[0]];
             const tgt = ex.kind === 'patty' ? TARGET.medium : 0.6;
-            if ((ex.kind === 'patty' || ex.kind === 'bacon') && o.cook[0] >= tgt && o.cook[1] < 0.1) {
+            // Flip patties and bacon once, halfway; eggs only when the menu wants them over easy.
+            const wantFlip = ex.kind === 'patty' || ex.kind === 'bacon' ? o.flips === 0 && o.level >= tgt / 2 && o.melt < 0 : ex.kind === 'egg' && ex.flipped && o.flips === 0 && o.level >= 0.2;
+            if (wantFlip) {
               await act(line(o.scr[0], o.scr[1], o.scr[0], o.scr[1] - 60, 4), 16);
             } else if (+ln[0] !== li) {
-              const t2 = ex.kind === 'patty' ? TARGET.medium : ex.kind === 'bacon' ? 0.6 : 0.5;
-              const done2 = ex.kind === 'patty' || ex.kind === 'bacon' ? o.cook[0] >= t2 - 0.02 && o.cook[1] >= t2 - 0.02 : o.cook[0] >= t2;
+              const t2 = ex.kind === 'patty' ? TARGET.medium : ex.kind === 'bacon' ? 0.6 : 0.55;
+              const done2 = o.level >= t2 - 0.02;
               const warm = await ev(() => window.__bv.counter.zones[2] === 'warm');
               const onWarm = o.x > warmSpots[0][0] - 0.8;
               const all = await items();
@@ -147,11 +152,12 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
               }
             }
           }
-          const tgt = l.kind === 'patty' ? TARGET.medium : l.kind === 'bun' || l.kind === 'egg' || l.kind === 'pineapple' ? 0.5 : 0.6;
-          if (wantsMelt(li) && it.melt < 0 && it.cook[1] >= tgt - 0.02 && it.cook[0] >= tgt - 0.15 && !it.flipping) {
+          const tgt = l.kind === 'patty' ? TARGET.medium : l.kind === 'bun' || l.kind === 'pineapple' ? 0.5 : l.kind === 'egg' ? 0.55 : 0.6;
+          if (wantsMelt(li) && it.melt < 0 && it.level >= tgt - 0.12 && it.flips > 0 && !it.flipping) {
             await cheeseOn(it); skip.add(li + 1); continue;
           }
-          const ready = (l.kind === 'patty' || l.kind === 'bacon' ? it.cook[0] >= tgt - 0.02 && it.cook[1] >= tgt - 0.02 : it.cook[0] >= tgt) && (!wantsMelt(li) || it.melt >= 0.5);
+          const flipOk = l.kind === 'egg' ? !!l.flipped === it.flips % 2 > 0 : l.kind === 'patty' || l.kind === 'bacon' ? it.flips > 0 : true;
+          const ready = it.level >= tgt - 0.02 && flipOk && (!wantsMelt(li) || it.melt >= 0.5);
           if (ready && !it.flipping) {
             const now = (await items()).find(i => i.uid === assigned[li]);
             await act(line(now.scr[0], now.scr[1], px, py, 12));

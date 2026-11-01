@@ -284,6 +284,49 @@ export function makeGravyPot(): THREE.Mesh {
   return bakedMesh(bakeShared(p));
 }
 
+/**
+ * Cheese curds in a cooled rectangular tray: a steel well with a blue cold line along the front
+ * and a heap of curds, set into the counter in front of the potato freezer. Origin on the floor.
+ */
+export const CURD_TRAY = { w: 1.6, d: 0.95, h: 0.32 };
+export function makeCurdTray(): THREE.Mesh {
+  const { w, d, h } = CURD_TRAY;
+  const p = new Parts();
+  p.add(box(w, h, d), STEEL, { p: [0, h / 2, 0] });
+  p.add(box(w - 0.16, 0.02, d - 0.16), "#dfeef4", { p: [0, h - 0.06, 0], ink: false });
+  p.add(box(w + 0.01, 0.06, 0.02), "#7fb6d6", { p: [0, h * 0.5, d / 2 + 0.005], ink: false });
+  for (const [bw, bd, x, z] of [[w, 0.08, 0, -d / 2 + 0.04], [w, 0.08, 0, d / 2 - 0.04], [0.08, d, -w / 2 + 0.04, 0], [0.08, d, w / 2 - 0.04, 0]] as const) {
+    p.add(box(bw, 0.04, bd), STEEL_LIGHT, { p: [x, h + 0.01, z], ink: 0.012 });
+  }
+  curdLumps(p, 34, w / 2 - 0.2, d / 2 - 0.16, h - 0.06, 5, 1.25);
+  return bakedMesh(bakeShared(p));
+}
+
+/**
+ * Gravy in a heated rectangular well (a bain-marie): a deep steel pan of gravy sunk in a heated
+ * body with an orange heat light and a ladle resting across it. Origin on the floor.
+ */
+export const GRAVY_WELL = { w: 1.55, d: 1.3, h: 0.5 };
+export function makeGravyWell(): THREE.Mesh {
+  const { w, d, h } = GRAVY_WELL;
+  const p = new Parts();
+  p.add(box(w, h, d), STEEL, { p: [0, h / 2, 0] });
+  // Heat light on the front.
+  p.add(box(0.5, 0.06, 0.02), "#f39a2e", { p: [-w / 2 + 0.4, h * 0.5, d / 2 + 0.005], ink: false });
+  p.add(box(0.08, 0.08, 0.03), "#e0442e", { p: [w / 2 - 0.2, h * 0.5, d / 2 + 0.01], ink: false });
+  // The pan's rim and the gravy inside, glossy brown.
+  for (const [bw, bd, x, z] of [[w, 0.1, 0, -d / 2 + 0.05], [w, 0.1, 0, d / 2 - 0.05], [0.1, d, -w / 2 + 0.05, 0], [0.1, d, w / 2 - 0.05, 0]] as const) {
+    p.add(box(bw, 0.05, bd), STEEL_LIGHT, { p: [x, h + 0.015, z], ink: 0.012 });
+  }
+  p.add(box(w - 0.2, 0.02, d - 0.2), GRAVY, { p: [0, h + 0.012, 0], ink: false });
+  p.add(box(0.36, 0.006, 0.08), "#9a6238", { p: [-0.2, h + 0.024, -0.2], r: [0, 0.4, 0], ink: false });
+  p.add(box(0.22, 0.006, 0.06), "#9a6238", { p: [0.3, h + 0.024, 0.25], r: [0, -0.3, 0], ink: false });
+  // A ladle resting across the rim.
+  p.add(new THREE.SphereGeometry(0.17, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), "#c9d1cf", { p: [0.25, h + 0.12, 0.05] });
+  p.add(cyl(0.025, 0.025, 0.95, 6), "#9aa3a6", { p: [-0.2, h + 0.16, -0.2], r: [0, 0.5, Math.PI / 2 - 0.12] });
+  return bakedMesh(bakeShared(p));
+}
+
 /** What you carry from the tub: a pinch of curds. */
 export function makeCurdHandful(): THREE.Mesh {
   const p = new Parts();

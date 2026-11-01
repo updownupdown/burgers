@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { buzz, Sfx } from "./audio";
-import { avgCook, bunToast, DRINK_FILL, FRIES_PERFECT, friesZone, FRIES_ZONE, pattyLabel, SALT } from "./game/cooking";
+import { cookLevel, COOK_SCALE, DRINK_FILL, friesZone, FRIES_ZONE, SALT, type Cookable } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { gearBlocker, gearById, projectShift, sleep, solarSaving, RUNNING_COST, type GearId } from "./game/day";
 import { freshSave, loadSave, passed, passTown, upgradeChoices, UPGRADES, writeSave, type Closing, type UpgradeId } from "./game/progress";
@@ -35,7 +35,7 @@ import { SCALE } from "./render/units";
 import { dressCup } from "./render/cup";
 import { makeCarton, makeCup, makeFood, makeFries, sliceSpot, stackBases } from "./render/food";
 import { disposeObject } from "./render/materials";
-import { CounterView, CUP_IN_HAND, EMPTY_PACK, STOPS, GRILL_SCALE, HOME_PAGE, PAGES, GRILL_TOP, ZONE_START, type GrillItem, type Hit } from "./scenes/counter";
+import { CounterView, CUP_IN_HAND, EMPTY_PACK, STOPS, GRILL_SCALE, GRILLE_ZONE, FLAT_ZONE, HOME_PAGE, PAGES, GRILL_TOP, ZONE_START, type GrillItem, type Hit } from "./scenes/counter";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
 import { SauceZoom } from "./scenes/saucezoom";
@@ -44,7 +44,7 @@ import "./ui/components.css";
 import "./style.css";
 import { mountHome, refreshHome, type NightShow } from "./screens/home";
 import { closeBoxes, closingHtml, prepHtml, reviewsHtml, suppliesHtml, toggleBox, type ReviewFilter } from "./screens/day";
-import { buildUi, donenessPill, patienceMood, ticketHtml } from "./ui";
+import { buildUi, cookMeter, patienceMood, ticketHtml } from "./ui";
 import { DRINK_TINT } from "./render/machines";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 import { closeAll, initMenu, openHowTo, openMenu, openMenuRef, openSettings } from "./screens/menu";
@@ -576,7 +576,9 @@ function coinPop(i: number, amount: number): void {
 function syncTray(i: number, animate: boolean): void {
   const s = game.slots[i];
   // A plate on the tray means a burger is expected; drinks-only and fries-only orders get a bare tray.
-  trayView.plates[i].setDish(!!s.order && s.order.layers.length > 0);
+  // A customer on their way out has taken their plate with them.
+  trayView.plates[i].setDish(!!s.order && s.order.layers.length > 0 && !s.leaving);
+  trayView.plates[i].setWants(!!s.order && s.order.fries && !s.leaving, !!s.order?.drink && !s.leaving);
   trayView.plates[i].sync(s.plate, animate, () => sfx.plop());
 }
 
@@ -647,10 +649,10 @@ function tutorialHint(): string | null {
   const hasPatty = layers.some((l) => l.piece.kind === "patty");
   if (!hasPatty) {
     if (!pattyOnGrill) return "Now drag a patty onto a hot part of the grill.";
-    const t = pattyOnGrill.piece.cook[0];
-    if (t < 0.43) return "Let it sizzle. No flipping needed: take it off when the tag says Medium.";
-    if (t < 0.67) return "Medium! Drag the patty up onto the bun.";
-    return "A bit past medium. Grab it now, before it burns.";
+    const t = cookLevel(pattyOnGrill.piece);
+    if (t < COOK_SCALE.patty.done) return "Let it sizzle. Take it off when the meter is in the middle band.";
+    if (t < COOK_SCALE.patty.over) return "Done! Drag the patty up onto the bun.";
+    return "A bit past done. Grab it now, before it burns.";
   }
   if (layers[layers.length - 1].piece.kind !== "bun" || layers.length < 3) return "Add the top bun.";
   return "Swipe the tray up to hand it to the customer!";
@@ -688,7 +690,7 @@ interface Pointer {
   x: number;
   y: number;
   band: ReturnType<typeof bandAt>;
-  mode: "none" | "swipe" | "held" | "grill" | "basket" | "pour" | "sauce" | "plate" | "wipe" | "egg";
+  mode: "none" | "swipe" | "held" | "grill" | "basket" | "pour" | "sauce" | "plate" | "wipe" | "rub" | "egg";
   /** Tap whose spill is being wiped. */
   wipe: number;
   hit: Hit | null;
@@ -715,7 +717,7 @@ function stackVisual(layers: Layer[]): THREE.Object3D {
     o.rotation.y = yaw[i];
     g.add(o);
   });
-  g.scale.setScalar(SCALE.burger);
+  g.scale.setScalar(GRILL_SCALE);
   return g;
 }
 
@@ -759,6 +761,8 @@ function startHold(pt: Pointer, payload: Payload): void {
   const trayObj = payloadVisual(payload);
   if (payload.type !== "piece" && payload.type !== "stack") trayObj.scale.multiplyScalar(0.55);
   if (payload.type === "stack") trayObj.scale.setScalar(1);
+  // Over the trays, a cup or carton shows exactly where it will land, at the size it lands at.
+  if (payload.type === "drink" || payload.type === "carton") trayObj.scale.setScalar(1);
   pt.held = { payload, counterObj, trayObj };
   pt.mode = "held";
   counter.setHeld(counterObj);
@@ -770,14 +774,15 @@ function moveHold(pt: Pointer): void {
   if (!pt.held) return;
   const band = bandAt(pt.y);
   if (band === "tray" || band === "customers") {
-    counter.moveHeld(new THREE.Vector3(), false);
+    counter.moveHeld(null);
     counter.highlightTrash(false);
     const slot = band === "tray" ? trayView.pick(ndcIn(bands.tray, pt.x, pt.y)) : game.active;
-    trayView.showGhost(slot >= 0 ? slot : game.active, pt.held.trayObj);
+    const p = pt.held.payload;
+    trayView.showGhost(slot >= 0 ? slot : game.active, pt.held.trayObj, p.type === "drink" ? "cup" : p.type === "carton" ? "fries" : "burger");
   } else {
     trayView.showGhost(-1, null);
     const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3);
-    counter.moveHeld(g, true);
+    counter.moveHeld(ndcIn(bands.counter, pt.x, pt.y));
     counter.highlightTrash(band === "counter" && counter.overTrash(g));
   }
 }
@@ -843,9 +848,6 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
       for (let i = s.plate.layers.length - 1; i >= 0 && s.plate.layers[i].piece.kind === p.kind; i--) n++;
       const want = s.order.layers.find((e) => e.kind === p.kind)?.count;
       if (want) showHint(`${KIND_LABEL[p.kind]} ${n} of ${want}${n > want ? ": generous!" : ""}`, 1.2);
-    } else if (s.order) {
-      const exp = s.order.layers[s.plate.layers.length - 1];
-      if (exp && exp.kind === "patty" && p.kind === "patty") showHint(`Patty: ${pattyLabel((p.cook[0] + p.cook[1]) / 2)}`, 1.5);
     }
     return true;
   }
@@ -937,7 +939,7 @@ function finishHold(pt: Pointer): void {
       const over = counter.overGrill(gTop);
       const [base, top] = payload.layers.map((l) => l.piece);
       const fits = payload.layers.length === 1 || (payload.layers.length === 2 && base.kind === "patty" && top.kind === "cheese");
-      if (over && fits && GRILLABLE.has(base.kind)) {
+      if (over && fits && GRILLABLE.has(base.kind) && grillSpotOk(base, over)) {
         counter.addGrillItem(base, over.x, over.z, top);
         sfx.sizzleHit();
         zoneHint(over.x);
@@ -945,19 +947,27 @@ function finishHold(pt: Pointer): void {
       }
     } else if (payload.type === "piece") {
       const over = counter.overGrill(gTop);
-      const under = over && payload.piece.kind === "cheese" ? counter.grillItemAt(gTop) : null;
-      if (under && counter.addTopping(under, payload.piece)) {
+      const under = over ? counter.grillItemAt(gTop) : null;
+      if (under && payload.piece.kind === "cheese" && counter.addTopping(under, payload.piece)) {
         sfx.plop();
         hintOnce("melt", "The cheese melts on the hot patty. Drag them up together when it slumps.", 3.5);
         done = true;
       } else if (over && payload.piece.kind === "cheese") {
         showHint(under?.topping ? "That patty already has cheese." : "Drop the cheese right on a patty to melt it.", 2);
-      } else if (over && GRILLABLE.has(payload.piece.kind)) {
-        counter.addGrillItem(payload.piece, over.x, over.z);
-        if (!payload.fromGrill) sfx.sizzleHit();
-        else sfx.thud();
-        zoneHint(over.x);
+      } else if (under && counter.canStack(under, payload.piece)) {
+        // Buns on buns, patties on patties: a stack to hold for later. Only the bottom one cooks.
+        counter.addGrillItem(payload.piece, under.x, under.z, undefined, under);
+        sfx.plop();
+        hintOnce("grill-stack", "Stacked. Only the bottom one touches the grill; park stacks on the warm end to hold them.", 3.5);
         done = true;
+      } else if (over && GRILLABLE.has(payload.piece.kind)) {
+        if (grillSpotOk(payload.piece, over)) {
+          counter.addGrillItem(payload.piece, over.x, over.z);
+          if (!payload.fromGrill) sfx.sizzleHit();
+          else sfx.thud();
+          zoneHint(over.x);
+          done = true;
+        }
       } else if (fast && !payload.fromGrill) {
         // Flicked up from a bin: toss it onto the active plate, a little less neatly.
         done = addToPlate(game.active, payload, has("steady") ? 0.08 : 0.22);
@@ -988,7 +998,7 @@ function finishHold(pt: Pointer): void {
 
   if (!done) {
     // Put things back where they came from.
-    if (payload.type === "piece" && payload.fromGrill) counter.addGrillItem(payload.piece, payload.fromGrill.x, payload.fromGrill.z);
+    if (payload.type === "piece" && payload.fromGrill) backOnGrill(payload.piece, payload.fromGrill);
     if (payload.type === "piece" && payload.fromPlate !== undefined) {
       // Lifted off a tray and dropped nowhere useful: it goes back on top.
       game.slots[payload.fromPlate].plate.layers.push({ piece: payload.piece, offX: 0, offZ: 0 });
@@ -1107,12 +1117,26 @@ function releaseEgg(pt: Pointer, dt: number, cancelled: boolean): void {
   }
   const over = counter.overGrill(g);
   if (!over) return;
-  if (counter.grillItemAt(g)) {
+  if (counter.grillItemAt(g) || counter.messAt(over.x, over.z) >= 0) {
     showHint("Crack it on a clear spot of the grill.", 1.8);
+    return;
+  }
+  const zone = counter.zoneAt(over.x);
+  if (zone !== FLAT_ZONE && zone !== GRILLE_ZONE) {
+    showHint("Crack eggs on the flat middle of the grill.", 2);
     return;
   }
   e.knock = 1;
   buzz(12);
+  if (zone === GRILLE_ZONE) {
+    // Through the grille: a mess that has to be rubbed off.
+    counter.addMess(over.x, over.z);
+    setEggStage("shells");
+    sfx.splash();
+    buzz([20, 30, 20]);
+    showHint("Eggs go through the grille! Rub the mess off, and crack eggs on the flat middle.", 3);
+    return;
+  }
   const clean = dt < EGG_CLEAN_TAP && !pt.moved;
   if (e.stage === "whole" && !clean) {
     setEggStage("cracked");
@@ -1141,11 +1165,32 @@ function updateEgg(dt: number): void {
   else e.obj.rotation.set(-0.35, 0, 1.25);
 }
 
+/** Can this piece go down here? Eggs only on the flat or warm part, and nothing on a mess. */
+function grillSpotOk(piece: Piece, at: { x: number; z: number }): boolean {
+  if (counter.messAt(at.x, at.z) >= 0) {
+    showHint("Rub the egg off the grille first.", 2);
+    return false;
+  }
+  if (piece.kind === "egg" && counter.zoneAt(at.x) === GRILLE_ZONE) {
+    showHint("Eggs fall through the grille. Keep them on the flat middle.", 2.2);
+    return false;
+  }
+  return true;
+}
+
+/** Put a piece back where it was lifted from the grill: back on its stack if there is one. */
+function backOnGrill(piece: Piece, at: { x: number; z: number }): void {
+  const under = counter.grillItemAt(counter.world(HOME_PAGE, at.x, GRILL_TOP, at.z));
+  counter.addGrillItem(piece, at.x, at.z, undefined, under && counter.canStack(under, piece) && Math.hypot(under.x - at.x, under.z - at.z) < 0.1 ? under : null);
+}
+
 /** Something just went down on a grill zone that's off or only warm: say so, once each. */
 function zoneHint(x: number): void {
-  const heat = counter.zones[counter.zoneAt(x)];
+  const zone = counter.zoneAt(x);
+  const heat = counter.zones[zone];
   if (heat === "off") showHint("That part of the grill is off. Tap its button on the front to heat it.", 2.5);
-  else if (heat === "warm") hintOnce("zone-warm", "Warm keeps food hot without cooking it much. Park finished food here.", 3);
+  else if (heat === "warm") hintOnce("zone-warm", "Warm holds food without cooking it, and nothing goes stale there. Park finished food here.", 3.5);
+  else if (zone === GRILLE_ZONE) hintOnce("grille", "The grille sears grill marks into patties: customers love them.", 3.5);
 }
 
 /** Curds or gravy onto fries in a carton (on a pad or a plate). False if it's already on. */
@@ -1541,12 +1586,17 @@ canvas.addEventListener("pointerdown", (e) => {
       startHold(pt, { type: "piece", piece: newPiece(hit.kind), fromGrill: null });
     }
     else if (hit.type === "grillItem") pt.mode = "grill";
+    else if (hit.type === "mess") {
+      pt.mode = "rub";
+      pt.wipe = hit.idx;
+      hintOnce("rub", "Rub it back and forth to scrape it off.", 2);
+    }
     else if (hit.type === "zone") {
       const heat = counter.cycleZone(hit.idx);
       sfx.flip();
       buzz(10);
       hintOnce("zones", "Each button cycles its zone: off, warm, hot. The strip along the front shows it: blue, orange, red.", 3.5);
-      if (heat === "warm") hintOnce("zone-warm", "Warm keeps food hot without cooking it much. Park finished food here.", 3);
+      if (heat === "warm") hintOnce("zone-warm", "Warm holds food without cooking it, and nothing goes stale there. Park finished food here.", 3.5);
     }
     else if (hit.type === "bottle") startSauce(pt, hit.sauce);
     else if (hit.type === "friesBin") startHold(pt, { type: "fries", cook: 0, basket: null, amount: FRIES_SCOOP });
@@ -1642,6 +1692,14 @@ canvas.addEventListener("pointermove", (e) => {
       }
       break;
     }
+    case "rub":
+      // Scrub egg off the grille.
+      if (counter.rubMess(pt.wipe, Math.hypot(pt.x - lastX, pt.y - lastY) / 380)) {
+        sfx.pop();
+        showHint("All clean.", 1.2);
+        pt.mode = "none";
+      }
+      break;
     case "grill":
       // Turn into a drag once the finger travels sideways or down, reaches the tray, or lingers.
       // A quick upward flick that stays on the counter is a flip, decided on release.
@@ -1719,15 +1777,17 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       break;
     case "grill":
       if (!cancelled && pt.hit?.type === "grillItem" && (flickUp || !pt.moved)) {
-        if (flickUp) {
-          if (counter.flip(pt.hit.item)) {
+        // A tap or a flick up flips it; a drag moves it.
+        if (flickUp || dt < 400) {
+          const it = pt.hit.item;
+          if (counter.flip(it)) {
             sfx.flip();
             buzz(15);
-            hintOnce("flip-done", "Nice flip!", 1.2);
-          } else if (pt.hit.item.piece.kind === "patty") showHint("No need to flip patties: they cook through on one side. Take them off at Medium.", 2.5);
-          else if (pt.hit.item.topping) showHint("Take the cheese off first.", 2);
-          else if (pt.hit.item.piece.kind === "egg") showHint("Eggs stay sunny side up. Drag it to the tray when the white sets.", 2.5);
-        } else showHint(pt.hit.item.piece.kind === "patty" || pt.hit.item.piece.kind === "egg" ? "Drag it to the tray when it's ready." : "Swipe up to flip, or drag it to the tray.", 2);
+            hintOnce("flip-done", it.piece.kind === "egg" ? "Flipped: over easy. Leave it sunny side up for orders that want it." : "Nice flip! Flipping cooks it evenly.", 2);
+          } else if (it.piece.kind === "bun") showHint("Buns toast cut side down: no need to flip them.", 2);
+          else if (it.topping) showHint("Take the cheese off first.", 2);
+          else if (counter.above(it)) showHint("Take the top one off the stack first.", 2);
+        } else showHint(pt.hit.item.piece.kind === "bun" ? "Drag it to the tray when it's toasted." : "Tap it to flip, or drag it to the tray.", 2);
       }
       break;
     case "basket":
@@ -2664,7 +2724,7 @@ function updateUi(dt = 0): void {
   // Tab dots: something needs attention on that counter.
   const friesReady = counter.baskets.some((b) => b.loaded && friesZone(b.cook) === "done");
   const friesBurning = counter.baskets.some((b) => b.loaded && b.down && b.cook >= FRIES_ZONE.over - 0.05);
-  const grillBurning = counter.grillItems.some((g) => g.piece.cook[0] > 0.85);
+  const grillBurning = counter.grillItems.some((g) => !g.below && g.piece.kind in COOK_SCALE && cookLevel(g.piece) > COOK_SCALE[g.piece.kind as Cookable].over + 0.1);
   const dots = [false, grillBurning, friesReady || friesBurning];
   const hot = [false, grillBurning, friesBurning];
   ui.tabDots.forEach((d, i) => {
@@ -2683,39 +2743,15 @@ function updateUi(dt = 0): void {
   ui.hint.hidden = !show;
 }
 
-/** Small doneness tags floating over grill items, so players don't have to judge colour alone. */
+/** A doneness meter under each grill item (the top of each stack), so players don't have to judge colour alone. */
 const grillTags: HTMLElement[] = [];
-/** Colour for each doneness band, so the grill tag can be read at a glance. */
-/** Cook thresholds of each patty doneness level, to show progress through the current one. */
-const DONENESS_BANDS: [string, number, number][] = [["raw", 0, 0.18], ["rare", 0.18, 0.43], ["medium", 0.43, 0.67], ["well", 0.67, 0.92], ["burnt", 0.92, 1.2]];
 
-function itemTag(p: Piece): string {
-  switch (p.kind) {
-    case "patty": {
-      // One pill: its level and how far into it the patty is. Medium (what every customer wants) gets a tick.
-      const t = p.cook[0];
-      const [d, lo, hi] = DONENESS_BANDS.find(([, , h]) => t < h) ?? DONENESS_BANDS[4];
-      return `<i class="pind">${donenessPill(d, (t - lo) / (hi - lo), d === "medium" ? "ok" : "")}</i>`;
-    }
-    case "bacon": {
-      const t = avgCook(p);
-      return t >= 1 ? "Burnt" : t >= 0.4 ? "Crispy" : p.cook[0] > 0.3 && p.cook[1] < 0.1 ? "Flip me" : "Raw";
-    }
-    case "egg": {
-      const t = Math.max(p.cook[0], p.cook[1]);
-      return t >= 1 ? "Rubbery" : t >= 0.35 ? "Set" : "Runny";
-    }
-    case "pineapple": {
-      const t = Math.max(p.cook[0], p.cook[1]);
-      return t >= 1 ? "Burnt" : t >= 0.35 ? "Grilled" : "Grilling";
-    }
-    case "bun": {
-      const t = bunToast(p);
-      return t >= 0.95 ? "Burnt" : t >= 0.35 ? "Toasted" : "Toasting";
-    }
-    default:
-      return "";
-  }
+/** The meter for a grill item, and how many are in its stack. */
+function itemTag(it: GrillItem): string {
+  const k = it.piece.kind;
+  const meter = k in COOK_SCALE ? cookMeter(k as Cookable, cookLevel(it.piece)) : "";
+  const n = counter.stackSize(it);
+  return `${meter}${n > 1 ? `<b class="sc">×${n}</b>` : ""}`;
 }
 /**
  * Staleness bars beside the trays: a slim vertical bar that drains as the cooked food on the tray
@@ -2792,15 +2828,8 @@ function updateStaleUi(): void {
   });
 }
 
-/**
- * A fries doneness meter: underdone, done and overdone zones, a line at perfect, and a marker
- * for where these fries are now.
- */
-function friesMeter(cook: number): string {
-  const end = FRIES_ZONE.burnt;
-  const pct = (v: number) => `${((Math.min(end, Math.max(0, v)) / end) * 100).toFixed(1)}%`;
-  return `<span class="fmeter ${friesZone(cook)}${cook >= end ? " burnt" : ""}" style="--u:${pct(FRIES_ZONE.done)};--d:${pct(FRIES_ZONE.over)};--p:${pct(FRIES_PERFECT)}"><i style="left:${pct(cook)}"></i></span>`;
-}
+/** Fries read on the same meter as everything else. */
+const friesMeter = (cook: number): string => cookMeter("fries", cook);
 
 /**
  * The big level bar down the left of the counter: it fades in while a drink pours (how full the
@@ -2880,10 +2909,11 @@ function updateFryTags(): void {
 }
 
 function updateGrillTags(): void {
-  const items = game.phase === "playing" ? counter.grillItems : [];
+  // One tag per stack, under its top item.
+  const items = game.phase === "playing" ? counter.grillItems.filter((g) => !counter.above(g)) : [];
   while (grillTags.length < items.length) {
     const el = document.createElement("div");
-    el.className = "gtag";
+    el.className = "gtag pt";
     ui.root.appendChild(el);
     grillTags.push(el);
   }
@@ -2894,19 +2924,13 @@ function updateGrillTags(): void {
       return;
     }
     // Under the item, or over its front edge on the front row, clear of the zone buttons.
-    const v = it.obj.position.clone().add(new THREE.Vector3(0, 0.2, Math.min(0.66, counter.grillTagZ - it.z))).project(counter.camera);
+    const v = it.obj.position.clone().setY(GRILL_TOP).add(new THREE.Vector3(0, 0.2, Math.min(0.36, counter.grillTagZ - it.z))).project(counter.camera);
     const x = ((v.x + 1) / 2) * bands.counter.w;
-    const patty = it.piece.kind === "patty";
-    el.hidden = x < 0 || x > bands.counter.w || (it.flipT >= 0 && !patty);
+    el.hidden = x < 0 || x > bands.counter.w || it.flipT >= 0;
     if (el.hidden) return;
-    const html = itemTag(it.piece);
+    const html = itemTag(it);
     if (el.innerHTML !== html) el.innerHTML = html;
-    // The patty indicator flips with the patty.
-    if (patty) (el.firstElementChild as HTMLElement).style.transform = it.flipT >= 0 ? `scaleY(${Math.cos(Math.PI * Math.min(1, it.flipT)).toFixed(3)})` : "";
-    el.classList.toggle("pt", patty);
-    const burning = Math.max(it.piece.cook[0], it.piece.cook[1]) >= (it.piece.kind === "patty" || it.piece.kind === "bacon" ? 0.92 : 0.95);
     const heat = counter.heatOf(it);
-    el.classList.toggle("hot", burning && heat === "hot");
     el.classList.toggle("warm", heat === "warm");
     el.classList.toggle("off", heat === "off");
     el.style.left = `${x}px`;
@@ -2975,6 +2999,7 @@ window.addEventListener("blur", cancelPointer);
   goToPage,
   goToStop,
   eggInHand: () => eggHand?.stage ?? null,
+  cookLevel,
   stops: STOPS.length,
   ring: ringBell,
   callNext,

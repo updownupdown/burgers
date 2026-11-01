@@ -4,7 +4,7 @@ import { pieceFor, popularityChange, willingnessToPay } from "./press";
 import { applyMods, makeOrder, orderFromRecipe, seededRng, sidesOrder } from "./menu";
 import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent } from "./stops";
 import { passed, upgradeChoices } from "./progress";
-import { alignLayers, payout, scorePlate } from "./scoring";
+import { alignLayers, layerQuality, payout, scorePlate } from "./scoring";
 import { FRIES_PERFECT, FRIES_ZONE, FRY_RATE } from "./cooking";
 import type { Kind, Layer, Order, Piece, Plate } from "./types";
 import { DONENESS_TARGET, newPiece } from "./types";
@@ -389,7 +389,7 @@ describe("recipe modifiers", () => {
         const o = makeOrder(i, rng, 1, stop);
         if (!o.layers.length) continue;
         for (const m of o.mods) {
-          expect(["bun", "patty"]).not.toContain(m.kind);
+          if (m.type !== "toast") expect(["bun", "patty"]).not.toContain(m.kind);
           if (m.type === "add") expect(stop.pantry).toContain(m.kind);
         }
         expect(o.layers[0].kind).toBe("bun");
@@ -520,5 +520,36 @@ describe("drinks-only and fries-only customers", () => {
     expect(r.notes).toContain("didn't order a burger");
     expect(r.score).toBeLessThan(90);
     expect(r.faulty).toBe(false);
+  });
+});
+
+describe("grill marks, flips and eggs", () => {
+  const ord = (layers: Order["layers"]): Order => ({ id: 1, name: "T", price: 9, mods: [], layers, fries: false, drink: null, friesSize: "S", drinkSize: "M" });
+  const lay = (p: Piece) => ({ piece: p, offX: 0, offZ: 0 });
+  const bun = () => newPiece("bun");
+  it("adds a little for a patty with grill marks", () => {
+    const o = ord([{ kind: "bun" }, { kind: "patty" }, { kind: "bun" }]);
+    const plain = newPiece("patty");
+    plain.cook = [0.55, 0.55];
+    const marked = newPiece("patty");
+    marked.cook = [0.55, 0.55];
+    marked.marks = [0.8, 0];
+    const a = scorePlate(o, { layers: [lay(bun()), lay(plain), lay(bun())], fries: null, drink: null });
+    const b = scorePlate(o, { layers: [lay(bun()), lay(marked), lay(bun())], fries: null, drink: null });
+    expect(b.score).toBeGreaterThanOrEqual(a.score);
+    expect(b.perks).toContain("grill marks");
+  });
+  it("chars a patty face left down too long, even when the middle is fine", () => {
+    const p = newPiece("patty");
+    p.cook = [1.1, 0.1];
+    expect(layerQuality({ kind: "patty" }, p)[1]).toBe("charred on one side");
+  });
+  it("wants eggs sunny side up or over easy, as the menu says", () => {
+    const e = newPiece("egg");
+    e.cook = [0.45, 0.15];
+    expect(layerQuality({ kind: "egg" }, e)[0]).toBe(1);
+    expect(layerQuality({ kind: "egg", flipped: true }, e)[1]).toBe("wanted the egg over easy");
+    e.flips = 1;
+    expect(layerQuality({ kind: "egg", flipped: true }, e)[0]).toBe(1);
   });
 });

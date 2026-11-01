@@ -1,6 +1,7 @@
 import type { Order, Plate } from "./game/types";
+import { COOK_SCALE, cookZone, type Cookable } from "./game/cooking";
 import { collapseCounted, layerQuality, PATTY_OFF } from "./game/scoring";
-import { DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, DRINKS, KIND_COLOR, KIND_LABEL } from "./game/types";
+import { COUNTED, DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, DRINKS, extraCount, KIND_COLOR, KIND_LABEL } from "./game/types";
 import { icon } from "./ui/icons";
 
 
@@ -139,6 +140,18 @@ export function donenessPill(d: string, progress?: number, cls = ""): string {
   return `<span class="dpill ${d} ${cls}" style="--c:${p.color}"><b>${p.label}</b>${bar}</span>`;
 }
 
+/**
+ * The one doneness meter, for everything that cooks: three regions (not done enough, done,
+ * over-done; the end is burnt), a dark line at perfect, and a caret over where it is now. What's
+ * still ahead is veiled, so the meter fills as it cooks and the caret never hides the reading.
+ * No words: the regions take the ingredient's own colours.
+ */
+export function cookMeter(kind: Cookable, t: number): string {
+  const z = COOK_SCALE[kind];
+  const pct = (v: number) => `${((Math.min(z.burnt, Math.max(0, v)) / z.burnt) * 100).toFixed(1)}%`;
+  return `<span class="cmeter ${kind} ${cookZone(kind, t)}" style="--u:${pct(z.done)};--d:${pct(z.over)};--p:${pct(z.perfect)};--v:${pct(t)}"><i></i></span>`;
+}
+
 /** How a waiting customer feels. The figure at the window and the face on their ticket always agree. */
 export function patienceMood(pct: number): "neutral" | "sad" | "angry" {
   return pct >= 0.5 ? "neutral" : pct >= 0.2 ? "sad" : "angry";
@@ -231,6 +244,8 @@ interface TicketRow {
   next: boolean;
   /** A piece on the plate the order has no line for. */
   extra?: boolean;
+  /** A leave-off ("NO Ketchup"). */
+  removed?: boolean;
 }
 
 function rowHtml(r: TicketRow): string {
@@ -274,7 +289,13 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
   }
   // Runs of counted toppings are one layer; a layer is done once it has its full count.
   const stacked = collapseCounted(plate.layers);
-  const modded = new Set(order.mods.filter((m) => m.type !== "no").map((m) => m.kind));
+  // Which ticket line each add-on or extra changed: the added layer sits highest of its kind.
+  const addedAt = new Map<number, "add" | "extra">();
+  for (const m of order.mods) {
+    if (m.type !== "add" && m.type !== "extra") continue;
+    const i = order.layers.map((l) => l.kind).lastIndexOf(m.kind);
+    if (i >= 0) addedAt.set(i, COUNTED.has(m.kind) && m.type === "extra" ? "extra" : "add");
+  }
   // The ticket is forgiving (the score isn't): each piece on the plate ticks off the lowest
   // ticket line of its kind still open, wherever it went in the stack, so a slip never asks for
   // another copy. A raw or burnt patty, or a counted topping left short under other
@@ -309,7 +330,7 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     }
     const k = st.piece.kind;
     const icon = k === "bun" ? (j === 0 ? "bunBottom" : "bunTop") : k;
-    const row: TicketRow = { icon, color: KIND_COLOR[k], label: KIND_LABEL[k], tail: st.count > 1 ? `<span class="n">×${st.count}</span>` : "", state: "wrong", mod: false, next: false, extra: true };
+    const row: TicketRow = { icon, color: KIND_COLOR[k], label: KIND_LABEL[k] + (st.count > 1 ? countMark(`x${st.count}`) : ""), tail: "", state: "wrong", mod: false, next: false, extra: true };
     extrasAt.set(below, [row, ...(extrasAt.get(below) ?? [])]);
   });
   // Extras above the top of the build go first in the list.
@@ -325,25 +346,36 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     } else if (exp.kind === "patty") {
       if (exp.smashed) icon = "smashed";
       if (exp.smashed) tail = `<span class="mb smash" title="Smash">${SMASH_SVG}</span>`;
-    } else if (exp.kind === "pineapple") tail = modBox("grill", "Grill");
+    } else if (exp.kind === "egg") tail = exp.flipped ? modBox("flip", "Flip") : modBox("sunny", "Sunny");
+    else if (exp.kind === "pineapple") tail = modBox("grill", "Grill");
     else if (exp.melted) tail = modBox("melt", "Melt");
+    // "ADD Bacon", "ADD Tomato x2": an add-on, or the added copy of a doubled layer. A counted
+    // topping asked for extra keeps its one line with the full count and says how many are added.
+    const add = addedAt.get(i);
+    if (add === "add") label = `${kw("ADD")}${label}`;
     if (exp.count) {
       const short = got[i] && got[i] < exp.count;
-      tail += `<span class="n">${short ? `${got[i]}/` : "×"}${exp.count}</span>`;
-    }
+      label += countMark(short ? `${got[i]}/${exp.count}` : `x${exp.count}`);
+      if (add === "extra") tail = modBox("add", `ADD ${extraCount(exp.kind)}`) + tail;
+    } else if (add === "extra") label = `${kw("ADD")}${label}`;
     for (const r of removed.filter((r) => r.at === i + 1)) rows.push(removedRow(r.kind, states[i + 1] ?? ""));
     if (i < order.layers.length - 1) rows.push(...(extrasAt.get(i) ?? []));
-    rows.push({ icon, color: KIND_COLOR[exp.kind], label, tail, state: states[i], mod: modded.has(exp.kind), next: i === nextIdx });
+    rows.push({ icon, color: KIND_COLOR[exp.kind], label, tail, state: states[i], mod: !!add, next: i === nextIdx });
   }
   rows.push(...(extrasAt.get(-1) ?? []));
   for (const r of removed.filter((r) => r.at === 0)) rows.push(removedRow(r.kind, states[0] ?? ""));
   return rows;
 }
 
-/** "- Ketchup": a leave-off, where it would have gone. Crossed off once the layer above it is on. */
+/** A keyword in front of a line: "NO Ketchup", "ADD Bacon". */
+const kw = (w: string) => `<b class="kw">${w}</b> `;
+/** How many go on, right after the name: "Pickles x3", or "2/3" while it's short. */
+const countMark = (t: string) => ` <b class="cnt">${t}</b>`;
+
+/** "NO Ketchup": a leave-off, where it would have gone. Crossed off once the layer above it is on. */
 function removedRow(kind: Order["layers"][number]["kind"], above: RowState): TicketRow {
   const icon = kind === "bun" ? "bunTop" : kind;
-  return { icon, color: KIND_COLOR[kind], label: `− ${KIND_LABEL[kind]}`, tail: "", state: above === "done" ? "done" : "", mod: true, next: false };
+  return { icon, color: KIND_COLOR[kind], label: `${kw("NO")}${KIND_LABEL[kind]}`, tail: "", state: above === "done" ? "done" : "", mod: true, next: false, removed: true };
 }
 
 /**
@@ -380,6 +412,18 @@ function nameMarks(order: Order): string {
   return `${order.mods.length ? `<span class="ast">*</span>` : ""}${extras ? `<span class="plus">+${extras}</span>` : ""}`;
 }
 
+/** What an order changes from the menu, for the folded stub: "NO Pickles", "ADD Bacon", "Toast". */
+export function exceptions(order: Order): string[] {
+  const out = order.mods.map((m) => {
+    if (m.type === "toast") return `${kw("TOAST")}Bun`;
+    const label = KIND_LABEL[m.kind];
+    if (m.type === "no") return `${kw("NO")}${label}`;
+    return `${kw("ADD")}${label}${m.type === "extra" && COUNTED.has(m.kind) ? countMark(`x${extraCount(m.kind)}`) : ""}`;
+  });
+  if (order.drink && order.ice === false) out.push(`${kw("NO")}Ice`);
+  return out;
+}
+
 /**
  * Ticket HTML for the focus rail. The order being worked on (`focused`) is a full receipt: patience,
  * the name, then the whole build top to bottom with the fries and drink beside it. The others are
@@ -392,15 +436,11 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, focused
   const bar = `<span class="bar"><i style="width:${(pct * 100).toFixed(0)}%"></i></span>`;
   const rows = buildRows(order, plate);
   if (!focused) {
-    const build = rows.filter((r) => !r.extra && !r.label.startsWith("−"));
-    const left = build.filter((r) => !r.state).length;
-    const pips = build
-      .reverse()
-      .map((r) => `<i class="${r.state}" style="--k:${r.color}"></i>`)
-      .join("");
+    // A stub is just the name and what's different from the menu.
+    const ex = exceptions(order);
     return `<div class="pat ${mood}">${moodFace(mood, !!order.critic)}${bar}</div>
       <div class="name"><span class="l">${esc(shortName(order.name))}</span>${nameMarks(order)}</div>
-      <div class="left">${left ? `<b>${left}</b> left` : "Ready"}</div><div class="pips">${pips}</div>`;
+      ${ex.length ? `<ul class="ex">${ex.map((e) => `<li>${e}</li>`).join("")}</ul>` : ""}`;
   }
   let list = rows;
   let folded = "";

@@ -31,6 +31,13 @@ export const SCALE = {
 export type FoodCategory = keyof typeof SCALE;
 
 /**
+ * Food on the counters (on the grill, in the pans and in the hand) is drawn closer to life size
+ * than on the trays: 1.15 times, so the grill holds a realistic load (about six patties a zone)
+ * and the pieces in the pans match the one you pull out.
+ */
+export const COUNTER_FOOD = 0.575 * 1.15 * STUDY;
+
+/**
  * A category's scale against burger parts. A view that zooms food (the tray plates) draws a
  * burger at s and keeps everything consistent by drawing fries at s * relScale("fries").
  */

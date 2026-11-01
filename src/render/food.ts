@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { avgCook, bunToast, isMelted } from "../game/cooking";
+import { avgCook, bunToast, cookLevel, isFlipped, isMelted } from "../game/cooking";
 import type { Kind, Piece } from "../game/types";
 import { COUNTED, SAUCE_RADIUS } from "../game/types";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
@@ -268,12 +268,27 @@ function makePatty(piece: Piece, body: THREE.Group): (p: Piece) => void {
   const fat = detail(PATTY_DETAIL.fat, true);
   const juice = detail(PATTY_DETAIL.juice);
   const cracks = detail(PATTY_DETAIL.cracks);
+  // Grill marks from the grille: dark diagonal bars across the top. (Marks on either face show
+  // on top, so a patty seared on the grille always looks it.)
+  const marks = new THREE.Group();
+  const markMat = toon("#2a170e", { unique: true });
+  for (let i = 0; i < 5; i++) {
+    const len = 2 * Math.sqrt(Math.max(0.1, 0.8 - ((i - 2) * 0.36) ** 2));
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(len, 0.012, 0.11), markMat);
+    bar.position.z = (i - 2) * 0.36;
+    bar.castShadow = false;
+    marks.add(bar);
+  }
+  marks.rotation.y = Math.PI / 4 + seed * 0.1;
+  marks.visible = false;
+  body.add(marks);
   body.add(m);
   let key = "";
   return (p) => {
     const down = p.cook[0];
     const up = p.cook[1];
-    const k = `${Math.round(down * 40)}|${Math.round(up * 40)}|${p.smashed ? 1 : 0}`;
+    const mk = Math.max(p.marks?.[0] ?? 0, p.marks?.[1] ?? 0);
+    const k = `${Math.round(down * 40)}|${Math.round(up * 40)}|${p.smashed ? 1 : 0}|${Math.round(mk * 10)}`;
     if (k === key) return;
     key = k;
     const t = (down + up) / 2;
@@ -314,6 +329,10 @@ function makePatty(piece: Piece, body: THREE.Group): (p: Piece) => void {
     cracks.visible = up > 0.95;
     cracks.position.y = top;
     cracks.scale.set(R0, 1, R0);
+    marks.visible = mk > 0.12;
+    marks.position.y = top + 0.004;
+    marks.scale.set(R0, 1, R0);
+    markMat.color.copy(cu).lerp(tmpE.set("#1d100a"), clamp(0.35 + mk * 0.65));
   };
 }
 
@@ -546,10 +565,13 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       body.add(white, midW, yolk, shine);
       let key = -1;
       set((p) => {
-        const cook = Math.max(p.cook[0], p.cook[1]);
-        const k = Math.round(cook * 30);
+        const cook = cookLevel(p);
+        const over = isFlipped(p);
+        const k = Math.round(cook * 30) * 2 + (over ? 1 : 0);
         if (k === key) return;
         key = k;
+        // Flipped (over easy): the yolk is under a veil of cooked white, and the shine is gone.
+        midW.visible = !over;
         // A crisp, lacy brown edge creeps in as it cooks; the glossy yolk dulls as it sets.
         const lace = smooth(0.25, 0.8, cook);
         const W = grade(eggWhite(Math.min(cook, 0.8), tmpA), tmpA);
@@ -566,10 +588,11 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
         setLine(white, edgeCol.clone().lerp(tmpD.set("#8a6a40"), lace));
         (midW.material as THREE.MeshToonMaterial).color.set("#ffffff").lerp(eggWhite(cook, tmpD), 0.5);
         (yolk.material as THREE.MeshToonMaterial).color.set("#ffa412").lerp(tmpD.set("#f2c457"), clamp((cook - 0.55) * 2.2));
-        const yh = lerp(0.85, 0.6, clamp(cook));
-        yolk.scale.set(1, yh, 1);
+        if (over) (yolk.material as THREE.MeshToonMaterial).color.lerp(tmpD.set("#fbf3df"), 0.72);
+        const yh = lerp(0.85, 0.6, clamp(cook)) * (over ? 0.55 : 1);
+        yolk.scale.set(over ? 1.15 : 1, yh, over ? 1.15 : 1);
         shine.position.y = 0.07 + 0.32 * yh * 0.85;
-        shine.visible = cook < 0.7;
+        shine.visible = cook < 0.7 && !over;
       });
       break;
     }

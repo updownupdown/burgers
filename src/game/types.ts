@@ -31,6 +31,10 @@ export interface Piece {
   held?: number;
   /** Sauce stroke, in plate-local units (x, z), for ketchup/mustard layers. */
   stroke?: { x: number; z: number }[];
+  /** Times it's been flipped on the grill (an egg flipped once is over easy). */
+  flips?: number;
+  /** Patties: grill marks seared into each face by the grille, 0..1 (`[down, up]`, like `cook`). */
+  marks?: [number, number];
 }
 
 export interface Layer {
@@ -84,11 +88,13 @@ export interface ExpectedLayer {
   melted?: boolean;
   /** Counted toppings (COUNTED): how many pieces go in this layer. */
   count?: number;
+  /** Eggs: flipped once on the grill (over easy). Unset is sunny side up. */
+  flipped?: boolean;
 }
 
-/** A change to a known recipe: "no pickles", "extra cheese", "add bacon". */
+/** A change to a known recipe: "no pickles", "extra cheese", "add bacon", or a toasted bun on a burger that usually isn't. */
 export interface Modifier {
-  type: "no" | "extra" | "add";
+  type: "no" | "extra" | "add" | "toast";
   kind: Kind;
 }
 

@@ -31,9 +31,139 @@ const MIN_FIT = 0.55;
  * short: a true-size cup's lid sits on the band's top edge and its straw leaves the picture, and
  * the lid and straw are what you check before serving.
  */
-const TRAY_SIDES = 0.6;
+export const TRAY_SIDES = 0.6;
 const ACTIVE_RING = "#c8472e";
 export const TRAY_VIEW_HALF_H = 2.2;
+
+/**
+ * Tray looks, for James to pick from (the study screenshots each; `?tray=` or the bv-tray
+ * setting chooses one): the kraft board with a paper liner (the look since build #41), a red
+ * diner tray, a steel sheet pan with parchment, a wooden serving board, and a woven basket.
+ * Every one keeps the same footprint (TRAY) and top height (0.13), so food sits the same.
+ */
+export type TrayStyle = "kraft" | "diner" | "sheet" | "board" | "basket";
+export const TRAY_STYLES: TrayStyle[] = ["kraft", "diner", "sheet", "board", "basket"];
+export function trayStyle(): TrayStyle {
+  try {
+    const q = new URLSearchParams(location.search).get("tray") ?? localStorage.getItem("bv-tray");
+    if (q && (TRAY_STYLES as string[]).includes(q)) return q as TrayStyle;
+  } catch {
+    // No storage: the default look.
+  }
+  return "kraft";
+}
+
+function makeTrayBody(style: TrayStyle): THREE.Group {
+  const g = new THREE.Group();
+  const { w, d } = TRAY;
+  const rimmed = (color: string, rimH: number, rimT: number, radius: number, opts: { ink?: number } = {}) => {
+    const base = mesh(faceted(new RoundedBoxGeometry(w, 0.12, d, 3, radius)), color);
+    base.position.y = 0.06;
+    g.add(base);
+    const long = faceted(new RoundedBoxGeometry(w, rimH, rimT, 2, Math.min(rimT, rimH) / 2.2));
+    const short = faceted(new RoundedBoxGeometry(rimT, rimH, d, 2, Math.min(rimT, rimH) / 2.2));
+    for (const k of [-1, 1]) {
+      const a = mesh(long, color, { ink: opts.ink ?? 0.012 });
+      a.position.set(0, 0.06 + rimH / 2, k * (d / 2 - rimT / 2));
+      const b = mesh(short, color, { ink: opts.ink ?? 0.012 });
+      b.position.set(k * (w / 2 - rimT / 2), 0.06 + rimH / 2, 0);
+      g.add(a, b);
+    }
+  };
+  const liner = (color: string, inset: number, turn = 0.02, check?: string) => {
+    const l = mesh(faceted(new THREE.BoxGeometry(w - inset, 0.01, d - inset * 0.95)), color, { ink: false });
+    l.position.y = 0.125;
+    l.rotation.y = turn;
+    g.add(l);
+    if (check) {
+      // A printed checker band round the liner's edge.
+      const n = 18;
+      for (let i = 0; i < n; i++) {
+        for (const k of [-1, 1]) {
+          if (i % 2) continue;
+          const sq = mesh(faceted(new THREE.BoxGeometry((w - inset) / n, 0.004, 0.09)), check, { ink: false });
+          sq.position.set(-(w - inset) / 2 + ((i + 0.5) * (w - inset)) / n, 0.132, k * ((d - inset * 0.95) / 2 - 0.05));
+          l.add(sq);
+          sq.position.y -= 0.125;
+        }
+      }
+    }
+  };
+  switch (style) {
+    case "kraft":
+      rimmed(TRAY_KRAFT, 0.1, 0.1, 0.1);
+      liner(TRAY_LINER, 0.36);
+      break;
+    case "diner":
+      // A moulded red fast-food tray: tall rounded rim, glossy, a checked paper sheet.
+      rimmed("#c8402f", 0.16, 0.16, 0.18);
+      liner("#fbf6ea", 0.42, -0.015, "#d8574a");
+      break;
+    case "sheet": {
+      // A half sheet pan: rolled steel edge, a sheet of parchment.
+      rimmed("#c7cfcd", 0.1, 0.07, 0.06, { ink: 0.01 });
+      liner("#efe3c6", 0.3, 0.035);
+      break;
+    }
+    case "board": {
+      // A wooden serving board: thick end grain, a handle at one end, greaseproof paper.
+      const b = mesh(faceted(new RoundedBoxGeometry(w, 0.16, d, 3, 0.12)), "#b77b45");
+      b.position.y = 0.05;
+      g.add(b);
+      for (let i = 0; i < 5; i++) {
+        const grain = mesh(faceted(new THREE.BoxGeometry(w - 0.3, 0.004, 0.02)), "#9c6534", { ink: false });
+        grain.position.set(0, 0.131, -d / 2 + 0.2 + i * ((d - 0.4) / 4));
+        g.add(grain);
+      }
+      liner("#f6efdf", 0.7, -0.06);
+      break;
+    }
+    case "basket": {
+      // A red woven basket: a shallow plastic weave, the classic burger-and-fries basket.
+      rimmed("#d2473a", 0.2, 0.12, 0.3);
+      for (let i = 0; i < 9; i++) {
+        const slot = mesh(faceted(new THREE.BoxGeometry(0.05, 0.004, d - 0.5)), "#9e2e24", { ink: false });
+        slot.position.set(-w / 2 + 0.35 + (i * (w - 0.7)) / 8, 0.122, 0);
+        g.add(slot);
+      }
+      liner("#fbf6ea", 0.55, 0.05, "#d8574a");
+      break;
+    }
+  }
+  return g;
+}
+
+/** A dashed outline on the liner where a side goes: a circle for the cup, a boat for the fries. */
+function sideMark(kind: "cup" | "fries"): THREE.Group {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color: "#b9a888", transparent: true, opacity: 0.85 });
+  const n = kind === "cup" ? 14 : 18;
+  for (let i = 0; i < n; i++) {
+    const t = i / n;
+    let x: number, z: number, a: number;
+    if (kind === "cup") {
+      a = t * Math.PI * 2;
+      [x, z] = [Math.cos(a) * 0.36, Math.sin(a) * 0.36];
+      a += Math.PI / 2;
+    } else {
+      // Round a rounded rectangle 0.86 x 0.62.
+      const w = 0.43;
+      const d = 0.31;
+      const per = 2 * (2 * w + 2 * d);
+      let u = t * per;
+      if (u < 2 * w) [x, z, a] = [-w + u, -d, 0];
+      else if ((u -= 2 * w) < 2 * d) [x, z, a] = [w, -d + u, Math.PI / 2];
+      else if ((u -= 2 * d) < 2 * w) [x, z, a] = [w - u, d, 0];
+      else [x, z, a] = [-w, d - (u - 2 * w), Math.PI / 2];
+    }
+    const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.035), mat);
+    dash.rotation.set(-Math.PI / 2, 0, -a);
+    dash.position.set(x, 0, z);
+    g.add(dash);
+  }
+  g.visible = false;
+  return g;
+}
 
 interface StackEntry {
   uid: number;
@@ -78,21 +208,7 @@ export class PlateView {
   headroom = Infinity;
 
   constructor() {
-    // The tray: a kraft board with a low rim and a paper liner.
-    const board = mesh(faceted(new RoundedBoxGeometry(TRAY.w, 0.12, TRAY.d, 2, 0.1)), TRAY_KRAFT);
-    board.position.y = 0.06;
-    const longRim = faceted(new RoundedBoxGeometry(TRAY.w, 0.1, 0.1, 2, 0.04));
-    const shortRim = faceted(new RoundedBoxGeometry(0.1, 0.1, TRAY.d, 2, 0.04));
-    const rims = [-1, 1].flatMap((k) => {
-      const a = mesh(longRim, TRAY_KRAFT, { ink: 0.012 });
-      a.position.set(0, 0.16, k * (TRAY.d / 2 - 0.05));
-      const b = mesh(shortRim, TRAY_KRAFT, { ink: 0.012 });
-      b.position.set(k * (TRAY.w / 2 - 0.05), 0.16, 0);
-      return [a, b];
-    });
-    const liner = mesh(faceted(new THREE.BoxGeometry(TRAY.w - 0.36, 0.01, TRAY.d - 0.34)), TRAY_LINER, { ink: false });
-    liner.position.y = 0.125;
-    liner.rotation.y = 0.02;
+    const trayBody = makeTrayBody(trayStyle());
     const plate = mesh(faceted(new THREE.CylinderGeometry(DISH_R, DISH_R * 0.86, 0.08, 28)), PLATE_PAPER);
     plate.position.y = 0.04;
     const rim = mesh(faceted(new THREE.TorusGeometry(DISH_R * 0.93, 0.045, 4, 28)), PLATE_RIM, { ink: false });
@@ -112,7 +228,7 @@ export class PlateView {
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.position.y = 0.02;
     this.burger.position.set(DISH_AT.x, 0.21, DISH_AT.z);
-    this.group.add(board, ...rims, liner, this.dish, this.ring, this.burger);
+    this.group.add(trayBody, this.dish, this.ring, this.burger, this.friesMark, this.cupMark);
   }
 
   /** Show the plate (a burger was ordered) or leave the tray bare (drinks or fries only). */
@@ -122,14 +238,33 @@ export class PlateView {
     this.placeSides();
   }
 
+  /** Where the fries or the cup stand on this tray (tray units). */
+  sideSpot(kind: "cup" | "fries"): { x: number; z: number } {
+    const solo = !this.dish.visible && !this.entries.length;
+    return kind === "cup" ? (solo ? CUP_SOLO : CUP_AT) : solo ? FRIES_SOLO : FRIES_AT;
+  }
+
   /** Fries and cup beside the plate, or in the middle of a tray with no burger on it. */
   private placeSides(): void {
-    const solo = !this.dish.visible && !this.entries.length;
-    const f = solo ? FRIES_SOLO : FRIES_AT;
-    const c = solo ? CUP_SOLO : CUP_AT;
+    const f = this.sideSpot("fries");
+    const c = this.sideSpot("cup");
     this.fries?.position.set(f.x, 0.13, f.z);
     this.cup?.position.set(c.x, 0.13, c.z);
+    // Outlines where an ordered side still has to go, like the plate for the burger.
+    this.friesMark.position.set(f.x, 0.132, f.z);
+    this.cupMark.position.set(c.x, 0.132, c.z);
+    this.friesMark.visible = this.wants.fries && !this.fries;
+    this.cupMark.visible = this.wants.drink && !this.cup;
   }
+
+  /** Which sides this tray's order wants (their outlines show until they're on). */
+  private wants = { fries: false, drink: false };
+  setWants(fries: boolean, drink: boolean): void {
+    this.wants = { fries, drink };
+    this.placeSides();
+  }
+  private friesMark = sideMark("fries");
+  private cupMark = sideMark("cup");
 
   stackTop(): number {
     return stackBases(this.entries.map((e) => e.piece)).top;
@@ -468,7 +603,11 @@ export class TrayView {
     this.ghostAt = at;
   }
 
-  showGhost(slot: number, obj: THREE.Object3D | null): void {
+  /**
+   * Show what's being carried over a tray: a burger part bobs over the stack; a cup or a carton of
+   * fries sits right where it will land, at the size it will be (see PlateView.sideSpot).
+   */
+  showGhost(slot: number, obj: THREE.Object3D | null, kind: "burger" | "cup" | "fries" = "burger"): void {
     if (this.ghost && (obj !== this.ghost || slot < 0)) {
       this.ghost.parent?.remove(this.ghost);
       this.ghost = null;
@@ -476,8 +615,10 @@ export class TrayView {
     if (!obj || slot < 0) return;
     this.ghost = obj;
     this.ghostSlot = slot;
+    this.ghostKind = kind;
     this.scene.add(obj);
   }
+  private ghostKind: "burger" | "cup" | "fries" = "burger";
 
   update(dt: number): void {
     for (const p of this.plates) p.update(dt);
@@ -485,6 +626,12 @@ export class TrayView {
       this.ghostT += dt;
       const pv = this.plates[this.ghostSlot];
       const s = pv.group.scale.x;
+      if (this.ghostKind !== "burger") {
+        const at = pv.sideSpot(this.ghostKind);
+        this.ghost.position.copy(pv.group.position).add(new THREE.Vector3(at.x * s, 0.13 * s + Math.abs(Math.sin(this.ghostT * 5)) * 0.04, at.z * s));
+        this.ghost.scale.setScalar(s * relScale(this.ghostKind === "cup" ? "cup" : "fries") * TRAY_SIDES * ((this.ghost.userData.sizeScale as number | undefined) ?? 1));
+        return;
+      }
       const b = pv.group.position.clone().addScaledVector(pv.burger.position, s);
       const top = b.y + s * pv.stackTop() * pv.s;
       if (this.ghostAt) this.ghost.position.set(b.x + this.ghostAt.x * s * pv.s, top + 0.12, b.z + this.ghostAt.z * s * pv.s);

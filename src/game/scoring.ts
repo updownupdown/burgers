@@ -1,4 +1,4 @@
-import { avgCook, bunToast, friesQuality, friesZone, FRIES_ZONE, isMelted, DRINK_FILL, pattyDoneness, SALT } from "./cooking";
+import { avgCook, bunToast, CHAR_FACE, cookLevel, COOK_SCALE, friesQuality, friesZone, FRIES_ZONE, isFlipped, isMelted, DRINK_FILL, MARKED, pattyDoneness, SALT } from "./cooking";
 import type { Drink, ExpectedLayer, Fries, Layer, Order, Piece, Plate } from "./types";
 import { COUNTED, KIND_LABEL, SAUCE_RADIUS, SIZE_LABEL } from "./types";
 
@@ -123,6 +123,9 @@ export function sauceVerdict(cov: number): { q: number; word: SauceWord } {
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
+/** Extra score (out of 1) for each patty with grill marks, up to two. */
+export const GRILL_MARK_BONUS = 0.04;
+
 /** A rare or well-done patty: acceptable, not ideal. */
 export const PATTY_OFF = 0.8;
 
@@ -132,9 +135,12 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
     case "patty": {
       // Every patty goes out medium. Rare and well done are acceptable but not ideal; raw and
       // burnt are not.
-      const level = pattyDoneness(Math.max(piece.cook[0], piece.cook[1]));
-      const [q, note]: [number, string | null] =
+      // Doneness is the middle of the patty (the average of its faces). A face left down too
+      // long chars even when the middle is fine: flip it to cook evenly.
+      const level = pattyDoneness(avgCook(piece));
+      let [q, note]: [number, string | null] =
         level === "burnt" ? [0.05, "burnt patty"] : level === "raw" ? [0.15, "raw patty"] : level === "medium" ? [1, null] : [PATTY_OFF, level === "rare" ? "patty a bit rare" : "patty a bit well done"];
+      if (level !== "burnt" && Math.max(...piece.cook) >= CHAR_FACE) [q, note] = [Math.min(q, 0.6), "charred on one side"];
       if (exp.smashed && !piece.smashed) return [q * 0.6, "wanted it smashed"];
       return [q, note];
     }
@@ -147,9 +153,10 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
       return [1, null];
     }
     case "bacon": {
-      const t = avgCook(piece);
-      if (t >= 1) return [0.2, "burnt bacon"];
-      if (t < 0.4) return [0.35, "floppy bacon"];
+      const t = cookLevel(piece);
+      if (t >= COOK_SCALE.bacon.burnt) return [0.2, "burnt bacon"];
+      if (t < COOK_SCALE.bacon.done) return [0.35, "floppy bacon"];
+      if (t >= COOK_SCALE.bacon.over) return [0.85, "bacon a bit dark"];
       return [1, null];
     }
     case "pineapple": {
@@ -159,9 +166,12 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
       return [1, null];
     }
     case "egg": {
-      const t = Math.max(piece.cook[0], piece.cook[1]);
-      if (t >= 1) return [0.3, "rubbery egg"];
-      if (t < 0.35) return [0.3, "runny egg white"];
+      const t = cookLevel(piece);
+      if (t >= COOK_SCALE.egg.burnt) return [0.3, "rubbery egg"];
+      if (t < COOK_SCALE.egg.done) return [0.3, "runny egg white"];
+      // Sunny side up or flipped once (over easy), as the menu says.
+      if (isFlipped(piece) !== !!exp.flipped) return [0.75, exp.flipped ? "wanted the egg over easy" : "wanted the egg sunny side up"];
+      if (t >= COOK_SCALE.egg.over) return [0.85, "egg a bit overdone"];
       return [1, null];
     }
     case "ketchup":
@@ -287,9 +297,16 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
     total = burger * 0.85 + sides * 0.15;
   }
 
+  // Patties seared on the grille come out with grill marks: a little extra for each one.
+  const marked = pairs.filter(([i, j]) => exp[i].kind === "patty" && Math.max(...(act[j].piece.marks ?? [0, 0])) >= MARKED && layerQuality(exp[i], act[j].piece)[0] >= PATTY_OFF).length;
+  const perks: string[] = [];
+  if (marked > 0 && total > 0) {
+    total = Math.min(1, total + GRILL_MARK_BONUS * Math.min(2, marked));
+    perks.push("grill marks");
+  }
+
   // A side they didn't order, made well, softens a bad review: the worse it was going, the more
   // a freebie helps. It never lifts a great meal much, and a bad freebie doesn't count.
-  const perks: string[] = [];
   if (generous > 0 && total < 1) {
     total = Math.min(1, total + 0.025 * Math.min(3, generous));
     perks.push("extra toppings");

@@ -9,8 +9,9 @@ import { faceted } from "./materials";
  * ingredient. Each bin is one baked mesh (pan and heap together) plus its ink hull, built
  * once per kind and shared.
  *
- * Pieces in the heap are drawn at about BIN_PIECE times ingredient units, a little under the
- * counter food scale, so grabbing one reads as taking some from a large supply.
+ * Pieces in the heap are drawn so that, once the cold rail fits the heap to its pan (x0.86), they
+ * come out at the counter food scale (COUNTER_FOOD): the piece you pull out is the size of the
+ * ones left in the pan. HEAP_S is that scale for burger parts; thin toppings get TOPPING_BOOST more.
  */
 
 /** Pan footprint: matches the old bin box. */
@@ -101,6 +102,10 @@ type Builder = (parts: Parts, r: () => number) => void;
 
 const jitter = (r: () => number, a: number) => (r() - 0.5) * 2 * a;
 
+/** Heap scale for burger parts (see the note at the top), and for thin toppings. */
+const HEAP_S = 0.514;
+const VEG_S = 0.548;
+
 const HEAPS: Partial<Record<Kind, Builder>> = {
   bun: (parts, r) => {
     const bun = (crown: string) => {
@@ -118,8 +123,8 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
     };
     // Slightly different bakes, so neighbouring buns separate.
     const buns = [bun("#e3a03c"), bun("#d48f30")];
-    // Bigger buns stacked three high, each a little off the one below, like a bakery bag tipped out.
-    const s = 0.52;
+    // Buns stacked three high, each a little off the one below, like a bakery bag tipped out.
+    const s = HEAP_S;
     for (let i = 0; i < 3; i++) {
       const y = PAN.floor + i * 0.5;
       parts.addParts(buns[i % 2], { p: [jitter(r, 0.04), y, 0.04 - i * 0.03], r: [jitter(r, 0.08) - 0.06, r() * 6, jitter(r, 0.08)], s });
@@ -127,7 +132,7 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
   },
   patty: (parts, r) => {
     // A stack of raw patties with paper between them, one more slid off the top.
-    const s = 0.5;
+    const s = HEAP_S;
     let y = PAN.floor;
     for (let i = 0; i < 4; i++) {
       parts.add(G.paper, "#f4f1ea", { p: [jitter(r, 0.02), y, jitter(r, 0.02)], r: [0, 0.1 + jitter(r, 0.12), 0], s, ink: 0.01 });
@@ -139,7 +144,7 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
     parts.add(G.patty, "#dc7680", { p: [0.04, y + 0.03, -0.05], r: [0.1, 1.3, -0.08], s });
   },
   bacon: (parts, r) => {
-    const s = 0.5;
+    const s = HEAP_S;
     for (let i = 0; i < 9; i++) {
       const z = -0.3 + (i % 5) * 0.15 + (i > 4 ? 0.07 : 0);
       const y = PAN.floor + (i > 4 ? 0.07 : 0) + (i % 5) * 0.012;
@@ -150,7 +155,7 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
   },
   cheese: (parts, r) => {
     // A deli stack of slices, edges slightly fanned so the layers show.
-    const s = 0.43;
+    const s = HEAP_S;
     for (let i = 0; i < 9; i++) {
       const y = PAN.floor + i * 0.022;
       parts.add(G.slice, i % 2 ? "#f7c531" : "#efb827", { p: [jitter(r, 0.025) - 0.03 + i * 0.006, y, jitter(r, 0.025)], r: [0, jitter(r, 0.07), 0], s, ink: i === 8 ? 0.02 : 0.012 });
@@ -171,7 +176,7 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
   },
   tomato: (parts, r) => {
     // Shingled rows of slices leaning on each other.
-    const s = 0.5;
+    const s = VEG_S / 0.92;
     for (let row = 0; row < 3; row++) {
       for (let i = 0; i < 4; i++) {
         const x = -0.3 + i * 0.2 + (row % 2) * 0.04;
@@ -198,7 +203,7 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
     }
   },
   pickle: (parts, r) => {
-    const s = 0.62;
+    const s = VEG_S / 0.73;
     for (let i = 0; i < 34; i++) {
       const a = i * 2.399;
       const rr = Math.sqrt((i + 0.5) / 34);
@@ -209,7 +214,7 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
   },
   pineapple: (parts, r) => {
     // Rings fanned like fallen dominoes, two rows.
-    const s = 0.4;
+    const s = HEAP_S;
     for (let row = 0; row < 2; row++) {
       for (let i = 0; i < 4; i++) {
         const x = row ? 0.2 : -0.2;
@@ -219,7 +224,7 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
     }
   },
   jalapeno: (parts, r) => {
-    const s = 0.62;
+    const s = VEG_S / 0.8;
     for (let i = 0; i < 40; i++) {
       const a = i * 2.399;
       const rr = Math.sqrt((i + 0.5) / 40);

@@ -25,7 +25,7 @@ const plate = (...kinds: (Kind | [Kind, number])[]): Plate => ({
 });
 /** Each row of the open ticket as "class|text", top of the burger first. */
 function rows(p: Plate): string[] {
-  return [...ticketHtml(order, p, 1, true).matchAll(/<li class="([^"]*)"[^>]*>.*?<span class="l">([^<]*)<\/span>/g)].map((m) => `${m[1]}|${m[2]}`);
+  return [...ticketHtml(order, p, 1, true).matchAll(/<li class="([^"]*)"[^>]*>.*?<span class="l">(.*?)<\/span>/g)].map((m) => `${m[1]}|${m[2].replace(/<b class="cnt">.*?<\/b>/g, "").replace(/<[^>]+>/g, "").trim()}`);
 }
 
 describe("forgiving ticket", () => {
@@ -45,5 +45,14 @@ describe("forgiving ticket", () => {
   it("leaves a short count on top as the next thing to finish", () => {
     const r = rows(plate("bun", "ketchup", ["patty", DONENESS_TARGET.medium], "lettuce", "tomato"));
     expect(r.find((x) => x.includes("next"))).toBe("next|Tomato");
+  });
+  it("says NO and ADD, with the count right after the name", () => {
+    const o: Order = { ...order, mods: [{ type: "no", kind: "lettuce" }, { type: "add", kind: "onion" }], layers: [{ kind: "bun" }, { kind: "patty" }, { kind: "onion", count: 2 }, { kind: "tomato", count: 2 }, { kind: "bun" }], removed: [{ kind: "lettuce", at: 2 }] };
+    const html = ticketHtml(o, plate(), 1, true);
+    expect(html).toContain('<b class="kw">NO</b> Lettuce');
+    expect(html).toContain('<b class="kw">ADD</b> Onion <b class="cnt">x2</b>');
+    const stub = ticketHtml(o, plate(), 1, false);
+    expect(stub).toContain('<b class="kw">NO</b> Lettuce');
+    expect(stub).not.toContain("left");
   });
 });

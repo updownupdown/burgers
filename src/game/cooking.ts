@@ -1,5 +1,6 @@
 import type { Doneness, Piece } from "./types";
 
+
 /** Seconds of grill time per unit of cook on one face. A side goes raw to medium in about 7s; patties cook at a third of that pace. */
 export const GRILL_RATE = 0.08;
 /**
@@ -44,8 +45,66 @@ export function isMelted(p: Piece): boolean {
   return (p.melt ?? 0) >= 0.5;
 }
 
-/** Melt per second: fast on a hot patty, slow on the warm end or under the heat lamp. */
-export const MELT_RATE = { hot: 0.45, warm: 0.14, lamp: 0.12 };
+/**
+ * Melt per second: on a hot patty a slice counts as melted after about 3.3 s and slumps right
+ * over in 6.7 s (a third of the old pace, so there's time to see it go). It barely moves on the
+ * warm zone.
+ */
+export const MELT_RATE = { hot: 0.15, warm: 0.04, lamp: 0.04 };
+
+/**
+ * Every cooked thing reads on one meter with three regions: not done enough, done, over-done
+ * (the end of the meter is burnt). `perfect` is the line to aim for, in the middle of done.
+ * Values are on each kind's own cook scale (see `cookLevel`).
+ */
+export interface CookScale {
+  done: number;
+  over: number;
+  burnt: number;
+  perfect: number;
+}
+export type Cookable = "patty" | "bacon" | "egg" | "bun" | "pineapple" | "fries";
+export const COOK_SCALE: Record<Cookable, CookScale> = {
+  // Under: raw and rare. Done: medium. Over: well done, then burnt.
+  patty: { done: 0.43, over: 0.67, burnt: 0.92, perfect: 0.55 },
+  bacon: { done: 0.4, over: 0.85, burnt: 1.0, perfect: 0.6 },
+  egg: { done: 0.35, over: 0.85, burnt: 1.0, perfect: 0.6 },
+  bun: { done: 0.35, over: 0.8, burnt: 0.95, perfect: 0.55 },
+  pineapple: { done: 0.35, over: 0.8, burnt: 1.0, perfect: 0.55 },
+  fries: { done: 0.5, over: 0.95, burnt: 1.3, perfect: 0.725 },
+};
+
+/**
+ * How cooked a piece is, on its kind's scale. Patties and bacon are the average of their two
+ * faces (the face up only gets heat through the meat, so a flip evens them out); an egg is
+ * the heat both faces have taken; a bun toasts on whichever face went down.
+ */
+export function cookLevel(p: Piece): number {
+  switch (p.kind) {
+    case "patty":
+    case "bacon":
+      return avgCook(p);
+    case "egg":
+      return p.cook[0] + p.cook[1];
+    default:
+      return Math.max(p.cook[0], p.cook[1]);
+  }
+}
+
+export function cookZone(kind: Cookable, t: number): "under" | "done" | "over" | "burnt" {
+  const z = COOK_SCALE[kind];
+  return t < z.done ? "under" : t < z.over ? "done" : t < z.burnt ? "over" : "burnt";
+}
+
+/** An egg flipped an odd number of times is over easy; otherwise sunny side up. */
+export const isFlipped = (p: Piece): boolean => (p.flips ?? 0) % 2 === 1;
+
+/** A patty face seared this hard is charred: flip before the face down gets there. */
+export const CHAR_FACE = 1.05;
+/** Grill marks count once they're this deep (about 8 s face down on a hot grille). */
+export const MARKED = 0.6;
+/** Grill marks per second on a hot grille. */
+export const MARK_RATE = 0.075;
 
 /**
  * Fries cook in three zones: underdone (pale and limp), done (golden) and overdone (dark and

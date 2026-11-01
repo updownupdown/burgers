@@ -232,7 +232,7 @@ html, body {
 .ticket .ic .yolk { fill: #f1ae2a; }
 .ticket .ic .st { fill: #f3d36b; }
 .ticket .ic .lid { fill: #f4f1ea; }
-.ticket li .n { font: 700 12px var(--bv-font-mono); flex: none; margin-left: auto; }
+.ticket li .n { font: 700 12px var(--bv-font-mono); flex: none; }
 .ticket li .dpill { flex: none; min-width: 0; font-size: 11.5px; line-height: 1.15; padding: 0 6px 1px; vertical-align: 0; }
 /* Modifiers in small coloured boxes: Toast, Melt, Grill, Smash (an icon), Ice / No ice. */
 .ticket .mb { flex: none; display: inline-grid; place-items: center; font: 800 11.5px/1.15 var(--bv-font-ui); font-style: normal; border-radius: 4px; padding: 0 4px 1px; background: var(--mb-bg); color: var(--mb-fg); }
@@ -242,6 +242,12 @@ html, body {
 .ticket .mb.smash { --mb-bg: #4b4640; --mb-fg: #fff; padding: 1px 3px; height: 15px; }
 .ticket .mb.smash svg { width: 11px; height: 11px; fill: currentColor; }
 .ticket .mb.ice { --mb-bg: #d9e9f4; --mb-fg: #2f5f86; }
+.ticket .mb.sunny { --mb-bg: #fbe7a6; --mb-fg: #7a5200; }
+.ticket .mb.flip { --mb-bg: #e9dfcf; --mb-fg: #5a4426; }
+.ticket .mb.add { --mb-bg: var(--t-mod); --mb-fg: #fff; }
+/* "NO Ketchup", "ADD Bacon": the keyword in caps, then the item; "x3" right after the name. */
+.ticket .kw { font: 800 0.82em/1 var(--bv-font-ui); letter-spacing: 0.04em; }
+.ticket .cnt { font: 800 0.92em/1 var(--bv-font-mono); white-space: nowrap; }
 .ticket .mb.noice { --mb-bg: #f8dfcb; --mb-fg: #a24c12; }
 /* Changed from the menu (extra, add-on, "− Ketchup"): orange. */
 .ticket li.mod { color: var(--t-mod); font-weight: 800; }
@@ -301,6 +307,9 @@ html, body {
 .ticket .pp { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 3px; }
 .ticket .pp .dpill { min-width: 0; font-size: 12px; padding: 0 6px 1px; }
 .ticket .pp .x { font: 700 12px var(--bv-font-mono); }
+/* A stub's exceptions under its name: "NO Pickles", "ADD Bacon". */
+.ticket .ex { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; color: var(--t-mod); font: 700 11.5px/1.15 var(--bv-font-ui); }
+.ticket .ex li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; min-height: 0; padding: 0; margin: 0; }
 .ticket .left { margin-top: 2px; font: 600 12px/1 var(--bv-font-mono); color: var(--bv-ink-2); }
 .ticket .left b { color: var(--bv-ink); }
 /* A list that still has to scroll fades out at the top, where the finished end of the burger is. */
@@ -637,6 +646,35 @@ html, body {
 .fmeter.over i, .fmeter.burnt i { background: var(--bv-paprika); }
 .fmeter.burnt { animation: fmeter-hot 0.5s ease-in-out infinite alternate; }
 @keyframes fmeter-hot { to { box-shadow: 0 0 0 2px var(--bv-paprika), 0 2px 6px rgb(194 59 72 / 0.6); } }
+/*
+ * The doneness meter for everything that cooks (cookMeter in ui.ts): not done enough | done |
+ * over-done in the ingredient's colours, a dark line at perfect, a caret over where it is now,
+ * and a pale veil over what's still ahead so the filled part is the reading.
+ */
+.cmeter {
+  --mu: #e9e2c4; --md: #e7b43c; --mo: #9a5a22;
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 8px;
+  margin-top: 7px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--mu) 0 var(--u), var(--md) var(--u) var(--d), var(--mo) var(--d) 100%);
+  box-shadow: 0 0 0 1.5px rgb(42 38 34 / 0.8), 0 2px 4px rgb(0 0 0 / 0.3);
+}
+.cmeter::after { content: ""; position: absolute; left: var(--v); right: 0; top: 0; bottom: 0; background: rgb(250 248 242 / 0.66); border-radius: 0 999px 999px 0; transition: left 0.2s linear; }
+.cmeter::before { content: ""; position: absolute; z-index: 1; left: var(--p); top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--bv-ink); border-radius: 1px; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.7); }
+.cmeter i { position: absolute; z-index: 2; left: var(--v); top: -8px; width: 0; height: 0; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top: 7px solid var(--bv-ink); filter: drop-shadow(0 0 1px #fff); transition: left 0.2s linear; }
+.cmeter.patty { --mu: #e08a91; --md: #9a5636; --mo: #4a2a1a; }
+.cmeter.egg { --mu: #d9d3c8; --md: #ffe9a6; --mo: #c58a3e; }
+.cmeter.bacon { --mu: #ec8a94; --md: #bf5a3c; --mo: #5e2716; }
+.cmeter.bun { --mu: #f6e0b0; --md: #e3a453; --mo: #7a4a22; }
+.cmeter.pineapple { --mu: #f9e27a; --md: #e8b03a; --mo: #8a5020; }
+.cmeter.burnt { animation: fmeter-hot 0.5s ease-in-out infinite alternate; }
+.cmeter.burnt i { border-top-color: var(--bv-paprika); }
+/* A stack on the grill: how many are in it, beside its meter. */
+.gtag .sc { font: 800 11px/1 var(--bv-font-mono); background: var(--bv-ink); color: var(--bv-paper); border-radius: 4px; padding: 2px 4px; align-self: flex-end; }
+.gtag.pt.warm .cmeter, .gtag.pt.off .cmeter { opacity: 0.85; }
 .ftag .scoops { display: flex; gap: 3px; }
 .ftag .scoops b { width: 7px; height: 7px; border-radius: 50%; background: rgb(255 255 255 / 0.5); box-shadow: 0 0 0 1px rgb(42 38 34 / 0.7); }
 .ftag .scoops b.on { background: #e7b43c; }

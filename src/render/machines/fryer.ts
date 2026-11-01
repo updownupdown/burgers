@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { bakedMesh, Parts, rng } from "../bake";
 import { faceted, shareGeometry, toon } from "../materials";
 import { STUDY } from "../units";
-import { box, C, cached, machine, rbox, sideProfile, topKnob } from "./kit";
+import { box, C, cached, machine, rbox, sideProfile } from "./kit";
 
 /*
  * The twin-well fryer, dropped into the counter: only its deck shows, a hand's width proud of
@@ -58,8 +58,7 @@ const body = cached(() => {
   for (const cx of XS) {
     p.add(faceted(new THREE.CylinderGeometry(0.05, 0.05, WELL_W, 10)), C.steelD, { p: [cx, H + 0.42, z0 - 0.1], r: [0, 0, Math.PI / 2] });
     for (const sx of [-1, 1]) p.add(box(0.07, 0.42, 0.07), C.steelD, { p: [cx + sx * (WELL_W / 2 - 0.05), H + 0.21, z0 - 0.1] });
-    // A knob per well on the front deck, and a dark meter window on the panel.
-    topKnob(p, cx - 0.75, H + 0.05, 1.95, 0.16, C.knob, 0.5);
+    // A dark meter window on the panel.
     const mz = (PANEL.z0 + PANEL.z1) / 2;
     p.add(box(WELL_W - 0.1, 0.03, 0.5), C.rubber, { p: [cx, H + PANEL.lo + ((PANEL.hi - PANEL.lo) * (PANEL.z1 - mz)) / (PANEL.z1 - PANEL.z0) + 0.01, mz], r: [SLOPE, 0, 0], ink: false });
   }

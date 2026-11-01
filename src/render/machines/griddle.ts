@@ -9,10 +9,10 @@ import { STUDY } from "../units";
  * splash guards so the pans behind it stay in view, a grease trough, and a control ledge along the
  * front with a chunky push button per zone. Each zone has its own light strip along the front
  * edge: blue when it's off, orange on warm, red on hot.
- * Study units below; 8.2 x 6.0 x 1.9 (82 x 60 cm).
+ * Study units below; 8.7 x 6.0 x 1.9 (87 x 60 cm).
  */
 
-const W = 8.2;
+const W = 8.7;
 const D = 6.0;
 /** Cook surface height. */
 const TOP = 1.3;
@@ -44,6 +44,19 @@ const body = cached(() => {
   const pd = PZ1 - PZ0;
   p.add(box(2 * PX + 0.1, 0.12, pd + 0.1), "#43484b", { p: [0, TOP - 0.06, (PZ0 + PZ1) / 2] });
   for (let i = 0; i < 7; i++) p.add(box(2 * PX - 0.2, 0.004, 0.08), "#53595c", { p: [0, TOP + 0.002, PZ0 + 0.35 + (i * (pd - 0.7)) / 6], ink: false });
+  // The left zone is a grille: raised cast-iron bars front to back over a dark firebox, so a
+  // patty seared there comes off with grill marks.
+  {
+    const x0 = -PX + 0.12;
+    const x1 = -PX + zoneW - 0.12;
+    p.add(box(x1 - x0 + 0.1, 0.01, pd - 0.1), "#1f2224", { p: [(x0 + x1) / 2, TOP + 0.003, (PZ0 + PZ1) / 2], ink: false });
+    const n = 8;
+    for (let i = 0; i < n; i++) {
+      const x = x0 + ((i + 0.5) * (x1 - x0)) / n;
+      p.add(box(0.13, 0.07, pd - 0.25), "#3c4144", { p: [x, TOP + 0.035, (PZ0 + PZ1) / 2], ink: 0.012 });
+      p.add(box(0.06, 0.004, pd - 0.3), "#6b7377", { p: [x - 0.02, TOP + 0.072, (PZ0 + PZ1) / 2], ink: false });
+    }
+  }
   // Two shallow grooves split the plate into three equal zones.
   for (const k of [1, 2]) p.add(box(0.05, 0.006, pd - 0.1), "#6e777b", { p: [-PX + zoneW * k, TOP + 0.004, (PZ0 + PZ1) / 2], ink: false });
   // Grease trough along the front of the plate.

@@ -8,6 +8,8 @@ export interface Recipe {
   /** Bottom to top. Patties get a random doneness per order. */
   layers: Kind[];
   toasted: boolean;
+  /** Eggs: sunny side up (the default) or flipped once, over easy. */
+  egg?: "sunny" | "over";
   /** Patties must be smashed flat on the grill. */
   smash?: boolean;
   /** Cheese sitting right on a patty should be melted on the grill. */
@@ -81,7 +83,7 @@ const REGION_STARTS: Stop[] = [
     shiftLength: 180,
     menu: [
       { name: "Plain Jane", price: 6, layers: ["bun", "patty", "bun"], toasted: false },
-      { name: "Trailhead Classic", price: 9, layers: ["bun", "ketchup", "patty", "lettuce", "tomato", "bun"], toasted: true },
+      { name: "Trailhead Classic", price: 9, layers: ["bun", "ketchup", "patty", "lettuce", "tomato", "bun"], toasted: false },
       { name: "Cheesy Switchback", price: 10, layers: ["bun", "patty", "cheese", "pickle", "mustard", "bun"], toasted: false },
       { name: "Sunrise Summit", price: 11, layers: ["bun", "lettuce", "patty", "egg", "bun"], toasted: true, from: 0.15 },
       { name: "Lumberjack Stack", price: 15, layers: ["bun", "patty", "cheese", "bacon", "onion", "patty", "ketchup", "bun"], toasted: true, melt: true, from: 0.3 },
@@ -103,8 +105,8 @@ const REGION_STARTS: Stop[] = [
     newThing: "New here: grilled pineapple. Grill one side until it's golden.",
     menu: [
       { name: "Boardwalk Basic", price: 8, layers: ["bun", "patty", "lettuce", "ketchup", "bun"], toasted: false },
-      { name: "Luau Stack", price: 13, layers: ["bun", "patty", "pineapple", "bacon", "mustard", "bun"], toasted: true },
-      { name: "Low Tide", price: 11, layers: ["bun", "lettuce", "tomato", "patty", "cheese", "onion", "bun"], toasted: true, melt: true },
+      { name: "Luau Stack", price: 13, layers: ["bun", "patty", "pineapple", "bacon", "mustard", "bun"], toasted: false },
+      { name: "Low Tide", price: 11, layers: ["bun", "lettuce", "tomato", "patty", "cheese", "onion", "bun"], toasted: false, melt: true },
       { name: "Big Kahuna", price: 17, layers: ["bun", "patty", "cheese", "pineapple", "patty", "bacon", "ketchup", "bun"], toasted: true, melt: true, from: 0.3 },
       { name: "Sandy Pickle", price: 10, layers: ["bun", "pickle", "patty", "cheese", "pickle", "bun"], toasted: false },
     ],
@@ -125,10 +127,10 @@ const REGION_STARTS: Stop[] = [
     newThing: "New here: smash burgers. Press and hold a fresh patty on the grill to smash it flat. Smashed patties cook fast!",
     menu: [
       { name: "Tumbleweed", price: 8, layers: ["bun", "patty", "onion", "ketchup", "bun"], toasted: false },
-      { name: "Mesa Smash", price: 12, layers: ["bun", "patty", "cheese", "onion", "mustard", "bun"], toasted: true, smash: true, melt: true },
-      { name: "Rattlesnake", price: 13, layers: ["bun", "patty", "jalapeno", "cheese", "jalapeno", "ketchup", "bun"], toasted: true },
+      { name: "Mesa Smash", price: 12, layers: ["bun", "patty", "cheese", "onion", "mustard", "bun"], toasted: false, smash: true, melt: true },
+      { name: "Rattlesnake", price: 13, layers: ["bun", "patty", "jalapeno", "cheese", "jalapeno", "ketchup", "bun"], toasted: false },
       { name: "Sunset Double", price: 16, layers: ["bun", "patty", "cheese", "patty", "cheese", "jalapeno", "bun"], toasted: true, smash: true, melt: true, from: 0.25 },
-      { name: "Ranch Breakfast", price: 14, layers: ["bun", "patty", "bacon", "egg", "bun"], toasted: true, from: 0.15 },
+      { name: "Ranch Breakfast", price: 14, layers: ["bun", "patty", "bacon", "egg", "bun"], toasted: true, egg: "over", from: 0.15 },
     ],
   },
 ];
@@ -136,8 +138,8 @@ const REGION_STARTS: Stop[] = [
 const [PINES, COAST, DESERT] = REGION_STARTS;
 const pick = (from: Stop, names: string[], extra: Recipe[] = []): Recipe[] => [...from.menu.filter((r) => names.includes(r.name)), ...extra];
 
-const CAMPFIRE_MELT: Recipe = { name: "Campfire Melt", price: 11, layers: ["bun", "patty", "cheese", "onion", "bun"], toasted: true, melt: true };
-const HARBOR_CLASSIC: Recipe = { name: "Harbor Classic", price: 12, layers: ["bun", "lettuce", "patty", "cheese", "tomato", "ketchup", "bun"], toasted: true, melt: true };
+const CAMPFIRE_MELT: Recipe = { name: "Campfire Melt", price: 11, layers: ["bun", "patty", "cheese", "onion", "bun"], toasted: false, melt: true };
+const HARBOR_CLASSIC: Recipe = { name: "Harbor Classic", price: 12, layers: ["bun", "lettuce", "patty", "cheese", "tomato", "ketchup", "bun"], toasted: false, melt: true };
 const SUN_VALLEY_SUPREME: Recipe = {
   name: "Sun Valley Supreme",
   price: 18,
@@ -336,7 +338,7 @@ export const EVENTS: TownEvent[] = [
     busy: 1.6,
     longer: 40,
     blurb: "Half the coast turns up to watch. Nobody packed lunch.",
-    special: { name: "Wipeout", price: 12, layers: ["bun", "patty", "pineapple", "cheese", "ketchup", "bun"], toasted: true, melt: false },
+    special: { name: "Wipeout", price: 12, layers: ["bun", "patty", "pineapple", "cheese", "ketchup", "bun"], toasted: false, melt: false },
   },
   {
     id: "seafest",

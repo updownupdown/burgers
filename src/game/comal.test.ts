@@ -4,7 +4,7 @@ import { EVENTS, fryerOf, middleOf, STOPS, townById, withEvent } from "./stops";
 import { dishOrder, scorePlate } from "./scoring";
 import { COOK_SCALE, friesQuality, fryPerfect, FRIES_PERFECT } from "./cooking";
 import type { Kind, Layer, Order, Piece, Plate } from "./types";
-import { isSauce, newPiece } from "./types";
+import { isSauce, newPiece, unfoldTortilla } from "./types";
 
 /*
  * Red Rock's comal (DESIGN §24, phase 3): taco, quesadilla and tostada orders, and how they score.
@@ -257,5 +257,32 @@ describe("Red Rock scoring", () => {
     const churros: Order = { ...o, fry: "churros" };
     const c: Plate = { ...perfect(churros), fries: { cook: fryPerfect("churros"), size: "M", fill: 1, fry: "churros" } };
     expect(scorePlate(churros, c).notes).toContain("churros needed sugar");
+  });
+});
+
+describe("unfolding a quesadilla (after build #68)", () => {
+  it("opens a folded tortilla back out, keeping its filling and the cook on its faces", () => {
+    const q = newPiece("flour");
+    const jack = newPiece("jack");
+    jack.melt = 0.3;
+    q.fill = [jack];
+    q.folded = true;
+    q.foldYaw = 1.2;
+    q.cook = [0.3, 0.2];
+    q.flips = 1;
+    expect(unfoldTortilla(q)).toBe(true);
+    expect(q.folded).toBe(false);
+    expect(q.foldYaw).toBeUndefined();
+    expect(q.fill).toEqual([jack]);
+    expect(q.cook).toEqual([0.3, 0.2]);
+    expect(q.flips).toBe(1);
+  });
+  it("leaves anything that isn't a folded tortilla alone", () => {
+    const open = newPiece("flour");
+    expect(unfoldTortilla(open)).toBe(false);
+    const calzone = newPiece("dough");
+    calzone.folded = true;
+    expect(unfoldTortilla(calzone)).toBe(false);
+    expect(calzone.folded).toBe(true);
   });
 });

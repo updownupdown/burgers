@@ -108,10 +108,10 @@ function pressSec(): Sec {
     title: "The panini press",
     lede: "On the Sunny Coast the grill makes way for a clamshell press. Both sides cook at once.",
     fig: `${pressSvg()}
-      <div class="hw-stack">${stackArt(PANINI)}<p class="hw-cap">A Caprese: ciabatta, pesto, mozzarella ×3, tomato ×3, basil, ciabatta. Built on the tray, then pressed.</p></div>`,
+      <div class="hw-stack">${stackArt(PANINI)}<p class="hw-cap">A Caprese: ciabatta, pesto, mozzarella ×3, tomato ×3, basil, ciabatta. Built bread first, then pressed.</p></div>`,
     points: [
-      "<b>Build the sandwich on the tray</b>, bread first. With the top slice on, drag down on the tray to lift the whole sandwich, and drop it in an <b>open bay</b>.",
-      "<b>Pull the handle down</b> to close the lid. The lid hides the food, so watch the <b>meter in front of the bay</b>: pale, golden with press lines, then dark. <b>Tap the handle</b> to lift the lid, then drag the panini back to the tray.",
+      "<b>Build the sandwich</b> bread first, right in an <b>open bay</b>, on the tray or on the board. With the top slice on, drag down on the tray to lift the whole sandwich into a bay.",
+      "<b>Pull the handle down</b> to close the lid. It only closes on a bread or a patty on its own, or a sandwich with bread top and bottom. The lid hides the food, so watch the <b>meter on the lid</b>: pale, golden with press lines, then dark. <b>Swipe the handle up</b> to lift the lid, then drag the panini back to the tray.",
       "The cheese inside melts while it's shut, and a little <b>oozes out</b> at the front when it has.",
       "<b>Chicken and veggie patties</b> are pressed on their own first, until their meter says done, then go in the sandwich and back in the press.",
       "<b>Avocado Toast</b> is open-faced: press only the sourdough, then add the avocado and rocket on the tray. The avocado never goes in the press.",
@@ -177,7 +177,7 @@ function ovenSec(board: boolean, fritters: boolean): Sec {
       "Left unturned, the fire side <b>scorches</b>. Turned just right, both halves come out even, with <b>leopard spots</b> on the crust: a small bonus.",
       "<b>Mushrooms</b> want the longer bake. <b>Basil, rocket and honey go on after</b>: drag the flatbread up to the tray first, then add them there (honey squeezes like any sauce).",
       ...(board ? ["In <b>Port Amber</b>: a third spot in the oven, the <b>Calzone</b> (fold it on the peel by dragging the dough's edge across the middle, then <b>turn it twice</b>), and the board: <b>swipe across a flatbread twice</b> to cut it in four."] : []),
-      `At the fryer, <b>zucchini fritti</b> go through the <b>batter bowl</b> on the way to the basket; salt them in the carton.${fritters ? " <b>Apple fritters</b> fry like fries and get cinnamon sugar from the sugar shaker." : ""}`,
+      `At the fryer, drop the <b>zucchini</b> in the <b>batter bowl</b>, then pick it up again for the basket; salt the fritti in the carton.${fritters ? " <b>Apple fritters</b> fry like fries and get cinnamon sugar from the sugar shaker." : ""}`,
     ],
   };
 }
@@ -195,7 +195,7 @@ function comalSec(tpress: boolean): Sec {
     points: [
       "<b>Tortillas</b> warm on the hot side in about 6 seconds: pale and stiff, then <b>soft with brown spots</b> (done), then hard. Watch the meter under each one. Park finished ones on the warm end.",
       "<b>Tacos</b>: drag each warm tortilla up to the tray; it stands in the rack. Each <b>tap on the pork or bean well</b> is one scoop onto the tray, one per taco; the toppings go on once.",
-      "<b>Quesadilla</b>: a flour tortilla on the comal, cheese on it, then <b>fold it</b>: press its edge and drag across the middle. <b>Flip it once</b>, and take it off when the cheese has melted, before the shell goes dark.",
+      "<b>Quesadilla</b>: a flour tortilla on the comal, cheese on it, then <b>fold it</b>: press its edge and drag across the middle. <b>Flip it once</b>, and take it off when the cheese has melted, before the shell goes dark. Forgot something? <b>Press and hold</b> it to unfold it.",
       "<b>Pineapple</b> chars on the comal like on the grill; flick it to flip. Eggs crack on the hot side: flip once for over easy.",
       "<b>Tostadas</b> come from the fryer: drop a corn tortilla in an empty basket and lower it. The fryer also makes <b>chips</b> from the tortilla wedges, and nachos get jalapeños and queso where a poutine gets curds and gravy.",
       ...(tpress ? ["In <b>Sun Valley</b> there's a <b>tortilla press</b>: hold it down to flatten a ball of masa, then drag the tortilla to the comal. Hand-pressed tortillas earn a $2 tip. Churros come from the fryer: shake sugar on them."] : []),

@@ -617,6 +617,11 @@ html, body {
 .gtag.warm { background: var(--bv-amber); color: var(--bv-night); }
 .gtag.off { background: #5aa3d8; }
 .gtag[hidden] { display: none; }
+/* Meters, chips and tags fade in as they appear (a counter settling after a swipe, food going down)
+   rather than popping in. */
+.gtag, .ftag { animation: tag-in 0.2s ease-out; }
+@keyframes tag-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .gtag, .ftag { animation: none; } }
 .gtag.stack.low { background: var(--bv-amber); color: var(--bv-night); }
 .gtag.supply { background: var(--bv-olive); }
 

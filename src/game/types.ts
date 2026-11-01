@@ -215,6 +215,15 @@ export const isSauce = (k: Kind): k is SauceKind => SAUCES.has(k);
 export const BREADS: ReadonlySet<Kind> = new Set<Kind>(["ciabatta", "sourdough"]);
 /** Cooked in the panini press on their own before they go in a sandwich. */
 export const PROTEINS: ReadonlySet<Kind> = new Set<Kind>(["chicken", "veggie"]);
+/**
+ * What a press bay can close on (bottom first): nothing, a bread or a protein on its own, or a
+ * sandwich with bread top and bottom. Anything else can be built in an open bay, but the lid
+ * won't come down on it.
+ */
+export function pressable(kinds: readonly Kind[]): boolean {
+  if (kinds.length <= 1) return kinds.length === 0 || BREADS.has(kinds[0]) || PROTEINS.has(kinds[0]);
+  return BREADS.has(kinds[0]) && BREADS.has(kinds[kinds.length - 1]);
+}
 /** Cheese that melts inside a closed panini. */
 export const PRESS_CHEESE: ReadonlySet<Kind> = new Set<Kind>(["mozzarella", "cheddar"]);
 /** Red Rock's tortillas: warmed on the comal for tacos; a flour one folds into a quesadilla. */
@@ -223,6 +232,16 @@ export const TORTILLAS: ReadonlySet<Kind> = new Set<Kind>(["corn", "flour"]);
 export const SCOOPED: ReadonlySet<Kind> = new Set<Kind>(["tuna", "pork", "beans"]);
 /** What can be laid on a tortilla on the comal (a quesadilla's filling). */
 export const COMAL_FILL: ReadonlySet<Kind> = new Set<Kind>(["jack", "pork", "beans", "jalapeno", "onion", "cilantro"]);
+/**
+ * Open a folded tortilla back out on the comal (a long press), so its filling can be fixed. The
+ * filling and the cook on its faces are kept. False if it wasn't folded.
+ */
+export function unfoldTortilla(p: Piece): boolean {
+  if (!TORTILLAS.has(p.kind) || !p.folded) return false;
+  p.folded = false;
+  delete p.foldYaw;
+  return true;
+}
 /** Orchard Isle: what goes on a flatbread after it comes out of the oven. */
 export const AFTER_OVEN: ReadonlySet<Kind> = new Set<Kind>(["basil", "rocket", "honey"]);
 /** Cheese that melts on a flatbread in the oven. */

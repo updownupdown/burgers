@@ -1,25 +1,13 @@
-import type { Plan, Review } from "./business";
+import type { Review } from "./business";
+import { migrateBonuses, type BonusId } from "./bonus";
 import type { PressPiece } from "./press";
-import type { GearId, TimeOfDay } from "./day";
-import type { AdLevel } from "./line";
+import type { TimeOfDay } from "./day";
+import { validShift, type ShiftWindow } from "./shift";
 import { REGION_START_IDS, START_TOWN, STOPS, townById } from "./stops";
-import { SHIFTS_TO_UNLOCK, START_BANK } from "./travel";
+import { SHIFTS_TO_UNLOCK } from "./travel";
 
-export type UpgradeId = "bench" | "tipjar" | "turbo" | "autostop" | "steady";
-
-export interface Upgrade {
-  id: UpgradeId;
-  name: string;
-  text: string;
-}
-
-export const UPGRADES: Upgrade[] = [
-  { id: "bench", name: "Comfy bench", text: "Customers wait 25% longer before giving up." },
-  { id: "tipjar", name: "Shiny tip jar", text: "Tips are 30% bigger." },
-  { id: "turbo", name: "Turbo fryer", text: "Fries cook 35% faster." },
-  { id: "autostop", name: "Smart fountain", text: "Drinks stop pouring at the line by themselves." },
-  { id: "steady", name: "Steady hands", text: "Tossed ingredients land much more neatly." },
-];
+/** How well known a brand new truck is (10..100): enough for a few people to stop by. */
+export const START_POPULARITY = 25;
 
 export interface Save {
   /** Old saves: index of the next region. Kept only to migrate into `town`. */
@@ -32,10 +20,6 @@ export interface Save {
   time: TimeOfDay;
   /** Map units driven since the last shift or sleep; hops add up against the overnight range. */
   driven: number;
-  /** Parts bought for cash at a supply yard: solar and engine (see GEAR in day.ts). */
-  gear: GearId[];
-  /** The Prep screen with every box collapsed and no ledger (complexity "balanced"; see complexity.ts). */
-  simplePlan: boolean;
   /** Today's shift, for the Closing screen, until the truck sleeps. */
   last: Closing | null;
   /** Towns the truck can drive to, and towns whose shift has been passed. */
@@ -43,42 +27,40 @@ export interface Save {
   passedTowns: string[];
   /** Passed shifts per town; SHIFTS_TO_UNLOCK of them open the town's roads (see travel.ts). */
   shiftsIn: Record<string, number>;
-  /** Old saves: one free hop a night. Replaced by `driven` against the range. */
-  overnightUsed?: boolean;
-  upgrades: UpgradeId[];
-  /** Gas money and savings. Starts at START_BANK; shifts add their profit, drives cost gas. */
-  bank: number;
+  /** Bonuses earned by great shifts (see bonus.ts), in the order they came. */
+  bonuses: BonusId[];
+  /** The one bonus brought into the next shift, picked on Prep; null for none. */
+  bonus: BonusId | null;
+  /** Recipe names hidden from the menu on Prep (by name, so it carries from town to town). */
+  hidden: string[];
+  /** When the window opens and closes, picked on Prep (see shift.ts). */
+  shift: ShiftWindow;
   /**
-   * Lifetime rating: every served order's stars (0–3) in either mode, summed and counted, so
-   * the home screen can show the truck's average with how many orders it rests on. Customers
-   * who walk out don't rate. Business-mode reputation (`rep`) is separate and recency-weighted.
+   * Lifetime rating: every served order's stars (0–3), summed and counted. The recency-weighted
+   * rating that pulls in customers is `rep`.
    */
   ratingCount: number;
   ratingSum: number;
   /** Best average stars per stop id. */
   best: Record<string, number>;
+  /** Best takings in one shift per stop id. */
+  bestTakings: Record<string, number>;
+  /** Towns where a great shift came after every bonus was earned: a ribbon on the map. */
+  ribbons: string[];
   tutorialDone: boolean;
   /** Trips finished (all stops). */
   trips: number;
-  /** Upgrades on offer after a passed shift, until one is picked. */
-  offer: UpgradeId[];
   /** Times each recipe was served well; familiar recipes get compact tickets. */
   known: Record<string, number>;
-  /** Run the business: buy ingredients, set prices and pick the menu before each shift (complexity "balanced" or "complex"). */
-  biz: boolean;
-  /** Last shift's plan, reused as the starting point for the next one. */
-  plan: Plan | null;
   /** Most recent reviews, newest first. */
   reviews: Review[];
-  /** Average stars across recent reviews, and how many reviews it's built on. */
+  /** Rating: average stars across recent reviews (0..3), and how many reviews it's built on. */
   rep: number;
   repWeight: number;
-  /** How well known the truck is, 10..100. Critics' pieces move it. */
+  /** How well known the truck is, 10..100. Word of mouth and the press move it. */
   popularity: number;
   /** Recent press, newest first. */
   press: PressPiece[];
-  /** Social media bought for the next shift (see ADS in line.ts); stays on until changed. */
-  ads: AdLevel;
 }
 
 /** Everything the Closing screen shows about today's shift, kept until the truck sleeps. */
@@ -90,20 +72,15 @@ export interface Closing {
   leftLine: number;
   walkedPast: number;
   stars: number[];
+  /** What the orders paid, the tips on top, and what went out free or spilled. */
   earned: number;
   tips: number;
+  comped: number;
   spills: number;
-  adCost: number;
-  /** Business mode: ingredient spend; zero otherwise. */
-  costs: number;
-  biz: boolean;
-  /** Takings less spills, ads and ingredients: what went into the tin. */
-  profit: number;
-  /** Tonight's running cost and the solar saving, charged when the truck sleeps. */
-  running: number;
-  solar: number;
-  /** What Prep projected for the net, when the player saw it. */
-  projected: [number, number] | null;
+  /** Earned and tips less comped and spills: the shift's score in dollars. */
+  takings: number;
+  /** The town's best takings before today, if any. */
+  bestBefore: number | null;
   reviews: Review[];
   rep: number;
   repBefore: number;
@@ -113,6 +90,12 @@ export interface Closing {
   opened: string[];
   shiftsHere: number;
   press: PressPiece | null;
+  /** A great shift (see bonus.ts), what it earned, and the bonus that was brought. */
+  great: boolean;
+  earnedBonus: BonusId | null;
+  ribbon: boolean;
+  usedBonus: BonusId | null;
+  shift: ShiftWindow;
 }
 
 const KEY = "bv-save-v1";
@@ -123,34 +106,35 @@ export function freshSave(): Save {
     day: 1,
     time: "morning",
     driven: 0,
-    gear: [],
-    simplePlan: false,
     last: null,
     unlocked: [START_TOWN],
     passedTowns: [],
     shiftsIn: {},
-    upgrades: [],
-    bank: START_BANK,
+    bonuses: [],
+    bonus: null,
+    hidden: [],
+    shift: validShift(null),
     ratingCount: 0,
     ratingSum: 0,
     best: {},
+    bestTakings: {},
+    ribbons: [],
     tutorialDone: false,
     trips: 0,
-    offer: [],
     known: {},
-    biz: false,
-    plan: null,
     reviews: [],
     rep: 2,
     repWeight: 6,
-    popularity: 10,
+    popularity: START_POPULARITY,
     press: [],
-    ads: 0,
   };
 }
 
+/** Fields older saves carry that the game no longer uses (money, supplies, business mode). */
+const RETIRED = ["bank", "gear", "simplePlan", "biz", "plan", "ads", "offer", "upgrades", "overnightUsed"] as const;
+
 /** A stored save brought up to date: missing fields filled in, old shapes converted. */
-export function migrateSave(p: Partial<Save>): Save {
+export function migrateSave(p: Partial<Save> & Record<string, unknown>): Save {
   const s: Save = { ...freshSave(), ...p };
   if (s.stop !== undefined && !p.town) {
     // Saves from before the map: start at the first town of the region they'd reached.
@@ -163,16 +147,27 @@ export function migrateSave(p: Partial<Save>): Save {
   if (!STOPS.some((t) => t.id === s.town)) s.town = START_TOWN;
   if (!s.unlocked.includes(s.town)) s.unlocked.push(s.town);
   if (!p.shiftsIn) {
-    // Saves from before gas money and shift counts: towns already passed count as fully
-    // worked (their roads are open anyway), and the truck gets its starting budget once.
+    // Saves from before shift counts: towns already passed count as fully worked.
     s.shiftsIn = {};
     for (const id of s.passedTowns) s.shiftsIn[id] = SHIFTS_TO_UNLOCK;
-    s.bank = (p.bank ?? 0) + START_BANK;
   }
-  delete s.overnightUsed;
+  // Kitchen upgrades from before bonuses are bonuses now.
+  if (!p.bonuses && Array.isArray(p.upgrades)) s.bonuses = migrateBonuses(p.upgrades as string[]);
+  s.bonuses = migrateBonuses(s.bonuses);
+  if (s.bonus && !s.bonuses.includes(s.bonus)) s.bonus = null;
+  // Business mode kept its menu as the dishes on it; Prep now keeps the ones taken off.
+  const plan = p.plan as { menu?: string[] } | null | undefined;
+  if (!p.hidden && plan?.menu) {
+    const town = STOPS.find((t) => t.id === s.town);
+    s.hidden = town ? town.menu.filter((r) => !plan.menu!.includes(r.name)).map((r) => r.name) : [];
+  }
+  if (!Array.isArray(s.hidden)) s.hidden = [];
+  s.shift = validShift(s.shift);
+  const bag = s as unknown as Record<string, unknown>;
+  for (const k of RETIRED) delete bag[k];
   if (s.time !== "morning" && s.time !== "evening") s.time = "morning";
-  if (!Array.isArray(s.gear)) s.gear = [];
-  if (s.last && s.last.town !== s.town) s.last = null;
+  // A Closing from before takings is dropped rather than half shown.
+  if (s.last && (s.last.town !== s.town || typeof s.last.takings !== "number")) s.last = null;
   return s;
 }
 
@@ -208,13 +203,4 @@ export function passTown(s: Save, id: string): boolean {
 /** A shift counts as passed with an average of at least one star and most customers served. */
 export function passed(avgStars: number, served: number, total: number): boolean {
   return served > 0 && avgStars >= 1 && served >= Math.ceil(total * 0.5);
-}
-
-export function upgradeChoices(owned: UpgradeId[], rng: () => number, n = 3): Upgrade[] {
-  const pool = UPGRADES.filter((u) => !owned.includes(u.id));
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
-  return pool.slice(0, n);
 }

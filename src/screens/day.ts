@@ -1,34 +1,34 @@
-import { CROWD, menuOf, PRICE, QUALITY, recipeCost, type Plan } from "../game/business";
-import { GEAR, gearBlocker, projectShift, rangeMiles, RUNNING_COST, runningCost, solarSaving, type Projection } from "../game/day";
-import { ADS, type AdLevel } from "../game/line";
-import { criticChance, willingnessToPay, type PressPiece } from "../game/press";
-import { UPGRADES, type Closing, type Save, type Upgrade } from "../game/progress";
+import { CROWD, MIN_MENU, menuFor } from "../game/business";
+import { BONUSES, bonusById, GREAT, nextBonus } from "../game/bonus";
+import { expectedCustomers } from "../game/day";
+import { DIFFICULTIES, DIFFICULTY, type Difficulty } from "../game/difficulty";
+import { criticChance, type PressPiece } from "../game/press";
+import type { Closing, Save } from "../game/progress";
+import { clockLabel, FIRST_HOUR, hourRate, LAST_HOUR, shiftHours, type ShiftWindow } from "../game/shift";
 import { eventOn, townById, type Stop } from "../game/stops";
 import { SHIFTS_TO_UNLOCK } from "../game/travel";
 import { icon } from "../ui/icons";
 import { buildLabel } from "../update";
+import { stackArt } from "./menuref";
 import "./day.css";
 
 /**
  * The screens on either side of a shift, and the small ones off the map (see game/day.ts):
  *
- * - **Prep**, before opening: the day's choices in expand boxes. A closed box shows the choice
- *   on the left and what it does to the day on the right, so the screen reads as a short plan
- *   with nothing open. The ledger box is the projected receipt. The Open button carries the net.
- * - **Closing**, after the shift: the stars, three numbers, then the same boxes for takings,
- *   today's reviews, the press, the road and the free pick.
- * - **Night**: a card that charges the running cost and turns the day.
- * - **Reviews** and the **supply yard**, reached from the map's dock.
+ * - **Prep & Open**, before opening: one scrolling page around one big number, the people to
+ *   expect. Under it: the shift window on the day's lunch curve, the menu as recipe cards to
+ *   show or hide, pacing, and the one bonus to bring. Everything here is fixed once the window opens.
+ * - **Closing**, after the shift: a bonus, when a great shift earned one, then the stars, the
+ *   takings, today's reviews, the press and the road.
+ * - **Reviews**, reached from the map.
  */
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const money = (n: number) => `${n < 0 ? "−" : ""}$${Math.abs(Math.round(n))}`;
-const cents = (n: number) => `$${n.toFixed(2)}`;
-const range = (lo: number, hi: number) => `$${Math.round(lo)}–${Math.round(hi)}`;
 const stars = (n: number) => `<span class="day-stars"><span>${"★".repeat(n)}</span><span class="off">${"★".repeat(Math.max(0, 3 - n))}</span></span>`;
 const CROWD_ICON: Record<string, string> = { commuters: "truck", families: "people", foodies: "critic", party: "sparkle" };
 
-/** Which boxes are open, per screen. Remembered while the app runs; Prep's "simple" is in the save. */
+/** Which boxes are open on Closing. Remembered while the app runs. */
 const openBoxes = new Set<string>(["closing:road"]);
 export function toggleBox(id: string): void {
   if (openBoxes.has(id)) openBoxes.delete(id);
@@ -69,132 +69,130 @@ function seg(act: string, cur: string, opts: { v: string; label: string; small?:
     .join("")}</div>`;
 }
 
-function ledgerHtml(p: Projection, plan: Plan | null, crowdLabel: string, head: string, tail = ""): string {
-  const row = (dt: string, dd: string, cls = "", sub = "") => `<dt class="${cls}">${dt}${sub ? `<small>${sub}</small>` : ""}</dt><dd class="${cls}">${dd}</dd>`;
-  return `<div class="day-ledger">
-    <h4><span>${head}</span><span>±15%</span></h4>
-    <dl>
-      ${row("Customers", String(p.customers), "", `${crowdLabel}${plan ? ` · ${PRICE[plan.price].label} prices` : ""}`)}
-      ${row("Takings", money(p.takings), "", `${cents(p.order)} an order`)}
-      ${row("Tips", money(p.tips))}
-      ${plan ? row("Ingredients", `−${money(p.ingredients)}`, "neg", `${QUALITY[plan.quality].label} · ${cents(p.perOrder)} an order`) : ""}
-      ${p.adCost ? row("Social media", `−${money(p.adCost)}`, "neg") : ""}
-      ${row("Generator and propane", `−${money(p.running)}`, "neg", "charged tonight")}
-      ${p.solar ? row("Solar", `+${money(Math.min(p.running, p.solar))}`, "sub") : ""}
-      ${row("Net", range(p.lo, p.hi), "tot")}
-    </dl>${tail}
-  </div>`;
+const hourLabel = (h: number) => clockLabel(h);
+
+/** The day's arrivals as bars by the hour, with the shift's window lit. */
+function curveHtml(w: ShiftWindow): string {
+  const hours: number[] = [];
+  for (let h = FIRST_HOUR; h < LAST_HOUR; h++) hours.push(h);
+  const bw = 100 / hours.length;
+  const bars = hours
+    .map((h, i) => {
+      const r = hourRate(h);
+      const on = h >= w.start && h < w.end;
+      const ht = 8 + r * 40;
+      return `<rect class="${on ? "on" : ""}" x="${i * bw + 1}" y="${50 - ht}" width="${bw - 2}" height="${ht}" rx="1.5"/>`;
+    })
+    .join("");
+  const ticks = [FIRST_HOUR, 11, 13, 15, LAST_HOUR]
+    .map((h) => `<span style="left:${((h - FIRST_HOUR) / (LAST_HOUR - FIRST_HOUR)) * 100}%">${h}</span>`)
+    .join("");
+  return `<div class="prep-curve"><svg viewBox="0 0 100 50" preserveAspectRatio="none" aria-hidden="true">${bars}</svg><div class="ticks">${ticks}</div></div>`;
+}
+
+function stepper(act: string, label: string, value: number, canDown: boolean, canUp: boolean): string {
+  return `<div class="prep-step"><span class="bv-eyebrow">${label}</span>
+    <div class="row"><button class="bv-btn icon sm" data-act="${act}" data-v="-1" ${canDown ? "" : "disabled"} aria-label="${label} an hour earlier">${icon("minus")}</button>
+    <b class="bv-mono">${hourLabel(value)}</b>
+    <button class="bv-btn icon sm" data-act="${act}" data-v="1" ${canUp ? "" : "disabled"} aria-label="${label} an hour later">${icon("plus")}</button></div></div>`;
 }
 
 // ---------------------------------------------------------------------------
-// Prep
+// Prep & Open
 
 export interface PrepInput {
   save: Save;
   /** Today's town, with its event applied. */
   stop: Stop;
-  /** Business mode's plan, or null in normal mode. */
-  plan: Plan | null;
+  /** The pacing the shift will open on. */
+  pacing: Difficulty;
 }
 
 export function prepHtml(p: PrepInput): string {
-  const { save, stop, plan } = p;
-  const simple = save.simplePlan;
-  const proj = projectShift({ stop, plan, popularity: save.popularity, ads: save.ads, rep: save.rep, upgrades: save.upgrades, gear: save.gear });
+  const { save, stop, pacing } = p;
   const ev = eventOn(stop.id, save.day);
   const crowd = CROWD[stop.crowd];
-  const tomorrow = eventOn(stop.id, save.day + 1);
-  const critic = criticChance(stop.crowd, ev);
-  const wtp = willingnessToPay(save.popularity, save.rep);
-  const boxes: Box[] = [];
+  const w = save.shift;
+  const bonus = save.bonus && save.bonuses.includes(save.bonus) ? save.bonus : null;
+  const input = { stop, popularity: save.popularity, rep: save.rep, hidden: save.hidden, shift: w, bonus, pacing };
+  const expect = expectedCustomers(input);
+  const menu = menuFor(stop, save.hidden);
+  const critic = bonus === "press" ? 1 : criticChance(stop.crowd, ev);
 
-  const expectAt = (lvl: AdLevel) => projectShift({ stop, plan, popularity: save.popularity, ads: lvl, rep: save.rep, upgrades: save.upgrades, gear: save.gear }).customers;
-  boxes.push({
-    id: "prep:who",
-    icon: CROWD_ICON[stop.crowd] ?? "people",
-    title: "Who's coming",
-    sub: `${crowd.label}${ev ? ` · ${esc(ev.name)} today` : ""}${save.ads ? ` · ${ADS[save.ads].label.toLowerCase()}` : ""}`,
-    value: `~${proj.customers}`,
-    unit: "customers",
-    body: `<div class="day-crowd">${icon(CROWD_ICON[stop.crowd] ?? "people")}<span><b>${crowd.label}.</b> ${esc(crowd.blurb)} Patience ×${crowd.patience.toFixed(2)}, tips ×${crowd.tips.toFixed(1)}. A critic today: ${critic >= 0.5 ? "likely" : critic >= 0.25 ? "possible" : "unlikely"}.</span></div>
-      ${ev ? `<div class="bv-callout">${icon("flag")}<span><b>${esc(ev.name)}.</b> ${esc(ev.blurb)} Busier and longer${ev.special ? `, with a special: ${esc(ev.special.name)}` : ""}.</span></div>` : ""}
-      ${tomorrow ? `<div class="day-note">${icon("calendar")}<span><b>Tomorrow:</b> ${esc(tomorrow.name)} here.</span></div>` : ""}
-      <div class="day-field"><span class="bv-eyebrow"><span>${icon("people")}Social media</span><span>Popularity ${save.popularity}</span></span>
-      ${seg("prep-ads", String(save.ads), ADS.map((a, i) => ({ v: String(i), label: a.label, small: `${a.cost ? `$${a.cost}` : "free"} · ~${expectAt(i as AdLevel)}`, disabled: save.bank < a.cost })))}
-      <span class="day-hint">${esc(ADS[save.ads].blurb)}${ADS[save.ads].buzz ? ` Popularity +${ADS[save.ads].buzz} today, +${ADS[save.ads].lasting} for good.` : " Fewer people come to a truck nobody knows yet; good shifts spread the word."}</span></div>`,
-  });
+  const cards = stop.menu
+    .map((r) => {
+      const on = menu.includes(r);
+      const locked = on && menu.length <= MIN_MENU;
+      const layers = r.layers.length;
+      const level = layers <= 5 ? 1 : layers <= 7 ? 2 : 3;
+      const tags = [r.toasted ? "Toasted" : "", r.smash ? "Smashed" : "", r.melt ? "Melted" : "", r.from ? "Later in the day" : ""].filter(Boolean).join(" · ");
+      return `<button class="prep-dish ${on ? "" : "off"}" data-act="prep-menu" data-v="${esc(r.name)}" aria-pressed="${on}" ${locked ? 'aria-disabled="true"' : ""}>
+        ${stackArt(r)}
+        <span class="nm">${esc(r.name)}</span>
+        <span class="meta"><span class="dots" aria-label="${["", "Easy", "Medium", "Tall"][level]}">${"<i class=on></i>".repeat(level)}${"<i></i>".repeat(3 - level)}</span>${tags ? `<small>${tags}</small>` : ""}</span>
+        <span class="tick">${icon(on ? "check" : "eye")}</span>
+      </button>`;
+    })
+    .join("");
 
-  if (plan) {
-    const menu = menuOf(stop, plan);
-    const mult = PRICE[plan.price].mult;
-    boxes.push({
-      id: "prep:menu",
-      icon: "menu",
-      title: "Menu",
-      sub: `${menu.length} of ${stop.menu.length} dishes`,
-      value: cents(proj.avgPrice),
-      unit: "avg price",
-      body: `<div class="day-mlist">${stop.menu
-        .map((r) => {
-          const on = plan.menu.includes(r.name);
-          const keep = r.price * mult - recipeCost(r, plan.quality);
-          return `<button class="day-mrow" data-act="plan-m" data-v="${esc(r.name)}" aria-pressed="${on}"><span class="box">${icon("check")}</span><span class="nm">${esc(r.name)}${r.from ? `<small>Joins the menu ${Math.round(r.from * 100)}% of the way through</small>` : ""}</span><span class="pr">${cents(r.price * mult)}<small class="${keep < 4 ? "thin" : ""}">keeps ${cents(keep)}</small></span></button>`;
-        })
-        .join("")}</div>
-        <span class="day-hint">More choice brings a few more customers. Two dishes minimum.</span>`,
-    });
-    boxes.push({
-      id: "prep:ing",
-      icon: "quality",
-      title: "Ingredients",
-      sub: esc(QUALITY[plan.quality].blurb),
-      value: cents(proj.perOrder),
-      unit: "an order",
-      body: `${seg("plan-q", plan.quality, (Object.keys(QUALITY) as (keyof typeof QUALITY)[]).map((q) => ({ v: q, label: QUALITY[q].label, small: `×${QUALITY[q].cost}` })))}
-        <span class="day-hint">${crowd.qualityWeight >= 1.4 ? `${crowd.label} notice ingredients a lot.` : crowd.qualityWeight <= 0.6 ? `${crowd.label} barely notice ingredients.` : `${crowd.label} notice ingredients a little.`} Each step of quality is worth about ${Math.round(8 * crowd.qualityWeight)} rating points per order.</span>`,
-    });
-    boxes.push({
-      id: "prep:price",
-      icon: "tag",
-      title: "Prices",
-      sub: esc(PRICE[plan.price].blurb),
-      value: `×${PRICE[plan.price].traffic.toFixed(2)}`,
-      unit: "customers",
-      body: `${seg("plan-p", plan.price, (Object.keys(PRICE) as (keyof typeof PRICE)[]).map((k) => ({ v: k, label: PRICE[k].label, small: k === "fair" ? "as expected" : `${PRICE[k].mult > 1 ? "+" : "−"}${Math.round(Math.abs(PRICE[k].mult - 1) * 100)}%` })))}
-        <span class="day-hint">Reputation ${save.rep.toFixed(1)}★ and popularity ${save.popularity}: people will pay <b>${wtp >= 0.5 ? "well above fair" : wtp >= 0.15 ? "a bit above fair" : wtp > -0.15 ? "fair prices" : "below fair"}</b> without complaint.${crowd.priceSensitivity >= 1.3 ? ` ${crowd.label} watch their wallets.` : ""}</span>`,
-    });
-  }
+  const owned = BONUSES.filter((b) => save.bonuses.includes(b.id));
+  const next = nextBonus(save.bonuses);
+  const bonusBody = owned.length
+    ? `<div class="prep-bonuses">${owned
+        .map(
+          (b) => `<button class="prep-bonus" data-act="prep-bonus" data-v="${b.id}" aria-pressed="${b.id === bonus}">
+          <span class="ic">${icon(b.icon)}</span><b>${esc(b.name)}</b><small>${esc(b.text)}</small><em>${esc(b.best)}</em></button>`,
+        )
+        .join("")}</div>`
+    : `<span class="day-hint">No bonuses yet. A great shift earns one: a ${GREAT.stars}★ average with ${Math.round(GREAT.served * 100)}% of orders served${next ? `. First up: <b>${esc(next.name)}</b>` : ""}.</span>`;
 
-  const solar = solarSaving(save.gear);
-  boxes.push({
-    id: "prep:run",
-    icon: "flame",
-    title: "Running costs",
-    sub: `Generator and propane${solar ? " · solar" : ""}`,
-    value: `−$${runningCost(save.gear)}`,
-    unit: solar ? "after solar" : "a night",
-    body: `<span class="day-hint">Every night costs $${RUNNING_COST} for the generator and propane, charged when you sleep. ${
-      solar ? `Your panels cover $${solar} of it.` : "A roof solar panel from the Summit City supply yard covers $5 of it and pays for itself in about twelve days."
-    } Overnight range: ${rangeMiles(save.gear)} mi.</span>`,
-  });
-
-  if (!simple) {
-    boxes.push({ id: "prep:ledger", icon: "receipt", title: "Ledger", sub: "What today should earn", value: range(proj.lo, proj.hi), unit: "net", body: ledgerHtml(proj, plan, crowd.label, `Day ${save.day} · ${esc(stop.name)}`) });
-  }
-
-  return `<div class="day-screen bv">
+  return `<div class="day-screen bv prep">
     <header class="day-top">
       <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("back")}</button>
-      <div class="where"><span class="bv-eyebrow">Day ${save.day} · Prep</span><b>${esc(stop.name)}</b></div>
-      <span class="bv-chip pill">${crowd.label}</span>
+      <div class="where"><span class="bv-eyebrow">Day ${save.day} · Prep &amp; Open</span><b>${esc(stop.name)}</b></div>
+      <span class="bv-chip pill">${icon(CROWD_ICON[stop.crowd] ?? "people")}${crowd.label}</span>
     </header>
     <div class="day-scroll">
-      ${plan ? `<div class="day-pref"><span>${simple ? "Balanced" : "Complex"}</span><button data-act="prep-simple">${simple ? "Show more detail" : "Keep it simple"}</button></div>` : ""}
-      ${boxes.map((b) => boxHtml(b, "prep-box")).join("")}
-      ${plan ? "" : `<span class="day-hint">Simple complexity: the menu and prices are set for you. Balanced or Complex (in Settings) puts them on this screen.</span>`}
+      <section class="prep-expect">
+        <span class="bv-eyebrow">Expect today</span>
+        <div class="big"><b class="bv-mono">${expect}</b><span>customers</span></div>
+        <div class="why">
+          <span>${icon("people")}Popularity <b class="bv-mono">${save.popularity}</b></span>
+          <span>${icon("star")}Rating <b class="bv-mono">${save.rep.toFixed(1)}</b></span>
+          <span>${icon("critic")}Critic ${critic >= 1 ? "booked" : critic >= 0.5 ? "likely" : critic >= 0.25 ? "possible" : "unlikely"}</span>
+        </div>
+        ${ev ? `<div class="bv-callout">${icon("flag")}<span><b>${esc(ev.name)}.</b> ${esc(ev.blurb)}${ev.special ? ` Special: ${esc(ev.special.name)}.` : ""}</span></div>` : ""}
+      </section>
+
+      <section class="prep-sec">
+        <h3 class="prep-h">${icon("clock")}Shift <span>${hourLabel(w.start)} to ${hourLabel(w.end)} · ${shiftHours(w)} h</span></h3>
+        ${curveHtml(w)}
+        <div class="prep-steps">
+          ${stepper("prep-open", "Open", w.start, w.start > FIRST_HOUR, w.start < w.end - 1)}
+          ${stepper("prep-close", "Close", w.end, w.end > w.start + 1, w.end < LAST_HOUR)}
+        </div>
+        <span class="day-hint">Lunch peaks from noon to one. Opening early or closing late adds a few quieter hours.</span>
+      </section>
+
+      <section class="prep-sec">
+        <h3 class="prep-h">${icon("menu")}Menu <span>${menu.length} of ${stop.menu.length} shown</span></h3>
+        <div class="prep-dishes">${cards}</div>
+        <span class="day-hint">A longer menu brings more people, and more kinds of order. Keep at least ${MIN_MENU}.</span>
+      </section>
+
+      <section class="prep-sec">
+        <h3 class="prep-h">${icon("timer")}Pacing <span>Set for the whole shift</span></h3>
+        ${seg("prep-pace", pacing, DIFFICULTIES.map((k) => ({ v: k, label: DIFFICULTY[k].label })))}
+        <span class="day-hint">${esc(DIFFICULTY[pacing].blurb)}</span>
+      </section>
+
+      <section class="prep-sec">
+        <h3 class="prep-h">${icon("sparkle")}Bonus <span>${owned.length ? (bonus ? "1 brought" : "Bring one, or none") : "None yet"}</span></h3>
+        ${bonusBody}
+      </section>
     </div>
     <footer class="day-foot">
-      <div class="sum"><span class="bv-eyebrow">Projected net</span><b>${range(proj.lo, proj.hi)}</b></div>
+      <div class="sum"><span class="bv-eyebrow">${hourLabel(w.start)} to ${hourLabel(w.end)}${bonus ? ` · ${esc(bonusById(bonus)!.name)}` : ""}</span><b>~${expect} customers</b></div>
       <button class="bv-btn primary lg" data-act="open">${icon("bell")}Open</button>
     </footer>
   </div>`;
@@ -203,7 +201,7 @@ export function prepHtml(p: PrepInput): string {
 // ---------------------------------------------------------------------------
 // Closing
 
-export function closingHtml(c: Closing, save: Save, offer: Upgrade[]): string {
+export function closingHtml(c: Closing, save: Save): string {
   const town = townById(c.town);
   const avg = c.stars.length ? c.stars.reduce((a, b) => a + b, 0) / c.stars.length : 0;
   const verdict =
@@ -211,54 +209,48 @@ export function closingHtml(c: Closing, save: Save, offer: Upgrade[]): string {
       ? "The truck stayed quiet today."
       : c.outcome === "failed"
         ? `${town.name} wasn't impressed. Serve at least half the customers with a 1★ average to count the day.`
-        : avg >= 2.5
-          ? `${town.name} will be talking about this for weeks.`
+        : c.great
+          ? `A great shift. ${town.name} will be talking about this for weeks.`
           : avg >= 1.5
             ? "Solid shift. Everyone left full."
             : "A rough day at the grill, but you made it.";
-  const net = c.profit - c.running + Math.min(c.running, c.solar);
-  const lifetime = save.ratingCount ? save.ratingSum / save.ratingCount : avg;
   const row = (dt: string, dd: string, cls = "", sub = "") => `<dt class="${cls}">${dt}${sub ? `<small>${sub}</small>` : ""}</dt><dd class="${cls}">${dd}</dd>`;
-  const onTarget = c.projected ? (net < c.projected[0] ? "Under" : net > c.projected[1] ? "Over" : "On target") : "";
+  const newBest = c.takings > 0 && (c.bestBefore === null || c.takings > c.bestBefore);
+  const earned = c.earnedBonus ? bonusById(c.earnedBonus) : null;
   const boxes: Box[] = [];
   boxes.push({
     id: "closing:take",
     icon: "receipt",
     title: "Takings",
     sub: `${c.served} order${c.served === 1 ? "" : "s"}${c.lost ? ` · ${c.lost} walked out` : ""}${c.leftLine ? ` · ${c.leftLine} left the line` : ""}`,
-    value: money(net),
-    unit: "net",
+    value: money(c.takings),
+    unit: newBest ? (c.bestBefore === null ? "first here" : "town best") : `best ${money(c.bestBefore ?? 0)}`,
     body: `<div class="day-ledger"><h4><span>Day ${c.day}</span><span>${esc(town.name)}</span></h4><dl>
-      ${row("Sales", money(c.earned))}
-      ${row("Tips", money(c.tips))}
+      ${row("Orders", money(c.earned))}
+      ${row("Tips", money(c.tips), "", "for speed")}
+      ${c.comped ? row("On the house", `−${money(c.comped)}`, "neg", "sides and extras nobody ordered") : ""}
       ${c.spills ? row("Spilled soda", `−${money(c.spills)}`, "neg") : ""}
-      ${c.adCost ? row("Social media", `−${money(c.adCost)}`, "neg") : ""}
-      ${c.biz ? row("Ingredients", `−${money(c.costs)}`, "neg") : ""}
-      ${row("Generator and propane", `−${money(c.running)}`, "neg", "charged tonight")}
-      ${c.solar ? row("Solar", `+${money(Math.min(c.running, c.solar))}`, "sub") : ""}
-      ${row("Net", money(net), "tot")}
-    </dl>${c.projected ? `<div class="foot"><span>Projected ${range(c.projected[0], c.projected[1])}</span><b>${onTarget}</b></div>` : ""}</div>
+      ${row("Takings", money(c.takings), "tot")}
+    </dl><div class="foot"><span>Best in ${esc(town.name)}</span><b>${newBest ? "New best!" : money(c.bestBefore ?? 0)}</b></div></div>
     ${c.best ? `<span class="day-hint">Best order: ${esc(c.best)}.</span>` : ""}`,
   });
-  if (c.biz) {
-    boxes.push({
-      id: "closing:rev",
-      icon: "star",
-      title: "Today's reviews",
-      sub: c.served ? (c.reviews.length ? `From ${c.served} orders; best and worst below` : `${c.served} orders, no written reviews`) : "Nobody was served",
-      value: `${avg.toFixed(1)}★`,
-      unit: `rep ${c.repBefore.toFixed(1)} → ${c.rep.toFixed(1)}`,
-      body: `<ul class="day-rev">${c.reviews.slice(0, 3).map((r) => `<li>${stars(r.stars)}<q>${esc(r.text)}</q></li>`).join("")}</ul>
-        <button class="bv-btn sm" data-act="reviews">${icon("review")}All ${save.reviews.length} reviews</button>`,
-    });
-  }
+  boxes.push({
+    id: "closing:rev",
+    icon: "star",
+    title: "Today's reviews",
+    sub: c.served ? (c.reviews.length ? `From ${c.served} orders; best and worst below` : `${c.served} orders, no written reviews`) : "Nobody was served",
+    value: `${avg.toFixed(1)}★`,
+    unit: `rating ${c.repBefore.toFixed(1)} → ${c.rep.toFixed(1)}`,
+    body: `<ul class="day-rev">${c.reviews.slice(0, 3).map((r) => `<li>${stars(r.stars)}<q>${esc(r.text)}</q></li>`).join("")}</ul>
+      <button class="bv-btn sm" data-act="reviews">${icon("review")}All ${save.reviews.length} reviews</button>`,
+  });
   boxes.push({
     id: "closing:press",
     icon: "critic",
-    title: "Press",
-    sub: c.press ? `A critic ate here today` : "No critic today",
+    title: "Popularity",
+    sub: c.press ? `A critic ate here today` : "Word of mouth",
     value: c.pop[0] === c.pop[1] ? "—" : `${c.pop[1] > c.pop[0] ? "+" : "−"}${Math.abs(c.pop[1] - c.pop[0])}`,
-    unit: c.pop[0] === c.pop[1] ? "" : `popularity ${c.pop[0]} → ${c.pop[1]}`,
+    unit: c.pop[0] === c.pop[1] ? "" : `${c.pop[0]} → ${c.pop[1]}`,
     body: c.press ? pressHtml(c.press) : `<span class="day-hint">Popularity ${c.pop[1]}. Happy customers tell their friends; walk-outs tell theirs. Critics turn up more at events and in foodie towns.</span>`,
   });
   const left = SHIFTS_TO_UNLOCK - c.shiftsHere;
@@ -283,30 +275,31 @@ export function closingHtml(c: Closing, save: Save, offer: Upgrade[]): string {
                 : "The roads out of here are open."
       }</span></div>`,
   });
-  if (offer.length && c.outcome !== "failed") {
-    boxes.push({
-      id: "closing:pick",
-      icon: "sparkle",
-      title: "A gift from the locals",
-      sub: "Pick one. It stays on the truck.",
-      value: "Free",
-      unit: "",
-      body: `<div class="day-offers">${offer.map((u) => `<button class="day-offer" data-act="pick" data-id="${u.id}"><b>${esc(u.name)}</b><span>${esc(u.text)}</span></button>`).join("")}</div>`,
-    });
-    openBoxes.add("closing:pick");
-  }
+
+  const reward = earned
+    ? `<section class="day-reward" aria-label="Bonus earned">
+        <span class="bv-eyebrow">Great shift · bonus earned</span>
+        <span class="ic">${icon(earned.icon)}</span>
+        <b>${esc(earned.name)}</b>
+        <p>${esc(earned.text)}</p>
+        <small>Bring it, or another bonus, from Prep &amp; Open. One per shift.</small>
+      </section>`
+    : c.ribbon
+      ? `<section class="day-reward" aria-label="Ribbon earned"><span class="bv-eyebrow">Great shift</span><span class="ic">${icon("trophy")}</span><b>A ribbon for ${esc(town.name)}</b><p>Every bonus is yours already. ${esc(town.name)} gets a ribbon on the map.</p></section>`
+      : "";
 
   return `<div class="day-screen bv closing">
     <header class="day-hero">
-      <span class="bv-eyebrow">Closing time · Day ${c.day}</span>
+      <span class="bv-eyebrow">Closing time · Day ${c.day} · ${hourLabel(c.shift.start)} to ${hourLabel(c.shift.end)}</span>
       <h2 class="bv-title">${esc(town.name)}</h2>
       <div class="day-hero-stars" aria-label="${avg.toFixed(1)} stars average">${stars(Math.round(avg))} <span class="bv-mono">${avg.toFixed(1)}</span></div>
       <p>${verdict}</p>
     </header>
     <div class="day-scroll">
+      ${reward}
       <div class="day-kpis">
-        <div class="day-kpi"><span class="bv-eyebrow">Net</span><b class="${net >= 0 ? "up" : "dn"}">${net >= 0 ? "+" : ""}${money(net)}</b><small>after costs</small></div>
-        <div class="day-kpi"><span class="bv-eyebrow">Rating</span><b>${avg.toFixed(1)}</b><small>lifetime ${lifetime.toFixed(1)}</small></div>
+        <div class="day-kpi"><span class="bv-eyebrow">Takings</span><b class="${newBest ? "up" : ""}">${money(c.takings)}</b><small>${newBest ? "town best" : `best ${money(c.bestBefore ?? 0)}`}</small></div>
+        <div class="day-kpi"><span class="bv-eyebrow">Rating</span><b>${c.rep.toFixed(1)}</b><small>${c.rep >= c.repBefore ? "+" : "−"}${Math.abs(c.rep - c.repBefore).toFixed(1)} today</small></div>
         <div class="day-kpi"><span class="bv-eyebrow">Served</span><b>${c.served}</b><small>${c.lost + c.leftLine ? `${c.lost + c.leftLine} left` : "nobody left"}</small></div>
       </div>
       ${boxes.map((b) => boxHtml(b, "closing-box")).join("")}
@@ -351,8 +344,8 @@ export function reviewsHtml(save: Save, filter: ReviewFilter): string {
     </header>
     <div class="day-scroll">
       <div class="day-kpis two">
-        <div class="day-kpi"><span class="bv-eyebrow">${icon("people")}Popularity</span><b>${save.popularity}<small class="of">/100</small></b><small>How many people have heard of the truck. More people come to the window.</small></div>
-        <div class="day-kpi"><span class="bv-eyebrow">${icon("star")}Rating</span><b>${save.ratingCount ? (save.ratingSum / save.ratingCount).toFixed(1) : "–"} <span class="st">★</span></b><small>${save.ratingCount ? `Average over ${save.ratingCount} order${save.ratingCount === 1 ? "" : "s"}.` : "No orders yet."} Good ratings bring people back and spread the word.</small></div>
+        <div class="day-kpi"><span class="bv-eyebrow">${icon("people")}Popularity</span><b>${save.popularity}<small class="of">/100</small></b><small>How many people have heard of the truck. Fills the line.</small></div>
+        <div class="day-kpi"><span class="bv-eyebrow">${icon("star")}Rating</span><b>${save.ratingCount ? save.rep.toFixed(1) : "–"} <span class="st">★</span></b><small>${save.ratingCount ? "Recent reviews count most." : "No orders yet."} A good rating brings a few more people.</small></div>
       </div>
       <div class="day-filters">${f("all", "All")}${f("critics", "Critics")}${f("good", "3★")}${f("bad", "1★")}${f("here", esc(here))}</div>
       <div class="day-rlist">
@@ -360,35 +353,6 @@ export function reviewsHtml(save: Save, filter: ReviewFilter): string {
         ${list.map((r) => `<div class="day-rcard"><div class="h">${stars(r.stars)}<span class="who">${esc(r.stop)}</span></div><q>${esc(r.text)}</q></div>`).join("")}
         ${!list.length && !(showPress && press.length) ? `<span class="day-hint">${reviews.length || press.length ? "Nothing here yet." : "No reviews yet. Customers write one after they eat, and critics turn up at events and in foodie towns."}</span>` : ""}
       </div>
-    </div>
-  </div>`;
-}
-
-// ---------------------------------------------------------------------------
-// Supply yard
-
-export function suppliesHtml(save: Save): string {
-  const here = townById(save.town);
-  const sellsHere = GEAR.some((g) => g.soldAt === here.id);
-  return `<div class="day-screen bv">
-    <header class="day-top">
-      <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("back")}</button>
-      <div class="where"><span class="bv-eyebrow">${sellsHere ? `${esc(here.name)} supply yard` : "Sold in the big cities"}</span><b>Supplies</b></div>
-      <span class="bv-chip pill">${icon("coin")}$${save.bank}</span>
-    </header>
-    <div class="day-scroll">
-      <span class="day-hint">Parts for the truck, bought for cash where they're sold. Running cost tonight: $${runningCost(save.gear)}. Overnight range: ${rangeMiles(save.gear)} mi.</span>
-      <div class="day-gear">${GEAR.map((g) => {
-        const why = gearBlocker(g, save.gear, save.town, save.bank);
-        const owned = save.gear.includes(g.id);
-        return `<div class="day-gear-row ${owned ? "owned" : ""}">
-          <span class="ic">${icon(g.id.startsWith("solar") ? "sun" : "truck")}</span>
-          <span class="t"><b>${esc(g.name)}</b><small>${esc(g.text)}</small><small class="where">${owned ? "Fitted" : `Sold in ${esc(townById(g.soldAt).name)}`}</small></span>
-          ${owned ? `<span class="bv-chip ok">${icon("check")}Fitted</span>` : `<button class="bv-btn sm ${why ? "" : "primary"}" data-act="buy" data-id="${g.id}" ${why ? "disabled" : ""}>$${g.cost}</button>`}
-          ${why && !owned ? `<small class="why">${esc(why)}</small>` : ""}
-        </div>`;
-      }).join("")}</div>
-      <div class="day-gear-owned"><span class="bv-eyebrow">Kitchen upgrades</span><span class="day-hint">${save.upgrades.length ? save.upgrades.map((u) => esc(UPGRADES.find((x) => x.id === u)?.name ?? u)).join(", ") : "None yet. The locals offer one after a good shift."}</span></div>
     </div>
   </div>`;
 }

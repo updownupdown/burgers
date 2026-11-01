@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { nextReputation, planFor, ratingBonus, trafficMult } from "./business";
-import { pieceFor, popularityChange, willingnessToPay } from "./press";
+import { menuFactor, menuFor, nextReputation, ratingFactor } from "./business";
+import { pieceFor, popularityChange } from "./press";
 import { applyMods, makeOrder, orderFromRecipe, seededRng, sidesOrder } from "./menu";
 import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent } from "./stops";
-import { passed, upgradeChoices } from "./progress";
+import { passed } from "./progress";
 import { alignLayers, layerQuality, payout, scorePlate } from "./scoring";
 import { FRIES_PERFECT, FRIES_ZONE, FRY_RATE } from "./cooking";
 import type { Kind, Layer, Order, Piece, Plate } from "./types";
@@ -357,12 +357,6 @@ describe("road trip progress", () => {
     expect(passed(0.8, 9, 9)).toBe(false);
     expect(passed(3, 4, 9)).toBe(false);
   });
-
-  it("only offers upgrades the truck doesn't have", () => {
-    const offer = upgradeChoices(["bench", "tipjar"], seededRng(3));
-    expect(offer).toHaveLength(3);
-    expect(offer.some((u) => u.id === "bench" || u.id === "tipjar")).toBe(false);
-  });
 });
 
 describe("feedback notes", () => {
@@ -399,41 +393,27 @@ describe("recipe modifiers", () => {
   });
 });
 
-describe("business mode", () => {
-  it("premium food at high prices rates the same as standard at fair prices", () => {
-    expect(ratingBonus({ quality: "premium", price: "high", menu: [] })).toBe(0);
-    expect(ratingBonus({ quality: "budget", price: "fair", menu: [] })).toBeLessThan(0);
-    expect(ratingBonus({ quality: "standard", price: "low", menu: [] })).toBeGreaterThan(0);
+describe("the crowd", () => {
+  it("draws more people to a longer menu and a better rating", () => {
+    expect(menuFactor(2)).toBeCloseTo(0.8);
+    expect(menuFactor(4)).toBeCloseTo(1);
+    expect(menuFactor(6)).toBeCloseTo(1.1);
+    expect(menuFactor(9)).toBeCloseTo(1.1);
+    expect(ratingFactor(3)).toBeGreaterThan(ratingFactor(2));
+    expect(ratingFactor(1)).toBeLessThan(1);
   });
 
-  it("low prices and a good reputation bring more customers", () => {
-    const plan = (price: "low" | "high") => ({ quality: "standard" as const, price, menu: [] });
-    expect(trafficMult(plan("low"), 2, 4)).toBeGreaterThan(trafficMult(plan("high"), 2, 4));
-    expect(trafficMult(plan("low"), 3, 4)).toBeGreaterThan(trafficMult(plan("low"), 1, 4));
-  });
-
-  it("keeps saved menus valid for the stop", () => {
-    const plan = planFor(STOPS[0], { quality: "budget", price: "low", menu: ["Mesa Smash"] });
-    expect(plan.menu.length).toBe(STOPS[0].menu.length);
-    expect(plan.quality).toBe("budget");
+  it("never lets the menu drop below two recipes", () => {
+    const t = STOPS[0];
+    expect(menuFor(t, []).length).toBe(t.menu.length);
+    expect(menuFor(t, [t.menu[0].name]).length).toBe(t.menu.length - 1);
+    expect(menuFor(t, t.menu.map((r) => r.name)).length).toBe(t.menu.length);
   });
 
   it("moves reputation gradually", () => {
     const r = nextReputation(2, 6, [3, 3, 3]);
     expect(r.rep).toBeGreaterThan(2);
     expect(r.rep).toBeLessThan(3);
-  });
-});
-
-describe("crowds", () => {
-  it("foodies reward premium ingredients more than commuters do", () => {
-    const plan = { quality: "premium" as const, price: "fair" as const, menu: [] };
-    expect(ratingBonus(plan, "foodies")).toBeGreaterThan(ratingBonus(plan, "commuters"));
-  });
-
-  it("price-sensitive crowds thin out more at high prices", () => {
-    const high = { quality: "standard" as const, price: "high" as const, menu: [] };
-    expect(trafficMult(high, 2, 4, "party")).toBeLessThan(trafficMult(high, 2, 4, "foodies"));
   });
 
   it("gives every town a crowd", () => {
@@ -464,12 +444,6 @@ describe("critics and popularity", () => {
   it("a great TV spot moves popularity more than a newspaper piece", () => {
     expect(popularityChange(3, "tv")).toBeGreaterThan(popularityChange(3, "paper"));
     expect(popularityChange(0, "paper")).toBeLessThan(0);
-  });
-
-  it("fame and good reviews raise what people will pay", () => {
-    expect(willingnessToPay(80, 2.8)).toBeGreaterThan(willingnessToPay(10, 2));
-    const high = { quality: "standard" as const, price: "high" as const, menu: [] };
-    expect(ratingBonus(high, "families", willingnessToPay(90, 3))).toBeGreaterThan(ratingBonus(high, "families", 0));
   });
 
   it("writes a piece with a headline and quote", () => {

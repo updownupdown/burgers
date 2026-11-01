@@ -2,9 +2,9 @@
  * The in-game menus, as three cards:
  *
  *   openMenu()        the pause menu, in a shift: Resume, Restart, Quit, then this shift's
- *                     menu, Pacing and Complexity, and doors to Settings and How to Play.
+ *                     menu, Pacing, and doors to Settings and How to Play.
  *                     Closing it resumes.
- *   openSettings()    Settings on their own: pacing, complexity, sound, graphics, the app.
+ *   openSettings()    Settings on their own: sound, graphics, the app.
  *                     From the map's Settings button, and from the pause menu.
  *   openHowTo()       How to Play on its own (howto.ts). From the map's Help button.
  *   openMenuRef()     The menu: every dish, open or locked (menuref.ts).
@@ -28,8 +28,6 @@ export type { GfxLevel, MenuDeps } from "./modal";
 export { openHowTo } from "./howto";
 export { openMenuRef } from "./menuref";
 
-import { COMPLEXITIES, COMPLEXITY, type Complexity } from "../game/complexity";
-import { DIFFICULTIES, DIFFICULTY, type Difficulty } from "../game/difficulty";
 
 const GFX: { id: GfxLevel; label: string; blurb: string }[] = [
   { id: "high", label: "High", blurb: "Soft shadows. Looks its best." },
@@ -153,7 +151,7 @@ export function openMenu(over: Partial<MenuDeps> = {}): void {
         d.quit();
         break;
       case "menuref":
-        openMenuRef(d.town(), { priceMult: d.priceMult?.() ?? 1 });
+        openMenuRef(d.town());
         break;
       case "settings":
         openSettings(over);
@@ -177,7 +175,7 @@ function pauseHtml(d: MenuDeps, town: Stop): string {
     </header>
     <div class="menu-body menu-scroll pause-body">
       ${sh ? shiftHtml(sh) : ""}
-      ${todayMenuHtml(town, d.priceMult?.() ?? 1, sh)}
+      ${todayMenuHtml(town, 1, sh)}
     </div>
     <footer class="pause-foot">
       <div class="pause-acts">
@@ -273,10 +271,6 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
     cls: "tall settings",
     html: `${head("Bun Voyage", "Settings", stacked)}
       <div class="menu-body menu-scroll menu-general">
-        <h3 class="menu-h">${icon("grill")}Play</h3>
-        ${field("difficulty", "clock", "Pacing", DIFFICULTY[d.difficulty()].blurb + (inShift ? " New customers feel it straight away." : ""), DIFFICULTIES.map((k) => ({ v: k, label: DIFFICULTY[k].label })), d.difficulty())}
-        ${field("complexity", "chart", "Complexity", COMPLEXITY[d.complexity()].blurb, COMPLEXITIES.map((k) => ({ v: k, label: COMPLEXITY[k].label })), d.complexity())}
-        <p class="menu-note">${icon("info")}<span>Change either any time. Stepping down keeps your reputation, reviews and upgrades for when you step back up.${inShift ? " Complexity changes take effect with your next shift." : ""}</span></p>
         <h3 class="menu-h">${icon("settings")}Device</h3>
         ${toggle("sound", d.sound() ? "sound-on" : "sound-off", "Sound", d.sound())}
         ${hapticsSupported() ? toggle("haptics", "vibrate", "Vibration", hapticsOn(), "A buzz on flips, dings and burns") : ""}
@@ -285,7 +279,7 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
         ${row("update", "update", "Check for updates", "", "")}
         ${d.canInstall() ? row("install", "pin", "Install the app", "Add Bun Voyage to your home screen and play offline", "") : ""}
         ${row("newtrip", "flag", "Start a new trip", "Back to the first town. Upgrades and savings reset.", "", 'data-tone="danger"')}
-        ${confirmBox("newtrip", inShift ? "End this shift and wipe the trip? Towns, upgrades and savings reset; best scores are kept." : "Wipe the trip and start again from the first town? Towns, upgrades and savings reset; best scores are kept.", "Start over")}
+        ${confirmBox("newtrip", inShift ? "End this shift and wipe the trip? Towns and bonuses reset; best scores are kept." : "Wipe the trip and start again from the first town? Towns and bonuses reset; best scores are kept.", "Start over")}
         ${inShift || !d.simulate ? "" : devHtml()}
         <p class="menu-build bv-mono">${esc(buildLabel())}</p>
       </div>`,
@@ -329,18 +323,6 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
         setHaptics(on);
         setToggle(btn, on);
         if (on) navigator.vibrate?.(20);
-        break;
-      }
-      case "difficulty": {
-        const v = btn.dataset.v as Difficulty;
-        d.setDifficulty(v);
-        pickSeg(card, btn, DIFFICULTY[v].blurb + (inShift ? " New customers feel it straight away." : ""));
-        break;
-      }
-      case "complexity": {
-        const v = btn.dataset.v as Complexity;
-        d.setComplexity(v);
-        pickSeg(card, btn, COMPLEXITY[v].blurb);
         break;
       }
       case "dev": {

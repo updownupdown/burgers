@@ -8,7 +8,7 @@ import { DIFFICULTY, type Difficulty } from "./difficulty";
  * the player rings the bell, or on their own when the window is empty, so the player sets how
  * many orders they juggle. Waiting in line has its own patience; an order's patience starts
  * when they order. Fame (`popularity` in the save) decides how many people turn up and how
- * willing they are to wait; social media posts buy a day of extra buzz and a little lasting fame.
+ * willing they are to wait.
  */
 
 /** How many customers the bell may bring to the window at once. */
@@ -43,28 +43,6 @@ export function linePatience(d: Difficulty, crowd: CrowdId): number {
  */
 export function lineDrain(position: number): number {
   return position === 0 ? 0.3 : position === 1 ? 0.65 : 1;
-}
-
-/** Social media before a shift: a day of buzz for the price, and a few people who remember. */
-export interface Ad {
-  label: string;
-  blurb: string;
-  cost: number;
-  /** Added to popularity for today's traffic only. */
-  buzz: number;
-  /** Added to popularity for good after the shift. */
-  lasting: number;
-}
-export type AdLevel = 0 | 1 | 2;
-export const ADS: Ad[] = [
-  { label: "Word of mouth", blurb: "No posts. Whoever has heard of you.", cost: 0, buzz: 0, lasting: 0 },
-  { label: "A post", blurb: "A photo and today's spot. A busier line.", cost: 12, buzz: 20, lasting: 2 },
-  { label: "Campaign", blurb: "Posts all morning. A long line, if you can handle it.", cost: 30, buzz: 45, lasting: 5 },
-];
-
-/** Popularity as today's crowd sees it: fame plus whatever buzz was bought. */
-export function todayPopularity(popularity: number, ad: AdLevel): number {
-  return Math.min(100, popularity + ADS[ad].buzz);
 }
 
 /**

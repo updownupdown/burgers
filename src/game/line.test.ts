@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ADS, joinChance, lineDrain, linePatience, MAX_LINE, todayPopularity, WINDOW, wordOfMouth } from "./line";
+import { joinChance, lineDrain, linePatience, MAX_LINE, WINDOW, wordOfMouth } from "./line";
 import { popularityTraffic } from "./press";
 
 describe("the line", () => {
@@ -40,12 +40,6 @@ describe("fame", () => {
     expect(popularityTraffic(50)).toBeGreaterThan(popularityTraffic(10));
   });
 
-  it("buys buzz for the day, capped at 100", () => {
-    expect(todayPopularity(10, 0)).toBe(10);
-    expect(todayPopularity(10, 1)).toBe(10 + ADS[1].buzz);
-    expect(todayPopularity(90, 2)).toBe(100);
-    expect(ADS[2].cost).toBeGreaterThan(ADS[1].cost);
-  });
 
   it("grows by word of mouth and shrinks when people give up", () => {
     expect(wordOfMouth([3, 3, 2, 2, 3, 2], 0, 0)).toBe(2);

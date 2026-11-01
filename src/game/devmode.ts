@@ -5,7 +5,8 @@
  * turned off (or dev mode is).
  */
 import type { Review } from "./business";
-import { freshSave, UPGRADES, type Save } from "./progress";
+import { BONUSES } from "./bonus";
+import { freshSave, START_POPULARITY, type Save } from "./progress";
 import { START_TOWN, STOPS, townById } from "./stops";
 import { SHIFTS_TO_UNLOCK } from "./travel";
 
@@ -101,13 +102,13 @@ export function simulatedSave(level: SimLevel): Save {
   // Park at the frontier: the last town worked, or the end of the road at 100%.
   s.town = worked[worked.length - 1];
   s.day = 1 + worked.length * (SHIFTS_TO_UNLOCK + 1);
-  s.popularity = Math.round(10 + 85 * k);
+  s.popularity = Math.round(START_POPULARITY + (95 - START_POPULARITY) * k);
   const orders = worked.length * SHIFTS_TO_UNLOCK * 9;
   s.ratingCount = orders;
   s.ratingSum = Math.round(orders * (1.9 + 0.7 * k));
   s.rep = Number((1.9 + 0.7 * k).toFixed(2));
   s.repWeight = 30;
-  s.upgrades = UPGRADES.slice(0, level === 100 ? UPGRADES.length : 2).map((u) => u.id);
+  s.bonuses = BONUSES.slice(0, level === 100 ? BONUSES.length : 4).map((b) => b.id);
   s.reviews = worked
     .flatMap((id, i) => SAMPLE_REVIEWS.slice(0, 2 + (i % 3)).map(([stars, text]): Review => ({ stars: Math.min(3, stars + (level === 100 && stars < 3 ? 1 : 0)), text, stop: townById(id).name })))
     .reverse()

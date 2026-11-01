@@ -2,33 +2,17 @@ import * as THREE from "three";
 import { buzz, Sfx } from "./audio";
 import { cookLevel, COOK_SCALE, DRINK_FILL, friesZone, FRIES_ZONE, SALT, type Cookable } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
-import { gearBlocker, gearById, projectShift, sleep, solarSaving, RUNNING_COST, type GearId } from "./game/day";
-import { freshSave, loadSave, passed, passTown, upgradeChoices, UPGRADES, writeSave, type Closing, type UpgradeId } from "./game/progress";
+import { expectedCustomers, sleep } from "./game/day";
+import { greatShift, nextBonus, type BonusId } from "./game/bonus";
+import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, validShift, type ShiftWindow } from "./game/shift";
+import { freshSave, loadSave, passed, passTown, writeSave, type Closing } from "./game/progress";
 import { eventOn, townById, withEvent, type TownEvent } from "./game/stops";
-import { criticChance, fadePopularity, pieceFor, popularityTraffic, willingnessToPay, type PressPiece } from "./game/press";
+import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
-import { ADS, joinChance, lineDrain, linePatience, todayPopularity, WINDOW, wordOfMouth, type AdLevel } from "./game/line";
-import { HOLD_GRACE, HOLD_RUIN, payout, SAUCE_BAND, sauceCoverage, sauceVerdict, scorePlate, starsFor, type SauceWord } from "./game/scoring";
-import {
-  CARTON_COST,
-  CROWD,
-  CUP_COST,
-  EXTRA_COST,
-  FRIES_BATCH_COST,
-  FRY_TOP_COST,
-  KIND_COST,
-  menuOf,
-  nextReputation,
-  planFor,
-  PRICE,
-  QUALITY,
-  ratingBonus,
-  reviewFor,
-  SODA_COST,
-  trafficMult,
-  type Plan,
-  type Review,
-} from "./game/business";
+import { joinChance, lineDrain, linePatience, WINDOW, wordOfMouth } from "./game/line";
+import { HOLD_GRACE, HOLD_RUIN, payout, SAUCE_BAND, sauceCoverage, sauceVerdict, scorePlate, type SauceWord } from "./game/scoring";
+import { CROWD, menuFor, nextReputation, reviewFor, type Review } from "./game/business";
+import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "./game/menu";
 import type { DrinkId, FriesSize, Layer, Order, Piece, Plate, SauceKind, Size } from "./game/types";
 import { COUNTED, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, GRILLABLE, KIND_LABEL, newPiece, SIZE_LABEL } from "./game/types";
 import { SCALE } from "./render/units";
@@ -43,15 +27,13 @@ import { makeEgg, type EggStage } from "./render/egg";
 import "./ui/components.css";
 import "./style.css";
 import { mountHome, refreshHome, type NightShow } from "./screens/home";
-import { closeBoxes, closingHtml, prepHtml, reviewsHtml, suppliesHtml, toggleBox, type ReviewFilter } from "./screens/day";
+import { closingHtml, prepHtml, reviewsHtml, toggleBox, type ReviewFilter } from "./screens/day";
 import { buildUi, cookMeter, patienceMood, ticketHtml } from "./ui";
 import { DRINK_TINT } from "./render/machines";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 import { closeAll, initMenu, openHowTo, openMenu, openMenuRef, openSettings } from "./screens/menu";
 import { dropBack, pushBack } from "./screens/nav";
-import { complexityOf, setComplexity } from "./game/complexity";
 import { simulate, type SimLevel } from "./game/devmode";
-import { clockAt, clockLabel, DEFAULT_SHIFT, shiftProgress, type ShiftWindow } from "./game/shift";
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -101,7 +83,8 @@ const ui = buildUi(document.getElementById("ui")!, PAGES);
 const save = loadSave();
 /** The town being played, as it is today (an event makes it busier and changes the crowd). */
 const stop = () => withEvent(townById(game.town), game.event);
-const has = (u: UpgradeId) => save.upgrades.includes(u);
+/** The bonus brought into this shift (one at most, picked on Prep). */
+const has = (b: BonusId) => game.bonus === b;
 
 interface Slot {
   order: Order | null;
@@ -166,24 +149,24 @@ const game = {
   bellAt: 0,
   /** When the window emptied, so the next person steps up on their own after a beat. */
   emptySince: -1,
-  /** Spent on social media today. */
-  adCost: 0,
-  /** Business mode: today's plan, ingredient spend and the reviews written so far. */
-  plan: null as Plan | null,
-  costs: 0,
+  /** What unordered sides and extra toppings would have sold for: they go out free. */
+  comped: 0,
+  /** Reviews written so far this shift. */
   reviews: [] as Review[],
+  /** Set on Prep and fixed for the shift: pacing, the window, and the one bonus brought along. */
+  pacing: "balanced" as Difficulty,
+  shift: validShift(null) as ShiftWindow,
+  /** Play time of today's window in seconds (see shift.ts). */
+  shiftLength: 180,
+  bonus: null as BonusId | null,
   /** Every rating this shift, walk-outs as zero, for reputation. */
   ratings: [] as number[],
   /** Which customer (by arrival order) is a food critic today, or -1; and what they wrote. */
   criticAt: -1,
   press: null as PressPiece | null,
-  /** What Prep projected for today's net, shown again on the Closing screen. */
-  projected: null as [number, number] | null,
   /** Which screen is up over the map, so its buttons redraw the right one. */
-  overlay: null as null | "closing" | "reviews" | "supplies",
+  overlay: null as null | "closing" | "reviews",
   reviewFilter: "all" as ReviewFilter,
-  /** Today's window on the clock (the HUD shows game time as a time of day inside it). */
-  shift: { ...DEFAULT_SHIFT } as ShiftWindow,
 };
 
 /** A critic's verdict counts like this many ordinary reviews. */
@@ -191,30 +174,22 @@ const CRITIC_WEIGHT = 5;
 
 function criticVerdict(stars: number, notes: string[]): void {
   game.press = pieceFor(stars, notes, stop(), game.event, game.rng);
-  if (game.plan) for (let k = 1; k < CRITIC_WEIGHT; k++) game.ratings.push(stars);
+  for (let k = 1; k < CRITIC_WEIGHT; k++) game.ratings.push(stars);
 }
 
-/** In business mode, ingredients cost money as they come out of the bins. */
-function spend(amount: number): void {
-  if (game.plan) game.costs += amount * QUALITY[game.plan.quality].cost;
-}
-
-/** The stop as the customers see it: just today's menu in business mode. */
+/** The stop as the customers see it: just the recipes left on today's menu. */
 function shopStop() {
   const st = stop();
-  return game.plan ? { ...st, menu: menuOf(st, game.plan) } : st;
+  return { ...st, menu: menuFor(st, save.hidden) };
 }
 
-/** How well known the truck is today: fame plus whatever buzz was bought (see ADS). */
-const todayPop = () => todayPopularity(save.popularity, save.ads);
-
-function plannedCustomers(plan: Plan): number {
-  return Math.max(4, Math.round(stop().customers * trafficMult(plan, save.rep, menuOf(stop(), plan).length, stop().crowd) * popularityTraffic(todayPop())));
-}
-
-/** Customers expected without a business plan: the town's trade, scaled by crowd and fame. */
-function expectedCustomers(): number {
-  return Math.max(3, Math.round(stop().customers * CROWD[stop().crowd].traffic * popularityTraffic(todayPop())));
+/** What a giveaway would have sold for: unordered sides at menu price, extra toppings at the extra price. */
+function compValue(order: Order, fries: Plate["fries"], drink: Plate["drink"], extraToppings = false): number {
+  let v = 0;
+  if (fries && !order.fries) v += fries.curds ? 8 : FRIES_PRICE[fries.size];
+  if (drink && !order.drink) v += DRINK_PRICE[drink.size];
+  if (extraToppings) v += EXTRA_PRICE;
+  return v;
 }
 
 // ---------------------------------------------------------------------------
@@ -320,9 +295,8 @@ function ndcIn(r: Rect, x: number, y: number): THREE.Vector2 {
 
 function spawnCustomer(slotIdx: number, seed: number): void {
   const s = game.slots[slotIdx];
-  const level = game.time / stop().shiftLength;
+  const level = Math.min(1, game.time / game.shiftLength);
   let order = makeOrder(game.orderSeq++, game.rng, level, shopStop());
-  if (game.plan) order.price = Math.round(order.price * PRICE[game.plan.price].mult);
   // The very first order of the trip is the simplest burger, with no sides.
   if (game.tutorial && game.ordered === 0) order = orderFromRecipe(order.id, stop().menu[0], false, null);
   s.order = order;
@@ -332,7 +306,7 @@ function spawnCustomer(slotIdx: number, seed: number): void {
   // Recipes you haven't made a couple of times yet start with the full layer list showing.
   // Every extra slice of a counted topping is another trip to the bin.
   const slices = order.layers.reduce((n, l) => n + Math.max(0, (l.count ?? 1) - 1), 0);
-  s.maxPatience = (50 + order.layers.length * 7 + slices * 2 + order.layers.filter((l) => l.kind === "patty").length * 22 + (order.fries ? 30 : 0) + (order.poutine ? 10 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.25 : 1) * CROWD[stop().crowd].patience * DIFFICULTY[difficulty].patience;
+  s.maxPatience = (50 + order.layers.length * 7 + slices * 2 + order.layers.filter((l) => l.kind === "patty").length * 22 + (order.fries ? 30 : 0) + (order.poutine ? 10 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.3 : 1) * CROWD[stop().crowd].patience * DIFFICULTY[game.pacing].patience;
   if (game.tutorial && game.ordered === 0) s.maxPatience = 600;
   s.patience = s.maxPatience;
   s.leaving = false;
@@ -354,7 +328,7 @@ const BELL_WINDOW = 1.4;
 function callNext(): boolean {
   const free = game.slots.findIndex((s) => !s.order && !s.fig);
   const atWindow = game.slots.filter((s) => s.order || s.fig).length;
-  if (free < 0 || !game.line.length || atWindow >= WINDOW[difficulty]) return false;
+  if (free < 0 || !game.line.length || atWindow >= WINDOW[game.pacing]) return false;
   const w = game.line.shift()!;
   spawnCustomer(free, w.seed);
   return true;
@@ -372,9 +346,9 @@ function ringBell(): void {
     hintOnce("bell-empty", "Nobody in line right now. The bell calls up the next person when there is one.", 3);
     return;
   }
-  if (atWindow >= WINDOW[difficulty]) {
+  if (atWindow >= WINDOW[game.pacing]) {
     sfx.bell();
-    hintOnce("bell-full", `No room at the window: ${WINDOW[difficulty]} at a time on ${DIFFICULTY[difficulty].label}. Serve someone first.`, 3.5);
+    hintOnce("bell-full", `No room at the window: ${WINDOW[game.pacing]} at a time on ${DIFFICULTY[game.pacing].label}. Serve someone first.`, 3.5);
     return;
   }
   if (game.bellTaps === 0 || game.time - game.bellAt > BELL_WINDOW) {
@@ -437,20 +411,15 @@ function serve(i: number): void {
   // Freebies kept from an earlier send-back count towards this verdict too.
   const plate: Plate = { ...s.plate, fries: s.plate.fries ?? s.kept.fries, drink: s.plate.drink ?? s.kept.drink };
   const r = scorePlate(s.order, plate);
-  if (game.plan) {
-    // Ingredient quality and prices tilt every rating.
-    r.score = Math.max(0, Math.min(100, r.score + ratingBonus(game.plan, stop().crowd, willingnessToPay(save.popularity, save.rep))));
-    r.stars = starsFor(r.score);
-  }
-  const call = game.tutorial ? "accept" : verdict(r.score, difficulty, !!s.sentBack, r.faulty, !!r.missing);
+  const call = game.tutorial ? "accept" : verdict(r.score, game.pacing, !!s.sentBack, r.faulty, !!r.missing);
   if (call === "sendBack") return sendBack(i, r.missing ?? r.notes[0] ?? "this isn't quite right");
   if (call === "refuse") return refuse(i, r.notes[0] ?? "this isn't what I ordered", r.perks.length > 0);
-  if (game.plan) {
-    game.ratings.push(r.stars);
-    const perk = r.perks.length && r.stars < 3 ? ` Loved the ${r.perks[0]}.` : "";
-    const back = s.sentBack ? " Had to send it back once." : "";
-    game.reviews.push({ stars: r.stars, text: reviewFor(r.stars, r.notes, game.plan, game.rng) + perk + back, stop: stop().name });
-  }
+  game.ratings.push(r.stars);
+  const perk = r.perks.length && r.stars < 3 ? ` Loved the ${r.perks[0]}.` : "";
+  const back = s.sentBack ? " Had to send it back once." : "";
+  game.reviews.push({ stars: r.stars, text: reviewFor(r.stars, r.notes, game.rng) + perk + back, stop: stop().name });
+  // Giveaways make people happy, but they go out free.
+  game.comped += compValue(s.order, plate.fries, plate.drink, r.perks.includes("extra toppings"));
   if (s.order.critic) criticVerdict(r.stars, r.notes);
   const { pay, tip: baseTip } = payout(s.order, r.score, s.patience / s.maxPatience);
   const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1) * CROWD[stop().crowd].tips);
@@ -531,10 +500,9 @@ function refuse(i: number, note: string, perk: boolean): void {
   const stars = took || perk ? 1 : 0;
   game.lost++;
   if (s.order!.critic) criticVerdict(0, [note]);
-  if (game.plan) {
-    game.ratings.push(stars);
-    game.reviews.push({ stars, text: `Refused it: ${note}.${took ? ` At least the ${took === "freebie" ? "free side" : took} was nice.` : ""}`, stop: stop().name });
-  }
+  game.ratings.push(stars);
+  game.reviews.push({ stars, text: `Refused it: ${note}.${took ? ` At least the ${took === "freebie" ? "free side" : took} was nice.` : ""}`, stop: stop().name });
+  game.comped += compValue(s.order!, s.kept.fries, s.kept.drink);
   sfx.grumble();
   buzz(80);
   customerLeaves(i, "angry", `No thanks. ${capitalise(note)}.${took ? ` I'll take the ${took === "freebie" ? "free side" : took} though.` : ""}`, false);
@@ -982,7 +950,6 @@ function finishHold(pt: Pointer): void {
         if (b.loaded && b.amount > 1 - FRIES_SCOOP / 2) showHint("That basket is full.", 1.5);
         else {
           // Each scoop is one small carton's worth; raw fries added later pull the batch's cook back.
-          spend(FRIES_BATCH_COST * payload.amount);
           const had = b.loaded ? b.amount : 0;
           b.cook = had ? (b.cook * had) / (had + payload.amount) : 0;
           b.amount = Math.min(1, had + payload.amount);
@@ -1066,7 +1033,6 @@ function setEggStage(stage: EggStage): void {
 }
 
 function pickUpEgg(at: THREE.Vector3): void {
-  spend(KIND_COST.egg);
   const obj = makeEgg("whole");
   obj.scale.setScalar(EGG_IN_HAND);
   counter.scene.add(obj);
@@ -1110,7 +1076,6 @@ function releaseEgg(pt: Pointer, dt: number, cancelled: boolean): void {
   const hit = counter.hit(ndc);
   if (e.stage === "whole" && hit?.type === "bin" && hit.kind === "egg") {
     // Back in the tray.
-    spend(-KIND_COST.egg);
     dropEggHand();
     sfx.plop();
     return;
@@ -1200,7 +1165,6 @@ function topFries(f: { curds?: boolean; gravy?: boolean }, what: "curds" | "grav
     return false;
   }
   f[what] = true;
-  spend(FRY_TOP_COST[what]);
   sfx.plop();
   if (what === "gravy" && !f.curds) hintOnce("curds-first", "Curds go under the gravy so they soften just right.", 3);
   return true;
@@ -1255,7 +1219,6 @@ function shakeSalt(pt: Pointer, dx: number, dy: number): void {
   if (before >= SALT.max) return void showHint("That's plenty of salt!", 1.2);
   f.salt = Math.min(SALT.max, before + SALT.shake);
   shaker.shakes++;
-  spend(FRY_TOP_COST.salt);
   sfx.shake();
   buzz(6);
   shaker.target.sync();
@@ -1289,7 +1252,6 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
       return false;
     }
     counter.dressCupAt(c, payload.type);
-    spend(EXTRA_COST[payload.type]);
     sfx.plop();
     return true;
   }
@@ -1304,7 +1266,6 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
     }
     sfx.plop();
     if (payload.type === "empty") {
-      spend(CUP_COST[payload.size]);
       hintOnce(cup.tap >= 0 ? "pour" : "cup-free", cup.tap >= 0 ? "Hold the drink's button on top of the fountain. Watch the bar on the left and let go at the line." : "Cups can stand anywhere. Move one under a nozzle to pour.", 3.5);
     }
     return true;
@@ -1318,7 +1279,6 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
       return false;
     }
     Object.assign(p, { size: payload.size as FriesSize, cook: 0, fill: 0 });
-    spend(CARTON_COST[payload.size as FriesSize]);
     counter.syncPack(pi);
     sfx.plop();
     hintOnce("pack", "Drag the fries from the basket into the carton.", 3);
@@ -1582,7 +1542,6 @@ canvas.addEventListener("pointerdown", (e) => {
       pt.mode = "egg";
       moveEgg(pt);
     } else if (hit.type === "bin") {
-      spend(KIND_COST[hit.kind]);
       startHold(pt, { type: "piece", piece: newPiece(hit.kind), fromGrill: null });
     }
     else if (hit.type === "grillItem") pt.mode = "grill";
@@ -1974,57 +1933,54 @@ ui.root.addEventListener("click", (e) => {
         screenShownAt = performance.now();
       } else startShift();
       break;
-    case "plan-q":
-    case "plan-p":
-    case "plan-m": {
-      const plan = planFor(stop(), save.plan);
+    case "prep-menu": {
+      // Hide or show a recipe; the menu never drops below two.
       const v = btn!.dataset.v!;
-      if (act === "plan-q") plan.quality = v as Plan["quality"];
-      else if (act === "plan-p") plan.price = v as Plan["price"];
-      else if (plan.menu.includes(v)) {
-        if (plan.menu.length > 2) plan.menu = plan.menu.filter((n) => n !== v);
-        else showHint("Keep at least two recipes on the menu.", 2);
-      } else plan.menu = [...plan.menu, v];
-      save.plan = plan;
+      if (save.hidden.includes(v)) save.hidden = save.hidden.filter((n) => n !== v);
+      else if (menuFor(stop(), [...save.hidden, v]).some((r) => r.name === v)) showHint("Keep at least two recipes on the menu.", 2);
+      else save.hidden = [...save.hidden, v];
       writeSave(save);
       showPrep();
       break;
     }
-    case "prep-ads": {
-      const lvl = Math.max(0, Math.min(2, Number(btn!.dataset.v))) as AdLevel;
-      if (save.bank < ADS[lvl].cost) break;
-      save.ads = lvl;
+    case "prep-pace": {
+      const v = btn!.dataset.v as Difficulty;
+      if (!(v in DIFFICULTY)) break;
+      difficulty = v;
+      try {
+        localStorage.setItem("bv-difficulty", v);
+      } catch {
+        // Storage can be unavailable; the pick still holds for this session.
+      }
+      showPrep();
+      break;
+    }
+    case "prep-open":
+    case "prep-close": {
+      // Move one end of the window by an hour.
+      const d = Number(btn!.dataset.v) || 0;
+      const w = { ...save.shift };
+      if (act === "prep-open") w.start = Math.min(w.end - 1, w.start + d);
+      else w.end = Math.max(w.start + 1, w.end + d);
+      save.shift = validShift(w);
       writeSave(save);
       showPrep();
       break;
     }
-    case "prep-box":
+    case "prep-bonus": {
+      const v = btn!.dataset.v as BonusId;
+      save.bonus = save.bonus === v || !save.bonuses.includes(v) ? null : v;
+      writeSave(save);
+      showPrep();
+      break;
+    }
     case "closing-box":
       toggleBox(btn!.dataset.v!);
-      if (act === "prep-box") showPrep();
-      else showClosing();
-      break;
-    case "prep-simple":
-      // "Keep it simple" is the Balanced complexity; "Show more detail" is Complex (see game/complexity.ts).
-      setComplexity(save, save.simplePlan ? "complex" : "balanced");
-      if (save.simplePlan) closeBoxes("prep:");
-      writeSave(save);
-      showPrep();
+      showClosing();
       break;
     case "open":
-      startShift(save.biz ? planFor(stop(), save.plan) : null);
+      startShift();
       break;
-    case "pick": {
-      const id = (e.target as HTMLElement).closest<HTMLElement>("[data-id]")?.dataset.id as UpgradeId | undefined;
-      if (!id || !save.offer.includes(id)) break;
-      save.upgrades.push(id);
-      save.offer = [];
-      writeSave(save);
-      sfx.coin();
-      if (game.overlay === "closing") showClosing();
-      else showTitle();
-      break;
-    }
     case "evening":
     case "next":
       showTitle();
@@ -2038,21 +1994,10 @@ ui.root.addEventListener("click", (e) => {
     case "rf":
       showReviews(btn!.dataset.v as ReviewFilter);
       break;
-    case "buy": {
-      const id = btn!.dataset.id as GearId;
-      const g = gearById(id);
-      if (!g || gearBlocker(g, save.gear, save.town, save.bank)) break;
-      save.bank -= g.cost;
-      save.gear.push(id);
-      writeSave(save);
-      sfx.coin();
-      showSupplies();
-      break;
-    }
     case "new-trip":
       if (btn!.dataset.armed !== "1") {
         btn!.dataset.armed = "1";
-        btn!.textContent = "Tap again to start over (upgrades and savings reset)";
+        btn!.textContent = "Tap again to start over (towns and bonuses reset)";
         break;
       }
       Object.assign(save, freshSave(), { tutorialDone: save.tutorialDone, trips: save.trips, best: save.best });
@@ -2074,7 +2019,6 @@ const inShift = () => game.phase === "playing" || game.phase === "paused";
 initMenu({
   inShift,
   town: () => (inShift() ? shopStop() : withEvent(townById(game.mapSel), eventOn(game.mapSel, save.day))),
-  priceMult: () => (inShift() && game.plan ? PRICE[game.plan.price].mult : 1),
   subtitle: () => `Day ${save.day}`,
   sound: () => !sfx.muted,
   setSound: (on) => {
@@ -2105,30 +2049,24 @@ initMenu({
       // ignore
     }
   },
-  complexity: () => complexityOf(save),
-  setComplexity: (c) => {
-    setComplexity(save, c);
-    writeSave(save);
-    if (game.phase === "title") showTitle();
-  },
   progress: () => ({ unlocked: save.unlocked, shiftsIn: save.shiftsIn }),
   shift: () => {
-    const len = stop().shiftLength;
+    const len = game.shiftLength;
     return {
       start: game.shift.start,
       end: game.shift.end,
       now: clockAt(game.time, game.shift, len),
       progress: shiftProgress(game.time, len),
       closing: game.time >= len,
-      pacing: DIFFICULTY[difficulty].label,
-      pacingBlurb: DIFFICULTY[difficulty].blurb,
+      pacing: DIFFICULTY[game.pacing].label,
+      pacingBlurb: DIFFICULTY[game.pacing].blurb,
       expected: game.customers,
       served: game.served,
       atWindow: game.slots.filter((s) => s.order && !s.leaving).length,
       inLine: game.line.length,
       left: game.lost + game.leftLine,
       stars: game.stars,
-      takings: game.money + game.tips - spills(),
+      takings: game.money + game.tips - spills() - game.comped,
       reviews: [...game.reviews].reverse(),
     };
   },
@@ -2184,7 +2122,7 @@ function shiftGuard(): void {
   }
 }
 
-function startShift(plan: Plan | null = null): void {
+function startShift(): void {
   cancelPointer();
   for (const k of ["prep", "overlay"]) dropBack(k);
   prepOpen = false;
@@ -2217,8 +2155,7 @@ function startShift(plan: Plan | null = null): void {
     nextSpawn: 1.2,
     active: 0,
     tutorial: !save.tutorialDone,
-    plan,
-    costs: 0,
+    comped: 0,
     reviews: [],
     ratings: [],
     line: [],
@@ -2227,23 +2164,23 @@ function startShift(plan: Plan | null = null): void {
     bellTaps: 0,
     bellAt: 0,
     emptySince: 0,
-    adCost: 0,
     press: null,
   });
-  // Social media bought for today comes out of the tin as the window opens; if the tin can't cover it, no post.
-  if (save.ads && save.bank < ADS[save.ads].cost) save.ads = 0;
-  game.adCost = ADS[save.ads].cost;
-  save.bank -= game.adCost;
-  game.customers = plan ? plannedCustomers(plan) : expectedCustomers();
-  const proj = projectShift({ stop: stop(), plan, popularity: save.popularity, ads: save.ads, rep: save.rep, upgrades: save.upgrades, gear: save.gear });
-  game.projected = [proj.lo, proj.hi];
+  // Prep's choices are fixed for the whole shift: pacing, the window and the bonus.
+  // The very first shift is the lunch rush on Balanced with no bonus.
+  const first = !save.tutorialDone;
+  game.pacing = first ? "balanced" : difficulty;
+  game.shift = first ? validShift(null) : validShift(save.shift);
+  game.bonus = !first && save.bonus && save.bonuses.includes(save.bonus) ? save.bonus : null;
+  game.shiftLength = shiftSeconds(game.shift, stop().shiftLength);
+  game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rep: save.rep, hidden: save.hidden, shift: game.shift, bonus: game.bonus, pacing: game.pacing });
   // A shift starts a fresh block of driving: the evening's hops count against the whole range.
   save.driven = 0;
   writeSave(save);
   ui.bell.hidden = false;
   applyStop();
   // Maybe a critic in today's line, never the very first customer.
-  game.criticAt = game.rng() < criticChance(stop().crowd, game.event) ? 1 + Math.floor(game.rng() * Math.max(1, game.customers - 2)) : -1;
+  game.criticAt = has("press") || game.rng() < criticChance(stop().crowd, game.event) ? 1 + Math.floor(game.rng() * Math.max(1, Math.min(game.customers, 8) - 2)) : -1;
   counter.fryBoost = has("turbo") ? 1.35 : 1;
   counter.autoStopPour = has("autostop");
   counter.setPage(HOME_PAGE);
@@ -2263,8 +2200,6 @@ function applyStop(): void {
   customersView.setBackdrop(st.backdrop);
 }
 
-const offerList = () => save.offer.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean);
-
 /** The best, a middling and the worst review of the shift, without repeats. */
 function highlights(reviews: Review[]): Review[] {
   const sorted = [...reviews].sort((a, b) => b.stars - a.stars);
@@ -2272,16 +2207,14 @@ function highlights(reviews: Review[]): Review[] {
   return picks.filter((r, i) => picks.findIndex((q) => q.text === r.text) === i);
 }
 
-/** Before opening: the day's choices in expand boxes, with the projected receipt. Both modes. */
+/** Before opening: who to expect, the menu, the window, pacing and a bonus. */
 function showPrep(): void {
   game.town = save.town;
   game.event = eventOn(save.town, save.day);
   game.overlay = null;
   if (!prepOpen) pushBack("prep", () => showTitle());
   prepOpen = true;
-  const plan = save.biz ? planFor(stop(), save.plan) : null;
-  if (plan) save.plan = plan;
-  ui.title.innerHTML = prepHtml({ save, stop: stop(), plan });
+  ui.title.innerHTML = prepHtml({ save, stop: stop(), pacing: difficulty });
   ui.title.hidden = false;
   ui.summary.hidden = true;
 }
@@ -2289,7 +2222,7 @@ function showPrep(): void {
 /** True while the Prep screen fills the title layer (the home screen is unmounted then). */
 let prepOpen = false;
 
-/** A screen over the map (closing, night, reviews, supplies) lives in the summary layer. */
+/** A screen over the map (closing, night, reviews) lives in the summary layer. */
 function showOverlay(kind: NonNullable<typeof game.overlay>, html: string): void {
   // Redrawing the same screen (a box opened, a filter tapped) must not swallow the next tap.
   if (game.overlay !== kind) screenShownAt = performance.now();
@@ -2315,16 +2248,12 @@ function showClosing(): void {
     showTitle();
     return;
   }
-  showOverlay("closing", closingHtml(save.last, save, offerList()));
+  showOverlay("closing", closingHtml(save.last, save));
 }
 
 function showReviews(filter: ReviewFilter): void {
   game.reviewFilter = filter;
   showOverlay("reviews", reviewsHtml(save, filter));
-}
-
-function showSupplies(): void {
-  showOverlay("supplies", suppliesHtml(save));
 }
 
 /**
@@ -2401,8 +2330,10 @@ function endShift(): void {
   save.time = "evening";
   save.driven = 0;
   const popBefore = save.popularity;
-  // Fame: yesterday's fades a touch, then word of mouth, the press and today's posts move it.
-  save.popularity = fadePopularity(save.popularity) + wordOfMouth(game.stars, game.lost, game.leftLine) + (game.press?.pop ?? 0) + ADS[save.ads].lasting;
+  // Popularity: yesterday's fades a touch, then word of mouth and the press move it.
+  // The guest book doubles the good word; apology cookies keep walk-outs from costing any.
+  const word = wordOfMouth(game.stars, has("cookies") ? 0 : game.lost, has("cookies") ? 0 : game.leftLine);
+  save.popularity = fadePopularity(save.popularity) + (word > 0 && has("guestbook") ? word * 2 : word) + (game.press?.pop ?? 0);
   save.popularity = Math.max(10, Math.min(100, save.popularity));
   customersView.setLine([]);
   if (game.press) save.press = [game.press, ...save.press].slice(0, 10);
@@ -2412,27 +2343,38 @@ function endShift(): void {
   }
   const here = stop();
   const avg = game.stars.length ? game.stars.reduce((a, b) => a + b, 0) / game.stars.length : 0;
-  // Lifetime rating for the home screen: every served order's stars, in either mode.
+  // Lifetime rating: every served order's stars.
   save.ratingCount += game.stars.length;
   save.ratingSum += game.stars.reduce((a, b) => a + b, 0);
   // A pass counts the people who ordered, so a short line isn't a fail, but serving one person out of a town's trade isn't a pass.
   const ok = passed(avg, game.served, Math.max(game.served + game.lost, Math.ceil(game.customers * 0.4)));
   let lastStop = false;
   const before = [...save.unlocked];
-  const profit = game.money + game.tips - spills() - game.costs;
-  save.bank += Math.max(0, Math.round(profit));
-  // The tin never goes below zero, even after an unlucky post.
-  save.bank = Math.max(0, save.bank);
+  // Takings are the shift's score: what the orders paid and the tips, less giveaways and spills.
+  const takings = Math.max(0, Math.round(game.money + game.tips - game.comped - spills()));
+  const bestBefore = save.bestTakings[here.id] ?? null;
+  save.bestTakings[here.id] = Math.max(bestBefore ?? 0, takings);
   const repBefore = save.rep;
-  if (game.plan) {
-    const r = nextReputation(save.rep, save.repWeight, game.ratings);
-    save.rep = r.rep;
-    save.repWeight = r.weight;
-    save.reviews = [...game.reviews.slice().reverse(), ...save.reviews].slice(0, 30);
-  }
+  const r = nextReputation(save.rep, save.repWeight, game.ratings);
+  save.rep = r.rep;
+  save.repWeight = r.weight;
+  save.reviews = [...game.reviews.slice().reverse(), ...save.reviews].slice(0, 30);
   save.best[here.id] = Math.max(save.best[here.id] ?? 0, avg);
+  // A great shift earns the next bonus; once they're all earned, a ribbon for the town.
+  const great = !game.tutorial && greatShift(game.stars, game.served, game.served + game.lost);
+  let earnedBonus: BonusId | null = null;
+  let ribbon = false;
+  if (great) {
+    const next = nextBonus(save.bonuses);
+    if (next) {
+      earnedBonus = next.id;
+      save.bonuses.push(next.id);
+    } else if (!save.ribbons.includes(here.id)) {
+      ribbon = true;
+      save.ribbons.push(here.id);
+    }
+  }
   if (ok) {
-    save.offer = upgradeChoices(save.upgrades, game.rng).map((u) => u.id);
     const firstTime = !save.passedTowns.includes(here.id);
     lastStop = passTown(save, here.id) && firstTime;
     if (lastStop) save.trips++;
@@ -2450,14 +2392,10 @@ function endShift(): void {
     stars: game.stars.slice(),
     earned: game.money,
     tips: game.tips,
+    comped: Math.round(game.comped),
     spills: spills(),
-    adCost: game.adCost,
-    costs: Math.round(game.costs),
-    biz: !!game.plan,
-    profit: Math.round(profit),
-    running: RUNNING_COST,
-    solar: solarSaving(save.gear),
-    projected: game.projected,
+    takings,
+    bestBefore,
     // The most telling ones: the best and the worst of the day.
     reviews: highlights(game.reviews),
     rep: save.rep,
@@ -2468,12 +2406,18 @@ function endShift(): void {
     opened: opened.map((t) => t.id),
     shiftsHere: save.shiftsIn?.[here.id] ?? 0,
     press: game.press,
+    great,
+    earnedBonus,
+    ribbon,
+    usedBonus: game.bonus,
+    shift: game.shift,
   };
   save.last = closing;
   writeSave(save);
   ui.title.hidden = false;
   showClosing();
   sfx.chime();
+  if (earnedBonus || ribbon) setTimeout(() => sfx.coin(), 400);
   // A pending update waits until the player leaves this screen (see showTitle).
   if (game.pendingUpdate) {
     ui.updateText.textContent = `Build #${game.pendingUpdate.build} will load when you continue.`;
@@ -2522,15 +2466,15 @@ function tick(dt: number): void {
     if (!(game.tutorial && game.ordered >= 1)) game.time += dt;
     // People arrive while the window is open and join the line, unless it's long and they've never heard of the truck.
     const tutorialHold = game.tutorial && game.ordered >= 1;
-    if (game.time < stop().shiftLength && game.spawned < game.customers && game.time >= game.nextSpawn && !tutorialHold) {
+    if (game.time < game.shiftLength && game.spawned < game.customers && game.time >= game.nextSpawn && !tutorialHold) {
       game.spawned++;
-      if (game.rng() < joinChance(game.line.length, todayPop())) {
-        const max = linePatience(difficulty, stop().crowd);
+      if (game.rng() < joinChance(game.line.length, save.popularity)) {
+        const max = linePatience(game.pacing, stop().crowd) * (has("bench") ? 1.3 : 1);
         game.line.push({ seed: Math.floor(game.rng() * 1000), patience: max, maxPatience: max });
       } else game.walkedPast++;
-      const level = game.time / stop().shiftLength;
-      const busy = game.customers / stop().customers;
-      game.nextSpawn = game.time + (((17 - 8 * level) * (0.8 + game.rng() * 0.4)) / busy) * DIFFICULTY[difficulty].spawnGap;
+      // People come along the lunch curve: busiest around noon, quieter early and late (see shift.ts).
+      const hour = clockAt(game.time, game.shift, game.shiftLength);
+      game.nextSpawn = game.time + arrivalGap(hour, game.shift, game.shiftLength, game.customers) * (0.8 + game.rng() * 0.4);
     }
     // If nobody's about, don't make the player wait for the next arrival.
     if (!game.slots.some((s) => s.order) && !game.line.length && game.nextSpawn > game.time + 2 && !game.tutorial) game.nextSpawn = game.time + 2;
@@ -2558,10 +2502,8 @@ function tick(dt: number): void {
       if (s.patience <= 0) {
         game.lost++;
         if (s.order.critic) criticVerdict(0, []);
-        if (game.plan) {
-          game.ratings.push(0);
-          game.reviews.push({ stars: 0, text: reviewFor(0, [], game.plan, game.rng, true), stop: stop().name });
-        }
+        game.ratings.push(0);
+        game.reviews.push({ stars: 0, text: reviewFor(0, [], game.rng, true), stop: stop().name });
         sfx.grumble();
         customerLeaves(i, "angry", "Too slow! I'm off.", false);
       }
@@ -2569,7 +2511,7 @@ function tick(dt: number): void {
 
     // Cooked food waiting on a tray slowly goes cold and dry (the warm grill zone is the place to hold it).
     for (const s of game.slots)
-      for (const l of s.plate.layers) if (GRILLABLE.has(l.piece.kind) && Math.max(...l.piece.cook) > 0.15) l.piece.held = (l.piece.held ?? 0) + dt;
+      for (const l of s.plate.layers) if (GRILLABLE.has(l.piece.kind) && Math.max(...l.piece.cook) > 0.15) l.piece.held = (l.piece.held ?? 0) + dt * (has("lamp") ? 0.5 : 1);
 
     if (!game.hintsShown.has("melt-order") && game.slots[game.active]?.order?.layers.some((l) => l.melted))
       hintOnce("melt-order", "This one wants melted cheese: drop the slice on the patty while it's on the grill.", 4.5);
@@ -2585,15 +2527,12 @@ function tick(dt: number): void {
       }
     }
 
-    const doneSpawning = game.time >= stop().shiftLength || game.spawned >= game.customers;
+    const doneSpawning = game.time >= game.shiftLength || game.spawned >= game.customers;
     if (doneSpawning && !game.line.length && game.slots.every((s) => !s.order && !s.fig)) endShift();
   }
 
   if (game.phase === "playing" || game.phase === "title" || game.phase === "summary") {
-    // Soda is paid for as it pours, so moving a cup around costs nothing.
-    const poured = counter.cups.map((c) => c.fill);
     counter.update(game.phase === "playing" ? dt : 0);
-    counter.cups.forEach((c, i) => spend((Math.min(1, c.fill) - Math.min(1, poured[i])) * SODA_COST[c.size]));
     trayView.update(dt);
     customersView.update(dt, game.active);
   }
@@ -2622,7 +2561,7 @@ function spills(): number {
 
 let lastTimerText = "";
 function updateUi(dt = 0): void {
-  const len = stop().shiftLength;
+  const len = game.shiftLength;
   const left = Math.max(0, len - game.time);
   const tText = left > 0 ? clockLabel(clockAt(game.time, game.shift, len)) : "Closing";
   if (tText !== lastTimerText) {
@@ -2633,7 +2572,7 @@ function updateUi(dt = 0): void {
   }
   const pct = `${(shiftProgress(game.time, len) * 100).toFixed(1)}%`;
   if (ui.clockFill.style.width !== pct) ui.clockFill.style.width = pct;
-  const net = Math.round(game.money + game.tips - spills() - game.costs);
+  const net = Math.round(game.money + game.tips - spills() - game.comped);
   const money = net < 0 ? `−$${-net}` : `$${net}`;
   if (ui.money.textContent !== money) ui.money.textContent = money;
 
@@ -2645,7 +2584,7 @@ function updateUi(dt = 0): void {
   if (ui.bellLabel.textContent !== bellLabel) ui.bellLabel.textContent = bellLabel;
   ui.bell.classList.toggle("empty", !game.line.length);
   ui.bell.classList.toggle("armed", game.bellTaps > 0);
-  ui.bell.classList.toggle("full", game.line.length > 0 && game.slots.filter((s) => s.order || s.fig).length >= WINDOW[difficulty]);
+  ui.bell.classList.toggle("full", game.line.length > 0 && game.slots.filter((s) => s.order || s.fig).length >= WINDOW[game.pacing]);
   placeTickets();
   game.slots.forEach((s, i) => {
     const t = ui.tickets[i];

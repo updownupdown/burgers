@@ -677,3 +677,14 @@ Farmers' market (Cedar Falls), County fair (Summit City), Surf contest (Driftwoo
 - **Fryer.** Fries come from a tray (the freezer is put away on the isle) and share their spot with the fritter dough; zucchini sits where the curds are. Zucchini must be dragged through the **batter bowl** (at the gravy spot) before it goes in a basket, and is salted. Apple fritters fry like fries and take the cinnamon sugar shaker. No poutine on the isle.
 - **Menus.** Food menu ("Flatbreads in ..."), Prep & Open rows and How to Play (an Oven section with the turn and, where it applies, the board) draw flatbreads and the calzone.
 - **Changed from the study.** Thyme is dropped (the cold rail holds eight pans). Sauce and oil are painted on the peel, not poured; honey goes on at the tray. The corn steam well (Driftwood, phase 2) is still deferred.
+
+### After build #68: kitchen fixes
+
+- **Panini press.** Sandwiches can be built right in an open bay or on the board (Harbor City), piece by piece from the pans, as well as on the tray (sauce still goes on at the tray). The lid only comes down on a bread or a chicken/veggie patty on its own, or a sandwich with bread top and bottom (`pressable` in `src/game/types.ts`); anything else makes the lid dip and spring back with a short hint. **Swipe the handle (or the shut lid) up to lift it**; a tap only says so. The meter sits on the shut lid (on the plate's front lip while it's open), the pesto and aioli caddy moved back a little (z 2.22) and the board more (z 1.98), clear of the trash chute.
+- **Quesadilla.** **Press and hold** a quesadilla on the comal for half a second to unfold it (`unfoldTortilla`): the filling and the cook on its faces stay, so a missing filling can go on and it folds again.
+- **Shredded cheese** is long, thin, bent strands in cheddar yellows (in the pan, on tortillas and tacos), and the pork is a browner red, so the two no longer look alike.
+- **Zucchini fritti.** The zucchini is **dropped in the batter bowl**, where it sits battered, and **picked up again** for the basket; carrying it over the bowl does nothing.
+- **Counter buttons.** A swipe that starts on one of the round counter buttons changes counter like a swipe along the trash chute; a tap still presses it.
+- **Indicators** (meters, chips, fryer tags) fade in over 0.2 s as they appear, so they ease in once a counter settles after a swipe.
+- **No size labels** on the cup, lid and carton stacks: sizes read from the models (this replaces the stack labels in §18).
+- **The night.** The night-to-morning text sits on a dark Dusk card (`--bv-night`), so it stays readable while the sky lightens behind it; dawn only warms the card's edge.

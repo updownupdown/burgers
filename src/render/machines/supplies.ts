@@ -325,6 +325,8 @@ export function makeTrashChute(w: number): THREE.Group {
   p.add(box(sw + 0.1, 0.06, 0.08), "#8d9a97", { p: [0, 0.04, -0.27], ink: false });
   p.add(box(sw + 0.1, 0.06, 0.08), "#8d9a97", { p: [0, 0.04, 0.27], ink: false });
   for (let i = 1; i < Math.round(sw / 1.2); i++) p.add(box(0.05, 0.05, 0.5), "#8d9a97", { p: [-sw / 2 + i * 1.2, 0.04, 0], ink: false });
+  // Rounded steel end caps: the chute stops just inside the outer counters, bookending the line.
+  for (const k of [-1, 1]) p.add(new THREE.CylinderGeometry(0.31, 0.31, 0.06, 16, 1, false, k < 0 ? Math.PI : 0, Math.PI), "#8d9a97", { p: [k * (sw / 2 + 0.05), 0.04, 0], ink: false });
   const g = new THREE.Group();
   const m = bakedMesh(new Parts().addParts(p, { s: STUDY }).bake(), { shadow: false });
   g.add(m);

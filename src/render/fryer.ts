@@ -164,55 +164,51 @@ export function makeBasket(): THREE.Group {
   return g;
 }
 
-/** Potato freezer: a narrow chest freezer, lid propped open against the wall, heaped with frozen fries. */
-export const FREEZER = { w: 1.6, d: 2.4, h: 0.55 };
-const LID_TILT = -1.62;
+/**
+ * Potato freezer: a deep drop-in well set into the counter, with a flush steel flange round it.
+ * The frozen fries sit well down inside, below the rim, so it reads as a deep bin.
+ */
+export const FREEZER = { w: 1.6, d: 2.4, h: 0.5 };
 let freezerBaked: Baked | null = null;
 export function makeFreezer(): THREE.Group {
   const { w, d, h } = FREEZER;
   if (!freezerBaked) {
     const p = new Parts();
-    p.add(box(w, h, d), "#eef3f4", { p: [0, h / 2, 0] });
-    // Frosty blue stripe along the front.
-    p.add(box(w + 0.01, 0.1, 0.02), "#7fb6d6", { p: [0, h * 0.55, d / 2 + 0.005], ink: false });
-    // The well: a frosted inner floor just below the rim, and a rim frame.
-    p.add(box(w - 0.24, 0.02, d - 0.24), "#b7d8e6", { p: [0, h - 0.04, 0], ink: false });
-    const rim = "#d9e6ea";
-    p.add(box(w, 0.05, 0.12), rim, { p: [0, h + 0.02, -d / 2 + 0.06], ink: 0.014 });
-    p.add(box(w, 0.05, 0.12), rim, { p: [0, h + 0.02, d / 2 - 0.06], ink: 0.014 });
-    p.add(box(0.12, 0.05, d - 0.24), rim, { p: [-w / 2 + 0.06, h + 0.02, 0], ink: 0.014 });
-    p.add(box(0.12, 0.05, d - 0.24), rim, { p: [w / 2 - 0.06, h + 0.02, 0], ink: 0.014 });
-    // Lid frame, swung up and leaning back against the wall.
-    const lz = -d / 2 - 0.02;
-    const tilt = LID_TILT;
-    const lid = new Parts();
-    lid.add(box(w - 0.02, 0.06, 0.1), "#dfe9ec", { p: [0, 0, 0.05] });
-    lid.add(box(w - 0.02, 0.06, 0.1), "#dfe9ec", { p: [0, 0, d - 0.15] });
-    lid.add(box(0.1, 0.06, d - 0.2), "#dfe9ec", { p: [-w / 2 + 0.06, 0, d / 2 - 0.05] });
-    lid.add(box(0.1, 0.06, d - 0.2), "#dfe9ec", { p: [w / 2 - 0.06, 0, d / 2 - 0.05] });
-    p.addParts(lid, { p: [0, h + 0.05, lz], r: [tilt, 0, 0] });
+    // Flange on the counter, then the walls of the well (open on top) and a frosted floor.
+    p.add(box(w + 0.24, 0.02, d + 0.24), "#c3cdcc", { p: [0, 0.01, 0], ink: 0.012 });
+    deepWell(p, w, d, h, 0.1, "#eef3f4", "#bcd5df", "#d9e6ea");
+    p.add(box(w + 0.01, 0.08, 0.02), "#7fb6d6", { p: [0, h * 0.5, d / 2 + 0.005], ink: false });
     freezerBaked = bakeShared(p);
   }
   const g = new THREE.Group();
   g.add(bakedMesh(freezerBaked));
-  // Glass in the lid.
-  const glass = new THREE.Mesh(FREEZER_GLASS, toon("#cfe9f5", { opacity: 0.45 }));
-  glass.position.set(0, h + 0.05, -d / 2 - 0.02);
-  glass.rotation.x = LID_TILT;
-  g.add(glass);
-  // Heaped frozen fries, well above the rim.
-  const pile = makeFryPile(w - 0.3, d - 0.3, 5, 11);
+  // Frozen fries well down in the well, their top below the rim.
+  const pile = makeFryPile(w - 0.34, d - 0.34, 4, 11);
   pile.userData.setCook(0);
-  pile.position.y = h - 0.05;
+  pile.position.y = 0.05;
   g.add(pile);
   return g;
 }
-const FREEZER_GLASS = (() => {
-  const g = new THREE.PlaneGeometry(FREEZER.w - 0.2, FREEZER.d - 0.2);
-  g.rotateX(-Math.PI / 2);
-  g.translate(0, 0.01, FREEZER.d / 2 - 0.05);
-  return shareGeometry(g);
-})();
+
+/**
+ * The walls of an open well `w` x `d`, `h` tall, walls `t` thick: outside in `outer`, the inside
+ * faces a shade darker (`inner`) so the depth reads from above, a floor near the bottom and a rim.
+ */
+function deepWell(p: Parts, w: number, d: number, h: number, t: number, outer: string, inner: string, rim: string): void {
+  for (const [bw, bd, x, z] of [[w, t, 0, -d / 2 + t / 2], [w, t, 0, d / 2 - t / 2], [t, d - 2 * t, -w / 2 + t / 2, 0], [t, d - 2 * t, w / 2 - t / 2, 0]] as const) {
+    p.add(box(bw, h, bd), outer, { p: [x, h / 2, z] });
+  }
+  // Inner lining: thin darker panels just inside each wall, darkest at the back (it faces the camera).
+  const lin = 0.012;
+  p.add(box(w - 2 * t, h - 0.04, lin), inner, { p: [0, h / 2, -d / 2 + t + lin / 2], ink: false });
+  p.add(box(w - 2 * t, h - 0.04, lin), inner, { p: [0, h / 2, d / 2 - t - lin / 2], ink: false });
+  p.add(box(lin, h - 0.04, d - 2 * t), inner, { p: [-w / 2 + t + lin / 2, h / 2, 0], ink: false });
+  p.add(box(lin, h - 0.04, d - 2 * t), inner, { p: [w / 2 - t - lin / 2, h / 2, 0], ink: false });
+  p.add(box(w - 2 * t, 0.03, d - 2 * t), inner, { p: [0, 0.03, 0], ink: false });
+  for (const [bw, bd, x, z] of [[w, t + 0.02, 0, -d / 2 + t / 2], [w, t + 0.02, 0, d / 2 - t / 2], [t + 0.02, d, -w / 2 + t / 2, 0], [t + 0.02, d, w / 2 - t / 2, 0]] as const) {
+    p.add(box(bw, 0.04, bd), rim, { p: [x, h + 0.01, z], ink: 0.012 });
+  }
+}
 
 /**
  * The packing station: a low steel shelf under a heat lamp with a big pad for each carton.
@@ -288,17 +284,16 @@ export function makeGravyPot(): THREE.Mesh {
  * Cheese curds in a cooled rectangular tray: a steel well with a blue cold line along the front
  * and a heap of curds, set into the counter in front of the potato freezer. Origin on the floor.
  */
-export const CURD_TRAY = { w: 1.6, d: 0.95, h: 0.32 };
+export const CURD_TRAY = { w: 1.6, d: 0.95, h: 0.34 };
 export function makeCurdTray(): THREE.Mesh {
   const { w, d, h } = CURD_TRAY;
   const p = new Parts();
-  p.add(box(w, h, d), STEEL, { p: [0, h / 2, 0] });
-  p.add(box(w - 0.16, 0.02, d - 0.16), "#dfeef4", { p: [0, h - 0.06, 0], ink: false });
+  p.add(box(w + 0.2, 0.02, d + 0.2), "#c3cdcc", { p: [0, 0.01, 0], ink: 0.012 });
+  deepWell(p, w, d, h, 0.08, STEEL, "#c9dde4", STEEL_LIGHT);
   p.add(box(w + 0.01, 0.06, 0.02), "#7fb6d6", { p: [0, h * 0.5, d / 2 + 0.005], ink: false });
-  for (const [bw, bd, x, z] of [[w, 0.08, 0, -d / 2 + 0.04], [w, 0.08, 0, d / 2 - 0.04], [0.08, d, -w / 2 + 0.04, 0], [0.08, d, w / 2 - 0.04, 0]] as const) {
-    p.add(box(bw, 0.04, bd), STEEL_LIGHT, { p: [x, h + 0.01, z], ink: 0.012 });
-  }
-  curdLumps(p, 34, w / 2 - 0.2, d / 2 - 0.16, h - 0.06, 5, 1.25);
+  // Two layers of curds, well below the rim.
+  curdLumps(p, 26, w / 2 - 0.2, d / 2 - 0.16, 0.09, 5, 1.25);
+  curdLumps(p, 16, w / 2 - 0.3, d / 2 - 0.22, 0.16, 9, 1.2);
   return bakedMesh(bakeShared(p));
 }
 

@@ -24,7 +24,7 @@ export interface Ui {
   tabs: HTMLButtonElement[];
   tabDots: HTMLElement[];
   menuBtn: HTMLButtonElement;
-  /** The service bell: ring twice to call the next person in line. */
+  /** The service bell: a ring calls the next person in line. */
   bell: HTMLButtonElement;
   bellCount: HTMLElement;
   bellLabel: HTMLElement;

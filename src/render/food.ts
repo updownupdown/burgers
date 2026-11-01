@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { avgCook, bunToast, cookLevel, isFlipped, isMelted } from "../game/cooking";
+import { avgCook, bunToast, cookLevel, isFlipped, isMelted, MARKED } from "../game/cooking";
 import type { Kind, Piece } from "../game/types";
 import { COUNTED, SAUCE_RADIUS } from "../game/types";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
@@ -268,8 +268,8 @@ function makePatty(piece: Piece, body: THREE.Group): (p: Piece) => void {
   const fat = detail(PATTY_DETAIL.fat, true);
   const juice = detail(PATTY_DETAIL.juice);
   const cracks = detail(PATTY_DETAIL.cracks);
-  // Grill marks from the grille: dark diagonal bars across the top. (Marks on either face show
-  // on top, so a patty seared on the grille always looks it.)
+  // Grill marks from the grille: dark diagonal bars on each face that spent long enough (MARKED)
+  // face down on the grille, and only on that face.
   const marks = new THREE.Group();
   const markMat = toon("#2a170e", { unique: true });
   for (let i = 0; i < 5; i++) {
@@ -281,14 +281,20 @@ function makePatty(piece: Piece, body: THREE.Group): (p: Piece) => void {
   }
   marks.rotation.y = Math.PI / 4 + seed * 0.1;
   marks.visible = false;
-  body.add(marks);
+  const marksDown = marks.clone();
+  const markDownMat = toon("#2a170e", { unique: true });
+  marksDown.traverse((o) => {
+    if (o instanceof THREE.Mesh) o.material = markDownMat;
+  });
+  body.add(marks, marksDown);
   body.add(m);
   let key = "";
   return (p) => {
     const down = p.cook[0];
     const up = p.cook[1];
-    const mk = Math.max(p.marks?.[0] ?? 0, p.marks?.[1] ?? 0);
-    const k = `${Math.round(down * 40)}|${Math.round(up * 40)}|${p.smashed ? 1 : 0}|${Math.round(mk * 10)}`;
+    const mkDown = p.marks?.[0] ?? 0;
+    const mk = p.marks?.[1] ?? 0;
+    const k = `${Math.round(down * 40)}|${Math.round(up * 40)}|${p.smashed ? 1 : 0}|${Math.round(mk * 10)}|${Math.round(mkDown * 10)}`;
     if (k === key) return;
     key = k;
     const t = (down + up) / 2;
@@ -329,10 +335,14 @@ function makePatty(piece: Piece, body: THREE.Group): (p: Piece) => void {
     cracks.visible = up > 0.95;
     cracks.position.y = top;
     cracks.scale.set(R0, 1, R0);
-    marks.visible = mk > 0.12;
+    marks.visible = mk >= MARKED;
     marks.position.y = top + 0.004;
     marks.scale.set(R0, 1, R0);
     markMat.color.copy(cu).lerp(tmpE.set("#1d100a"), clamp(0.35 + mk * 0.65));
+    marksDown.visible = mkDown >= MARKED;
+    marksDown.position.y = -0.004;
+    marksDown.scale.set(R0, 1, R0);
+    markDownMat.color.copy(cd).lerp(tmpE.set("#1d100a"), clamp(0.35 + mkDown * 0.65));
   };
 }
 

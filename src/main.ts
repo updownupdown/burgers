@@ -325,8 +325,11 @@ function spawnCustomer(slotIdx: number, seed: number): void {
   syncTray(slotIdx, false);
 }
 
-/** Two taps on the bell within this many seconds call the next person up. */
-const BELL_WINDOW = 1.4;
+/**
+ * A tap on the bell calls the next person up. Taps within this many seconds of the last one only
+ * ring (a quick double ring is still one customer); after a pause the next tap calls again.
+ */
+const BELL_WINDOW = 1.5;
 
 /** The first in line steps up to a free place at the window, if the difficulty allows another. */
 function callNext(): boolean {
@@ -338,31 +341,26 @@ function callNext(): boolean {
   return true;
 }
 
-/** A tap on the bell: the first arms it, the second (soon after) calls the next person in line. */
+/** A tap on the bell: calls the next person in line, unless the bell rang only a moment ago. */
 function ringBell(): void {
   if (game.phase !== "playing") return;
   const atWindow = game.slots.filter((s) => s.order || s.fig).length;
   ui.bell.classList.remove("ring");
   void ui.bell.offsetWidth;
   ui.bell.classList.add("ring");
+  sfx.bell();
+  const recent = game.bellTaps > 0 && game.time - game.bellAt < BELL_WINDOW;
+  game.bellTaps = 1;
+  game.bellAt = game.time;
+  if (recent) return;
   if (!game.line.length) {
-    sfx.bell();
     hintOnce("bell-empty", "Nobody in line right now. The bell calls up the next person when there is one.", 3);
     return;
   }
   if (atWindow >= WINDOW[game.pacing]) {
-    sfx.bell();
     hintOnce("bell-full", `No room at the window: ${WINDOW[game.pacing]} at a time on ${DIFFICULTY[game.pacing].label}. Serve someone first.`, 3.5);
     return;
   }
-  if (game.bellTaps === 0 || game.time - game.bellAt > BELL_WINDOW) {
-    game.bellTaps = 1;
-    game.bellAt = game.time;
-    sfx.bell();
-    return;
-  }
-  game.bellTaps = 0;
-  sfx.bell(true);
   if (callNext()) hintOnce("bell-called", "Next! More people at the window means more money, if you can keep up.", 3.5);
 }
 ui.bell.addEventListener("click", ringBell);
@@ -665,6 +663,10 @@ interface Pointer {
   y: number;
   band: ReturnType<typeof bandAt>;
   mode: "none" | "swipe" | "held" | "grill" | "basket" | "pour" | "sauce" | "plate" | "wipe" | "rub" | "egg";
+  /** The press started on the trash chute with nothing in hand (a swipe there changes counter). */
+  chute?: boolean;
+  /** That swipe has already changed counter. */
+  paged?: boolean;
   /** Tap whose spill is being wiped. */
   wipe: number;
   hit: Hit | null;
@@ -1542,7 +1544,11 @@ canvas.addEventListener("pointerdown", (e) => {
       // An egg or its shells in hand: this press moves them (a tap on the grill cracks the egg).
       pt.mode = "egg";
       moveEgg(pt);
-    } else if (!hit) pt.mode = "swipe";
+    } else if (!hit) {
+      pt.mode = "swipe";
+      // Empty hands on the trash chute: a sideways swipe along it moves to the next counter.
+      pt.chute = counter.overTrash(counter.groundPoint(ndcIn(bands.counter, x, y)));
+    }
     else if (hit.type === "bin" && hit.kind === "egg") {
       pickUpEgg(counter.groundPoint(ndcIn(bands.counter, x, y), GRILL_TOP));
       pt.mode = "egg";
@@ -1560,7 +1566,7 @@ canvas.addEventListener("pointerdown", (e) => {
       const heat = counter.cycleZone(hit.idx);
       sfx.flip();
       buzz(10);
-      hintOnce("zones", "Each button cycles its zone: off, warm, hot. The strip along the front shows it: blue, orange, red.", 3.5);
+      hintOnce("zones", "Each power button cycles its zone: off, warm, hot. Its lights show it: none for off, one orange for warm, two red for hot.", 3.5);
       if (heat === "warm") hintOnce("zone-warm", "Warm holds food without cooking it, and nothing goes stale there. Park finished food here.", 3.5);
     }
     else if (hit.type === "bottle") startSauce(pt, hit.sauce);
@@ -1635,9 +1641,16 @@ canvas.addEventListener("pointermove", (e) => {
   if (Math.hypot(dx, dy) > 12) pt.moved = true;
 
   switch (pt.mode) {
-    case "swipe":
-      // Sideways swipes on the counter are free for station actions; counters change from the tab bar.
+    case "swipe": {
+      // Sideways swipes on the counter are free for station actions; counters change from the tab
+      // bar, or by swiping along the trash chute with empty hands.
+      const dx = pt.x - pt.x0;
+      if (pt.chute && !pt.paged && Math.abs(dx) > 36 && Math.abs(dx) > Math.abs(pt.y - pt.y0) * 1.5) {
+        pt.paged = true;
+        goToStop(counter.stop + (dx < 0 ? 1 : -1));
+      }
       break;
+    }
     case "egg":
       if (bandAt(pt.y) === "counter") moveEgg(pt);
       break;
@@ -2653,10 +2666,9 @@ function updateUi(dt = 0): void {
   ui.bell.hidden = game.phase === "title" || game.phase === "summary";
   const inLine = String(game.line.length);
   if (ui.bellCount.textContent !== inLine) ui.bellCount.textContent = inLine;
-  const bellLabel = game.bellTaps ? "Again" : "Next";
+  const bellLabel = "Next";
   if (ui.bellLabel.textContent !== bellLabel) ui.bellLabel.textContent = bellLabel;
   ui.bell.classList.toggle("empty", !game.line.length);
-  ui.bell.classList.toggle("armed", game.bellTaps > 0);
   ui.bell.classList.toggle("full", game.line.length > 0 && game.slots.filter((s) => s.order || s.fig).length >= WINDOW[game.pacing]);
   placeTickets();
   game.slots.forEach((s, i) => {

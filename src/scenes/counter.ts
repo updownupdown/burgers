@@ -51,7 +51,7 @@ const GRIDDLE = { x: 1.2, z: 0.62 };
 /** The row of grillable pans behind the griddle, and the cold rail of everything else. */
 const GRILL_PANS = { x: 1.2, z: -2.45 };
 const SIDE_PANS = { x: -3.0, z: -1.05 };
-const CADDY = { x: -2.55, z: 2.2 };
+const CADDY = { x: -2.82, z: 2.2 };
 /** The griddle's cook surface, zones and buttons, griddle-local (read once from the model). */
 const GRIDDLE_SPOTS = makeGriddle().userData.spots;
 const GRIDDLE_SURFACE = GRIDDLE_SPOTS.surface;
@@ -83,6 +83,10 @@ const STACKS: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon"]);
 const TRASH = { z0: 3.05, z1: 3.5 };
 /** The slot runs the full width of every counter (page-local x), and on between them. */
 const TRASH_HALF = 4.4;
+/** The chute's two ends (world x): just inside the left edge of the first view and the right edge of the last. */
+const TRASH_END_GAP = 1.05;
+const TRASH_X0 = () => pageX(0) - VIEW_W / 2 + TRASH_END_GAP;
+const TRASH_X1 = () => pageX(PAGES.length - 1) + VIEW_W / 2 - TRASH_END_GAP;
 
 /**
  * Fryer page, "front pass", in page-local x and z, on one screen. The big potato freezer is at
@@ -530,19 +534,23 @@ export class CounterView {
 
   /**
    * The trash chute along the front edge: one slot the whole length of the window line, so every
-   * counter has it in the same place. Each counter's stretch lights up on its own.
+   * counter has it in the same place. It stops just short of the outer edges of the drinks and
+   * fryer views, so its ends bookend the three counters. Each counter's stretch lights up on its own.
    */
   private buildTrash(): void {
-    const x0 = pageX(0) - TRASH_HALF - 4;
-    const x1 = pageX(PAGES.length - 1) + TRASH_HALF + 4;
+    const x0 = TRASH_X0();
+    const x1 = TRASH_X1();
     const chute = makeTrashChute(x1 - x0);
     chute.position.set((x0 + x1) / 2, 0, (TRASH.z0 + TRASH.z1) / 2);
     this.scene.add(chute);
     PAGES.forEach((_, page) => {
       // Lights up while something held is over it, so you know a drop will bin it.
-      const glow = new THREE.Mesh(new THREE.PlaneGeometry(2 * TRASH_HALF + 0.2, TRASH.z1 - TRASH.z0 + 0.25), new THREE.MeshBasicMaterial({ color: "#e0523f", transparent: true, opacity: 0.55, depthWrite: false }));
+      const gx0 = Math.max(x0, pageX(page) - TRASH_HALF - 0.1);
+      const gx1 = Math.min(x1, pageX(page) + TRASH_HALF + 0.1);
+      const glow = new THREE.Mesh(new THREE.PlaneGeometry(gx1 - gx0, TRASH.z1 - TRASH.z0 + 0.25), new THREE.MeshBasicMaterial({ color: "#e0523f", transparent: true, opacity: 0.55, depthWrite: false }));
       glow.rotation.x = -Math.PI / 2;
       glow.position.copy(this.world(page, 0, 0.1, (TRASH.z0 + TRASH.z1) / 2));
+      glow.position.x = (gx0 + gx1) / 2;
       glow.visible = false;
       glow.renderOrder = 3;
       this.scene.add(glow);
@@ -869,7 +877,7 @@ export class CounterView {
 
   /** True when a dropped item at this world point lands in the trash slot. */
   overTrash(world: THREE.Vector3): boolean {
-    return world.z > TRASH.z0 - 0.05 && Math.abs(world.x - pageX(this.page)) < TRASH_HALF + 0.6;
+    return world.z > TRASH.z0 - 0.05 && Math.abs(world.x - pageX(this.page)) < TRASH_HALF + 0.6 && world.x > TRASH_X0() - 0.3 && world.x < TRASH_X1() + 0.3;
   }
 
   /** Grill-local position if the world point is over the grill plate. */

@@ -653,25 +653,35 @@ html, body {
  * over-done in the ingredient's colours, a dark line at perfect, a caret over where it is now,
  * and a pale veil over what's still ahead so the filled part is the reading.
  */
+/*
+ * The doneness meter: under | done | over. The done band is always green so the safe zone reads at
+ * a glance on every food; under and over take the food's own tints. Pale gaps split the bands, the
+ * perfect point is a faint tick, and a big caret shows where the food is now.
+ */
 .cmeter {
-  --mu: #e9e2c4; --md: #e7b43c; --mo: #9a5a22;
+  --mu: #e9e2c4; --md: #4fae6e; --mo: #9a5a22; --gap: rgb(255 255 255 / 0.9);
   position: relative;
   display: block;
-  width: 44px;
-  height: 8px;
-  margin-top: 7px;
+  width: 56px;
+  height: 12px;
+  margin-top: 10px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--mu) 0 var(--u), var(--md) var(--u) var(--d), var(--mo) var(--d) 100%);
-  box-shadow: 0 0 0 1.5px rgb(42 38 34 / 0.8), 0 2px 4px rgb(0 0 0 / 0.3);
+  background: linear-gradient(90deg,
+    var(--mu) 0 calc(var(--u) - 1px), var(--gap) calc(var(--u) - 1px) calc(var(--u) + 1px),
+    var(--md) calc(var(--u) + 1px) calc(var(--d) - 1px), var(--gap) calc(var(--d) - 1px) calc(var(--d) + 1px),
+    var(--mo) calc(var(--d) + 1px) 100%);
+  box-shadow: 0 0 0 2px rgb(42 38 34 / 0.85), 0 2px 4px rgb(0 0 0 / 0.3);
 }
-.cmeter::after { content: ""; position: absolute; left: var(--v); right: 0; top: 0; bottom: 0; background: rgb(250 248 242 / 0.66); border-radius: 0 999px 999px 0; transition: left 0.2s linear; }
-.cmeter::before { content: ""; position: absolute; z-index: 1; left: var(--p); top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--bv-ink); border-radius: 1px; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.7); }
-.cmeter i { position: absolute; z-index: 2; left: var(--v); top: -8px; width: 0; height: 0; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top: 7px solid var(--bv-ink); filter: drop-shadow(0 0 1px #fff); transition: left 0.2s linear; }
-.cmeter.patty { --mu: #e08a91; --md: #9a5636; --mo: #4a2a1a; }
-.cmeter.egg { --mu: #d9d3c8; --md: #ffe9a6; --mo: #c58a3e; }
-.cmeter.bacon { --mu: #ec8a94; --md: #bf5a3c; --mo: #5e2716; }
-.cmeter.bun { --mu: #f6e0b0; --md: #e3a453; --mo: #7a4a22; }
-.cmeter.pineapple { --mu: #f9e27a; --md: #e8b03a; --mo: #8a5020; }
+.cmeter::after { content: ""; position: absolute; left: var(--v); right: 0; top: 0; bottom: 0; background: rgb(250 248 242 / 0.55); border-radius: 0 999px 999px 0; transition: left 0.2s linear; }
+.cmeter::before { content: ""; position: absolute; z-index: 1; left: var(--p); top: 2px; bottom: 2px; width: 1px; margin-left: -0.5px; background: rgb(255 255 255 / 0.55); }
+.cmeter i { position: absolute; z-index: 2; left: var(--v); top: -10px; width: 0; height: 0; margin-left: -7px; border: 7px solid transparent; border-bottom: 0; border-top: 9px solid var(--bv-ink); filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff); transition: left 0.2s linear; }
+.cmeter.done { box-shadow: 0 0 0 2px #2f7a4a, 0 0 6px rgb(79 174 110 / 0.8), 0 2px 4px rgb(0 0 0 / 0.3); }
+.cmeter.patty { --mu: #e58c94; --mo: #4a2a1a; }
+.cmeter.egg { --mu: #e4ded2; --mo: #b9772e; }
+.cmeter.bacon { --mu: #ec8a94; --mo: #5e2716; }
+.cmeter.bun { --mu: #f6e0b0; --mo: #7a4a22; }
+.cmeter.pineapple { --mu: #f9e27a; --mo: #8a5020; }
+.cmeter.fries { --mu: #f3e6a8; --mo: #8a5020; }
 .cmeter.burnt { animation: fmeter-hot 0.5s ease-in-out infinite alternate; }
 .cmeter.burnt i { border-top-color: var(--bv-paprika); }
 /* A stack on the grill: how many are in it, beside its meter. */

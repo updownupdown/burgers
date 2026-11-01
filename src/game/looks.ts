@@ -55,7 +55,7 @@ export const LOOKS: LookItem[] = [
   { id: "surf", slot: "roof", name: "Surfboards", text: "Two boards, strapped down. Sold in Driftwood.", price: 450, town: "driftwood" },
   { id: "windmill", slot: "roof", name: "Windmill", text: "A little desert windmill that turns in the breeze. Sold in Dust Bowl Flats.", price: 900, town: "dustbowl" },
   { id: "neon", slot: "roof", name: "Neon sign", text: "The cloche in pink neon. Glows after dark.", price: 1500 },
-  { id: "burger", slot: "roof", name: "Giant burger", text: "A fibreglass burger on a pole, slowly turning.", price: 2500 },
+  { id: "burger", slot: "roof", name: "Giant burger", text: "A fibreglass burger on a short, sturdy post.", price: 2500 },
   { id: "hottub", slot: "roof", name: "Rooftop hot tub", text: "Cedar tub, warm water, steam on cold nights.", price: 25000, grand: true },
 
   { id: "plain", slot: "lights", name: "No lights", text: "Lights out at closing.", price: 0 },

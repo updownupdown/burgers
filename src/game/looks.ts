@@ -1,14 +1,15 @@
 /**
  * The truck's looks: cosmetics bought with savings in the Garage. They change nothing in the
  * kitchen; they show on the truck on the road map, under the stars when the truck sleeps, and in
- * the Garage. One item per slot is worn at a time; everything bought is kept.
+ * the Garage. One item per slot is worn at a time; everything bought is kept. (The shop dog of
+ * build #58 was retired in favour of inflatables; saves that bought it get its price back.)
  *
  * Most are modest. A few are absurd and priced to match: long goals for a truck that has been
  * on the road a long time. Three are souvenirs, sold only once the truck has worked a shift in
  * their town.
  */
 
-export type Slot = "paint" | "awning" | "roof" | "lights" | "wheels" | "tag";
+export type Slot = "paint" | "awning" | "roof" | "lights" | "wheels" | "inflatable" | "tag";
 
 export interface LookItem {
   id: string;
@@ -29,6 +30,7 @@ export const SLOTS: { id: Slot; name: string }[] = [
   { id: "roof", name: "Roof" },
   { id: "lights", name: "Lights" },
   { id: "wheels", name: "Wheels" },
+  { id: "inflatable", name: "Inflatable" },
   { id: "tag", name: "Tag-along" },
 ];
 
@@ -66,8 +68,12 @@ export const LOOKS: LookItem[] = [
   { id: "chromehub", slot: "wheels", name: "Chrome spokes", text: "Polished spoked rims.", price: 500 },
   { id: "spinners", slot: "wheels", name: "Gold spinners", text: "Gold rims that keep spinning when she's parked.", price: 8000, grand: true },
 
+  { id: "flat", slot: "inflatable", name: "None", text: "Nothing on the pavement.", price: 0 },
+  { id: "fries", slot: "inflatable", name: "Inflatable fries", text: "A giant carton of fries, pegged down behind the front wheel.", price: 900 },
+  { id: "chef", slot: "inflatable", name: "Inflatable chef", text: "A tall chef in a toque, waving a spatula.", price: 1500 },
+  { id: "tubeman", slot: "inflatable", name: "Waving tube man", text: "Flails wildly all day on a little blower.", price: 2200 },
+
   { id: "solo", slot: "tag", name: "Nobody", text: "Just the truck.", price: 0 },
-  { id: "dog", slot: "tag", name: "Shop dog", text: "Rides up front. Sleeps through the night.", price: 350 },
   { id: "trailer", slot: "tag", name: "Teardrop trailer", text: "A little trailer in matching paint.", price: 3000 },
   { id: "balloon", slot: "tag", name: "Hot-air balloon", text: "Tethered to the roof, in your colours.", price: 30000, grand: true },
   { id: "airship", slot: "tag", name: "Airship", text: "Follows the truck from town to town. Why not.", price: 75000, grand: true },
@@ -76,7 +82,7 @@ export const LOOKS: LookItem[] = [
 /** What the truck is wearing, one item id per slot. */
 export type Look = Record<Slot, string>;
 
-export const DEFAULT_LOOK: Look = { paint: "coral", awning: "mustard", roof: "none", lights: "plain", wheels: "steel", tag: "solo" };
+export const DEFAULT_LOOK: Look = { paint: "coral", awning: "mustard", roof: "none", lights: "plain", wheels: "steel", inflatable: "flat", tag: "solo" };
 
 export function lookById(id: string): LookItem | undefined {
   return LOOKS.find((l) => l.id === id);

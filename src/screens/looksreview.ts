@@ -27,7 +27,7 @@ for (const s of SLOTS) {
 root.innerHTML = html;
 
 // The road map's truck: the same looks, drawn small.
-const combos: Partial<Look>[] = [{}, { paint: "twotone", awning: "stripes", roof: "surf", wheels: "whitewall" }, { paint: "woodie", roof: "canoe", tag: "trailer", lights: "string" }, { paint: "chrome", roof: "neon", lights: "marquee", tag: "dog" }, { paint: "gold", awning: "velvet", roof: "hottub", lights: "search", wheels: "spinners", tag: "balloon" }, { paint: "dusk", roof: "windmill", tag: "airship" }, { paint: "sage", roof: "burger", awning: "teal" }, { roof: "herbs", paint: "butter" }];
+const combos: Partial<Look>[] = [{}, { paint: "twotone", awning: "stripes", roof: "surf", wheels: "whitewall" }, { paint: "woodie", roof: "canoe", tag: "trailer", lights: "string" }, { paint: "chrome", roof: "neon", lights: "marquee", inflatable: "tubeman" }, { inflatable: "chef", roof: "hottub" }, { inflatable: "fries", wheels: "chromehub" }, { paint: "gold", awning: "velvet", roof: "hottub", lights: "search", wheels: "spinners", tag: "balloon" }, { paint: "dusk", roof: "windmill", tag: "airship" }, { paint: "sage", roof: "burger", awning: "teal" }, { roof: "herbs", paint: "butter" }];
 let mini = `<h2>On the map</h2><div class="row">`;
 for (const c of combos) for (const night of [false, true]) mini += `<figure class="${night ? "n" : ""}" style="width:150px">${truckSvg({ ...DEFAULT_LOOK, ...c }, { mini: true, night, width: 70 })}${truckSvg({ ...DEFAULT_LOOK, ...c }, { mini: true, night, width: 34 })}</figure>`;
 root.insertAdjacentHTML("afterbegin", mini + `</div>`);

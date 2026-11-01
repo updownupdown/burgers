@@ -113,8 +113,8 @@ export function simulatedSave(level: SimLevel): Save {
   s.bonuses = level === 100 ? [...s.found] : s.found.slice(0, 4);
   s.bank = level === 100 ? 24000 : 640;
   if (level === 100) {
-    s.looks = ["dusk", "teal", "string", "whitewall", "dog", "canoe"];
-    s.look = { paint: "dusk", awning: "teal", roof: "canoe", lights: "string", wheels: "whitewall", tag: "dog" };
+    s.looks = ["dusk", "teal", "string", "whitewall", "tubeman", "canoe"];
+    s.look = { paint: "dusk", awning: "teal", roof: "canoe", lights: "string", wheels: "whitewall", inflatable: "tubeman", tag: "solo" };
   }
   s.reviews = worked
     .flatMap((id, i) => SAMPLE_REVIEWS.slice(0, 2 + (i % 3)).map(([stars, text]): Review => ({ stars: Math.min(3, stars + (level === 100 && stars < 3 ? 1 : 0)), text, stop: townById(id).name })))

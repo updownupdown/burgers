@@ -121,6 +121,45 @@ function pressSec(): Sec {
   };
 }
 
+const TACOS: Recipe = { name: "Street Tacos", price: 10, layers: ["corn", "pork", "onion", "cilantro", "lime"], toasted: true, dish: "tacos", counts: { corn: 3, pork: 3, onion: 1 } };
+
+/** A tortilla on the comal, its edge dragged across its middle into a half moon. */
+function foldSvg(): string {
+  return `<svg class="hw-svg" viewBox="0 0 160 90" aria-hidden="true">
+    <rect x="6" y="18" width="148" height="56" rx="8" fill="#2f3335" stroke="#2a2622" stroke-width="1.6"/>
+    <rect x="104" y="18" width="50" height="56" rx="0" fill="#ffb04a" opacity=".12"/>
+    <ellipse cx="44" cy="46" rx="26" ry="20" fill="#f3e2b8" stroke="#2a2622" stroke-width="1.6"/>
+    <g fill="#f6d77a"><rect x="34" y="40" width="14" height="3" rx="1.5"/><rect x="40" y="47" width="12" height="3" rx="1.5"/><rect x="30" y="50" width="10" height="3" rx="1.5"/></g>
+    <path d="M44 66c0-10 0-20 0-30" stroke="#2a2622" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="2 3"/>
+    <path d="M30 60c8-2 14-10 26-18" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M52 38l5 3-2 6" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M96 30h0a26 20 0 0 1 0 40z" fill="#ebc98a" stroke="#2a2622" stroke-width="1.6"/>
+    <path d="M96 30v40" stroke="#2a2622" stroke-width="1.6"/>
+    <path d="M120 52c2 0 3 2 2 4" fill="none" stroke="#f4c54a" stroke-width="3" stroke-linecap="round"/>
+  </svg>`;
+}
+
+/** The comal, for Red Rock (DESIGN §24, phase 3). */
+function comalSec(tpress: boolean): Sec {
+  return {
+    id: "comal",
+    chip: "Comal",
+    icon: "flame",
+    title: "The comal",
+    lede: "In Red Rock the grill makes way for a comal: one long steel plate, hot on the left two thirds and warm on the right end. No buttons to set.",
+    fig: `${foldSvg()}
+      <div class="hw-stack">${stackArt(TACOS)}<p class="hw-cap">Street Tacos: 3 corn tortillas, a scoop of pork in each, onion, cilantro and a lime wedge.</p></div>`,
+    points: [
+      "<b>Tortillas</b> warm on the hot side in about 6 seconds: pale and stiff, then <b>soft with brown spots</b> (done), then hard. Watch the meter under each one. Park finished ones on the warm end.",
+      "<b>Tacos</b>: drag each warm tortilla up to the tray; it stands in the rack. Each <b>tap on the pork or bean well</b> is one scoop onto the tray, one per taco; the toppings go on once.",
+      "<b>Quesadilla</b>: a flour tortilla on the comal, cheese on it, then <b>fold it</b>: press its edge and drag across the middle. <b>Flip it once</b>, and take it off when the cheese has melted, before the shell goes dark.",
+      "<b>Pineapple</b> chars on the comal like on the grill; flick it to flip. Eggs crack on the hot side: flip once for over easy.",
+      "<b>Tostadas</b> come from the fryer: drop a corn tortilla in an empty basket and lower it. The fryer also makes <b>chips</b> from the tortilla wedges, and nachos get jalapeños and queso where a poutine gets curds and gravy.",
+      ...(tpress ? ["In <b>Sun Valley</b> there's a <b>tortilla press</b>: hold it down to flatten a ball of masa, then drag the tortilla to the comal. Hand-pressed tortillas earn a $2 tip. Churros come from the fryer: shake sugar on them."] : []),
+    ],
+  };
+}
+
 /* ---- the guide ------------------------------------------------------------ */
 
 function sections(): Sec[] {
@@ -436,6 +475,9 @@ export function howToHtml(): string {
   const all = sections();
   // On the Sunny Coast the press section follows the grill's (and the menu shows paninis).
   if (getDeps()?.town()?.press) all.splice(all.findIndex((x) => x.id === "grill") + 1, 0, pressSec());
+  // In Red Rock the comal's follows it.
+  const comal = getDeps()?.town()?.comal;
+  if (comal) all.splice(all.findIndex((x) => x.id === "grill") + 1, 0, comalSec(!!comal.tpress));
   const secs = [...all, menuSec()];
   return `<nav class="menu-chips" aria-label="Sections">${secs.map((s) => `<button class="bv-chip pill" data-jump="${s.id}">${icon(s.icon)}${s.chip}</button>`).join("")}</nav>
   ${secs

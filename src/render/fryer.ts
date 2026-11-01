@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
 import { curdLumps, GRAVY, makeFryPile } from "./food";
+import { NACHO_JALAPENO } from "./sides";
+import type { FryKind } from "../game/types";
 import { faceted, shareGeometry, toon } from "./materials";
 
 /**
@@ -298,28 +300,59 @@ export function makeCurdTray(): THREE.Mesh {
 }
 
 /**
- * Sweet potato fries (the coast's fryer, from Driftwood): frozen orange sticks in a cooled tray
- * where the curd tray stands in the Pines. Origin on the floor.
+ * Something raw to fry, in a cooled tray: sweet potato fries where the curd tray stands in the
+ * Pines (the coast, from Driftwood); tortilla wedges for chips and piped churro dough at the
+ * freezer's spot in Red Rock. Origin on the floor.
  */
 export const SWEET_TRAY = { w: 1.6, d: 0.95, h: 0.34 };
-let sweetBaked: Baked | null = null;
-export function makeSweetTray(): THREE.Group {
-  const { w, d, h } = SWEET_TRAY;
-  if (!sweetBaked) {
+let trayBaked: Baked | null = null;
+export function makeFryTray(fry: FryKind = "sweet", w = SWEET_TRAY.w, d = SWEET_TRAY.d): THREE.Group {
+  const { h } = SWEET_TRAY;
+  const body = () => {
     const p = new Parts();
     p.add(box(w + 0.2, 0.02, d + 0.2), "#c3cdcc", { p: [0, 0.01, 0], ink: 0.012 });
     deepWell(p, w, d, h, 0.08, STEEL, "#c9dde4", STEEL_LIGHT);
     p.add(box(w + 0.01, 0.06, 0.02), "#7fb6d6", { p: [0, h * 0.5, d / 2 + 0.005], ink: false });
-    sweetBaked = bakeShared(p);
-  }
+    return bakeShared(p);
+  };
   const g = new THREE.Group();
-  g.add(bakedMesh(sweetBaked));
-  const pile = makeFryPile(w - 0.26, d - 0.22, 2, 23);
-  pile.userData.setSweet(true);
+  if (w === SWEET_TRAY.w && d === SWEET_TRAY.d) g.add(bakedMesh((trayBaked ??= body())));
+  else g.add(bakedMesh(body()));
+  const pile = makeFryPile(w - 0.26, d - 0.22, fry === "churros" ? 3 : 2, 23, false, fry);
   pile.userData.setCook(0);
   pile.position.y = 0.04;
   g.add(pile);
   return g;
+}
+export const makeSweetTray = (): THREE.Group => makeFryTray("sweet");
+
+/** Sliced jalapeños for nachos in a cooled tray (the curd tray's spot). Origin on the floor. */
+export function makeJalapenoTray(): THREE.Mesh {
+  const { w, d, h } = CURD_TRAY;
+  const p = new Parts();
+  p.add(box(w + 0.2, 0.02, d + 0.2), "#c3cdcc", { p: [0, 0.01, 0], ink: 0.012 });
+  deepWell(p, w, d, h, 0.08, STEEL, "#c9dde4", STEEL_LIGHT);
+  p.add(box(w + 0.01, 0.06, 0.02), "#7fb6d6", { p: [0, h * 0.5, d / 2 + 0.005], ink: false });
+  const ringGeo = faceted(new THREE.TorusGeometry(0.075, 0.026, 4, 10).rotateX(Math.PI / 2));
+  const r = rng(13);
+  for (let l = 0; l < 2; l++) {
+    const n = l ? 14 : 22;
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.39996;
+      const rr = Math.sqrt((i + 0.5) / n);
+      p.add(ringGeo, i % 5 === 2 ? "#5aa83f" : NACHO_JALAPENO, { p: [Math.cos(a) * rr * (w / 2 - 0.22), 0.1 + l * 0.06 + r() * 0.03, Math.sin(a) * rr * (d / 2 - 0.16)], r: [(r() - 0.5) * 0.6, 0, (r() - 0.5) * 0.6], ink: 0.01 });
+    }
+  }
+  return bakedMesh(bakeShared(p));
+}
+
+/** A sugar shaker for churros: the salt shaker's shape with a cinnamon-sugar band. */
+export function makeSugarShaker(): THREE.Mesh {
+  const p = new Parts();
+  p.add(cyl(0.15, 0.17, 0.42, 10), "#fbf6ea", { p: [0, 0.21, 0] });
+  p.add(cyl(0.155, 0.165, 0.1, 10), "#c98a4a", { p: [0, 0.2, 0], ink: false });
+  p.add(cyl(0.12, 0.16, 0.14, 10), "#d9b25a", { p: [0, 0.49, 0] });
+  return bakedMesh(bakeShared(p));
 }
 
 /**
@@ -327,7 +360,7 @@ export function makeSweetTray(): THREE.Group {
  * body with an orange heat light and a ladle resting across it. Origin on the floor.
  */
 export const GRAVY_WELL = { w: 1.55, d: 1.3, h: 0.5 };
-export function makeGravyWell(): THREE.Mesh {
+export function makeGravyWell(sauce: string = GRAVY): THREE.Mesh {
   const { w, d, h } = GRAVY_WELL;
   const p = new Parts();
   p.add(box(w, h, d), STEEL, { p: [0, h / 2, 0] });
@@ -338,9 +371,9 @@ export function makeGravyWell(): THREE.Mesh {
   for (const [bw, bd, x, z] of [[w, 0.1, 0, -d / 2 + 0.05], [w, 0.1, 0, d / 2 - 0.05], [0.1, d, -w / 2 + 0.05, 0], [0.1, d, w / 2 - 0.05, 0]] as const) {
     p.add(box(bw, 0.05, bd), STEEL_LIGHT, { p: [x, h + 0.015, z], ink: 0.012 });
   }
-  p.add(box(w - 0.2, 0.02, d - 0.2), GRAVY, { p: [0, h + 0.012, 0], ink: false });
-  p.add(box(0.36, 0.006, 0.08), "#9a6238", { p: [-0.2, h + 0.024, -0.2], r: [0, 0.4, 0], ink: false });
-  p.add(box(0.22, 0.006, 0.06), "#9a6238", { p: [0.3, h + 0.024, 0.25], r: [0, -0.3, 0], ink: false });
+  p.add(box(w - 0.2, 0.02, d - 0.2), sauce, { p: [0, h + 0.012, 0], ink: false });
+  p.add(box(0.36, 0.006, 0.08), sauce === GRAVY ? "#9a6238" : "#f7cf5a", { p: [-0.2, h + 0.024, -0.2], r: [0, 0.4, 0], ink: false });
+  p.add(box(0.22, 0.006, 0.06), sauce === GRAVY ? "#9a6238" : "#f7cf5a", { p: [0.3, h + 0.024, 0.25], r: [0, -0.3, 0], ink: false });
   // A ladle resting across the rim.
   p.add(new THREE.SphereGeometry(0.17, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), "#c9d1cf", { p: [0.25, h + 0.12, 0.05] });
   p.add(cyl(0.025, 0.025, 0.95, 6), "#9aa3a6", { p: [-0.2, h + 0.16, -0.2], r: [0, 0.5, Math.PI / 2 - 0.12] });
@@ -355,10 +388,22 @@ export function makeCurdHandful(): THREE.Mesh {
 }
 
 /** A ladle of gravy, to pour over a carton. */
-export function makeLadle(): THREE.Mesh {
+export function makeLadle(sauce: string = GRAVY): THREE.Mesh {
   const p = new Parts();
   p.add(new THREE.SphereGeometry(0.17, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), "#c9d1cf", { p: [0, 0.17, 0] });
-  p.add(cyl(0.15, 0.15, 0.02, 10), GRAVY, { p: [0, 0.16, 0], ink: 0 });
+  p.add(cyl(0.15, 0.15, 0.02, 10), sauce, { p: [0, 0.16, 0], ink: 0 });
   p.add(cyl(0.025, 0.025, 0.8, 6), "#9aa3a6", { p: [0.3, 0.45, 0], r: [0, 0, 0.9] });
+  return bakedMesh(bakeShared(p));
+}
+
+/** What you carry from the jalapeño tray: a pinch of rings. */
+export function makeJalapenoHandful(): THREE.Mesh {
+  const p = new Parts();
+  const ringGeo = faceted(new THREE.TorusGeometry(0.06, 0.022, 4, 10).rotateX(Math.PI / 2));
+  for (let i = 0; i < 6; i++) {
+    const a = i * 2.39996;
+    const rr = Math.sqrt((i + 0.5) / 6);
+    p.add(ringGeo, NACHO_JALAPENO, { p: [Math.cos(a) * rr * 0.14, 0.05 + (i % 2) * 0.03, Math.sin(a) * rr * 0.12], r: [i * 0.3, 0, i * 0.2], ink: 0.01 });
+  }
   return bakedMesh(bakeShared(p));
 }

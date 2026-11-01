@@ -247,6 +247,8 @@ html, body {
 .ticket .mb.ice { --mb-bg: #d9e9f4; --mb-fg: #2f5f86; }
 .ticket .mb.sunny { --mb-bg: #fbe7a6; --mb-fg: #7a5200; }
 .ticket .mb.flip { --mb-bg: #e9dfcf; --mb-fg: #5a4426; }
+.ticket .mb.fold { --mb-bg: #f6ecd2; --mb-fg: #6a4d1c; }
+.ticket .mb.sugar { --mb-bg: #f3e1c4; --mb-fg: #7a4a1e; }
 .ticket .mb.add { --mb-bg: var(--t-mod); --mb-fg: #fff; }
 /* "NO Ketchup", "ADD Bacon": the keyword in caps, then the item; "x3" right after the name. */
 .ticket .kw { font: 800 0.82em/1 var(--bv-font-ui); letter-spacing: 0.04em; }
@@ -677,6 +679,14 @@ html, body {
 .cmeter.chicken { --f0: #ff9fae; --f1: #f6ead6; --f2: #c79560; }
 .cmeter.veggie { --f0: #b9cf86; --f1: #c98a3e; --f2: #7d4b23; }
 .cmeter.sweet { --f0: #ffc58d; --f1: #f07d22; --f2: #a2481d; }
+/* Red Rock: tortillas pale to soft and spotted to hard, the tostada shell, chips and churros. */
+.cmeter.corn { --f0: #f6e6a6; --f1: #e9ad44; --f2: #a8662a; }
+.cmeter.flour { --f0: #fbf3df; --f1: #ebc98a; --f2: #b9803e; }
+.cmeter.tostada, .cmeter.chips { --f0: #f6e6a6; --f1: #ebb53c; --f2: #a8662a; }
+.cmeter.churros { --f0: #f7e4b6; --f1: #d6913e; --f2: #8a4e1c; }
+/* A quesadilla's cheese on the comal: melting, then melted. */
+.gtag.pt .mlt { position: absolute; left: 50%; top: 100%; transform: translate(-50%, 2px); font: 800 9.5px/1.2 var(--bv-font-ui); color: #6b5200; background: #fbeec0; border-radius: 4px; padding: 0 4px; box-shadow: 0 0 0 1px rgb(42 38 34 / 0.6); opacity: 0.75; white-space: nowrap; }
+.gtag.pt .mlt.on { background: #f9d95b; opacity: 1; }
 /* A press bay's meter, in front of the bay: a melt mark beside it once there's cheese inside. */
 .gtag.pt.bay { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .gtag.pt.bay[hidden] { display: none; }

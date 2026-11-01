@@ -20,8 +20,8 @@ const BASE_W = 2 * SLOT_X + 0.82;
 /** Height of the nozzle tip in the caddy (hidden inside the base). */
 const SEAT_Y = 0.22;
 
-const COLOR: Record<SauceKind, string> = { ketchup: C.ketchup, mustard: C.mustard, pesto: "#5f9a3a", aioli: "#efe4c0" };
-const BASE_TINT: Record<SauceKind, string> = { ketchup: "#ffe1d8", mustard: "#fff2c0", pesto: "#d9ecc8", aioli: "#fffaf0" };
+const COLOR: Record<SauceKind, string> = { ketchup: C.ketchup, mustard: C.mustard, pesto: "#5f9a3a", aioli: "#efe4c0", redsalsa: "#c8321f", greensalsa: "#6c9e2c", crema: "#f4efe2" };
+const BASE_TINT: Record<SauceKind, string> = { ketchup: "#ffe1d8", mustard: "#fff2c0", pesto: "#d9ecc8", aioli: "#fffaf0", redsalsa: "#ffd8cc", greensalsa: "#e2f0c8", crema: "#ffffff" };
 
 const bottleParts = (kind: SauceKind) => () => {
   const p = new Parts();
@@ -42,6 +42,9 @@ const BOTTLES: Record<SauceKind, ReturnType<typeof cached>> = {
   mustard: cached(bottleParts("mustard")),
   pesto: cached(bottleParts("pesto")),
   aioli: cached(bottleParts("aioli")),
+  redsalsa: cached(bottleParts("redsalsa")),
+  greensalsa: cached(bottleParts("greensalsa")),
+  crema: cached(bottleParts("crema")),
 };
 
 export interface SauceBottleObject extends THREE.Group {
@@ -70,17 +73,29 @@ export function makeSauceBottle(kind: SauceKind): SauceBottleObject {
   return g;
 }
 
-const caddy = cached(() => {
-  const p = new Parts();
-  p.add(rbox(BASE_W, 0.5, 1.1, 0.06), "#3a4043", { p: [0, 0.25, 0] });
-  for (const x of [-SLOT_X, SLOT_X]) {
-    p.add(tor(0.36, 0.04, 6, 24), "#8e9a98", { p: [x, 0.52, 0], r: [Math.PI / 2, 0, 0] });
-    p.add(tor(0.36, 0.035, 6, 24), "#8e9a98", { p: [x, 1.4, 0], r: [Math.PI / 2, 0, 0] });
+const slotX = (n: number, i: number) => (i - (n - 1) / 2) * 2 * SLOT_X * (n > 2 ? 0.8 : 1);
+const CADDIES = new Map<number, ReturnType<typeof cached>>();
+/** The wire caddy for n bottles (two at the grill and the press, one to three at the comal). */
+const caddy = (n: number) => {
+  let c = CADDIES.get(n);
+  if (!c) {
+    c = cached(() => {
+      const p = new Parts();
+      const w = n === 2 ? BASE_W : Math.abs(slotX(n, 0)) * 2 + 0.82 + (n === 1 ? 0.2 : 0);
+      p.add(rbox(w, 0.5, 1.1, 0.06), "#3a4043", { p: [0, 0.25, 0] });
+      for (let i = 0; i < n; i++) {
+        const x = slotX(n, i);
+        p.add(tor(0.36, 0.04, 6, 24), "#8e9a98", { p: [x, 0.52, 0], r: [Math.PI / 2, 0, 0] });
+        p.add(tor(0.36, 0.035, 6, 24), "#8e9a98", { p: [x, 1.4, 0], r: [Math.PI / 2, 0, 0] });
+      }
+      for (const x of [-w / 2 + 0.03, ...(n === 2 ? [0] : []), w / 2 - 0.03]) p.add(box(0.06, 1.0, 0.06), "#8e9a98", { p: [x, 0.95, 0] });
+      p.add(box(w - 0.04, 0.05, 0.05), "#8e9a98", { p: [0, 1.4, 0] });
+      return p;
+    });
+    CADDIES.set(n, c);
   }
-  for (const x of [-BASE_W / 2 + 0.03, 0, BASE_W / 2 - 0.03]) p.add(box(0.06, 1.0, 0.06), "#8e9a98", { p: [x, 0.95, 0] });
-  p.add(box(BASE_W - 0.04, 0.05, 0.05), "#8e9a98", { p: [0, 1.4, 0] });
-  return p;
-});
+  return c;
+};
 
 export interface SauceCaddyObject extends THREE.Group {
   userData: {
@@ -89,7 +104,7 @@ export interface SauceCaddyObject extends THREE.Group {
     spots: { bottles: Partial<Record<SauceKind, { x: number; y: number; z: number }>> };
     /** The bottles standing in the caddy; hide one while it's lifted out. */
     bottles: Partial<Record<SauceKind, SauceBottleObject>>;
-    kinds: [SauceKind, SauceKind];
+    kinds: SauceKind[];
   };
 }
 
@@ -97,13 +112,12 @@ export interface SauceCaddyObject extends THREE.Group {
  * The caddy with two bottles, one at each end (ketchup and mustard at the grill; pesto and aioli at
  * the panini press): about 1.7 x 0.73 game units, 1.53 tall.
  */
-export function makeSauceCaddy(kinds: [SauceKind, SauceKind] = ["ketchup", "mustard"]): SauceCaddyObject {
+export function makeSauceCaddy(kinds: SauceKind[] = ["ketchup", "mustard"]): SauceCaddyObject {
   const g = new THREE.Group() as SauceCaddyObject;
-  g.add(bakedMesh(caddy()));
-  const spots: Partial<Record<SauceKind, { x: number; y: number; z: number }>> = {
-    [kinds[0]]: { x: -SLOT_X * STUDY, y: SEAT_Y * STUDY, z: 0 },
-    [kinds[1]]: { x: SLOT_X * STUDY, y: SEAT_Y * STUDY, z: 0 },
-  };
+  const n = Math.max(1, kinds.length);
+  g.add(bakedMesh(caddy(n)()));
+  const spots: Partial<Record<SauceKind, { x: number; y: number; z: number }>> = {};
+  kinds.forEach((k, i) => (spots[k] = { x: slotX(n, i) * STUDY, y: SEAT_Y * STUDY, z: 0 }));
   const bottles: Partial<Record<SauceKind, SauceBottleObject>> = {};
   for (const k of kinds) {
     const b = makeSauceBottle(k);
@@ -112,7 +126,7 @@ export function makeSauceCaddy(kinds: [SauceKind, SauceKind] = ["ketchup", "must
     g.add(b);
     bottles[k] = b;
   }
-  machine(g, BASE_W, 1.1, SEAT_Y + NUB + 0.22 + BOTTLE_H, { bottles: spots });
+  machine(g, n === 2 ? BASE_W : Math.abs(slotX(n, 0)) * 2 + 0.82, 1.1, SEAT_Y + NUB + 0.22 + BOTTLE_H, { bottles: spots });
   g.userData.bottles = bottles;
   g.userData.kinds = kinds;
   return g;

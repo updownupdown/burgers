@@ -62,8 +62,8 @@ describe("panini orders", () => {
     expect(coast("harbor").menu.map((r) => r.name)).toContain("Veggie Club");
     expect(coast("saltwater").press).toEqual({ bays: 2, slice: false });
     expect(coast("harbor").press).toEqual({ bays: 3, slice: true });
-    expect(coast("saltwater").sweet).toBeFalsy();
-    expect(coast("driftwood").sweet).toBe(true);
+    expect(coast("saltwater").fryer).toBeUndefined();
+    expect(coast("driftwood").fryer).toEqual(["fries", "sweet"]);
   });
 
   it("press the bread, melt the cheese, and keep an open toast's avocado cold", () => {
@@ -110,7 +110,7 @@ describe("panini orders", () => {
       for (let i = 0; i < 300; i++) {
         const o = makeOrder(i, rng, 0.8, coast(id));
         expect(o.poutine).toBeFalsy();
-        if (o.sweet) {
+        if (o.fry === "sweet") {
           expect(o.fries).toBe(true);
           sweet++;
         }
@@ -197,9 +197,9 @@ describe("panini scoring", () => {
   it("scores sweet potato fries on their own, narrower band, and notices a mix-up", () => {
     expect(friesQuality(SWEET_PERFECT, true)).toBe(1);
     expect(friesQuality(FRIES_PERFECT + 0.12, true)).toBeLessThan(friesQuality(FRIES_PERFECT + 0.12, false));
-    const o: Order = { ...caprese, fries: true, sweet: true, friesSize: "S" };
+    const o: Order = { ...caprese, fries: true, fry: "sweet", friesSize: "S" };
     const p = perfect(o);
-    p.fries = { cook: SWEET_PERFECT, size: "S", fill: 1, salt: 0.6, sweet: true };
+    p.fries = { cook: SWEET_PERFECT, size: "S", fill: 1, salt: 0.6, fry: "sweet" };
     expect(scorePlate(o, p).score).toBe(100);
     p.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt: 0.6 };
     expect(scorePlate(o, p).notes).toContain("wanted sweet potato fries");

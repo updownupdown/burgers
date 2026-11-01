@@ -233,7 +233,7 @@ const CHICKEN = {
     const t = await start('driftwood');
     await t.ev(() => window.__bv.goToPage(2));
     await step(t.p, 1);
-    const sw = await t.hp('sweetBin');
+    const sw = await t.hp('fryBin', { fry: 'sweet' });
     const fr = await t.hp('friesBin');
     const b0 = await t.hp('basket', { idx: 0 });
     const b1 = await t.hp('basket', { idx: 1 });
@@ -244,7 +244,7 @@ const CHICKEN = {
     await step(t.p, 14);
     await t.hideHint();
     await t.p.screenshot({ path: `${out}fryer-sweet.png` });
-    console.log('baskets', JSON.stringify(await t.ev(() => window.__bv.counter.baskets.map((b) => ({ sweet: b.sweet, cook: +b.cook.toFixed(2) })))));
+    console.log('baskets', JSON.stringify(await t.ev(() => window.__bv.counter.baskets.map((b) => ({ fry: b.fry, cook: +b.cook.toFixed(2) })))));
     await t.b.close();
   }
   // 4. The Pines: the grill as it was.

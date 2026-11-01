@@ -1,4 +1,4 @@
-import type { Doneness, Kind, Piece } from "./types";
+import type { Doneness, FryKind, Kind, Piece } from "./types";
 
 
 /** Seconds of grill time per unit of cook on one face. A side goes raw to medium in about 7s; patties cook at a third of that pace. */
@@ -61,7 +61,7 @@ export interface CookScale {
   burnt: number;
   perfect: number;
 }
-export type Cookable = "patty" | "bacon" | "egg" | "bun" | "pineapple" | "fries" | "ciabatta" | "sourdough" | "chicken" | "veggie" | "sweet";
+export type Cookable = "patty" | "bacon" | "egg" | "bun" | "pineapple" | "fries" | "ciabatta" | "sourdough" | "chicken" | "veggie" | "sweet" | "corn" | "flour" | "tostada" | "chips" | "churros";
 export const COOK_SCALE: Record<Cookable, CookScale> = {
   // Under: raw and rare. Done: medium. Over: well done, then burnt.
   // Medium is generous: about 50% longer than it used to be (0.43-0.67).
@@ -79,7 +79,24 @@ export const COOK_SCALE: Record<Cookable, CookScale> = {
   veggie: { done: 0.35, over: 0.8, burnt: 1.0, perfect: 0.57 },
   // Sweet potato fries: the done band is narrower than plain fries' (and they cook faster, SWEET_FRY).
   sweet: { done: 0.5, over: 0.82, burnt: 1.12, perfect: 0.66 },
+  // Red Rock's comal: a tortilla goes pale and stiff, soft and spotted (done), then hard. A folded
+  // quesadilla reads the same scale on the average of its two sides.
+  corn: { done: 0.35, over: 0.8, burnt: 1.02, perfect: 0.56 },
+  flour: { done: 0.35, over: 0.8, burnt: 1.02, perfect: 0.56 },
+  // A tostada shell in the fryer: pale, crisp and golden, then dark.
+  tostada: { done: 0.5, over: 0.9, burnt: 1.2, perfect: 0.7 },
+  // Chips fry fast with a narrower band; churros are like fries.
+  chips: { done: 0.5, over: 0.85, burnt: 1.15, perfect: 0.675 },
+  churros: { done: 0.5, over: 0.9, burnt: 1.25, perfect: 0.7 },
 };
+
+/**
+ * Red Rock's comal. Tortillas warm on the face down against GRILL_RATE: about 6 s to soft and
+ * spotted on the hot side, hard from about 13 s. A quesadilla's cheese melts while the tortilla is
+ * on the hot side, faster once it's folded over (about 7 s folded); the warm side holds it.
+ */
+export const COMAL_SPEED: Partial<Record<Kind, number>> = { corn: 0.75, flour: 0.75 };
+export const QUESO_MELT = { open: 0.04, folded: 0.075, warm: 0.015 };
 
 /**
  * The panini press cooks both faces at once, so a piece's two faces stay equal; its cook level is
@@ -113,6 +130,10 @@ export function cookLevel(p: Piece): number {
       return avgCook(p);
     case "egg":
       return p.cook[0] + p.cook[1];
+    case "corn":
+    case "flour":
+      // A taco tortilla warms on whichever face went down; a folded quesadilla is the average of its sides.
+      return p.folded ? avgCook(p) : Math.max(p.cook[0], p.cook[1]);
     default:
       return Math.max(p.cook[0], p.cook[1]);
   }
@@ -143,10 +164,23 @@ export const FRIES_PERFECT = (FRIES_ZONE.done + FRIES_ZONE.over) / 2;
 /** Sweet potato fries: a narrower done band (COOK_SCALE.sweet). */
 export const SWEET_ZONE = { done: COOK_SCALE.sweet.done, over: COOK_SCALE.sweet.over, burnt: COOK_SCALE.sweet.burnt };
 export const SWEET_PERFECT = (SWEET_ZONE.done + SWEET_ZONE.over) / 2;
-const zoneOf = (sweet: boolean) => (sweet ? SWEET_ZONE : FRIES_ZONE);
+/** Each fry kind's zones: fries, sweet potato fries, chips and churros. */
+export const FRY_ZONE: Record<FryKind, { done: number; over: number; burnt: number }> = {
+  fries: FRIES_ZONE,
+  sweet: SWEET_ZONE,
+  chips: { done: COOK_SCALE.chips.done, over: COOK_SCALE.chips.over, burnt: COOK_SCALE.chips.burnt },
+  churros: { done: COOK_SCALE.churros.done, over: COOK_SCALE.churros.over, burnt: COOK_SCALE.churros.burnt },
+};
+export const fryPerfect = (fry: FryKind): number => (FRY_ZONE[fry].done + FRY_ZONE[fry].over) / 2;
+/**
+ * How fast each kind fries against plain fries: sweet potato fries 1.3x; chips (tortilla wedges)
+ * golden in about 8 s; churros a little quicker than fries. A tostada shell crisps in about 10 s.
+ */
+export const FRY_SPEED: Record<FryKind | "tostada", number> = { fries: 1, sweet: 1.3, chips: 2.5, churros: 1.4, tostada: 2 };
+const zoneOf = (fry: FryKind | boolean) => FRY_ZONE[fry === true ? "sweet" : fry === false ? "fries" : fry];
 
-export function friesZone(t: number, sweet = false): "under" | "done" | "over" {
-  const z = zoneOf(sweet);
+export function friesZone(t: number, fry: FryKind | boolean = "fries"): "under" | "done" | "over" {
+  const z = zoneOf(fry);
   return t < z.done ? "under" : t < z.over ? "done" : "over";
 }
 
@@ -155,8 +189,8 @@ export function friesZone(t: number, sweet = false): "under" | "done" | "over" {
  * in the done zone is good and dead centre is best; underdone gets better towards done, and
  * overdone gets worse the longer they stay in.
  */
-export function friesQuality(t: number, sweet = false): number {
-  const { done, over, burnt } = zoneOf(sweet);
+export function friesQuality(t: number, fry: FryKind | boolean = "fries"): number {
+  const { done, over, burnt } = zoneOf(fry);
   const perfect = (done + over) / 2;
   if (t < done) return 0.15 + 0.4 * Math.max(0, t / done);
   if (t < over) return 1 - (0.25 * Math.abs(t - perfect)) / (perfect - done);

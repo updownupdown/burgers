@@ -1,23 +1,24 @@
 import * as THREE from "three";
 import { buzz, Sfx } from "./audio";
-import { cookLevel, COOK_SCALE, DRINK_FILL, friesZone, FRIES_ZONE, isMelted, SALT, SWEET_ZONE, type Cookable } from "./game/cooking";
+import { cookLevel, COOK_SCALE, cookZone, DRINK_FILL, friesZone, FRY_ZONE, isMelted, SALT, type Cookable } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { expectedCustomers, sleep } from "./game/day";
 import { greatShift, townBonus, type BonusId } from "./game/bonus";
 import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, validShift, type ShiftWindow } from "./game/shift";
 import { freshSave, loadSave, passed, passTown, writeSave, type Closing } from "./game/progress";
-import { eventOn, fountainFor, middleOf, townById, withEvent, type TownEvent } from "./game/stops";
+import { eventOn, fountainFor, fryerOf, middleOf, townById, withEvent, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
 import { joinChance, lineDrain, linePatience, WINDOW, wordOfMouth } from "./game/line";
 import { HOLD_GRACE, HOLD_RUIN, payout, SAUCE_BAND, sauceCoverage, sauceVerdict, scorePlate, type SauceWord } from "./game/scoring";
 import { CROWD, menuFor, nextReputation, reviewFor, type Review } from "./game/business";
 import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "./game/menu";
-import type { DrinkId, FriesSize, Layer, Order, Piece, Plate, SauceKind, Size } from "./game/types";
-import { BREADS, COUNTED, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, GRILLABLE, KIND_LABEL, newPiece, PROTEINS, SIZE_LABEL } from "./game/types";
+import type { DrinkId, FriesSize, FryKind, Layer, Order, Piece, Plate, SauceKind, Size } from "./game/types";
+import { BREADS, COMAL_FILL, COUNTED, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, FRY_LABEL, fryOf, GRILLABLE, isSauce, KIND_LABEL, newPiece, PROTEINS, SCOOPED, SIZE_LABEL, TORTILLAS } from "./game/types";
 import { SCALE } from "./render/units";
 import { dressCup } from "./render/cup";
 import { makeCarton, makeCup, makeFood, makeFries, sliceSpot, stackBases } from "./render/food";
+import { TORTILLA_R } from "./render/tacos";
 import { disposeObject } from "./render/materials";
 import { CounterView, CUP_IN_HAND, EMPTY_PACK, STOPS, GRILL_SCALE, GRILLE_ZONE, FLAT_ZONE, HOME_PAGE, PAGES, GRILL_TOP, ZONE_START, type GrillItem, type Hit } from "./scenes/counter";
 import { PLATE } from "./render/machines/press";
@@ -436,7 +437,9 @@ function serve(i: number): void {
   // The meal deal sign: a main (whatever the middle counter makes: anything built in layers) with
   // a side and a drink tips half again.
   const meal = has("combo") && s.order.layers.length > 0 && !!s.order.fries && !!s.order.drink;
-  const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1) * (meal ? 1.5 : 1) * CROWD[stop().crowd].tips);
+  // Hand-pressed tortillas (Sun Valley's press) earn a couple of dollars on top.
+  const handmade = r.perks.includes("hand-pressed tortillas") ? 2 : 0;
+  const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1) * (meal ? 1.5 : 1) * CROWD[stop().crowd].tips) + handmade;
   game.money += pay;
   game.tips += tip;
   game.served++;
@@ -644,11 +647,11 @@ function tutorialHint(): string | null {
 // Input
 
 type Payload =
-  | { type: "piece"; piece: Piece; fromGrill: { x: number; z: number } | null; fromPlate?: number }
+  | { type: "piece"; piece: Piece; fromGrill: { x: number; z: number } | null; fromPlate?: number; fromBasket?: number }
   | { type: "stack"; layers: Layer[]; grill?: { x: number; z: number }; fromPlate?: number; bay?: number; board?: boolean }
-  | { type: "fries"; cook: number; basket: number | null; amount: number; sweet?: boolean }
-  | { type: "carton"; size: FriesSize; cook: number; fill: number; pack: number; salt: number; curds: boolean; gravy: boolean; sweet?: boolean; fromPlate?: number }
-  | { type: "salt" }
+  | { type: "fries"; cook: number; basket: number | null; amount: number; fry?: FryKind }
+  | { type: "carton"; size: FriesSize; cook: number; fill: number; pack: number; salt: number; curds: boolean; gravy: boolean; fry?: FryKind; fromPlate?: number }
+  | { type: "salt"; sugar?: boolean }
   | { type: "curds" }
   | { type: "gravy" }
   | { type: "drink"; flavor: DrinkId | null; fill: number; size: Size; ice: boolean; lid: boolean; from: { x: number; z: number } | null; fromPlate?: number }
@@ -672,7 +675,9 @@ interface Pointer {
   x: number;
   y: number;
   band: ReturnType<typeof bandAt>;
-  mode: "none" | "swipe" | "held" | "grill" | "basket" | "pour" | "sauce" | "plate" | "wipe" | "rub" | "egg" | "bay" | "handle" | "board";
+  mode: "none" | "swipe" | "held" | "grill" | "basket" | "pour" | "sauce" | "plate" | "wipe" | "rub" | "egg" | "bay" | "handle" | "board" | "tpress";
+  /** A press on the edge of a tortilla on the comal (page-local grill point): dragging it across the middle folds it. */
+  foldFrom?: { x: number; z: number };
   /** The press started on the trash chute with nothing in hand (a swipe there changes counter). */
   chute?: boolean;
   /** That swipe has already changed counter. */
@@ -716,12 +721,12 @@ function payloadVisual(p: Payload): THREE.Object3D {
   }
   if (p.type === "fries") {
     // Straight from the freezer or the basket: loose fries, no carton yet.
-    const f = makeFries(false, "L", p.amount, { sweet: p.sweet });
+    const f = makeFries(false, "L", p.amount, { fry: p.fry });
     f.userData.setCook(p.cook);
     f.scale.setScalar(SCALE.fries);
     return f;
   }
-  if (p.type === "salt" || p.type === "curds" || p.type === "gravy") return counter.fryTopMesh(p.type);
+  if (p.type === "salt" || p.type === "curds" || p.type === "gravy") return counter.fryTopMesh(p.type === "salt" && p.sugar ? "sugar" : p.type);
   if (p.type === "carton") {
     const f = makeFries(true, p.size, p.fill, p);
     f.userData.setCook(p.cook);
@@ -862,7 +867,7 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
       return false;
     }
     const { cook, size, fill, salt, curds, gravy } = payload;
-    s.plate.fries = { cook, size, fill, salt, curds, gravy, ...(payload.sweet ? { sweet: true } : {}) };
+    s.plate.fries = { cook, size, fill, salt, curds, gravy, ...(payload.fry && payload.fry !== "fries" ? { fry: payload.fry } : {}) };
   } else {
     if (s.plate.drink) {
       showHint("This tray already has a drink.", 2);
@@ -894,17 +899,18 @@ function finishHold(pt: Pointer): void {
   let done = false;
   if (payload.type === "salt") {
     // Salt goes on by shaking; letting go just puts the shaker back.
-    counter.shakerObj.visible = true;
-    if (!shaker.shakes && shaker.target) showHint("Shake it over the fries to salt them.", 2);
+    (payload.sugar ? counter.sugarShaker : counter.shakerObj).visible = true;
+    if (!shaker.shakes && shaker.target) showHint(payload.sugar ? "Shake it over the churros to sugar them." : "Shake it over the fries to salt them.", 2);
     shaker.target = null;
     return;
   }
 
-  if (payload.type === "piece" && payload.piece.kind === "tuna" && payload.fromPlate === undefined && !payload.fromGrill && !pt.moved && dur < 450) {
-    // The tuna well: a tap is one scoop onto the tray in front.
+  if (payload.type === "piece" && SCOOPED.has(payload.piece.kind) && payload.fromPlate === undefined && !payload.fromGrill && !pt.moved && dur < 450) {
+    // The tuna well, and the pork and bean wells: a tap is one scoop onto the tray in front.
     addToPlate(game.active, payload, 0.04);
     sfx.plop();
-    hintOnce("tuna", "Each tap is one scoop of tuna onto the tray. A Tuna Melt takes two.", 3);
+    if (payload.piece.kind === "tuna") hintOnce("tuna", "Each tap is one scoop of tuna onto the tray. A Tuna Melt takes two.", 3);
+    else hintOnce("scoop", "Each tap is one scoop onto the tray: one per taco. Or drag a scoop onto a tortilla on the comal.", 3.5);
     return;
   }
 
@@ -932,7 +938,13 @@ function finishHold(pt: Pointer): void {
       const over = counter.overGrill(gTop);
       const [base, top] = payload.layers.map((l) => l.piece);
       const fits = payload.layers.length === 1 || (payload.layers.length === 2 && base.kind === "patty" && top.kind === "cheese");
-      if (over && fits && GRILLABLE.has(base.kind) && grillSpotOk(base, over)) {
+      const filled = counter.middle === "comal" && TORTILLAS.has(base.kind) && payload.layers.slice(1).every((l) => COMAL_FILL.has(l.piece.kind)) && !counter.grillItemAt(gTop);
+      if (over && filled) {
+        // A filled tortilla (or a quesadilla) back on the comal, filling and all.
+        counter.addGrillItem(onTortilla(payload.layers), over.x, over.z);
+        sfx.sizzleHit();
+        done = true;
+      } else if (over && fits && GRILLABLE.has(base.kind) && grillSpotOk(base, over)) {
         counter.addGrillItem(base, over.x, over.z, top);
         sfx.sizzleHit();
         zoneHint(over.x);
@@ -941,7 +953,33 @@ function finishHold(pt: Pointer): void {
     } else if (payload.type === "piece") {
       const over = counter.overGrill(gTop);
       const under = over ? counter.grillItemAt(gTop) : null;
-      if (under && payload.piece.kind === "cheese" && counter.addTopping(under, payload.piece)) {
+      const comal = counter.middle === "comal";
+      const fryHit = counter.page === 2 ? counter.hit(ndcIn(bands.counter, pt.x, pt.y)) : null;
+      if (fryHit?.type === "basket" && (payload.piece.kind === "corn" || payload.piece.kind === "tostada")) {
+        // A corn tortilla in an empty basket fries into a tostada shell (Red Rock).
+        const b = counter.baskets[fryHit.idx];
+        if (b.loaded) showHint("Use an empty basket for the tostada.", 2);
+        else {
+          const shell = payload.piece.kind === "tostada" ? payload.piece : newPiece("tostada");
+          counter.setBasketShell(fryHit.idx, shell);
+          Object.assign(b, { loaded: true, down: false, goldenRung: false, cook: 0, amount: 0 });
+          sfx.plop();
+          hintOnce("tostada", "Tap the basket to lower it. The tostada is crisp and golden in about 10 seconds.", 3.5);
+          done = true;
+        }
+      } else if (comal && under && TORTILLAS.has(under.piece.kind) && (COMAL_FILL.has(payload.piece.kind) || isSauce(payload.piece.kind))) {
+        // Fillings go on a tortilla on the comal: cheese for a quesadilla, or a taco built in place.
+        if (under.piece.folded) showHint("It's folded already. Fill it before you fold it.", 2);
+        else if (isSauce(payload.piece.kind)) showHint("Sauce goes on at the tray.", 1.5);
+        else if ((under.piece.fill?.length ?? 0) >= 4) showHint("That's plenty on one tortilla.", 1.5);
+        else {
+          (under.piece.fill ??= []).push(payload.piece);
+          sfx.plop();
+          if (payload.piece.kind === "jack") hintOnce("quesa-fold", "Now fold it: drag the tortilla's edge across its middle. Then flip it once.", 4);
+          else hintOnce("taco-fill", "Drag it up by its middle to take it to the tray. Dragging its edge across the middle folds it.", 4);
+          done = true;
+        }
+      } else if (under && payload.piece.kind === "cheese" && counter.addTopping(under, payload.piece)) {
         sfx.plop();
         hintOnce("melt", "The cheese melts on the hot patty. Drag them up together when it slumps.", 3.5);
         done = true;
@@ -966,16 +1004,17 @@ function finishHold(pt: Pointer): void {
         done = addToPlate(game.active, payload, has("steady") ? 0.08 : 0.22);
         sfx.whoosh();
       } else if (over && !GRILLABLE.has(payload.piece.kind)) {
-        showHint(`${capitalise(payload.piece.kind)} doesn't go on the grill. Drag it up to the tray.`, 2.5);
+        showHint(comal && COMAL_FILL.has(payload.piece.kind) ? `Drop the ${KIND_LABEL[payload.piece.kind].toLowerCase()} on a tortilla, or drag it up to the tray.` : `${KIND_LABEL[payload.piece.kind]} doesn't go on the ${comal ? "comal" : "grill"}. Drag it up to the tray.`, 2.5);
       }
     } else if (payload.type === "fries" && payload.basket === null) {
       const hit = counter.hit(ndcIn(bands.counter, pt.x, pt.y));
       if (hit?.type === "basket") {
         const b = counter.baskets[hit.idx];
         if (b.loaded && b.amount > 1 - FRIES_SCOOP / 2) showHint("That basket is full.", 1.5);
-        else if (b.loaded && b.sweet !== !!payload.sweet) showHint("Keep sweet potato fries and plain fries in separate baskets.", 2.5);
+        else if (b.shell) showHint("There's a tostada frying in that basket.", 2);
+        else if (b.loaded && b.fry !== (payload.fry ?? "fries")) showHint(`Keep ${FRY_LABEL[b.fry].toLowerCase()} and ${FRY_LABEL[payload.fry ?? "fries"].toLowerCase()} in separate baskets.`, 2.5);
         else {
-          b.sweet = !!payload.sweet;
+          b.fry = payload.fry ?? "fries";
           // Each scoop is one small carton's worth; raw fries added later pull the batch's cook back.
           const had = b.loaded ? b.amount : 0;
           b.cook = had ? (b.cook * had) / (had + payload.amount) : 0;
@@ -1000,7 +1039,12 @@ function finishHold(pt: Pointer): void {
     }
     if (payload.type === "stack" && payload.grill) {
       const [base, top] = payload.layers.map((l) => l.piece);
-      counter.addGrillItem(base, payload.grill.x, payload.grill.z, top);
+      if (TORTILLAS.has(base.kind)) counter.addGrillItem(onTortilla(payload.layers), payload.grill.x, payload.grill.z);
+      else counter.addGrillItem(base, payload.grill.x, payload.grill.z, top);
+    }
+    if (payload.type === "piece" && payload.fromBasket !== undefined) {
+      counter.setBasketShell(payload.fromBasket, payload.piece);
+      Object.assign(counter.baskets[payload.fromBasket], { loaded: true, down: false });
     }
     if (payload.type === "stack" && payload.fromPlate !== undefined) {
       game.slots[payload.fromPlate].plate.layers.push(...payload.layers);
@@ -1010,7 +1054,7 @@ function finishHold(pt: Pointer): void {
     if (payload.type === "stack" && payload.board) counter.setBoard(payload.layers);
     if (payload.type === "fries" && payload.basket !== null) {
       const b = counter.baskets[payload.basket];
-      Object.assign(b, { loaded: true, cook: payload.cook, amount: payload.amount, sweet: !!payload.sweet });
+      Object.assign(b, { loaded: true, cook: payload.cook, amount: payload.amount, fry: payload.fry ?? "fries" });
     }
     if (payload.type === "drink") {
       const { flavor, fill, size, ice, lid, from, fromPlate } = payload;
@@ -1022,12 +1066,12 @@ function finishHold(pt: Pointer): void {
     }
     if (payload.type === "carton") {
       const { size, cook, fill, salt, curds, gravy, fromPlate } = payload;
-      const sweet = !!payload.sweet;
+      const fry = payload.fry ?? "fries";
       if (fromPlate !== undefined) {
-        game.slots[fromPlate].plate.fries = { size, cook, fill, salt, curds, gravy, ...(sweet ? { sweet } : {}) };
+        game.slots[fromPlate].plate.fries = { size, cook, fill, salt, curds, gravy, ...(fry !== "fries" ? { fry } : {}) };
         syncTray(fromPlate, false);
       } else {
-        Object.assign(counter.packs[payload.pack], { size, cook, fill, salt, curds, gravy, sweet });
+        Object.assign(counter.packs[payload.pack], { size, cook, fill, salt, curds, gravy, fry });
         counter.syncPack(payload.pack);
       }
     }
@@ -1121,13 +1165,14 @@ function releaseEgg(pt: Pointer, dt: number, cancelled: boolean): void {
     return;
   }
   const zone = counter.zoneAt(over.x);
-  if (zone !== FLAT_ZONE && zone !== GRILLE_ZONE) {
-    showHint("Crack eggs on the flat middle of the grill.", 2);
+  const comal = counter.middle === "comal";
+  if (comal ? counter.zones[zone] !== "hot" : zone !== FLAT_ZONE && zone !== GRILLE_ZONE) {
+    showHint(comal ? "Crack eggs on the hot side of the comal." : "Crack eggs on the flat middle of the grill.", 2);
     return;
   }
   e.knock = 1;
   buzz(12);
-  if (zone === GRILLE_ZONE) {
+  if (zone === GRILLE_ZONE && !comal) {
     // Through the grille: a mess that has to be rubbed off.
     counter.addMess(over.x, over.z);
     setEggStage("shells");
@@ -1170,7 +1215,7 @@ function grillSpotOk(piece: Piece, at: { x: number; z: number }): boolean {
     showHint("Rub the egg off the grille first.", 2);
     return false;
   }
-  if (piece.kind === "egg" && counter.zoneAt(at.x) === GRILLE_ZONE) {
+  if (piece.kind === "egg" && counter.middle === "grill" && counter.zoneAt(at.x) === GRILLE_ZONE) {
     showHint("Eggs fall through the grille. Keep them on the flat middle.", 2.2);
     return false;
   }
@@ -1183,10 +1228,28 @@ function backOnGrill(piece: Piece, at: { x: number; z: number }): void {
   counter.addGrillItem(piece, at.x, at.z, undefined, under && counter.canStack(under, piece) && Math.hypot(under.x - at.x, under.z - at.z) < 0.1 ? under : null);
 }
 
+/** A tortilla and what's on it, as one comal item (the fillings ride along in piece.fill). */
+function onTortilla(layers: Layer[]): Piece {
+  const [base, ...rest] = layers.map((l) => l.piece);
+  base.fill = rest.length ? rest : undefined;
+  return base;
+}
+/** A tortilla off the comal as a stack: the tortilla, then what was on it. */
+function offTortilla(piece: Piece): Layer[] {
+  const fill = piece.fill ?? [];
+  piece.fill = undefined;
+  return [piece, ...fill].map((p) => ({ piece: p, offX: 0, offZ: 0 }));
+}
+
 /** Something just went down on a grill zone that's off or only warm: say so, once each. */
 function zoneHint(x: number): void {
   const zone = counter.zoneAt(x);
   const heat = counter.zones[zone];
+  if (counter.middle === "comal") {
+    if (heat === "warm") hintOnce("comal-warm", "The right end of the comal only keeps things warm. Cook on the hot side, then park them here.", 3.5);
+    else hintOnce("comal-hot", "Tortillas warm in about 6 seconds: soft, with brown spots. Don't leave them till they go hard.", 4);
+    return;
+  }
   if (heat === "off") showHint("That part of the grill is off. Tap its button on the front to heat it.", 2.5);
   else if (heat === "warm") hintOnce("zone-warm", "Warm holds food without cooking it, and nothing goes stale there. Park finished food here.", 3.5);
   else if (zone === GRILLE_ZONE) hintOnce("grille", "The grille sears grill marks into patties: customers love them.", 3.5);
@@ -1195,12 +1258,12 @@ function zoneHint(x: number): void {
 /** Curds or gravy onto fries in a carton (on a pad or a plate). False if it's already on. */
 function topFries(f: { curds?: boolean; gravy?: boolean }, what: "curds" | "gravy"): boolean {
   if (f[what]) {
-    showHint(what === "curds" ? "It's got curds." : "It's got gravy.", 1.2);
+    showHint(what === "curds" ? (counter.redRock ? "It's got jalapeños." : "It's got curds.") : counter.redRock ? "It's got queso." : "It's got gravy.", 1.2);
     return false;
   }
   f[what] = true;
   sfx.plop();
-  if (what === "gravy" && !f.curds) hintOnce("curds-first", "Curds go under the gravy so they soften just right.", 3);
+  if (what === "gravy" && !f.curds) hintOnce("curds-first", counter.redRock ? "Jalapeños go on before the queso." : "Curds go under the gravy so they soften just right.", 3);
   return true;
 }
 
@@ -1248,7 +1311,12 @@ function shakeSalt(pt: Pointer, dx: number, dy: number): void {
     hintOnce("salt-where", "Shake it over fries in a carton, on the pad or on the plate.", 2.5);
     return;
   }
-  const f = shaker.target.f;
+  const f = shaker.target.f as { salt?: number; fry?: FryKind };
+  const sugar = ptr?.held?.payload.type === "salt" && !!ptr.held.payload.sugar;
+  if (sugar !== (fryOf(f) === "churros")) {
+    showHint(sugar ? "Sugar goes on churros." : "Churros get sugar, not salt: use the sugar shaker.", 2);
+    return;
+  }
   const before = f.salt ?? 0;
   if (before >= SALT.max) return void showHint("That's plenty of salt!", 1.2);
   f.salt = Math.min(SALT.max, before + SALT.shake);
@@ -1326,11 +1394,12 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
       showHint("Put a carton there first.", 1.5);
       return false;
     }
-    if (p.fill > 0 && p.sweet !== !!payload.sweet) {
-      showHint(p.sweet ? "That carton has sweet potato fries in it." : "That carton has plain fries in it.", 2);
+    const fry = payload.fry ?? "fries";
+    if (p.fill > 0 && p.fry !== fry) {
+      showHint(`That carton has ${FRY_LABEL[p.fry].toLowerCase()} in it.`, 2);
       return false;
     }
-    p.sweet = !!payload.sweet;
+    p.fry = fry;
     const portion = FRIES_PORTION[p.size as FriesSize];
     const room = (1 - p.fill) * portion;
     if (room < 0.01) {
@@ -1344,7 +1413,7 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
     sfx.plop();
     // Whatever didn't fit stays in the basket for the next carton.
     const left = payload.amount - moved;
-    if (left > 0.02) Object.assign(counter.baskets[payload.basket], { loaded: true, cook: payload.cook, amount: left, down: false, sweet: !!payload.sweet });
+    if (left > 0.02) Object.assign(counter.baskets[payload.basket], { loaded: true, cook: payload.cook, amount: left, down: false, fry });
     if (p.fill < 0.95) hintOnce("skimpy", "Not quite full. Top it up with another batch, or customers call it skimpy.", 3);
     return true;
   }
@@ -1430,9 +1499,12 @@ function paintSauce(pt: Pointer): void {
   const s = sauceDrag!;
   const slot = s.slot;
   const pv = trayView.plates[slot];
-  const raw = pv.drawPoint(sauceZoom.ray(pt.x, pt.y - NOZZLE_UP), Infinity);
+  const raw0 = pv.drawPoint(sauceZoom.ray(pt.x, pt.y - NOZZLE_UP), Infinity);
   trayView.showGhost(slot, s.bottle);
-  trayView.ghostOver(raw);
+  trayView.ghostOver(raw0);
+  // Tacos and quesadillas aren't round: sauce is painted over the dish's own extent.
+  const ext = pv.dishExtent();
+  const raw = ext ? { x: raw0.x / ext.rx, z: raw0.z / ext.rz } : raw0;
   const r = Math.hypot(raw.x, raw.z);
   if (r > 1.12) return;
   const q = r > 1 ? { x: raw.x / r, z: raw.z / r } : raw;
@@ -1487,7 +1559,7 @@ ui.root.appendChild(sauceUi);
 const sauceScore = sauceUi.querySelector(".sauce-score") as HTMLElement;
 /** The level bar's full height, as coverage. */
 const METER_TOP = 0.8;
-const SAUCE_TINT: Record<SauceKind, string> = { ketchup: "#d8261b", mustard: "#e9b80f", pesto: "#5f9a3a", aioli: "#f1e6c2" };
+const SAUCE_TINT: Record<SauceKind, string> = { ketchup: "#d8261b", mustard: "#e9b80f", pesto: "#5f9a3a", aioli: "#f1e6c2", redsalsa: "#c8321f", greensalsa: "#6c9e2c", crema: "#f4efe2" };
 /**
  * The sauce on the zoomed burger, for the shared level bar down the left (the same bar the drink
  * pour and the salt shaker use), or null when the close-up is closed.
@@ -1587,7 +1659,21 @@ canvas.addEventListener("pointerdown", (e) => {
     } else if (hit.type === "bin") {
       startHold(pt, { type: "piece", piece: newPiece(hit.kind), fromGrill: null });
     }
-    else if (hit.type === "grillItem") pt.mode = "grill";
+    else if (hit.type === "grillItem") {
+      pt.mode = "grill";
+      // On the edge of a filled tortilla, a drag across the middle folds it.
+      const it = hit.item;
+      if (counter.middle === "comal" && TORTILLAS.has(it.piece.kind) && !it.piece.folded && it.piece.fill?.length && it.flipT < 0) {
+        const g = counter.groundPoint(ndcIn(bands.counter, x, y), GRILL_TOP);
+        const at = { x: g.x - counter.world(HOME_PAGE, 0, 0, 0).x, z: g.z };
+        const R = TORTILLA_R[it.piece.kind as "corn" | "flour"] * GRILL_SCALE;
+        if (Math.hypot(at.x - it.x, at.z - it.z) > R * 0.3) pt.foldFrom = at;
+      }
+    }
+    else if (hit.type === "tpress") {
+      pt.mode = "tpress";
+      sfx.pop();
+    }
     else if (hit.type === "mess") {
       pt.mode = "rub";
       pt.wipe = hit.idx;
@@ -1602,9 +1688,11 @@ canvas.addEventListener("pointerdown", (e) => {
     }
     else if (hit.type === "bottle") startSauce(pt, hit.sauce);
     else if (hit.type === "friesBin") startHold(pt, { type: "fries", cook: 0, basket: null, amount: FRIES_SCOOP });
-    else if (hit.type === "sweetBin") {
-      startHold(pt, { type: "fries", cook: 0, basket: null, amount: FRIES_SCOOP, sweet: true });
-      hintOnce("sweet", "Sweet potato fries cook faster than plain ones, and their golden window is shorter.", 3.5);
+    else if (hit.type === "fryBin") {
+      startHold(pt, { type: "fries", cook: 0, basket: null, amount: FRIES_SCOOP, fry: hit.fry });
+      if (hit.fry === "sweet") hintOnce("sweet", "Sweet potato fries cook faster than plain ones, and their golden window is shorter.", 3.5);
+      else if (hit.fry === "chips") hintOnce("chips", "Tortilla wedges fry into chips in about 8 seconds: drop a scoop in a basket and lower it.", 3.5);
+      else hintOnce("churros", "Churros fry like fries. Shake sugar on them once they're in the carton.", 3.5);
     }
     else if (hit.type === "bay") pt.mode = "bay";
     else if (hit.type === "handle") pt.mode = "handle";
@@ -1617,19 +1705,35 @@ canvas.addEventListener("pointerdown", (e) => {
     else if (hit.type === "pack") {
       const p = counter.packs[hit.idx];
       if (p.size && p.fill > 0) {
-        startHold(pt, { type: "carton", size: p.size, cook: p.cook, fill: p.fill, pack: hit.idx, salt: p.salt, curds: p.curds, gravy: p.gravy, sweet: p.sweet });
+        startHold(pt, { type: "carton", size: p.size, cook: p.cook, fill: p.fill, pack: hit.idx, salt: p.salt, curds: p.curds, gravy: p.gravy, fry: p.fry });
         Object.assign(p, EMPTY_PACK);
         counter.syncPack(hit.idx);
       } else showHint(p.size ? "Drag fries from the basket into the carton." : "Grab a carton from the stacks, front left.", 2);
     }
     else if (hit.type === "basket") pt.mode = "basket";
     else if (hit.type === "shaker" || hit.type === "curds" || hit.type === "gravy") {
-      startHold(pt, { type: hit.type === "shaker" ? "salt" : hit.type });
+      const sugar = hit.type === "shaker" && !!hit.sugar;
+      startHold(pt, hit.type === "shaker" ? { type: "salt", sugar } : { type: hit.type });
       if (hit.type === "shaker") {
-        counter.shakerObj.visible = false;
+        (sugar ? counter.sugarShaker : counter.shakerObj).visible = false;
         Object.assign(shaker, { shakes: 0, target: null, dirX: 0, dirY: 0, runX: 0, runY: 0 });
       }
-      hintOnce(`fry-${hit.type}`, hit.type === "shaker" ? "Hold the shaker over fries and shake it. Watch the bar on the left: stop at the line." : hit.type === "curds" ? "Poutine: fries, then cheese curds, then gravy on top." : "Ladle gravy over the curds to finish a poutine.", 3);
+      const red = counter.redRock;
+      hintOnce(
+        `fry-${hit.type}${sugar ? "-sugar" : ""}${red ? "-red" : ""}`,
+        hit.type === "shaker"
+          ? sugar
+            ? "Shake sugar over churros in their carton. Watch the bar on the left: stop at the line."
+            : `Hold the shaker over ${red ? "chips" : "fries"} and shake it. Watch the bar on the left: stop at the line.`
+          : hit.type === "curds"
+            ? red
+              ? "Nachos: chips, then jalapeños, then queso on top."
+              : "Poutine: fries, then cheese curds, then gravy on top."
+            : red
+              ? "Ladle queso over the jalapeños to finish the nachos."
+              : "Ladle gravy over the curds to finish a poutine.",
+        3,
+      );
     }
     else if (hit.type === "tap") {
       const t = counter.taps[hit.idx];
@@ -1717,6 +1821,7 @@ canvas.addEventListener("pointermove", (e) => {
       }
       break;
     case "grill":
+      if (pt.foldFrom && pt.hit?.type === "grillItem" && foldMove(pt, pt.hit.item)) break;
       // Turn into a drag once the finger travels sideways or down, reaches the tray, or lingers.
       // A quick upward flick that stays on the counter is a flip, decided on release.
       if (pt.moved && pt.hit?.type === "grillItem" && (now - pt.t0 > 400 || Math.abs(dx) > Math.abs(dy) || dy > 0 || bandAt(pt.y) !== "counter")) {
@@ -1724,9 +1829,11 @@ canvas.addEventListener("pointermove", (e) => {
         if (item.flipT < 0) {
           counter.removeGrillItem(item);
           const at = { x: item.x, z: item.z };
-          // A cheesed patty comes off the grill as a little stack.
+          // A cheesed patty comes off the grill as a little stack, and a filled tortilla with its filling.
           if (item.topping) startHold(pt, { type: "stack", layers: [item.piece, item.topping.piece].map((piece) => ({ piece, offX: 0, offZ: 0 })), grill: at });
-          else startHold(pt, { type: "piece", piece: item.piece, fromGrill: at });
+          else if (item.piece.fill?.length) {
+            startHold(pt, { type: "stack", layers: offTortilla(item.piece), grill: at });
+          } else startHold(pt, { type: "piece", piece: item.piece, fromGrill: at });
         }
       }
       break;
@@ -1736,7 +1843,10 @@ canvas.addEventListener("pointermove", (e) => {
       const s = pt.plate >= 0 ? game.slots[pt.plate] : null;
       if (!s || bandAt(pt.y) !== "counter") break;
       const ls = s.plate.layers;
-      if (ls.length && counter.middle === "press" && BREADS.has(ls[0].piece.kind) && BREADS.has(ls[ls.length - 1].piece.kind)) {
+      if (ls.length && ls[0].piece.folded) {
+        // A quesadilla comes off whole, to go back on the comal or another tray.
+        startHold(pt, { type: "stack", layers: ls.splice(0), fromPlate: pt.plate });
+      } else if (ls.length && counter.middle === "press" && BREADS.has(ls[0].piece.kind) && BREADS.has(ls[ls.length - 1].piece.kind)) {
         // A sandwich with its lid on comes off whole, to go in the press or on the board.
         startHold(pt, { type: "stack", layers: ls.splice(0), fromPlate: pt.plate });
         if (ls.length === 0 && pt.held && (pt.held.payload as { layers: Layer[] }).layers.length > 1) hintOnce("panini-lift", "Drop the sandwich in an open bay and pull the handle down to press it.", 3.5);
@@ -1751,7 +1861,7 @@ canvas.addEventListener("pointermove", (e) => {
       } else if (s.plate.fries) {
         const f = s.plate.fries;
         s.plate.fries = null;
-        startHold(pt, { type: "carton", size: f.size, cook: f.cook, fill: f.fill, pack: -1, salt: f.salt ?? 0, curds: !!f.curds, gravy: !!f.gravy, sweet: !!f.sweet, fromPlate: pt.plate });
+        startHold(pt, { type: "carton", size: f.size, cook: f.cook, fill: f.fill, pack: -1, salt: f.salt ?? 0, curds: !!f.curds, gravy: !!f.gravy, fry: fryOf(f), fromPlate: pt.plate });
       } else break;
       syncTray(pt.plate, false);
       break;
@@ -1759,10 +1869,17 @@ canvas.addEventListener("pointermove", (e) => {
     case "basket":
       if (pt.moved && pt.hit?.type === "basket" && (now - pt.t0 > 400 || dy > 0 || Math.abs(dx) > Math.abs(dy) || bandAt(pt.y) !== "counter")) {
         const b = counter.baskets[pt.hit.idx];
-        if (b.loaded) {
+        if (b.shell) {
+          const shell = b.shell;
+          counter.setBasketShell(pt.hit.idx, null);
           b.loaded = false;
           b.down = false;
-          startHold(pt, { type: "fries", cook: b.cook, basket: pt.hit.idx, amount: b.amount, sweet: b.sweet });
+          startHold(pt, { type: "piece", piece: shell, fromGrill: null, fromBasket: pt.hit.idx });
+          hintOnce("tostada-up", "Drag the tostada up to a tray, then pile beans, lettuce, cheese and crema on it.", 3);
+        } else if (b.loaded) {
+          b.loaded = false;
+          b.down = false;
+          startHold(pt, { type: "fries", cook: b.cook, basket: pt.hit.idx, amount: b.amount, fry: b.fry });
         }
       }
       break;
@@ -1810,6 +1927,43 @@ canvas.addEventListener("pointermove", (e) => {
     }
   }
 });
+
+/**
+ * The fold: a press on a filled tortilla's edge, dragged across its middle, folds it over into a
+ * half moon (a quesadilla). True while the gesture is still a fold (so it doesn't turn into a drag).
+ */
+function foldMove(pt: Pointer, it: GrillItem): boolean {
+  const from = pt.foldFrom!;
+  if (it.held || it.flipT >= 0 || it.piece.folded) {
+    pt.foldFrom = undefined;
+    return false;
+  }
+  const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), GRILL_TOP);
+  const cur = { x: g.x - counter.world(HOME_PAGE, 0, 0, 0).x, z: g.z };
+  const R = TORTILLA_R[it.piece.kind as "corn" | "flour"] * GRILL_SCALE;
+  const ux = from.x - it.x;
+  const uz = from.z - it.z;
+  const ul = Math.hypot(ux, uz) || 1;
+  // How far past the middle the finger has come, along the line from the edge it started on.
+  const along = ((cur.x - it.x) * ux + (cur.z - it.z) * uz) / ul;
+  if (along < -R * 0.2) {
+    it.piece.folded = true;
+    // The half moon lies on the side the finger went, its crease across the drag.
+    it.piece.foldYaw = Math.atan2(-ux, -uz);
+    pt.foldFrom = undefined;
+    pt.mode = "none";
+    sfx.flip();
+    buzz(15);
+    hintOnce("quesa-flip", "Folded! Flip it once so both sides crisp, and take it off once the cheese has melted.", 3.5);
+    return true;
+  }
+  if (Math.hypot(cur.x - it.x, cur.z - it.z) > R * 1.5 || bandAt(pt.y) !== "counter") {
+    // Left the tortilla: it's a drag after all.
+    pt.foldFrom = undefined;
+    return false;
+  }
+  return true;
+}
 
 /** Close a press bay on whatever is in it. */
 function closeBay(i: number): void {
@@ -1917,7 +2071,8 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
             sfx.flip();
             buzz(15);
             hintOnce("flip-done", it.piece.kind === "egg" ? "Flipped: over easy. Leave it sunny side up for orders that want it." : "Nice flip! Flipping cooks it evenly.", 2);
-          } else if (it.piece.kind === "bun") showHint("Buns toast cut side down: no need to flip them.", 2);
+          } else if (TORTILLAS.has(it.piece.kind) && it.piece.fill?.length && !it.piece.folded) showHint("Fold it first: drag the tortilla's edge across its middle.", 2.5);
+          else if (it.piece.kind === "bun") showHint("Buns toast cut side down: no need to flip them.", 2);
           else if (it.topping) showHint("Take the cheese off first.", 2);
           else if (counter.above(it)) showHint("Take the top one off the stack first.", 2);
         } else showHint(pt.hit.item.piece.kind === "bun" ? "Drag it to the tray when it's toasted." : "Tap it to flip, or drag it to the tray.", 2);
@@ -1926,7 +2081,7 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
     case "basket":
       if (!cancelled && pt.hit?.type === "basket") {
         const b = counter.baskets[pt.hit.idx];
-        if (!b.loaded) showHint("Drag frozen fries into the basket.", 2);
+        if (!b.loaded) showHint(counter.redRock ? "Drag tortilla wedges into the basket, or a corn tortilla to fry a tostada." : "Drag frozen fries into the basket.", 2);
         else if (!pt.moved || flickUp) {
           b.down = !b.down;
           if (b.down) sfx.sizzleHit();
@@ -1938,6 +2093,10 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       break;
     case "pour":
       for (const t of counter.taps) t.pouring = false;
+      break;
+    case "tpress":
+      counter.setTpress(0);
+      if (!cancelled) showHint("Hold the press down to flatten the masa into a tortilla.", 2);
       break;
     case "handle":
       if (!cancelled && pt.hit?.type === "handle" && !pt.moved) {
@@ -2372,7 +2531,8 @@ function startShift(): void {
   for (const g of [...counter.grillItems]) counter.removeGrillItem(g);
   dropEggHand();
   counter.zones = [...ZONE_START];
-  for (const b of counter.baskets) Object.assign(b, { loaded: false, cook: 0, down: false, goldenRung: false, amount: 0, sweet: false });
+  for (const b of counter.baskets) Object.assign(b, { loaded: false, cook: 0, down: false, goldenRung: false, amount: 0, fry: "fries" });
+  counter.baskets.forEach((_, i) => counter.setBasketShell(i, null));
   counter.resetStations();
   game.town = save.town;
   game.event = eventOn(save.town, save.day);
@@ -2435,9 +2595,9 @@ function applyStop(): void {
   const st = stop();
   // The coast's middle counter is the panini press; everywhere else, the grill.
   const middle = middleOf(st);
-  counter.setMiddle(middle, st.press?.bays ?? 2, !!st.press?.slice);
-  counter.setFryerSides(st.poutine !== false && middle === "grill", !!st.sweet);
-  setTabArt(ui.tabs[HOME_PAGE], middle === "press" ? "Press" : "Grill");
+  counter.setMiddle(middle, st.press?.bays ?? 2, !!st.press?.slice, !!st.comal?.tpress);
+  counter.setFryerSides(st.poutine !== false && middle !== "press", fryerOf(st));
+  setTabArt(ui.tabs[HOME_PAGE], middle === "press" ? "Press" : middle === "comal" ? "Comal" : "Grill");
   counter.setPantry(st.pantry);
   // The fountain pours the area's two local drinks beside the three house ones.
   const drinks = fountainFor(st.region);
@@ -2807,6 +2967,21 @@ function tick(dt: number): void {
     else if (!game.hintsShown.has("smash-order") && game.slots[game.active]?.order?.layers.some((l) => l.smashed))
       hintOnce("smash-order", "This one's a smash burger: press and hold a fresh patty on the grill to flatten it.", 4.5);
 
+    // The tortilla press (Sun Valley): hold it down to flatten a ball of masa, then drag the tortilla off.
+    if (ptr && ptr.mode === "tpress") {
+      const t = Math.min(1, (game.time - ptr.gt0) / 0.45);
+      counter.setTpress(t);
+      if (t >= 1) {
+        const piece = newPiece("corn");
+        piece.handmade = true;
+        sfx.thud();
+        buzz(30);
+        startHold(ptr, { type: "piece", piece, fromGrill: null });
+        counter.setTpress(0);
+        hintOnce("tpress", "Hand-pressed! Warm it on the comal like any tortilla. Customers tip for these.", 3.5);
+      }
+    }
+
     // Press and hold a fresh patty to smash it (at stops that serve smash burgers).
     if (ptr && ptr.mode === "grill" && !ptr.moved && ptr.hit?.type === "grillItem" && game.time - ptr.gt0 > 0.45 && stop().menu.some((r) => r.smash)) {
       if (counter.smash(ptr.hit.item)) {
@@ -2963,8 +3138,8 @@ function updateUi(dt = 0): void {
     el.classList.toggle("down", counter.taps[i].pouring);
   });
   // Tab dots: something needs attention on that counter.
-  const friesReady = counter.baskets.some((b) => b.loaded && friesZone(b.cook, b.sweet) === "done");
-  const friesBurning = counter.baskets.some((b) => b.loaded && b.down && b.cook >= (b.sweet ? SWEET_ZONE : FRIES_ZONE).over - 0.05);
+  const friesReady = counter.baskets.some((b) => b.loaded && (b.shell ? cookZone("tostada", cookLevel(b.shell)) === "done" : friesZone(b.cook, b.fry) === "done"));
+  const friesBurning = counter.baskets.some((b) => b.loaded && b.down && (b.shell ? cookLevel(b.shell) >= COOK_SCALE.tostada.over - 0.05 : b.cook >= FRY_ZONE[b.fry].over - 0.05));
   const grillBurning =
     counter.grillItems.some((g) => !g.below && g.piece.kind in COOK_SCALE && cookLevel(g.piece) > COOK_SCALE[g.piece.kind as Cookable].over + 0.1) ||
     counter.bays.some((b, i) => {
@@ -3029,7 +3204,10 @@ function itemTag(it: GrillItem): string {
   const k = it.piece.kind;
   const meter = k in COOK_SCALE ? cookMeter(k as Cookable, cookLevel(it.piece)) : "";
   const n = counter.stackSize(it);
-  return `${meter}${n > 1 ? `<b class="sc">×${n}</b>` : ""}`;
+  // A quesadilla's cheese: melting, then melted.
+  const jack = it.piece.fill?.find((f) => f.kind === "jack");
+  const melt = jack ? `<b class="mlt${isMelted(jack) ? " on" : ""}">${isMelted(jack) ? "Melted" : "Melting"}</b>` : "";
+  return `${meter}${melt}${n > 1 ? `<b class="sc">×${n}</b>` : ""}`;
 }
 /**
  * Staleness bars beside the trays: a slim vertical bar that drains as the cooked food on the tray
@@ -3107,7 +3285,7 @@ function updateStaleUi(): void {
 }
 
 /** Fries read on the same meter as everything else. */
-const friesMeter = (cook: number, sweet = false): string => cookMeter(sweet ? "sweet" : "fries", cook);
+const friesMeter = (cook: number, fry: FryKind = "fries"): string => cookMeter(fry, cook);
 
 /**
  * The big level bar down the left of the counter: it fades in while a drink pours (how full the
@@ -3161,12 +3339,13 @@ function updateFryTags(): void {
       if (!b.loaded) continue;
       const scoops = Math.round(b.amount / FRIES_SCOOP);
       const pips = [0, 1, 2].map((k) => `<b class="${k < scoops ? "on" : ""}"></b>`).join("");
-      spots.push({ at: counter.fryTagPoint(i), html: `${friesMeter(b.cook, b.sweet)}<span class="scoops" aria-label="${scoops} of 3 scoops">${pips}</span>` });
+      spots.push({ at: counter.fryTagPoint(i), html: `${friesMeter(b.cook, b.fry)}<span class="scoops" aria-label="${scoops} of 3 scoops">${pips}</span>` });
     }
     for (const p of counter.packs) {
       if (!p.size || p.fill <= 0) continue;
-      const tops = [p.salt && "Salt", p.curds && "Curds", p.gravy && "Gravy"].filter(Boolean).map((t) => `<em>${t}</em>`).join("");
-      spots.push({ at: new THREE.Vector3(p.x, 0.2, p.z + 0.5), html: `${friesMeter(p.cook, p.sweet)}${tops ? `<span class="tops">${tops}</span>` : ""}` });
+      const red = counter.redRock;
+      const tops = [p.salt && (p.fry === "churros" ? "Sugar" : "Salt"), p.curds && (red ? "Jalapeños" : "Curds"), p.gravy && (red ? "Queso" : "Gravy")].filter(Boolean).map((t) => `<em>${t}</em>`).join("");
+      spots.push({ at: new THREE.Vector3(p.x, 0.2, p.z + 0.5), html: `${friesMeter(p.cook, p.fry)}${tops ? `<span class="tops">${tops}</span>` : ""}` });
     }
   }
   while (fryTags.length < spots.length) {
@@ -3335,7 +3514,17 @@ window.addEventListener("blur", cancelPointer);
     middle: counter.middle,
     bays: counter.bays.slice(0, counter.bayCount).map((b, i) => ({ closed: b.closed, open: b.open, layers: b.layers.map((l) => ({ kind: l.piece.kind, cook: cookLevel(l.piece), melt: l.piece.melt ?? 0, cut: !!l.piece.cut })), plate: counter.bayPoint(i).toArray(), handle: counter.handlePoint(i).toArray() })),
     board: counter.board?.on ? { at: counter.boardPoint().toArray(), layers: counter.board.layers.map((l) => l.piece.kind) } : null,
-    sweetBin: counter.sweetBinAt.toArray(),
+    fryBins: Object.fromEntries(Object.entries(counter.fryBinAt).map(([k, v]) => [k, v!.toArray()])),
+  }),
+  /** The comal, for the playtest bot: what's on it, where things are and the tortilla press. */
+  comal: () => ({
+    middle: counter.middle,
+    zones: [...counter.zones],
+    items: counter.grillItems.map((g) => ({ kind: g.piece.kind, at: g.obj.position.toArray(), cook: cookLevel(g.piece), faces: [...g.piece.cook], folded: !!g.piece.folded, fill: (g.piece.fill ?? []).map((f) => ({ kind: f.kind, melt: f.melt ?? 0 })), flips: g.piece.flips ?? 0, r: TORTILLA_R[g.piece.kind as "corn" | "flour"] ? TORTILLA_R[g.piece.kind as "corn" | "flour"] * GRILL_SCALE : 0 })),
+    tpress: counter.tpressOn ? counter.tpressPoint().toArray() : null,
+    zonePoints: [0, 1, 2].map((i) => counter.zonePoint(i).toArray()),
+    baskets: counter.baskets.map((b, i) => ({ loaded: b.loaded, down: b.down, fry: b.fry, cook: b.cook, shell: b.shell ? cookLevel(b.shell) : null, at: counter.fryTagPoint(i).toArray() })),
+    packs: counter.packs.map((p) => ({ size: p.size, fill: p.fill, fry: p.fry, at: [p.x, p.y, p.z] })),
   }),
   save,
   showTitle,

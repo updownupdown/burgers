@@ -6,6 +6,7 @@ import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
 import { faceted, grade, lineColor, lineMaterial, mesh, outline, ramp, shareGeometry, toon } from "./materials";
 import { TOPPING_BOOST } from "./units";
 import { makePaniniPiece, PANINI_HEIGHT } from "./panini";
+import { makeTacoPiece, TACO_HEIGHT, FOLDED_HEIGHT } from "./tacos";
 
 /*
  * Burger parts, from James's picks in the Kitchen Bench study: the sesame classic bun, a patty
@@ -41,6 +42,7 @@ const BASE_HEIGHT: Record<Kind, number> = {
   ketchup: 0.04,
   mustard: 0.04,
   ...(PANINI_HEIGHT as Record<Exclude<Kind, "bun" | "patty" | "bacon" | "egg" | "cheese" | "lettuce" | "tomato" | "onion" | "pickle" | "pineapple" | "jalapeno" | "ketchup" | "mustard">, number>),
+  ...(TACO_HEIGHT as Record<Exclude<Kind, "bun" | "patty" | "bacon" | "egg" | "cheese" | "lettuce" | "tomato" | "onion" | "pickle" | "pineapple" | "jalapeno" | "ketchup" | "mustard">, number>),
 };
 /** Vertical and horizontal scale each kind is built at. */
 const bodyScale = (k: Kind): [number, number] => {
@@ -644,7 +646,10 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
     case "ketchup":
     case "mustard":
     case "pesto":
-    case "aioli": {
+    case "aioli":
+    case "redsalsa":
+    case "greensalsa":
+    case "crema": {
       const color = SAUCE_COLOR[piece.kind];
       const holder = new THREE.Group();
       body.add(holder);
@@ -674,16 +679,25 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       break;
     }
     default: {
-      // The panini press's breads, proteins and fillings (render/panini.ts).
+      // The panini press's breads, proteins and fillings (render/panini.ts), and the comal's
+      // tortillas and taco fillings (render/tacos.ts).
       const update = makePaniniPiece(piece, body);
       if (update) set(update);
+      else {
+        const taco = makeTacoPiece(piece, body);
+        if (taco)
+          set((p) => {
+            taco(p);
+            if (p.kind === "corn" || p.kind === "flour") g.userData.height = (p.folded ? FOLDED_HEIGHT[p.kind] : TACO_HEIGHT[p.kind]!) * h;
+          });
+      }
     }
   }
   return g;
 }
 
 /** Sauce lines on the stack. */
-const SAUCE_COLOR: Record<"ketchup" | "mustard" | "pesto" | "aioli", string> = { ketchup: "#d8261b", mustard: "#f0c419", pesto: "#4f8f2e", aioli: "#f1e4b8" };
+const SAUCE_COLOR: Record<"ketchup" | "mustard" | "pesto" | "aioli" | "redsalsa" | "greensalsa" | "crema", string> = { ketchup: "#d8261b", mustard: "#f0c419", pesto: "#4f8f2e", aioli: "#f1e4b8", redsalsa: "#c8321f", greensalsa: "#6c9e2c", crema: "#f7f1e1" };
 
 /** How far from the middle of the burger each counted topping's slices sit. */
 const SLICE_RING: Partial<Record<Kind, number>> = { tomato: 0.42, onion: 0.28, pickle: 0.45, jalapeno: 0.46, mozzarella: 0.44, avocado: 0.2, redonion: 0.36, tuna: 0.36 };

@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import type { Piece, Plate } from "../game/types";
+import { fryOf } from "../game/types";
+import { makeDish, stretchSauce, type DishObject } from "../render/dishes";
 import { dressCup } from "../render/cup";
 import { makeCup, makeFood, makeFries, stackBases, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
@@ -271,7 +273,7 @@ export class PlateView {
     this.cupMark.position.set(c.x, 0.132, c.z);
     this.friesMark.visible = this.wants.fries && !this.fries;
     this.cupMark.visible = this.wants.drink && !this.cup;
-    this.dish.visible = this.hasDish && !this.entries.length;
+    this.dish.visible = this.hasDish && !this.entries.length && !this.dishObj;
   }
 
   /** Which sides this tray's order wants (their outlines show until they're on). */
@@ -284,7 +286,55 @@ export class PlateView {
   private cupMark = sideMark("cup");
 
   stackTop(): number {
+    if (this.dishObj) return this.dishObj.top;
     return stackBases(this.entries.map((e) => e.piece)).top;
+  }
+
+  /** Red Rock's tacos and quesadillas are drawn as one dish (render/dishes.ts) rather than a stack. */
+  private dishObj: DishObject | null = null;
+  private dishKey = "";
+  /** The half sizes sauce paints over on the dish (burger-local units), or null for a round stack. */
+  dishExtent(): { rx: number; rz: number } | null {
+    return this.dishObj ? { rx: this.dishObj.rx, rz: this.dishObj.rz } : null;
+  }
+  private clearDish(): void {
+    if (!this.dishObj) return;
+    this.burger.remove(this.dishObj.group);
+    disposeObject(this.dishObj.group);
+    this.dishObj = null;
+    this.dishKey = "";
+  }
+  /** Draw the plate as a dish if it is one; true when it was. */
+  private syncDish(p: Plate, animate: boolean, onLand: () => void): boolean {
+    const dish = p.layers.length > 0 && p.layers[0] && (p.layers[0].piece.kind === "corn" || p.layers[0].piece.kind === "flour");
+    if (!dish) {
+      this.clearDish();
+      return false;
+    }
+    for (const e of this.entries.splice(0)) {
+      this.burger.remove(e.obj);
+      disposeObject(e.obj);
+    }
+    const key = p.layers.map((l) => `${l.piece.uid}${l.piece.folded ? "f" : ""}`).join(",");
+    if (key !== this.dishKey) {
+      const grew = !!this.dishObj && key.startsWith(this.dishKey);
+      this.clearDish();
+      const d = makeDish(p.layers.map((l) => l.piece));
+      if (!d) return false;
+      this.dishObj = d;
+      this.dishKey = key;
+      this.burger.add(d.group);
+      if (animate) {
+        this.kick(grew ? 0.15 : 0.3);
+        onLand();
+      }
+    }
+    // Sauce being squeezed on: redraw its line as it grows.
+    for (const [i, o] of this.dishObj!.sauces) {
+      const piece = p.layers[i]?.piece;
+      if (piece?.stroke) o.userData.update(stretchSauce(piece, this.dishObj!.rx, this.dishObj!.rz));
+    }
+    return true;
   }
 
   /** The scale a stack of this height draws at so its top stays under the headroom line. */
@@ -314,6 +364,10 @@ export class PlateView {
   }
 
   sync(p: Plate, animate: boolean, onLand: () => void): void {
+    if (this.syncDish(p, animate, onLand)) {
+      this.syncSides(p);
+      return;
+    }
     const want = p.layers.map((l, i) => ({ l, role: (i === 0 ? "bottom" : "top") as BunRole }));
     let same = 0;
     while (same < this.entries.length && same < want.length && this.entries[same].uid === want[same].l.piece.uid && this.entries[same].role === want[same].role) same++;
@@ -355,8 +409,12 @@ export class PlateView {
     p.layers.forEach((l, i) => {
       if (l.piece.stroke) this.entries[i]?.obj.userData.update(l.piece);
     });
+    this.syncSides(p);
+  }
 
-    const fk = p.fries ? `f${p.fries.sweet ? "s" : ""}${p.fries.cook.toFixed(2)}${p.fries.size}${p.fries.fill.toFixed(2)}${Math.round((p.fries.salt ?? 0) * 10)}${+!!p.fries.curds}${+!!p.fries.gravy}` : "";
+  /** The fries and the drink beside the main. */
+  private syncSides(p: Plate): void {
+    const fk = p.fries ? `f${fryOf(p.fries)}${p.fries.cook.toFixed(2)}${p.fries.size}${p.fries.fill.toFixed(2)}${Math.round((p.fries.salt ?? 0) * 10)}${+!!p.fries.curds}${+!!p.fries.gravy}` : "";
     if (fk !== this.friesKey) {
       if (this.fries) {
         this.group.remove(this.fries);

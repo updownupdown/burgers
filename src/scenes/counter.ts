@@ -1,10 +1,13 @@
 import * as THREE from "three";
-import { cookLevel, COOK_SCALE, DRINK_FILL, FRIES_PERFECT, FRIES_ZONE, FRY_RATE, GRILL_RATE, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, SWEET_FRY, SWEET_PERFECT, SWEET_ZONE, type Cookable } from "../game/cooking";
-import type { DrinkId, FriesSize, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
-import { BREADS, CUP_SPEED, GRILLABLE, isSauce, PRESS_CHEESE, PROTEINS } from "../game/types";
+import { COMAL_SPEED, cookLevel, COOK_SCALE, DRINK_FILL, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, GRILL_RATE, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, type Cookable } from "../game/cooking";
+import type { DrinkId, FriesSize, FryKind, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
+import { BREADS, CUP_SPEED, GRILLABLE, isSauce, PRESS_CHEESE, PROTEINS, SCOOPED, TORTILLAS } from "../game/types";
 import { fountainFor, type MiddleCounter } from "../game/stops";
 import { BAY, BOARD, CLOSED_GAP, makeCuttingBoard, makePressBay, PLATE, type PressBayObject } from "../render/machines/press";
-import { makeSweetTray, SWEET_TRAY } from "../render/fryer";
+import { makeFryTray, makeJalapenoHandful, makeJalapenoTray, makeSugarShaker, SWEET_TRAY } from "../render/fryer";
+import { makeComal, makeTortillaPress, type TortillaPressObject } from "../render/machines/comal";
+import { QUESO } from "../render/sides";
+import { tickTacos } from "../render/tacos";
 import { counterTop, wallPanels } from "../render/wear";
 import { CUP_DIMS, cupSurfaceY, makeCarton, makeCartonStack, makeCup, makeFood, makeBasketFries, makeFries, stackBases, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { dressCup } from "../render/cup";
@@ -70,6 +73,18 @@ const CADDY = { x: -2.82, z: 2.2 };
 const PRESS = { x: 1.2, z: 0.3, gap: 0.12 };
 const PRESS_CADDY = { x: -0.62, z: 2.42 };
 const PRESS_BOARD = { x: 2.5, z: 2.4 };
+/**
+ * The comal page (Red Rock), in the grill page's place: the comal on the griddle's footprint
+ * (hot left two thirds, warm right third), tortillas, pork, beans and pineapple in the row of pans
+ * at the back, the cold toppings in the left rail, the salsa and crema caddy at the front and, at
+ * Sun Valley, the tortilla press front right.
+ */
+const COMAL_CADDY = { x: -0.45, z: 2.42 };
+const TPRESS = { x: 2.45, z: 2.5 };
+/** The tortilla press is drawn a little smaller than life, so it fits the front corner. */
+const TPRESS_SCALE = 0.85;
+/** Kinds that go in the row of pans behind the comal. */
+const COMAL_BACK = (k: Kind) => TORTILLAS.has(k) || SCOOPED.has(k) || k === "pineapple";
 /** The left rail's back edge stays put whatever its row count, so the pans line up with the grill page's. */
 const SIDE_BACK_Z = SIDE_PANS.z - 2.1;
 /** Most bays a press has (Harbor City); fewer are hidden. */
@@ -128,6 +143,7 @@ const FRYER = {
   gravy: { x: 3.42, z: -2.1 },
   curds: { x: -3.35, z: 0.25 },
   shaker: { x: 3.42, z: -0.2 },
+  sugar: { x: 3.42, z: 0.85 },
 };
 /** The fryer (and its baskets) drawn this much bigger than the model, in the room a smaller potato freezer frees up. */
 const FRYER_SCALE = 1.3;
@@ -136,7 +152,7 @@ const SHAKER_SCALE = 1.6;
 /** One packing pad (the cream square inside its orange outline). */
 const PAD = { w: 1.47, d: 1.07 };
 /** A packing pad with nothing on it. */
-export const EMPTY_PACK = { size: null, cook: 0, fill: 0, salt: 0, curds: false, gravy: false, sweet: false } as const;
+export const EMPTY_PACK = { size: null, cook: 0, fill: 0, salt: 0, curds: false, gravy: false, fry: "fries" as FryKind } as const;
 /** Cartons on the pads and in their stacks, against carton units. */
 const PACK_SCALE = SCALE.fries;
 const CARTON_STACK_SCALE = SCALE.fries;
@@ -201,8 +217,11 @@ export interface Mess {
 
 export interface Basket {
   loaded: boolean;
-  /** Sweet potato fries in this basket (a basket holds one kind at a time). */
-  sweet: boolean;
+  /** What's in this basket (a basket holds one kind at a time). */
+  fry: FryKind;
+  /** A tostada shell frying in this basket in place of fries (Red Rock), or null. */
+  shell: Piece | null;
+  shellObj: FoodObject | null;
   cook: number;
   down: boolean;
   goldenRung: boolean;
@@ -232,8 +251,8 @@ export interface Stack {
 /** A spot at the front of the fryer where a carton waits to be filled. */
 export interface Pack {
   size: FriesSize | null;
-  /** Sweet potato fries in this carton. */
-  sweet: boolean;
+  /** What's in this carton: plain or sweet potato fries, chips or churros. */
+  fry: FryKind;
   cook: number;
   fill: number;
   /** Salt shaken on so far (SALT in cooking.ts). */
@@ -291,10 +310,11 @@ export type Hit =
   | { type: "zone"; idx: number }
   | { type: "stack"; idx: number }
   | { type: "pack"; idx: number }
-  | { type: "shaker" }
+  | { type: "shaker"; sugar?: boolean }
   | { type: "curds" }
   | { type: "gravy" }
-  | { type: "sweetBin" }
+  | { type: "fryBin"; fry: FryKind }
+  | { type: "tpress" }
   | { type: "bay"; idx: number }
   | { type: "handle"; idx: number }
   | { type: "board" };
@@ -337,9 +357,9 @@ export interface CounterEvents {
  * patty medium from about 21 s to 33 s; bacon crisp from 18 s, dark from 38 s; egg set from
  * 18 s, overdone from 44 s. Buns toast in about 10 s.
  */
-const COOK_SPEED: Record<string, number> = { patty: 0.377, bacon: 0.41, egg: 0.18, bun: 0.45, pineapple: 0.4 };
-/** Heat reaching the face up, against the face down. */
-const UP_HEAT: Partial<Record<Kind, number>> = { patty: 0.35, bacon: 0.35, egg: 0.35 };
+const COOK_SPEED: Record<string, number> = { patty: 0.377, bacon: 0.41, egg: 0.18, bun: 0.45, pineapple: 0.4, ...COMAL_SPEED };
+/** Heat reaching the face up, against the face down (a thin tortilla warms through a little). */
+const UP_HEAT: Partial<Record<Kind, number>> = { patty: 0.35, bacon: 0.35, egg: 0.35, corn: 0.25, flour: 0.25 };
 
 /** Nozzle spacing on the soda fountain. */
 export const TAP_GAP = FOUNTAIN_SPOTS.cups[1].x - FOUNTAIN_SPOTS.cups[0].x;
@@ -384,8 +404,8 @@ export class CounterView {
   baskets: Basket[] = [];
   /** Where to grab frozen fries from (the middle of the potato freezer), in world units. */
   friesBinAt = new THREE.Vector3();
-  /** ...and sweet potato fries (their tray), where the coast has them. */
-  sweetBinAt = new THREE.Vector3();
+  /** ...and the other things to fry (their trays), where a town has them. */
+  fryBinAt: Partial<Record<FryKind, THREE.Vector3>> = {};
   taps: Tap[] = [];
   private fountain: FountainObject | null = null;
   /** Cups standing on the drinks counter. */
@@ -406,7 +426,19 @@ export class CounterView {
   bayCount = 2;
   /** The cutting board (Harbor City), and the sandwich on it. */
   board: { obj: THREE.Object3D; x: number; z: number; layers: Layer[]; food: THREE.Group | null; foodKey: string; on: boolean } | null = null;
-  private sweetTray!: THREE.Object3D;
+  private fryTrays: Partial<Record<FryKind, THREE.Object3D>> = {};
+  private freezer!: THREE.Object3D;
+  private jalTray!: THREE.Object3D;
+  private quesoWell!: THREE.Object3D;
+  sugarShaker!: THREE.Object3D;
+  /** Red Rock's fryer kit (chips, nachos, churros) is out. */
+  redRock = false;
+  private comalGroup = new THREE.Group();
+  private comalCaddy: SauceCaddyObject | null = null;
+  /** The tortilla press (Sun Valley), how far its lever is down (0..1), and whether it's out. */
+  tpress!: TortillaPressObject;
+  tpressT = 0;
+  tpressOn = false;
   private curdTray!: THREE.Object3D;
   private gravyWell!: THREE.Object3D;
   private puffs: THREE.Mesh[] = [];
@@ -433,10 +465,12 @@ export class CounterView {
     splash.position.set(7, 0.25, -3.35);
     this.scene.add(splash);
 
-    this.scene.add(this.grillGroup, this.pressGroup);
+    this.scene.add(this.grillGroup, this.pressGroup, this.comalGroup);
     this.pressGroup.visible = false;
+    this.comalGroup.visible = false;
     this.buildGrill();
     this.buildPress();
+    this.buildComal();
     this.buildFryer();
     this.buildDrinks();
     this.buildTrash();
@@ -516,6 +550,54 @@ export class CounterView {
     this.proxy(new THREE.BoxGeometry(BOARD.w, 0.7, BOARD.d), at(PRESS_BOARD.x, 0.3, PRESS_BOARD.z), { type: "board" }, board);
   }
 
+  /** The comal page (Red Rock): see COMAL. Built once, shown in place of the grill. */
+  private buildComal(): void {
+    const C = this.comalGroup;
+    const at = (x: number, y: number, z: number) => this.world(1, x, y, z);
+    const comal = makeComal();
+    comal.position.copy(at(GRIDDLE.x, 0, GRIDDLE.z));
+    C.add(comal);
+    const tp = makeTortillaPress();
+    tp.position.copy(at(TPRESS.x, 0, TPRESS.z));
+    tp.scale.setScalar(TPRESS_SCALE);
+    C.add(tp);
+    this.tpress = tp;
+    this.proxy(new THREE.BoxGeometry(1.7, 1.0, 1.3), at(TPRESS.x, 0.4, TPRESS.z), { type: "tpress" }, tp);
+  }
+
+  /** The comal's sauce caddy: whatever squeeze bottles this town's menu uses (none at Red Mesa). */
+  private setComalCaddy(sauces: SauceKind[]): void {
+    if (this.comalCaddy) {
+      for (const k of this.comalCaddy.userData.kinds) delete this.bottles[k];
+      this.comalGroup.remove(this.comalCaddy);
+      disposeObject(this.comalCaddy);
+      this.comalCaddy = null;
+      this.hitMeshes = this.hitMeshes.filter((m) => {
+        const keep = m.userData.owner !== this.comalCaddyOwner;
+        if (!keep) this.scene.remove(m);
+        return keep;
+      });
+    }
+    if (!sauces.length) return;
+    const caddy = makeSauceCaddy(sauces.slice(0, 3));
+    caddy.position.copy(this.world(1, COMAL_CADDY.x - (sauces.length < 3 ? 0.3 : 0), 0, COMAL_CADDY.z));
+    this.comalGroup.add(caddy);
+    this.comalCaddy = caddy;
+    this.comalCaddyOwner = caddy;
+    Object.assign(this.bottles, caddy.userData.bottles);
+    for (const k of caddy.userData.kinds) {
+      const b = caddy.userData.spots.bottles[k]!;
+      this.proxy(new THREE.BoxGeometry(0.55, 1.6, 0.85), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k }, caddy);
+    }
+  }
+  private comalCaddyOwner: THREE.Object3D | null = null;
+
+  /** Where the tortilla press's plate is, world space. */
+  tpressPoint(): THREE.Vector3 {
+    const sp = this.tpress.userData.spots.plate;
+    return this.tpress.position.clone().add(new THREE.Vector3(sp.x, sp.y, sp.z).multiplyScalar(TPRESS_SCALE));
+  }
+
   /** Spread the bays that are out evenly about the press's centre, and hide the rest. */
   private layoutBays(): void {
     const n = this.bayCount;
@@ -539,10 +621,17 @@ export class CounterView {
    * Put out this town's middle counter: the grill, or the panini press with its bays and (at
    * Harbor City) the cutting board. Empties the press.
    */
-  setMiddle(mode: MiddleCounter, bays = 2, board = false): void {
+  setMiddle(mode: MiddleCounter, bays = 2, board = false, tpress = false): void {
     this.middle = mode;
     this.grillGroup.visible = mode === "grill";
     this.pressGroup.visible = mode === "press";
+    this.comalGroup.visible = mode === "comal";
+    // The comal has no buttons: hot under the left two thirds, warm at the right end.
+    if (mode === "comal") this.zones = ["hot", "hot", "warm"];
+    this.tpressOn = mode === "comal" && tpress;
+    this.tpress.visible = this.tpressOn;
+    this.tpressT = 0;
+    this.tpress.userData.setPress(0);
     this.bayCount = Math.max(1, Math.min(MAX_BAYS, bays));
     for (const b of this.bays) this.setBay(b, []);
     for (const b of this.bays) Object.assign(b, { closed: false, open: 1 });
@@ -554,10 +643,35 @@ export class CounterView {
     }
   }
 
-  /** The fryer's extras: curds and gravy where poutine is served (and in the Pines), the sweet potato tray at the coast from Driftwood. */
-  setFryerSides(poutine: boolean, sweet: boolean): void {
-    this.curdTray.visible = this.gravyWell.visible = poutine;
-    this.sweetTray.visible = sweet;
+  /**
+   * The fryer's extras for a town: curds and gravy where poutine is served (and in the Pines), the
+   * sweet potato tray at the coast from Driftwood. In Red Rock the potato freezer gives way to
+   * trays of tortilla wedges (chips) and churro dough, jalapeños and a queso well stand where the
+   * curds and gravy do once nachos are on, and churros get a sugar shaker.
+   */
+  setFryerSides(poutine: boolean, fryer: readonly FryKind[]): void {
+    const red = fryer.includes("chips");
+    this.redRock = red;
+    this.freezer.visible = fryer.includes("fries");
+    this.curdTray.visible = this.gravyWell.visible = poutine && !red;
+    this.jalTray.visible = this.quesoWell.visible = poutine && red;
+    this.sugarShaker.visible = fryer.includes("churros");
+    for (const [k, t] of Object.entries(this.fryTrays)) t!.visible = fryer.includes(k as FryKind);
+    // Two trays share the freezer's spot when both are out.
+    const both = fryer.includes("chips") && fryer.includes("churros");
+    const F = FRYER;
+    const place = (k: FryKind, z: number) => {
+      const t = this.fryTrays[k];
+      if (!t) return;
+      t.position.copy(this.world(2, F.freezer.x, 0, z));
+      this.fryBinAt[k] = this.world(2, F.freezer.x, 0.4, z);
+      const m = this.hitMeshes.find((h) => (h.userData.hit as Hit).type === "fryBin" && (h.userData.hit as { fry: FryKind }).fry === k);
+      m?.position.copy(this.world(2, F.freezer.x, 0.3, z));
+    };
+    if (red) {
+      place("chips", both ? F.freezer.z - 0.65 : F.freezer.z);
+      place("churros", F.freezer.z + 0.6);
+    } else place("sweet", F.curds.z);
   }
 
   /** Build the food drawn for a stack of layers (bottom first), at the counter food scale. */
@@ -613,6 +727,30 @@ export class CounterView {
     const bd = this.board;
     return !!bd && bd.on && Math.abs(world.x - pageX(1) - bd.x) < BOARD.w / 2 + 0.1 && Math.abs(world.z - bd.z) < BOARD.d / 2 + 0.15;
   }
+  /** Put a tortilla in an empty fryer basket to fry into a tostada shell, or take it out (null). */
+  setBasketShell(i: number, piece: Piece | null): void {
+    const b = this.baskets[i];
+    if (b.shellObj) {
+      b.obj.remove(b.shellObj);
+      disposeObject(b.shellObj);
+      b.shellObj = null;
+    }
+    b.shell = piece;
+    if (!piece) return;
+    const o = makeFood(piece, "top");
+    o.scale.setScalar(GRILL_SCALE / FRYER_SCALE);
+    o.position.y = 0.08;
+    b.obj.add(o);
+    b.shellObj = o;
+  }
+
+  /** Bring the tortilla press's lever down (0 open .. 1 pressed flat). */
+  setTpress(t: number): void {
+    if (Math.abs(t - this.tpressT) < 0.001) return;
+    this.tpressT = t;
+    this.tpress.userData.setPress(t);
+  }
+
   /** Close or lift a bay's lid. */
   setLid(i: number, closed: boolean): void {
     const b = this.bays[i];
@@ -650,8 +788,9 @@ export class CounterView {
     const freezer = makeFreezer();
     freezer.position.copy(at(F.freezer.x, 0, F.freezer.z));
     this.scene.add(freezer);
+    this.freezer = freezer;
     this.friesBinAt.copy(at(F.freezer.x, 0.6, F.freezer.z));
-    this.proxy(new THREE.BoxGeometry(FREEZER.w + 0.1, 1.4, FREEZER.d + 0.2), this.friesBinAt.clone(), { type: "friesBin" });
+    this.proxy(new THREE.BoxGeometry(FREEZER.w + 0.1, 1.4, FREEZER.d + 0.2), this.friesBinAt.clone(), { type: "friesBin" }, freezer);
 
     // Carton stacks along the front on the left, small to large.
     F.stacks.forEach(([size, x]) => this.addStack("carton", size, at(x, 0, F.stackZ)));
@@ -672,6 +811,14 @@ export class CounterView {
     this.scene.add(shaker);
     this.shakerObj = shaker;
     this.proxy(new THREE.BoxGeometry(1.3, 1.2, 1.25), at(F.shaker.x, 0.4, F.shaker.z), { type: "shaker" });
+    // Churros' sugar, in its own shaker below the salt (Sun Valley).
+    const sugar = makeSugarShaker();
+    sugar.scale.setScalar(SHAKER_SCALE);
+    sugar.position.copy(at(F.sugar.x, 0, F.sugar.z));
+    sugar.visible = false;
+    this.scene.add(sugar);
+    this.sugarShaker = sugar;
+    this.proxy(new THREE.BoxGeometry(1.1, 1.2, 0.9), at(F.sugar.x, 0.4, F.sugar.z), { type: "shaker", sugar: true }, sugar);
     const tray = makeCurdTray();
     tray.position.copy(at(F.curds.x, 0, F.curds.z));
     this.scene.add(tray);
@@ -682,14 +829,28 @@ export class CounterView {
     this.scene.add(well);
     this.gravyWell = well;
     this.proxy(new THREE.BoxGeometry(GRAVY_WELL.w + 0.1, 1.2, GRAVY_WELL.d + 0.2), at(F.gravy.x, 0.5, F.gravy.z), { type: "gravy" }, well);
-    // Sweet potato fries (the coast, from Driftwood) where the curds are in the Pines.
-    const sweet = makeSweetTray();
-    sweet.position.copy(at(F.curds.x, 0, F.curds.z));
-    sweet.visible = false;
-    this.scene.add(sweet);
-    this.sweetTray = sweet;
-    this.sweetBinAt.copy(at(F.curds.x, 0.4, F.curds.z));
-    this.proxy(new THREE.BoxGeometry(SWEET_TRAY.w + 0.1, 0.9, SWEET_TRAY.d + 0.2), at(F.curds.x, 0.3, F.curds.z), { type: "sweetBin" }, sweet);
+    // Red Rock's nacho toppings in the same spots: jalapeños for curds, queso for gravy.
+    const jal = makeJalapenoTray();
+    jal.position.copy(at(F.curds.x, 0, F.curds.z));
+    jal.visible = false;
+    this.scene.add(jal);
+    this.jalTray = jal;
+    this.proxy(new THREE.BoxGeometry(CURD_TRAY.w + 0.1, 0.9, CURD_TRAY.d + 0.2), at(F.curds.x, 0.3, F.curds.z), { type: "curds" }, jal);
+    const queso = makeGravyWell(QUESO);
+    queso.position.copy(at(F.gravy.x, 0, F.gravy.z));
+    queso.visible = false;
+    this.scene.add(queso);
+    this.quesoWell = queso;
+    this.proxy(new THREE.BoxGeometry(GRAVY_WELL.w + 0.1, 1.2, GRAVY_WELL.d + 0.2), at(F.gravy.x, 0.5, F.gravy.z), { type: "gravy" }, queso);
+    // Trays of other things to fry: sweet potato fries (the coast, from Driftwood) where the curds
+    // are in the Pines; tortilla wedges and churro dough at the freezer's spot in Red Rock.
+    for (const fry of ["sweet", "chips", "churros"] as FryKind[]) {
+      const tray = makeFryTray(fry);
+      tray.visible = false;
+      this.scene.add(tray);
+      this.fryTrays[fry] = tray;
+      this.proxy(new THREE.BoxGeometry(SWEET_TRAY.w + 0.1, 0.9, SWEET_TRAY.d + 0.2), new THREE.Vector3(), { type: "fryBin", fry }, tray);
+    }
 
     // The hang-rail fryer: a basket per well, hanging tilted on the rail until it's lowered.
     const fryer = makeFryer();
@@ -717,7 +878,7 @@ export class CounterView {
       const hang = sp.hang[i];
       const up = fryer.position.clone().add(new THREE.Vector3(hang.x, hang.y, hang.z));
       const down = fryer.position.clone().add(new THREE.Vector3(w.x, sp.down.y, w.z));
-      this.baskets.push({ loaded: false, sweet: false, cook: 0, down: false, goldenRung: false, beepT: 0, obj: basket, fries, t: 0, amount: 0, up, downAt: down, tilt: hang.tilt });
+      this.baskets.push({ loaded: false, fry: "fries", shell: null, shellObj: null, cook: 0, down: false, goldenRung: false, beepT: 0, obj: basket, fries, t: 0, amount: 0, up, downAt: down, tilt: hang.tilt });
       this.proxy(new THREE.BoxGeometry(1.5 * k, 1.4, 2.6 * k), fryer.position.clone().add(new THREE.Vector3(w.x, 0.8, w.z + 0.5 * k)), { type: "basket", idx: i });
     });
   }
@@ -805,9 +966,9 @@ export class CounterView {
   }
 
   /** What you carry from the fryer's topping column. */
-  fryTopMesh(what: "salt" | "curds" | "gravy"): THREE.Object3D {
-    if (what === "salt") {
-      const m = makeShaker();
+  fryTopMesh(what: "salt" | "curds" | "gravy" | "sugar"): THREE.Object3D {
+    if (what === "salt" || what === "sugar") {
+      const m = what === "sugar" ? makeSugarShaker() : makeShaker();
       // Tipped over, ready to shake.
       m.rotation.z = 2.3;
       m.position.y = 0.4;
@@ -815,7 +976,11 @@ export class CounterView {
       g.add(m);
       return g;
     }
-    return what === "curds" ? makeCurdHandful() : makeLadle();
+    if (this.redRock && what === "curds") {
+      const j = makeJalapenoHandful();
+      return j;
+    }
+    return what === "curds" ? makeCurdHandful() : makeLadle(this.redRock ? QUESO : undefined);
   }
 
   /** Packing pad with fries under a world point, or -1. */
@@ -1029,12 +1194,15 @@ export class CounterView {
       return keep;
     });
     const press = this.middle === "press";
+    const comal = this.middle === "comal";
     // At the press the back rail holds what goes in the press first (breads, proteins) and the
-    // tuna well; the side rail the cold fillings. Sauces are in the caddy, never in a pan.
-    const back = (k: Kind) => (press ? PRESS_BACK(k) : GRILLABLE.has(k));
-    const usable = kinds.filter((k) => !(press && isSauce(k)));
+    // tuna well; the side rail the cold fillings. Sauces are in the caddy, never in a pan. At the
+    // comal the back rail holds the tortillas, pork, beans and pineapple.
+    const back = (k: Kind) => (press ? PRESS_BACK(k) : comal ? COMAL_BACK(k) : GRILLABLE.has(k));
+    const usable = kinds.filter((k) => !((press || comal) && isSauce(k)));
+    if (comal) this.setComalCaddy(kinds.filter(isSauce) as SauceKind[]);
     const hot = usable.filter(back).slice(0, 5);
-    const cold = usable.filter((k) => !back(k)).slice(0, press ? 8 : 6);
+    const cold = usable.filter((k) => !back(k)).slice(0, press || comal ? 8 : 6);
     const group = new THREE.Group();
     this.bins = [];
     const fill = (rail: ReturnType<typeof makeColdRail>, at: { x: number; z: number }) => {
@@ -1048,8 +1216,8 @@ export class CounterView {
         this.proxy(new THREE.BoxGeometry(pan.w, 0.9, pan.d), this.world(1, b.x, b.y - 0.2, b.z), { type: "bin", kind: b.kind });
       }
     };
-    fill(makeColdRail({ cols: Math.max(press ? 2 : 3, hot.length), rows: 1, kinds: hot }), GRILL_PANS);
-    if (press) {
+    fill(makeColdRail({ cols: Math.max(press || comal ? 2 : 3, hot.length), rows: 1, kinds: hot }), GRILL_PANS);
+    if (press || comal) {
       // Down from the same back edge as the grill's side rail, as many rows as it takes.
       const rows = Math.max(3, Math.ceil(cold.length / 2));
       fill(makeColdRail({ cols: 2, rows, kinds: cold }), { x: SIDE_PANS.x, z: SIDE_BACK_Z + (rows * 1.27 + 0.4) / 2 });
@@ -1172,7 +1340,7 @@ export class CounterView {
 
   /** Grill-local position if the world point is over the grill plate. */
   overGrill(world: THREE.Vector3): { x: number; z: number } | null {
-    if (this.middle !== "grill") return null;
+    if (this.middle === "press") return null;
     const x = world.x - pageX(1);
     const { x0, x1, z0, z1 } = GRILL_BOUNDS;
     if (x < x0 - 0.3 || x > x1 + 0.3 || world.z < z0 - 0.5 || world.z > z1 + 0.4) return null;
@@ -1273,6 +1441,8 @@ export class CounterView {
   flip(item: GrillItem): boolean {
     if (item.flipT >= 0 || item.held || item.topping || this.above(item)) return false;
     if (item.piece.kind === "bun") return false;
+    // An open tortilla with something on it would spill: fold it first.
+    if (TORTILLAS.has(item.piece.kind) && item.piece.fill?.length && !item.piece.folded) return false;
     item.flipT = 0;
     return true;
   }
@@ -1370,7 +1540,8 @@ export class CounterView {
 
   /** Where the sauce caddy stands, for the in-hand mask. */
   caddyPoint(): THREE.Vector3 {
-    return (this.middle === "press" ? this.pressCaddy : this.caddy).position.clone().setY(0.8);
+    const c = this.middle === "press" ? this.pressCaddy : this.middle === "comal" ? this.comalCaddy ?? this.caddy : this.caddy;
+    return c.position.clone().setY(0.8);
   }
 
   /** Where a basket's fry meter sits: in its window on the fryer's back panel. */
@@ -1433,6 +1604,7 @@ export class CounterView {
 
   update(dt: number): void {
     this.time += dt;
+    tickTacos(dt);
     // Camera glides between stops along the window line.
     const stop = STOPS[this.stop];
     this.camX += (stop.x + this.dragOffset - this.camX) * Math.min(1, dt * 10);
@@ -1470,6 +1642,11 @@ export class CounterView {
         const touching = !it.below;
         const heat = touching ? ZONE_RATE[zone] * (COOK_SPEED[it.piece.kind] ?? 1) * (it.piece.smashed ? 1.6 : 1) * this.grillBoost : 0;
         const before = cookLevel(it.piece);
+        // What's on a tortilla: cheese melts while it's on the heat, faster once it's folded over.
+        if (it.piece.fill?.length) {
+          const rate = zone === "hot" ? (it.piece.folded ? QUESO_MELT.folded : QUESO_MELT.open) : zone === "warm" ? QUESO_MELT.warm : 0;
+          for (const f of it.piece.fill) if (f.kind === "jack") f.melt = Math.min(1, (f.melt ?? 0) + rate * this.grillBoost * dt);
+        }
         if (it.topping) {
           const c = it.topping.piece;
           c.melt = Math.min(1, (c.melt ?? 0) + (zone === "hot" ? MELT_RATE.hot : zone === "warm" ? MELT_RATE.warm : 0) * dt);
@@ -1478,7 +1655,7 @@ export class CounterView {
         it.piece.cook[0] += GRILL_RATE * heat * dt;
         it.piece.cook[1] += GRILL_RATE * heat * (UP_HEAT[it.piece.kind] ?? 0) * dt;
         // The ridged grille sears marks into the face down.
-        if (touching && zi === GRILLE_ZONE && zone === "hot" && it.piece.kind === "patty") {
+        if (touching && this.middle === "grill" && zi === GRILLE_ZONE && zone === "hot" && it.piece.kind === "patty") {
           const m = (it.piece.marks ??= [0, 0]);
           m[0] = Math.min(1, m[0] + MARK_RATE * dt);
         }
@@ -1494,7 +1671,7 @@ export class CounterView {
       it.obj.userData.update(it.piece);
     }
     // Press: a closed bay cooks everything in it, both faces at once.
-    const smokes: { x: number; z: number; y: number; cook: number }[] = [];
+    const smokes: { x: number; z: number; y: number; cook: number; light?: boolean }[] = [];
     if (this.middle === "press") {
       for (let i = 0; i < this.bayCount; i++) {
         const b = this.bays[i];
@@ -1545,7 +1722,8 @@ export class CounterView {
 
     // Smoke: puffs drift up from cooking items (and closed press bays); darker when burning.
     const active = this.grillItems.filter((g) => !g.held && !g.below && g.flipT < 0 && this.heatOf(g) === "hot");
-    for (const it of active) smokes.push({ x: gx + it.x, z: it.z, y: GRILL_TOP + 0.3, cook: it.piece.cook[0] });
+    // A warming tortilla only gives off a thin wisp; meat and a burning anything smoke properly.
+    for (const it of active) smokes.push({ x: gx + it.x, z: it.z, y: GRILL_TOP + 0.3, cook: it.piece.cook[0], light: it.piece.kind === "corn" || it.piece.kind === "flour" });
     const shown = this.zones.join();
     if (this.zonesShown !== shown) {
       this.zones.forEach((z, i) => this.griddle.userData.setZone(i, z));
@@ -1576,7 +1754,7 @@ export class CounterView {
       m.scale.setScalar(0.6 + t * 1.5);
       const mat = m.material as THREE.MeshBasicMaterial;
       mat.color.set(burnt ? "#3a3532" : "#f2f2f2");
-      mat.opacity = (burnt ? 0.55 : 0.28) * Math.sin(Math.PI * t) * Math.min(1, it.cook * 4);
+      mat.opacity = (burnt ? 0.55 : it.light ? 0.12 : 0.28) * Math.sin(Math.PI * t) * Math.min(1, it.cook * 4);
     });
 
     // Fryer
@@ -1588,18 +1766,40 @@ export class CounterView {
       b.obj.position.lerpVectors(b.up, b.downAt, b.t);
       b.obj.position.y += inOil ? Math.sin(this.time * 18) * 0.015 : 0;
       b.obj.rotation.x = b.tilt * (1 - b.t);
-      b.fries.visible = b.loaded;
+      b.fries.visible = b.loaded && !b.shell;
       const bub = this.fryer.userData.bubbles[i];
       bub.visible = inOil && b.t > 0.85;
       if (bub.visible) {
         bub.scale.set(1, 0.6 + 0.4 * Math.abs(Math.sin(this.time * 9 + i)), 1);
         bub.rotation.y = Math.sin(this.time * 2.3 + i) * 0.12;
       }
+      if (b.shell) {
+        // A tostada shell: fries flat in the basket, both sides at once.
+        const sh = b.shell;
+        if (inOil) {
+          const before = cookLevel(sh);
+          const r = FRY_RATE * this.fryBoost * FRY_SPEED.tostada * dt;
+          sh.cook[0] += r;
+          sh.cook[1] += r;
+          const sc = COOK_SCALE.tostada;
+          if (before < sc.done && cookLevel(sh) >= sc.done) this.events.done();
+          if (before < sc.perfect - 0.04 && cookLevel(sh) >= sc.perfect - 0.04) this.events.golden();
+          if (cookLevel(sh) >= sc.perfect - 0.04) {
+            b.beepT -= dt;
+            if (b.beepT <= 0) {
+              this.events.beep();
+              b.beepT = cookLevel(sh) >= sc.over ? 0.4 : 0.75;
+            }
+          }
+        } else b.beepT = 0;
+        if (b.shellObj) b.shellObj.userData.update(sh);
+        continue;
+      }
       if (inOil) {
         const before = b.cook;
-        const zone = b.sweet ? SWEET_ZONE : FRIES_ZONE;
-        const perfect = b.sweet ? SWEET_PERFECT : FRIES_PERFECT;
-        b.cook += FRY_RATE * this.fryBoost * (b.sweet ? SWEET_FRY : 1) * dt;
+        const zone = FRY_ZONE[b.fry];
+        const perfect = fryPerfect(b.fry);
+        b.cook += FRY_RATE * this.fryBoost * FRY_SPEED[b.fry] * dt;
         if (before < zone.done && b.cook >= zone.done) this.events.done();
         if (!b.goldenRung && b.cook >= perfect - 0.04) {
           b.goldenRung = true;
@@ -1615,7 +1815,7 @@ export class CounterView {
         }
       } else b.beepT = 0;
       if (b.loaded) {
-        b.fries.userData.setSweet?.(b.sweet);
+        b.fries.userData.setFry(b.fry);
         b.fries.userData.setCook(b.cook);
         b.fries.userData.setAmount?.(b.amount);
       }

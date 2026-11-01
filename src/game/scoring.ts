@@ -1,6 +1,6 @@
-import { avgCook, bunToast, CHAR_FACE, cookLevel, COOK_SCALE, cookZone, friesQuality, friesZone, FRIES_ZONE, isFlipped, isMelted, DRINK_FILL, MARKED, pattyDoneness, SALT, SWEET_ZONE } from "./cooking";
-import type { Drink, ExpectedLayer, Fries, Layer, Order, Piece, Plate } from "./types";
-import { BREADS, COUNTED, KIND_LABEL, SAUCE_RADIUS, SIZE_LABEL } from "./types";
+import { avgCook, bunToast, CHAR_FACE, cookLevel, COOK_SCALE, cookZone, friesQuality, friesZone, FRY_ZONE, isFlipped, isMelted, DRINK_FILL, MARKED, pattyDoneness, SALT } from "./cooking";
+import type { Drink, ExpectedLayer, Fries, Kind, Layer, Order, Piece, Plate } from "./types";
+import { BREADS, COUNTED, fryOf, KIND_LABEL, SAUCE_RADIUS, SIZE_LABEL, TORTILLAS } from "./types";
 
 export interface ScoreResult {
   /** 0..100 */
@@ -174,13 +174,41 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
       if (t >= COOK_SCALE.egg.over) return [0.85, "egg a bit overdone"];
       return [1, null];
     }
+    case "corn":
+    case "flour": {
+      // Taco tortillas: pale and stiff, soft and spotted (done), hard. A quesadilla's shell is
+      // folded over its filling and crisped on both sides.
+      if (exp.folded && !piece.folded) return [0.45, "wanted it folded"];
+      const t = cookLevel(piece);
+      const z = cookZone(exp.kind, t);
+      if (z === "burnt") return [0.15, piece.folded ? "burnt quesadilla" : "burnt tortilla"];
+      if (piece.folded && Math.max(...piece.cook) >= CHAR_FACE) return [0.6, "charred on one side"];
+      if (z === "under") return [0.5, piece.folded ? "quesadilla's still pale" : "cold, stiff tortilla"];
+      if (piece.folded && Math.min(...piece.cook) < 0.2) return [0.7, "only crisp on one side"];
+      if (z === "over") return [0.85, piece.folded ? "quesadilla a bit dark" : "tortilla a bit hard"];
+      return [1, null];
+    }
+    case "tostada": {
+      const z = cookZone("tostada", cookLevel(piece));
+      if (z === "burnt") return [0.15, "burnt tostada"];
+      if (z === "under") return [0.45, "soggy tostada shell"];
+      if (z === "over") return [0.85, "tostada a bit dark"];
+      return [1, null];
+    }
+    case "jack":
+      if (exp.melted && !isMelted(piece)) return [0.55, "cheese not melted"];
+      return [1, null];
     case "ketchup":
     case "mustard":
     case "pesto":
-    case "aioli": {
+    case "aioli":
+    case "redsalsa":
+    case "greensalsa":
+    case "crema": {
       const { q, word } = sauceVerdict(sauceCoverage(piece.stroke));
-      if (word === "stingy") return [q, `stingy with the ${exp.kind}`];
-      if (word === "drowning") return [q, `drowning in ${exp.kind}`];
+      const name = KIND_LABEL[exp.kind].toLowerCase();
+      if (word === "stingy") return [q, `stingy with the ${name}`];
+      if (word === "drowning") return [q, `drowning in ${name}`];
       return [q, null];
     }
     case "cheese":
@@ -230,10 +258,31 @@ export function starsFor(score: number): ScoreResult["stars"] {
   return score >= 90 ? 3 : score >= 70 ? 2 : score >= 45 ? 1 : 0;
 }
 
+/**
+ * Red Rock's dishes are judged by what's on them, not the order it went on in: tacos in the rack
+ * show every topping, a quesadilla's filling is folded inside, a tostada is built flat. The base
+ * (tortillas or the shell) stays first and the rest is sorted into the ticket's order, so a
+ * scoop of pork after the onion still counts with the others.
+ */
+export function dishOrder(expected: ExpectedLayer[], layers: Layer[]): Layer[] {
+  const base = expected[0]?.kind;
+  if (!base || !(TORTILLAS.has(base) || base === "tostada")) return layers;
+  const rank = (k: Kind) => {
+    const i = expected.findIndex((e) => e.kind === k);
+    return i < 0 ? expected.length : i;
+  };
+  const head = layers.filter((l) => l.piece.kind === base);
+  const rest = layers.filter((l) => l.piece.kind !== base);
+  return [...head, ...rest.map((l, i) => ({ l, i })).sort((a, b) => rank(a.l.piece.kind) - rank(b.l.piece.kind) || a.i - b.i).map((x) => x.l)];
+}
+
+/** Extra score (out of 1) when a taco's corn tortillas were pressed by hand (Sun Valley); it also adds to the tip. */
+export const HANDMADE_BONUS = 0.04;
+
 export function scorePlate(order: Order, plate: Plate): ScoreResult {
   const notes: string[] = [];
   const exp = order.layers;
-  const act = collapseCounted(plate.layers);
+  const act = collapseCounted(dishOrder(exp, plate.layers));
   const pairs = alignLayers(exp, act);
 
   const structure = act.length === 0 ? 0 : pairs.length / Math.max(exp.length, act.length);
@@ -271,6 +320,14 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
         [q0, note] = countQuality(want, act[j].count, exp[i].kind);
         // Counted cheese still has to melt; the avocado on an open toast must never be heated.
         if (exp[i].melted && !isMelted(act[j].piece)) [q0, note] = [Math.min(q0, 0.55), "cheese not melted"];
+        // Taco tortillas are counted, and the warmth of the run is judged on its worst one. A taco
+        // short is a lot worse than a pickle short.
+        if (TORTILLAS.has(exp[i].kind)) {
+          if (act[j].count < want) [q0, note] = [Math.max(0.2, act[j].count / want - 0.15), want - act[j].count > 1 ? "tacos short" : "a taco short"];
+          const run = plate.layers.filter((l) => l.piece.kind === exp[i].kind).map((l) => layerQuality(exp[i], l.piece));
+          const worst = run.reduce((a, b) => (b[0] < a[0] ? b : a), [1, null] as [number, string | null]);
+          if (worst[0] < q0) [q0, note] = worst;
+        }
         if (exp[i].cold && (act[j].piece.cook[0] ?? 0) > 0.15) [q0, note] = [Math.min(q0, 0.55), "warm avocado"];
         // A piece or two more than the recipe reads as generous.
         generous += Math.min(2, Math.max(0, act[j].count - want));
@@ -278,7 +335,8 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
       const dry = heldPenalty(act[j].piece);
       const q = q0 * (1 - dry);
       if (dry > 0.15 && !notes.includes("been sitting a while")) notes.push("been sitting a while");
-      const w = exp[i].kind === "patty" || exp[i].kind === "chicken" || exp[i].kind === "veggie" ? 3 : 1;
+      // The main part weighs most: a patty, a pressed protein, a quesadilla's shell or a taco's tortillas.
+      const w = exp[i].kind === "patty" || exp[i].kind === "chicken" || exp[i].kind === "veggie" || (exp[i].kind === "flour" && exp[i].folded) ? 3 : exp[i].kind === "corn" ? 2 : 1;
       sum += q * w;
       weights += w;
       worst = Math.min(worst, q);
@@ -312,7 +370,7 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
   let drinkQ = 0;
   if (order.fries) {
     sideParts++;
-    if (!plate.fries) notes.push(order.poutine ? "forgot the poutine" : "forgot the fries");
+    if (!plate.fries) notes.push(`forgot the ${sideName(order)}`);
     else friesQ = friesScore(order, plate.fries, notes);
     sideScore += friesQ;
   }
@@ -344,6 +402,12 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
     perks.push("grill marks");
   }
 
+  // Tortillas pressed by hand at Sun Valley: a little extra, and a better tip.
+  if (total > 0.5 && plate.layers.some((l) => l.piece.handmade)) {
+    total = Math.min(1, total + HANDMADE_BONUS);
+    perks.push("hand-pressed tortillas");
+  }
+
   // A side they didn't order, made well, softens a bad review: the worse it was going, the more
   // a freebie helps. It never lifts a great meal much, and a bad freebie doesn't count.
   if (generous > 0 && total < 1) {
@@ -355,56 +419,72 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
     total += Math.min(0.12, (1 - total) * 0.35) * q;
     perks.push(what);
   };
-  if (!order.fries && plate.fries && plate.fries.fill > 0.5) freebie(friesScore({ ...order, poutine: !!plate.fries.curds, sweet: !!plate.fries.sweet }, plate.fries, []), plate.fries.curds ? "free poutine" : "free fries");
+  if (!order.fries && plate.fries && plate.fries.fill > 0.5) {
+    const f = plate.fries;
+    const nachos = fryOf(f) === "chips";
+    freebie(friesScore({ ...order, poutine: !!f.curds, fry: fryOf(f) }, f, []), f.curds ? (nachos ? "free nachos" : "free poutine") : `free ${fryOf(f) === "fries" ? "fries" : fryOf(f) === "sweet" ? "sweet fries" : fryOf(f)}`);
+  }
   if (!order.drink && plate.drink && plate.drink.fill > 0.6) freebie(Math.min(1, plate.drink.fill), "free drink");
 
   const score = Math.round(clamp01(total) * 100);
   const sideMissing = (order.fries && (!plate.fries || friesQ < 0.35)) || (!!order.drink && (!plate.drink || drinkQ < 0.35));
   const faulty = (exp.length > 0 && (pairs.length < exp.length || worstLayer < 0.35)) || sideMissing;
-  const missing = order.drink && !plate.drink ? "forgot the drink" : order.fries && !plate.fries ? (order.poutine ? "forgot the poutine" : "forgot the fries") : exp.length > 0 && plate.layers.length === 0 ? "forgot the burger" : null;
+  const main = !exp.length ? "burger" : TORTILLAS.has(exp[0].kind) ? (exp[0].folded ? "quesadilla" : "tacos") : exp[0].kind === "tostada" ? "tostada" : BREADS.has(exp[0].kind) ? "panini" : "burger";
+  const missing = order.drink && !plate.drink ? "forgot the drink" : order.fries && !plate.fries ? `forgot the ${sideName(order)}` : exp.length > 0 && plate.layers.length === 0 ? `forgot the ${main}` : null;
   return { score, stars: starsFor(score), structure, quality, presentation, sides, notes, perks, faulty, missing };
 }
 
-/** Fries or poutine against the order, 0..1. */
+/** What the customer calls their side: fries, sweet fries, chips, churros, poutine or nachos. */
+function sideName(order: Order): string {
+  const fry = fryOf(order);
+  if (order.poutine) return fry === "chips" ? "nachos" : "poutine";
+  return fry === "sweet" ? "sweet fries" : fry;
+}
+
+/** Fries (or chips, churros) and poutine (or nachos) against the order, 0..1. */
 function friesScore(order: Order, fries: Fries, notes: string[]): number {
   const c = fries.cook;
-  const sweet = !!fries.sweet;
-  let q = friesQuality(c, sweet);
-  const zone = friesZone(c, sweet);
-  if (zone === "under") notes.push("soggy fries");
-  else if (zone === "over") notes.push(c >= (sweet ? SWEET_ZONE : FRIES_ZONE).burnt ? "burnt fries" : "overdone fries");
-  if (!order.poutine && sweet !== !!order.sweet) {
+  const fry = fryOf(fries);
+  const word = fry === "sweet" ? "fries" : fry;
+  let q = friesQuality(c, fry);
+  const zone = friesZone(c, fry);
+  if (zone === "under") notes.push(fry === "chips" ? "chewy chips" : fry === "churros" ? "doughy churros" : "soggy fries");
+  else if (zone === "over") notes.push(c >= FRY_ZONE[fry].burnt ? `burnt ${word}` : `overdone ${word}`);
+  if (fry !== fryOf(order)) {
     q *= 0.6;
-    notes.push(order.sweet ? "wanted sweet potato fries" : "wanted regular fries");
+    notes.push(`wanted ${{ fries: "regular fries", sweet: "sweet potato fries", chips: "chips", churros: "churros" }[fryOf(order)]}`);
   }
   if (fries.size !== order.friesSize) {
     q *= 0.5;
-    notes.push(`wanted ${SIZE_LABEL[order.friesSize].toLowerCase()} fries`);
+    notes.push(`wanted ${SIZE_LABEL[order.friesSize].toLowerCase()} ${word}`);
   } else if (fries.fill < 0.95) {
     q *= 0.6;
-    notes.push(order.poutine ? "skimpy poutine" : "skimpy fries");
+    notes.push(`skimpy ${order.poutine ? sideName(order) : word}`);
   }
   if (order.poutine) {
+    const nachos = fry === "chips";
     if (!fries.curds) {
       q *= 0.5;
-      notes.push("where are the curds?");
+      notes.push(nachos ? "where are the jalapeños?" : "where are the curds?");
     }
     if (!fries.gravy) {
       q *= 0.5;
-      notes.push("no gravy on the poutine");
+      notes.push(nachos ? "no queso on the nachos" : "no gravy on the poutine");
     }
   } else {
-    // Salt is optional but plain fries without it taste flat, and too much is worse; poutine toppings on plain fries are a surprise.
+    // Salt (sugar on churros) is optional but they taste flat without it, and too much is worse;
+    // poutine or nacho toppings on a plain side are a surprise.
     const salt = fries.salt ?? 0;
+    const what = fry === "churros" ? "sugar" : "salt";
     if (salt <= 0) {
       q *= 0.85;
-      notes.push("fries needed salt");
+      notes.push(`${word} needed ${what}`);
     } else if (salt < SALT.low) {
       q *= 0.93;
-      notes.push("fries could use more salt");
+      notes.push(`${word} could use more ${what}`);
     } else if (salt > SALT.high) {
       q *= 0.8;
-      notes.push("fries too salty");
+      notes.push(fry === "churros" ? "churros too sugary" : `${word} too salty`);
     }
     if (fries.curds || fries.gravy) q *= 0.8;
   }

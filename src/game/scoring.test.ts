@@ -237,8 +237,14 @@ describe("makeOrder", () => {
         expect(o.fries || !!o.drink).toBe(true);
         continue;
       }
-      for (const l of o.layers) if (!isSauce(l.kind)) expect(stop.pantry).toContain(l.kind);
-      // The coast's paninis start and end with bread (an open-faced toast only starts with it).
+      // (A tostada's shell is a corn tortilla fried at the fryer.)
+      for (const l of o.layers) if (!isSauce(l.kind) && l.kind !== "tostada") expect(stop.pantry).toContain(l.kind);
+      // The coast's paninis start and end with bread (an open-faced toast only starts with it);
+      // Red Rock's dishes start with a tortilla or a tostada shell.
+      if (stop.comal) {
+        expect(["corn", "flour", "tostada"]).toContain(o.layers[0].kind);
+        continue;
+      }
       const bread = stop.press ? [...BREADS] : ["bun"];
       expect(bread).toContain(o.layers[0].kind);
       if (o.name !== "Avocado Toast") expect(bread).toContain(o.layers[o.layers.length - 1].kind);
@@ -403,8 +409,12 @@ describe("recipe modifiers", () => {
         const o = makeOrder(i, rng, 1, stop);
         if (!o.layers.length) continue;
         for (const m of o.mods) {
-          if (m.type !== "toast") expect(["bun", "patty", ...BREADS, ...PROTEINS]).not.toContain(m.kind);
+          if (m.type !== "toast") expect(["bun", "patty", ...BREADS, ...PROTEINS, "corn", "flour", "tostada"]).not.toContain(m.kind);
           if (m.type === "add") expect(stop.pantry).toContain(m.kind);
+        }
+        if (stop.comal) {
+          expect(["corn", "flour", "tostada"]).toContain(o.layers[0].kind);
+          continue;
         }
         const bread = stop.press ? [...BREADS] : ["bun"];
         expect(bread).toContain(o.layers[0].kind);
@@ -458,7 +468,9 @@ describe("events", () => {
     const on = withEvent(t, rodeo);
     expect(on.customers).toBeGreaterThan(t.customers);
     expect(on.crowd).toBe(rodeo.crowd);
-    expect(on.menu).toEqual(t.menu);
+    // The rodeo's special, a platter of street tacos, joins the menu for the day.
+    expect(on.menu.slice(0, t.menu.length)).toEqual(t.menu);
+    expect(on.menu[on.menu.length - 1].name).toBe("Rodeo Platter");
   });
 
   it("hold a harvest fair at Larkvale", () => {

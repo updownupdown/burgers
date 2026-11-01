@@ -25,7 +25,19 @@ export type Kind =
   | "redonion"
   | "tuna"
   | "pesto"
-  | "aioli";
+  | "aioli"
+  // Red Rock's comal (DESIGN §24, phase 3).
+  | "corn"
+  | "flour"
+  | "pork"
+  | "beans"
+  | "cilantro"
+  | "lime"
+  | "jack"
+  | "tostada"
+  | "redsalsa"
+  | "greensalsa"
+  | "crema";
 
 export type Doneness = "rare" | "medium" | "well";
 export type DrinkId = "cola" | "water" | "tea" | "pine" | "pink" | "cucumber" | "hibiscus" | "lime" | "cider" | "bramble";
@@ -33,7 +45,15 @@ export type DrinkId = "cola" | "water" | "tea" | "pine" | "pink" | "cucumber" | 
 export const DRINKS: DrinkId[] = ["cola", "water", "tea", "pine", "pink", "cucumber", "hibiscus", "lime", "cider", "bramble"];
 /** On the fountain everywhere; the other two buttons are the area's own. */
 export const HOUSE_DRINKS: DrinkId[] = ["cola", "water", "tea"];
-export type SauceKind = "ketchup" | "mustard" | "pesto" | "aioli";
+export type SauceKind = "ketchup" | "mustard" | "pesto" | "aioli" | "redsalsa" | "greensalsa" | "crema";
+/**
+ * What a fryer basket and a carton hold: plain fries, sweet potato fries (the coast), tortilla
+ * chips (Red Rock, in place of fries) or churros (Sun Valley).
+ */
+export type FryKind = "fries" | "sweet" | "chips" | "churros";
+export const FRY_LABEL: Record<FryKind, string> = { fries: "Fries", sweet: "Sweet fries", chips: "Chips", churros: "Churros" };
+/** The fry kind on a carton or an order (missing means plain fries). */
+export const fryOf = (x: { fry?: FryKind } | null | undefined): FryKind => x?.fry ?? "fries";
 
 /** A single physical food item. `cook[0]` is the face currently down on the grill. */
 export interface Piece {
@@ -54,6 +74,14 @@ export interface Piece {
   marks?: [number, number];
   /** Panini bread: the sandwich was sliced in half on the cutting board. */
   cut?: boolean;
+  /** A flour tortilla folded in half over its filling on the comal (a quesadilla). */
+  folded?: boolean;
+  /** Which way a folded tortilla's open edge faces on the comal (radians about y). */
+  foldYaw?: number;
+  /** A tortilla on the comal: what's been laid on it (a quesadilla's cheese and fillings), in order. */
+  fill?: Piece[];
+  /** A corn tortilla flattened by hand in the tortilla press (Sun Valley). */
+  handmade?: boolean;
 }
 
 export interface Layer {
@@ -80,11 +108,14 @@ export interface Fries {
   fill: number;
   /** How much salt has been shaken on (see SALT in cooking.ts); 0 or missing is none. Plain fries want it; poutine doesn't need it. */
   salt?: number;
-  /** Poutine toppings: cheese curds, then gravy. */
+  /**
+   * The two toppings of a loaded carton: on poutine, cheese curds then gravy; on nachos (Red Rock),
+   * jalapeños (`curds`) and queso (`gravy`).
+   */
   curds?: boolean;
   gravy?: boolean;
-  /** Sweet potato fries (the coast's fryer, from Driftwood): they cook faster with a narrower done band. */
-  sweet?: boolean;
+  /** What's in the carton, when it isn't plain fries: sweet potato fries, chips or churros. (`salt` is sugar on churros.) */
+  fry?: FryKind;
 }
 
 export interface Drink {
@@ -113,6 +144,8 @@ export interface ExpectedLayer {
   flipped?: boolean;
   /** Avocado on an open-faced toast: it should never have been in the press. */
   cold?: boolean;
+  /** A flour tortilla folded over its filling and crisped on both sides (a quesadilla). */
+  folded?: boolean;
 }
 
 /** A change to a known recipe: "no pickles", "extra cheese", "add bacon", or a toasted bun on a burger that usually isn't. */
@@ -139,16 +172,16 @@ export interface Order {
   ice?: boolean | null;
   /** A food critic: their verdict goes in the paper. */
   critic?: boolean;
-  /** A poutine meal: a large carton of fries with curds and gravy, and no burger. */
+  /** A poutine meal: a large carton of fries with curds and gravy, and no burger. (Nachos in Red Rock: chips, jalapeños and queso.) */
   poutine?: boolean;
-  /** The fries are sweet potato fries. */
-  sweet?: boolean;
+  /** The side is sweet potato fries, chips or churros rather than plain fries. */
+  fry?: FryKind;
   /** A panini to be sliced in half on the cutting board (Harbor City). */
   slice?: boolean;
 }
 
-export const GRILLABLE: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon", "egg", "pineapple"]);
-export const SAUCES: ReadonlySet<Kind> = new Set<Kind>(["ketchup", "mustard", "pesto", "aioli"]);
+export const GRILLABLE: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon", "egg", "pineapple", "corn", "flour"]);
+export const SAUCES: ReadonlySet<Kind> = new Set<Kind>(["ketchup", "mustard", "pesto", "aioli", "redsalsa", "greensalsa", "crema"]);
 export const isSauce = (k: Kind): k is SauceKind => SAUCES.has(k);
 /** Panini breads: a sandwich starts and (unless it's open-faced) ends with one. */
 export const BREADS: ReadonlySet<Kind> = new Set<Kind>(["ciabatta", "sourdough"]);
@@ -156,15 +189,24 @@ export const BREADS: ReadonlySet<Kind> = new Set<Kind>(["ciabatta", "sourdough"]
 export const PROTEINS: ReadonlySet<Kind> = new Set<Kind>(["chicken", "veggie"]);
 /** Cheese that melts inside a closed panini. */
 export const PRESS_CHEESE: ReadonlySet<Kind> = new Set<Kind>(["mozzarella", "cheddar"]);
+/** Red Rock's tortillas: warmed on the comal for tacos; a flour one folds into a quesadilla. */
+export const TORTILLAS: ReadonlySet<Kind> = new Set<Kind>(["corn", "flour"]);
+/** Steam wells and the tuna well: a tap is one scoop onto the active tray. */
+export const SCOOPED: ReadonlySet<Kind> = new Set<Kind>(["tuna", "pork", "beans"]);
+/** What can be laid on a tortilla on the comal (a quesadilla's filling). */
+export const COMAL_FILL: ReadonlySet<Kind> = new Set<Kind>(["jack", "pork", "beans", "jalapeno", "onion", "cilantro"]);
 /** Half the width of a squeezed line of sauce, in burger-local units (the bun has radius 1). */
 export const SAUCE_RADIUS = 0.09;
 /**
  * Toppings placed one piece at a time; a recipe asks for a number of them. Fewer saves money but
  * customers notice; a couple extra can win a better review.
  */
-export const COUNTED: ReadonlySet<Kind> = new Set<Kind>(["pickle", "onion", "tomato", "jalapeno", "mozzarella", "avocado", "redonion", "tuna"]);
-/** Pieces of each counted topping in a standard recipe, unless the recipe says otherwise. */
-export const STANDARD_COUNT: Partial<Record<Kind, number>> = { pickle: 3, onion: 2, tomato: 2, jalapeno: 4, mozzarella: 3, avocado: 4, redonion: 2, tuna: 2 };
+export const COUNTED: ReadonlySet<Kind> = new Set<Kind>(["pickle", "onion", "tomato", "jalapeno", "mozzarella", "avocado", "redonion", "tuna", "corn", "pork", "beans"]);
+/**
+ * Pieces of each counted topping in a standard recipe, unless the recipe says otherwise. A taco
+ * order's corn tortillas are counted too (one per taco), and so are scoops from the steam wells.
+ */
+export const STANDARD_COUNT: Partial<Record<Kind, number>> = { pickle: 3, onion: 2, tomato: 2, jalapeno: 4, mozzarella: 3, avocado: 4, redonion: 2, tuna: 2, corn: 3, pork: 1, beans: 1 };
 /** "Extra pickles" adds this many on top of the recipe's count. */
 export function extraCount(kind: Kind): number {
   return Math.max(1, Math.round((STANDARD_COUNT[kind] ?? 1) * 0.67));
@@ -197,6 +239,17 @@ export const KIND_LABEL: Record<Kind, string> = {
   tuna: "Tuna",
   pesto: "Pesto",
   aioli: "Aioli",
+  corn: "Corn tortilla",
+  flour: "Flour tortilla",
+  pork: "Pork",
+  beans: "Beans",
+  cilantro: "Cilantro",
+  lime: "Lime",
+  jack: "Cheese",
+  tostada: "Tostada shell",
+  redsalsa: "Red salsa",
+  greensalsa: "Green salsa",
+  crema: "Crema",
 };
 
 /** Swatch colours used by tickets (CSS). */
@@ -227,6 +280,17 @@ export const KIND_COLOR: Record<Kind, string> = {
   tuna: "#e8d5b5",
   pesto: "#5f9a3a",
   aioli: "#f1e6c2",
+  corn: "#f0cf6a",
+  flour: "#f6ecd2",
+  pork: "#c0622e",
+  beans: "#7a4a32",
+  cilantro: "#3f9a3a",
+  lime: "#8cc63f",
+  jack: "#f6d77a",
+  tostada: "#e8b04a",
+  redsalsa: "#c8321f",
+  greensalsa: "#6c9e2c",
+  crema: "#f7f1e1",
 };
 
 export const DRINK_LABEL: Record<DrinkId, string> = {

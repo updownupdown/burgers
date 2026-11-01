@@ -5,7 +5,7 @@
  */
 import * as gameMenu from "../game/menu";
 import { ADD_PRICE, DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "../game/menu";
-import { fountainFor, recipeCount, STOPS, townById, type Recipe, type Stop } from "../game/stops";
+import { fountainFor, fryerOf, recipeCount, STOPS, townById, type Recipe, type Stop } from "../game/stops";
 import { openedBy, SHIFTS_TO_UNLOCK, unlockProgress } from "../game/travel";
 import { BREADS, COUNTED, DRINK_COLOR, PRESS_CHEESE, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, SIZE_LABEL, type Kind, type Size } from "../game/types";
 import { icon } from "../ui/icons";
@@ -52,10 +52,14 @@ export function recipeHtml(r: Recipe, mult: number, special: boolean, locked = f
     tags.push(`<span class="bv-chip pill">${icon("panini")}${r.open ? "Bread pressed, open-faced" : "Pressed"}</span>`);
     if (r.layers.some((k) => k === "chicken" || k === "veggie")) tags.push(`<span class="bv-chip pill">${icon("press")}${r.layers.includes("chicken") ? "Chicken" : "Patty"} pressed first</span>`);
     if (r.open && r.layers.includes("avocado")) tags.push(`<span class="bv-chip pill">${icon("avocado")}Avocado cold</span>`);
-  } else if (r.toasted) tags.push(`<span class="bv-chip pill">${icon("toast")}Toasted bun</span>`);
+  } else if (r.dish === "quesadilla") tags.push(`<span class="bv-chip pill">${icon("toast")}Folded, flipped once</span>`);
+  else if (r.dish === "tacos") tags.push(`<span class="bv-chip pill">${icon("toast")}Warm tortillas</span>`);
+  else if (r.dish === "tostada") tags.push(`<span class="bv-chip pill">${icon("flame")}Fried shell</span>`);
+  else if (r.toasted) tags.push(`<span class="bv-chip pill">${icon("toast")}Toasted bun</span>`);
   if (r.smash) tags.push(`<span class="bv-chip pill">${icon("smash")}Smashed, well done</span>`);
   if (r.melt) tags.push(`<span class="bv-chip pill">${icon("cheese")}Melted cheese</span>`);
-  if (r.layers.includes("pineapple")) tags.push(`<span class="bv-chip pill">${icon("flame")}Grilled pineapple</span>`);
+  if (r.layers.includes("pineapple")) tags.push(`<span class="bv-chip pill">${icon("flame")}${r.dish ? "Charred" : "Grilled"} pineapple</span>`);
+  if (r.egg === "over") tags.push(`<span class="bv-chip pill">${icon("flame")}Egg over easy</span>`);
   const flow = r.layers.map((k) => `<li><i class="swc" style="--c:${KIND_COLOR[k]}"></i><span>${layerLabel(r, k)}</span></li>`).join("");
   return `<article class="mref-item ${locked ? "locked" : ""}">
     ${stackArt(r)}
@@ -114,6 +118,10 @@ function elsewhereHtml(town: Stop, seen: Set<string>, prog: RoadProgress | null)
 export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = null): string {
   const base = new Set(townById(town.id).menu.map((r) => r.name));
   const press = !!town.press;
+  const comal = !!town.comal;
+  const fryer = fryerOf(town);
+  const main = press ? "Paninis" : comal ? "Tacos" : "Burgers";
+  const mainIcon = press ? "panini" : "burger";
   const scoops = (s: Size) => Math.round(FRIES_PORTION[s] / FRIES_SCOOP);
   const poutine = poutinePrice();
   const counted = [...COUNTED].map((k) => KIND_LABEL[k].toLowerCase());
@@ -123,7 +131,7 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
   ).join("");
   return `
   <nav class="menu-chips" aria-label="Sections">
-    <button class="bv-chip pill" data-jump="burgers">${icon(press ? "panini" : "burger")}${press ? "Paninis" : "Burgers"}</button>
+    <button class="bv-chip pill" data-jump="burgers">${icon(mainIcon)}${main}</button>
     <button class="bv-chip pill" data-jump="road">${icon("map")}Down the road</button>
     <button class="bv-chip pill" data-jump="sides">${icon("fries")}Sides</button>
     <button class="bv-chip pill" data-jump="drinks">${icon("drink")}Drinks</button>
@@ -131,18 +139,19 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
   </nav>
   ${mult !== 1 ? `<p class="bv-callout mref-biz">${icon("tag")}<span>Your prices: today's are ${mult > 1 ? "raised" : "lowered"} (×${mult.toFixed(2).replace(/0$/, "")}).</span></p>` : ""}
   <section class="mref-sec" data-sec="burgers">
-    <h3 class="menu-h">${icon(press ? "panini" : "burger")}${press ? "Paninis" : "Burgers"} in ${esc(town.name)} <span>${town.menu.length}</span></h3>
-    <p class="mref-note">${press ? `Every panini is pressed golden, the cheese melted inside.${town.press?.slice ? " Here they go out cut in half." : ""}` : "Every patty goes out medium. Nobody asks for rare or well done."}</p>
+    <h3 class="menu-h">${icon(mainIcon)}${main} in ${esc(town.name)} <span>${town.menu.length}</span></h3>
+    <p class="mref-note">${press ? `Every panini is pressed golden, the cheese melted inside.${town.press?.slice ? " Here they go out cut in half." : ""}` : comal ? `Tortillas are warmed on the comal until soft and spotted; a quesadilla is folded and flipped once, its cheese melted.${town.comal?.tpress ? " Hand-pressed tortillas earn a tip." : ""}` : "Every patty goes out medium. Nobody asks for rare or well done."}</p>
     ${town.menu.map((r) => recipeHtml(r, mult, !base.has(r.name))).join("")}
   </section>
   ${elsewhereHtml(town, new Set(town.menu.map((r) => r.name)), prog)}
   <section class="mref-sec" data-sec="sides">
     <h3 class="menu-h">${icon("fries")}Sides</h3>
     <table class="bv-table mref-table">
-      <thead><tr><th>Fries</th><th>Scoops</th><th class="num">Price</th></tr></thead>
-      <tbody>${fries}
-      ${town.sweet ? `<tr class="mref-poutine"><td colspan="2"><b>Sweet potato fries</b><small>Same sizes and prices; they cook faster</small></td><td class="num">${price(FRIES_PRICE.S)}+</td></tr>` : ""}
-      ${poutine != null && town.poutine ? `<tr class="mref-poutine"><td colspan="2"><b>Poutine</b><small>Fries, cheese curds, gravy</small></td><td class="num">${price(poutine)}</td></tr>` : ""}
+      <thead><tr><th>${fryer.includes("chips") ? "Chips & salsa" : "Fries"}</th><th>Scoops</th><th class="num">Price</th></tr></thead>
+      <tbody>${fryer.includes("chips") ? fries.replace(/ fries</g, " chips<") : fries}
+      ${fryer.includes("churros") ? `<tr class="mref-poutine"><td colspan="2"><b>Churros</b><small>Same sizes and prices; sugar on top</small></td><td class="num">${price(FRIES_PRICE.S)}+</td></tr>` : ""}
+      ${fryer.includes("sweet") ? `<tr class="mref-poutine"><td colspan="2"><b>Sweet potato fries</b><small>Same sizes and prices; they cook faster</small></td><td class="num">${price(FRIES_PRICE.S)}+</td></tr>` : ""}
+      ${poutine != null && town.poutine ? (fryer.includes("chips") ? `<tr class="mref-poutine"><td colspan="2"><b>Nachos</b><small>Chips, jalapeños, queso</small></td><td class="num">${price(poutine)}</td></tr>` : `<tr class="mref-poutine"><td colspan="2"><b>Poutine</b><small>Fries, cheese curds, gravy</small></td><td class="num">${price(poutine)}</td></tr>`) : ""}
       </tbody>
     </table>
     <p class="mref-note">Salted unless you skip it. Cartons come from the stacks by the fryer.</p>

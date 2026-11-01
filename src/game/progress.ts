@@ -168,6 +168,11 @@ export function migrateSave(p: Partial<Save> & Record<string, unknown>): Save {
   s.found = migrateBonuses([...(Array.isArray(s.found) ? s.found : []), ...s.bonuses]);
   // Old saves kept their gas money; it carries over as savings.
   s.bank = Math.max(0, Math.round(Number(s.bank) || 0));
+  // The shop dog was retired: whoever bought it gets the $350 back.
+  if (Array.isArray(s.looks) && s.looks.includes("dog")) {
+    s.bank += 350;
+    s.looks = s.looks.filter((id) => id !== "dog");
+  }
   s.looks = Array.isArray(s.looks) ? s.looks.filter((id) => LOOKS.some((l) => l.id === id && l.price > 0)) : [];
   s.look = validLook(s.look, s.looks);
   if (s.bonus && !s.bonuses.includes(s.bonus)) s.bonus = null;

@@ -543,13 +543,16 @@ Open towns whose bonus is still to unlock carry a small gold diamond on the map,
 
 **The Garage** (`src/screens/garage.ts`, the savings button by Settings on the map; a dot when an unlocked bonus is affordable). The truck stands on a little stage (a moon button shows it at night). Tabs: **Bonuses** by region, and **Looks** by slot. Tapping a look tries it on; the bar under the truck buys or wears it.
 
-**Looks** (`src/game/looks.ts`, drawn by `src/screens/truckart.ts`). Six slots, one worn in each, all purchases kept. They change nothing in the kitchen. Some are modest; the *Grand* ones are priced as long goals; three souvenirs are sold only after a shift in their town.
+**Looks** (`src/game/looks.ts`, drawn by `src/screens/truckart.ts`). Seven slots, one worn in each, all purchases kept. They change nothing in the kitchen. Some are modest; the *Grand* ones are priced as long goals; three souvenirs are sold only after a shift in their town.
 
 - Paint: Coral (free), Sage $150, Butter $150, Dusk blue $250, Diner two-tone $600, Woodie $1,200, Polished aluminium $4,000, Gold leaf $40,000 (glints).
 - Awning: Mustard (free), Candy stripes $120, Teal scallops $200, Velvet and fringe $6,000.
-- Roof: bare (free), Herb garden $300, Canoe $450 (Cedar Falls), Surfboards $450 (Driftwood), Windmill $900 (Dust Bowl Flats, turns), Neon sign $1,500 (glows after dark), Giant burger $2,500 (slowly turns), Rooftop hot tub $25,000 (steams).
-- Lights: none (free), String lights $250, Marquee bulbs $900 (chase at night), Searchlights $12,000 (sweep the night sky, across the road map too).
-- Wheels: Steel (free), Whitewalls $200, Chrome spokes $500, Gold spinners $8,000 (keep spinning).
-- Tag-along: nobody (free), Shop dog $350 (sleeps at night), Teardrop trailer $3,000 (matching paint), Hot-air balloon $30,000 (tethered, bobbing), Airship $75,000 (floats above the truck from town to town).
+- Roof: bare (free), Herb garden $300, Canoe $450 (Cedar Falls), Surfboards $450 (Driftwood), Windmill $900 (Dust Bowl Flats, turns), Neon sign $1,500 (glows after dark), Giant burger $2,500 (on a short, thick post; it doesn't turn), Rooftop hot tub $25,000 (cedar barrel with steel hoops on a slatted deck, ladder up the back, steam, lit from inside at night).
+- Lights: none (free), String lights $250 (wire clipped along the awning hem, bulbs hanging at the dips), Marquee bulbs $900 (chase at night), Searchlights $12,000 (sweep the night sky, across the road map too).
+- Wheels: Steel (free), Whitewalls $200, Chrome spokes $500, Gold spinners $8,000 (keep spinning). Both fill most of the wheel.
+- Inflatable (one at a time, pegged down just behind the front wheel): none (free), Inflatable fries $900 (sways), Inflatable chef $1,500 (sways, waves a spatula), Waving tube man $2,200 (flails wildly on a little blower).
+- Tag-along: nobody (free), Teardrop trailer $3,000 (matching paint), Hot-air balloon $30,000 (tethered, bobbing), Airship $75,000 (floats above the truck from town to town).
 
-**Where looks show.** The road map's truck (the same art, drawn small with thicker lines; it lights up on the evening map), the night card when the truck sleeps (parked under the stars with the window lit, bulbs and neon on, beams sweeping and the dog asleep, then dawn), and the Garage. The catalogue page is `looks.html` beside the game. Counters in the kitchen don't show looks yet.
+**Where looks show.** The road map's truck (the same art, drawn small with thicker lines; it lights up on the evening map), the night card when the truck sleeps (parked under the stars with the window lit, bulbs and neon on, beams sweeping, then dawn), and the Garage. The catalogue page is `looks.html` beside the game. Counters in the kitchen don't show looks yet.
+
+*Build after #58 (James):* the shop dog was retired (owners get $350 back) for the Inflatable slot; the giant burger stopped turning; the neon sign shrank; the hot tub was redrawn; the string lights now hang from the awning; chrome and gold rims got bigger.

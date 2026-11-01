@@ -13,7 +13,7 @@ import "./garage.css";
  *
  * - **Bonuses**: one per town, in road order. Locked until a great shift there; then for sale;
  *   then owned and ready to bring from Prep.
- * - **Looks**: paint, awning, roof, lights, wheels and a tag-along. Tap one to try it on; buy it
+ * - **Looks**: paint, awning, roof, lights, wheels, an inflatable and a tag-along. Tap one to try it on; buy it
  *   or wear it from the bar under the truck.
  */
 

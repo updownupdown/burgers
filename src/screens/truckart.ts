@@ -18,7 +18,7 @@ import "./truckart.css";
 
 export interface TruckOpts {
   mini?: boolean;
-  /** Night: the window is lit, bulbs and neon glow, searchlights sweep, the dog sleeps. */
+  /** Night: the window is lit, bulbs and neon glow, searchlights sweep, the hot tub lights up. */
   night?: boolean;
   /** Width in CSS pixels (big art only); the height follows. */
   width?: number;
@@ -183,15 +183,16 @@ export function truckSvg(look: Look = DEFAULT_LOOK, o: TruckOpts = {}): string {
   if (look.lights === "marquee") front.push(marquee(mini));
   if (look.lights === "search") front.push(searchLamps(W, mini));
 
-  // ---- roof things in front of the roof line (signs, burger), and the dog
+  // ---- roof things in front of the roof line (signs, burger), and the inflatable on the pavement
   front.push(look.roof === "neon" ? roofFront(look.roof, id, W, mini, defs) : shade(roofFront(look.roof, id, W, mini, defs)));
-  if (tag === "dog" && !mini) front.push(dog());
+  front.push(shade(inflatable(look.inflatable, W, mini)));
   if (paint.finish === "gold" && !mini) front.push(glints());
 
   // ---- the box around it all
   let [x0, y0, x1, y1] = o.crop ? [-2, -4, 218, 122] : [-8, 6, 224, 124];
-  const roofTop: Record<string, number> = { none: 14, herbs: 2, canoe: -4, surf: -4, windmill: -62, neon: -20, burger: -44, hottub: -16 };
-  y0 = Math.min(y0, (roofTop[look.roof] ?? 14) - 4);
+  const roofTop: Record<string, number> = { none: 14, herbs: 2, canoe: -4, surf: -4, windmill: -62, neon: -12, burger: -32, hottub: -30 };
+  const floatTop: Record<string, number> = { fries: 56, chef: 34, tubeman: -10 };
+  y0 = Math.min(y0, (roofTop[look.roof] ?? 14) - 4, (floatTop[look.inflatable] ?? 99) - 6);
   if (look.lights === "search" && !o.crop) y0 = Math.min(y0, -70);
   if (tag === "trailer") x0 = -80;
   if (tag === "balloon") y0 = Math.min(y0, o.crop ? -60 : -134);
@@ -270,7 +271,8 @@ function wheel(kind: string, x: number, y: number, r: number, W: number, mini: b
   if (mini) {
     const hub = kind === "spinners" ? GOLD : kind === "steel" ? CREAM : CHROME;
     const wall = kind === "whitewall" ? `<circle cx="${x}" cy="${y}" r="${r * 0.72}" fill="#f4efe6"/>` : "";
-    return tyre + wall + `<circle cx="${x}" cy="${y}" r="${r * 0.45}" fill="${hub}"/>`;
+    const big = kind === "spinners" || kind === "chromehub";
+    return tyre + wall + `<circle cx="${x}" cy="${y}" r="${r * (big ? 0.72 : 0.45)}" fill="${hub}"/>`;
   }
   if (kind === "whitewall")
     return `${tyre}<circle cx="${x}" cy="${y}" r="${r * 0.78}" fill="#f4efe6" stroke="#cfc8bb" stroke-width="0.6"/><circle cx="${x}" cy="${y}" r="${r * 0.5}" fill="${TYRE}"/>
@@ -279,14 +281,15 @@ function wheel(kind: string, x: number, y: number, r: number, W: number, mini: b
     const metal = kind === "spinners" ? GOLD : CHROME;
     const spokes =
       kind === "spinners"
-        ? `<g class="tk-spinner" style="transform-origin:${x}px ${y}px">${[0, 120, 240].map((a) => `<path transform="rotate(${a} ${x} ${y})" d="M${x} ${y}Q${x + 3} ${y - 5} ${x + 1} ${y - 8.6}Q${x - 2} ${y - 5} ${x} ${y}Z" fill="#fff0b8" stroke="#a87a22" stroke-width="0.5"/>`).join("")}</g>`
-        : Array.from({ length: 10 }, (_, i) => {
-            const a = (i / 10) * Math.PI * 2;
-            return `<path d="M${x} ${y}L${f(x + Math.cos(a) * r * 0.66)} ${f(y + Math.sin(a) * r * 0.66)}" stroke="${ln2(metal)}" stroke-width="0.8"/>`;
+        ? `<g class="tk-spinner" style="transform-origin:${x}px ${y}px">${[0, 120, 240].map((a) => `<path transform="rotate(${a} ${x} ${y})" d="M${x} ${y}Q${f(x + 4.4)} ${f(y - 6)} ${f(x + 1.6)} ${f(y - r * 0.8)}Q${f(x - 3)} ${f(y - 6.4)} ${x} ${y}Z" fill="#fff0b8" stroke="#a87a22" stroke-width="0.6"/>`).join("")}</g>`
+        : Array.from({ length: 12 }, (_, i) => {
+            const a = (i / 12) * Math.PI * 2;
+            return `<path d="M${f(x + Math.cos(a + 0.18) * 3)} ${f(y + Math.sin(a + 0.18) * 3)}L${f(x + Math.cos(a) * r * 0.8)} ${f(y + Math.sin(a) * r * 0.8)}" stroke="${ln2(metal)}" stroke-width="0.9"/>`;
           }).join("");
     void id;
     void defs;
-    return `${tyre}<circle cx="${x}" cy="${y}" r="${r * 0.7}" fill="${metal}" stroke="${ln2(metal)}" stroke-width="0.8"/>${spokes}<circle cx="${x}" cy="${y}" r="2.2" fill="${metal}" stroke="${ln2(metal)}" stroke-width="0.7"/><path d="M${x - 6} ${y - 5}a8 8 0 0 1 6 -3" stroke="#ffffff" stroke-width="1.2" fill="none" opacity="0.7" stroke-linecap="round"/>`;
+    // Big, low-profile rims: only a thin band of tyre shows.
+    return `${tyre}<circle cx="${x}" cy="${y}" r="${f(r * 0.86)}" fill="${metal}" stroke="${ln2(metal)}" stroke-width="0.8"/><circle cx="${x}" cy="${y}" r="${f(r * 0.8)}" fill="none" stroke="${ln2(metal)}" stroke-width="0.5" opacity="0.7"/>${spokes}<circle cx="${x}" cy="${y}" r="3" fill="${metal}" stroke="${ln2(metal)}" stroke-width="0.7"/><path d="M${x - 8} ${y - 6}a10 10 0 0 1 7.5 -4.2" stroke="#ffffff" stroke-width="1.4" fill="none" opacity="0.75" stroke-linecap="round"/>`;
   }
   return `${tyre}<circle cx="${x}" cy="${y}" r="${r * 0.55}" fill="#6d6560"/><circle cx="${x}" cy="${y}" r="${r * 0.28}" fill="${CREAM}" stroke="${ln2(CREAM)}" stroke-width="${W * 0.5}"/>`;
 }
@@ -340,17 +343,21 @@ function bulb(x: number, y: number, r: number, cls = "", delay = 0): string {
 }
 
 function stringLights(mini: boolean): string {
-  // A wire swagged under the awning's hem, a bulb at every dip.
-  const pts: [number, number][] = [];
+  // A wire clipped to the awning's hem at each point, swagging between, a bulb hanging at each dip.
   const n = mini ? 5 : 9;
-  let d = "M18 46";
+  const hem = 38.6;
+  const sag = mini ? 6 : 5;
+  const xs = Array.from({ length: n + 1 }, (_, i) => 21 + (i / n) * 108);
+  let d = `M${f(xs[0])} ${hem}`;
+  const dips: [number, number][] = [];
   for (let i = 0; i < n; i++) {
-    const a = 18 + (i / n) * 116;
-    const b = 18 + ((i + 1) / n) * 116;
-    d += `Q${f((a + b) / 2)} ${mini ? 54 : 53} ${f(b)} 46`;
-    pts.push([(a + b) / 2, mini ? 50.5 : 50]);
+    const m = (xs[i] + xs[i + 1]) / 2;
+    d += `Q${f(m)} ${f(hem + sag * 2)} ${f(xs[i + 1])} ${hem}`;
+    dips.push([m, hem + sag]);
   }
-  return `<path class="tk-wire" d="${d}" fill="none"/>${pts.map(([x, y], i) => bulb(x, y + 1.8, mini ? 3 : 2.1, "", i * 0.13)).join("")}`;
+  const clips = mini ? "" : xs.map((x) => `<rect x="${f(x - 0.9)}" y="${hem - 1.6}" width="1.8" height="2.4" rx="0.4" fill="#5a4f48"/>`).join("");
+  const drops = mini ? "" : dips.map(([x, y]) => `<path d="M${f(x)} ${f(y)}v1.4" stroke="#3f3630" stroke-width="0.7"/>`).join("");
+  return `<path class="tk-wire" d="${d}" fill="none"/>${clips}${drops}${dips.map(([x, y], i) => bulb(x, y + (mini ? 2.6 : 3.2), mini ? 3 : 2, "", i * 0.13)).join("")}`;
 }
 
 function marquee(mini: boolean): string {
@@ -421,18 +428,7 @@ function roof(kind: string, id: string, W: number, mini: boolean, defs: string[]
     };
     return `${leaves(20, 72)}${leaves(86, 138)}<rect x="20" y="11" width="52" height="9" rx="1" fill="${box}" stroke="${ln2(box)}" stroke-width="${W}"/><rect x="86" y="11" width="52" height="9" rx="1" fill="${box}" stroke="${ln2(box)}" stroke-width="${W}"/>`;
   }
-  if (kind === "hottub") {
-    const wood = "#b07a4f";
-    const staves = mini ? "" : Array.from({ length: 14 }, (_, i) => `<path d="M${46 + i * 5} -6V19" stroke="#8a5a3c" stroke-width="0.6"/>`).join("");
-    const steam = mini
-      ? ""
-      : [56, 78, 100].map((x, i) => `<path class="tk-steam" style="animation-delay:${i * 0.9}s" d="M${x} -10q-5 -7 0 -14t0 -14" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"/>`).join("");
-    const ladder = `<path d="M4 22V94M10 22V94${mini ? "" : "M4 32h6M4 44h6M4 56h6M4 68h6M4 80h6"}" stroke="#7d868b" stroke-width="${mini ? 3 : 1.2}"/>`;
-    return `${ladder}${steam}<path d="M42 -6H118L116 20H44Z" fill="${wood}" stroke="${ln2(wood)}" stroke-width="${W}" stroke-linejoin="round"/>${staves}
-      <path d="M43 1H117M44 13H116" stroke="#5a4f48" stroke-width="${mini ? 3 : 1.4}"/>
-      <ellipse cx="80" cy="-6" rx="38" ry="${mini ? 4 : 3}" fill="#8fd0e0" stroke="${ln2(wood)}" stroke-width="${W}"/>
-      ${mini ? "" : `<path d="M100 -7c2 0 4 1 4 3v10h5v-12" fill="${CREAM}" stroke="${line(CREAM)}" stroke-width="0.6"/><path d="M104 2h5" stroke="${CORAL}" stroke-width="1.2"/>`}`;
-  }
+  if (kind === "hottub") return hotTub(id, W, mini, defs);
   if (kind === "windmill") {
     const steel = "#a9afab";
     const lattice = mini
@@ -460,19 +456,22 @@ function roofFront(kind: string, id: string, W: number, mini: boolean, defs: str
     defs.push(`<filter id="${id}-neon" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`);
     const board = "#2f2a33";
     const tube = `class="tk-neon" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
-    return `<path d="M52 20V12M108 20V12" stroke="#5a4f48" stroke-width="${mini ? 5 : 2.2}"/>
+    return `<g transform="translate(80 20) scale(0.78) translate(-80 -20)"><path d="M52 20V12M108 20V12" stroke="#5a4f48" stroke-width="${mini ? 5 : 2.2}"/>
       <rect x="36" y="-18" width="88" height="30" rx="4" fill="${board}" stroke="${line(board)}" stroke-width="${W}"/>
       <g ${tube} stroke-width="${mini ? 3.4 : 1.7}" filter="${mini ? "" : `url(#${id}-neon)`}">
         <path d="M44 4.5Q45 -11 56 -11Q67 -11 68 4.5Z"/><path d="M42 7.5H70"/><path d="M56 -11v-2.5"/>
         ${mini ? `<path d="M78 -6H116M78 4H110"/>` : `<ellipse cx="81" cy="-3.5" rx="4" ry="7"/><path d="M89 3.5V-10.5H93Q97 -10.5 97 -6.5Q97 -2.5 93 -2.5H89"/><path d="M109 -10.5H102V3.5H109M102 -3.5H107"/><path d="M113 3.5V-10.5L120 3.5V-10.5"/>`}
-      </g>`;
+      </g></g>`;
   }
   if (kind === "burger") {
     const bun = "#e7a95a";
     const beef = "#6b3f2a";
+    const post = "#7d868b";
     return `<g>
-      <path d="M85 20V-2" stroke="#7d868b" stroke-width="${mini ? 5 : 2.6}"/>
-      <g class="tk-turn" style="transform-origin:85px -20px">
+      <path d="M81 20V7H89V20Z" fill="${post}" stroke="${line(post)}" stroke-width="${W * 0.8}"/>
+      <path d="M74 20.5Q74 17 78 17H92Q96 17 96 20.5Z" fill="${post}" stroke="${line(post)}" stroke-width="${W * 0.8}"/>
+      ${mini ? "" : `<path d="M83 8V18" stroke="#ffffff" stroke-width="1.2" opacity="0.45"/>`}
+      <g transform="translate(0 12)">
         <path d="M60 -10H110Q110 -3 104 -3H66Q60 -3 60 -10Z" fill="${bun}" stroke="${line(bun)}" stroke-width="${W}"/>
         <rect x="58" y="-17" width="54" height="7.5" rx="3.5" fill="${beef}" stroke="${line(beef)}" stroke-width="${W}"/>
         <path d="M58 -17H112L106 -12L100 -16L90 -10L82 -16L72 -12L64 -16Z" fill="${MUSTARD}" stroke="${line(MUSTARD)}" stroke-width="${W * 0.6}" stroke-linejoin="round"/>
@@ -488,21 +487,152 @@ function roofFront(kind: string, id: string, W: number, mini: boolean, defs: str
 // ---------------------------------------------------------------------------
 // Tag-alongs
 
-function dog(): string {
-  const fur = "#d6a066";
-  const dark = "#8a5a3c";
-  const head = (cls: string, t: string) => `<g class="${cls}" transform="${t}">
-    <path d="M175 61Q171 49 181 46Q189 44 192 50L199 54Q202.5 56.5 200 59.5L194 62.5Q188 66.5 181 65.5Q176.5 64.5 175 61Z" fill="${fur}" stroke="${line(fur)}" stroke-width="0.9" stroke-linejoin="round"/>
-    <path d="M190.5 51.5L199 54Q202.5 56.5 200 59.5L194 62Q190.5 58.5 190.5 51.5Z" fill="#f3e6d0"/>
-    <ellipse cx="200.2" cy="56" rx="1.7" ry="1.3" fill="${INK}"/>
-    <path class="tk-ear" style="transform-origin:181px 47px" d="M181.5 47Q174 46 171.5 54.5Q173.5 59 178 56.5Q181.5 52.5 181.5 47Z" fill="${dark}" stroke="${line(dark)}" stroke-width="0.8" stroke-linejoin="round"/>
-    <path d="M177 63.5Q184 67.5 191 64" stroke="${CHERRY}" stroke-width="2" fill="none" stroke-linecap="round"/>
+/** Inflatables stand on the pavement just behind the front wheel, in front of the body. */
+function inflatable(kind: string, W: number, mini: boolean): string {
+  if (kind === "tubeman") return tubeMan(W, mini);
+  if (kind === "chef") return chef(W, mini);
+  if (kind === "fries") return friesBalloon(W, mini);
+  return "";
+}
+
+/** Little pegs and guy lines that hold an inflatable down. */
+function pegs(x0: number, x1: number, top: number, mini: boolean): string {
+  if (mini) return "";
+  return `<path d="M${x0} ${top}L${x0 - 6} 116.5M${x1} ${top}L${x1 + 6} 116.5" stroke="#8a7d72" stroke-width="0.5"/><path d="M${x0 - 7} 116.5h2M${x1 + 5} 116.5h2" stroke="#5a4f48" stroke-width="1.2"/>`;
+}
+
+function tubeMan(W: number, mini: boolean): string {
+  const red = "#e8553e";
+  const yel = "#f3c45a";
+  const ol = line(red);
+  const sw = mini ? 3 : W;
+  // A chain of tube segments, each nested in the last and swaying on its own clock: the whip.
+  const seg = (h: number, w: number, cls: string, inner: string) =>
+    `<g class="tk-tube ${cls}"><path d="M${-w / 2} 0Q${-w / 2 - 0.6} ${-h / 2} ${-w / 2} ${-h}H${w / 2}Q${w / 2 + 0.6} ${-h / 2} ${w / 2} 0Z" fill="${red}" stroke="${ol}" stroke-width="${sw}" stroke-linejoin="round"/>${
+      mini ? "" : `<path d="M${-w / 2 + 1.6} -2V${-h + 2}" stroke="#ffffff" stroke-width="1.1" opacity="0.35"/>`
+    }<g transform="translate(0 ${-h})">${inner}</g></g>`;
+  const arm = (side: number, cls: string) =>
+    `<g transform="scale(${side} 1)"><g class="tk-tube ${cls}"><path d="M0 -1Q10 -6 18 -16Q20 -18 22 -16Q16 -4 2 3Z" fill="${red}" stroke="${ol}" stroke-width="${sw * 0.9}" stroke-linejoin="round"/>${
+      mini ? "" : `<path d="M18.6 -16.6q2 -3 4 -1M19.4 -15.6l3 -3.2" stroke="${ol}" stroke-width="0.8" fill="none"/>`
+    }</g></g>`;
+  const head = `<g><path d="M-6 0Q-7 -12 0 -13Q7 -12 6 0Z" fill="${yel}" stroke="${line(yel)}" stroke-width="${sw}" stroke-linejoin="round"/>${
+    mini
+      ? ""
+      : `<circle cx="-2.2" cy="-7.6" r="1.6" fill="#ffffff" stroke="${INK}" stroke-width="0.4"/><circle cx="2.4" cy="-7.6" r="1.6" fill="#ffffff" stroke="${INK}" stroke-width="0.4"/><circle cx="-1.8" cy="-7.4" r="0.7" fill="${INK}"/><circle cx="2.8" cy="-7.8" r="0.7" fill="${INK}"/><path d="M-3 -3.4Q0 -0.6 3 -3.4" stroke="${INK}" stroke-width="0.8" fill="none" stroke-linecap="round"/>`
+  }<path d="M-5 -12.5Q-6 -18 -2 -16Q0 -20 2 -16Q6 -18 5 -12.5" fill="${red}" stroke="${ol}" stroke-width="${sw * 0.8}" stroke-linejoin="round"/></g>`;
+  const top = seg(16, 9, "t3", `${arm(1, "a1")}${arm(-1, "a2")}${head}`);
+  const body = seg(30, 10, "t1", seg(26, 9.5, "t2", top));
+  const blower = `<path d="M-9 116V106Q-9 103 -6 103H6Q9 103 9 106V116Z" fill="#5f6b4a" stroke="${line("#5f6b4a")}" stroke-width="${sw * 0.8}"/>${
+    mini ? "" : `<circle cx="0" cy="110" r="3" fill="none" stroke="#3f4632" stroke-width="0.7"/><path d="M-2 110h4M0 108v4" stroke="#3f4632" stroke-width="0.6"/>`
+  }`;
+  return `<g class="tk-float tk-tubeman" transform="translate(156 0)">${blower}<g transform="translate(0 103)">${body}</g></g>`;
+}
+
+function chef(W: number, mini: boolean): string {
+  const white = "#f6f1e7";
+  const ol = line("#d8cfbf");
+  const sw = mini ? 3 : W;
+  const skin = "#f0c49a";
+  return `<g class="tk-float tk-chef" transform="translate(156 0)">
+    ${pegs(-9, 9, 84, mini)}
+    <g class="tk-sway">
+      <path d="M-11 116Q-14 96 -11 80Q-10 70 0 69Q10 70 11 80Q14 96 11 116Z" fill="${white}" stroke="${ol}" stroke-width="${sw}" stroke-linejoin="round"/>
+      ${mini ? "" : `<path d="M-9 98H9V113H-9Z" fill="${CORAL}" opacity="0.85"/><circle cx="0" cy="79" r="0.9" fill="${ol}"/><circle cx="0" cy="86" r="0.9" fill="${ol}"/><circle cx="0" cy="93" r="0.9" fill="${ol}"/>`}
+      <path d="M-5.5 70.5H5.5" stroke="${CHERRY}" stroke-width="${mini ? 3 : 2.4}" stroke-linecap="round"/>
+      <ellipse cx="0" cy="61" rx="8.5" ry="9" fill="${skin}" stroke="${line(skin)}" stroke-width="${sw}"/>
+      ${mini ? "" : `<circle cx="-3" cy="60" r="0.9" fill="${INK}"/><circle cx="3" cy="60" r="0.9" fill="${INK}"/><path d="M-3 64.5Q0 67 3 64.5" stroke="${INK}" stroke-width="0.8" fill="none" stroke-linecap="round"/><circle cx="-5" cy="63.5" r="1.4" fill="#ec9a86" opacity="0.6"/><circle cx="5" cy="63.5" r="1.4" fill="#ec9a86" opacity="0.6"/>`}
+      <path d="M-7.5 55Q-12 52 -10 46Q-9 38 -3 40Q0 33 3 40Q9 38 10 46Q12 52 7.5 55Z" fill="${white}" stroke="${ol}" stroke-width="${sw}" stroke-linejoin="round"/>
+      <path d="M-7.5 55H7.5V51.5H-7.5Z" fill="${white}" stroke="${ol}" stroke-width="${sw * 0.8}"/>
+      <g class="tk-wave">
+        <path d="M9 76Q18 70 22 60Q24 57 26 60Q24 72 12 82Z" fill="${white}" stroke="${ol}" stroke-width="${sw}" stroke-linejoin="round"/>
+        <circle cx="24" cy="58.5" r="2.6" fill="${skin}" stroke="${line(skin)}" stroke-width="${sw * 0.7}"/>
+        <path d="M24 58L27 46" stroke="#5a4f48" stroke-width="${mini ? 3 : 1.6}" stroke-linecap="round"/><path d="M24.4 46.5L25.8 38L32 39.6L29.6 47.6Z" fill="${CHROME}" stroke="${line(CHROME)}" stroke-width="${sw * 0.7}" stroke-linejoin="round"/>
+      </g>
+      <path d="M-9 78Q-15 86 -14 94Q-13 97 -10.5 95Q-10 88 -7 82Z" fill="${white}" stroke="${ol}" stroke-width="${sw}" stroke-linejoin="round"/>
+    </g>
   </g>`;
-  return `<g class="tk-dog">
-    <g class="awake">${head("", "")}<circle cx="187" cy="51.6" r="1.2" fill="${INK}"/><path d="M194.5 61.5q0.5 4.5 3 4q1.5 -0.5 0.5 -4.5z" fill="#e8838f" stroke="${line("#e8838f")}" stroke-width="0.5"/></g>
-    <g class="asleep">${head("", "translate(-2 5) rotate(10 186 60)")}<path d="M184.8 57.6q1.5 1.2 3 0" stroke="${INK}" stroke-width="0.9" fill="none" stroke-linecap="round"/><text class="tk-z" x="196" y="50" font-size="7" font-weight="700" fill="#e9e1d2">z</text><text class="tk-z z2" x="201" y="43" font-size="5" font-weight="700" fill="#e9e1d2">z</text></g>
-    <ellipse cx="182" cy="69.6" rx="3.2" ry="1.9" fill="#f3e6d0" stroke="${line(fur)}" stroke-width="0.6"/><ellipse cx="189" cy="69.6" rx="3.2" ry="1.9" fill="#f3e6d0" stroke="${line(fur)}" stroke-width="0.6"/>
+}
+
+function friesBalloon(W: number, mini: boolean): string {
+  const red = "#d9534f";
+  const fry = "#f2c35a";
+  const sw = mini ? 3 : W;
+  const sticks = [
+    [-7, 70, -14],
+    [-9, 72, -9],
+    [-5, 66, -4],
+    [1, 68, -1],
+    [-1, 62, 3],
+    [3, 64, 7],
+    [7, 69, 12],
+    [9, 74, 17],
+  ]
+    .map(([x, y, a]) => `<rect x="${x - 2.4}" y="${y}" width="4.8" height="${86 - y}" rx="2" transform="rotate(${a} ${x} 86)" fill="${fry}" stroke="${line(fry)}" stroke-width="${sw * 0.8}"/>`)
+    .join("");
+  return `<g class="tk-float tk-fries" transform="translate(156 0)">
+    ${pegs(-12, 12, 92, mini)}
+    <g class="tk-sway">
+      ${sticks}
+      <path d="M-15 82Q0 87 15 82L12 114Q0 117 -12 114Z" fill="${red}" stroke="${line(red)}" stroke-width="${sw}" stroke-linejoin="round"/>
+      ${mini ? "" : `<path d="M-14.6 86Q0 91 14.6 86" stroke="#ffffff" stroke-width="1" fill="none" opacity="0.5"/><path d="M-6 97Q-3 92 0 97Q3 92 6 97Q3 103 0 106Q-3 103 -6 97Z" fill="${MUSTARD}" stroke="${line(MUSTARD)}" stroke-width="0.6"/><path d="M-10 90L-8.6 112" stroke="#ffffff" stroke-width="2" opacity="0.25" stroke-linecap="round"/>`}
+    </g>
   </g>`;
+}
+
+/**
+ * The hot tub: a cedar barrel tub on a slatted deck over the roof, with steel hoops, a thick
+ * rim, water that lights up at night, a towel over the side, steps up from the rear ladder and
+ * a rail along the roof edge.
+ */
+function hotTub(id: string, W: number, mini: boolean, defs: string[]): string {
+  const cedar = "#b07a4f";
+  const cedarDk = "#8a5a3c";
+  const deckC = "#9a6a48";
+  const band = "#5a4f48";
+  const cx = 82;
+  const rx = 33;
+  const top = -6;
+  const bot = 15;
+  defs.push(`<linearGradient id="${id}-staves" x1="0" x2="1"><stop offset="0" stop-color="#6e4630" stop-opacity="0.55"/><stop offset="0.22" stop-color="#6e4630" stop-opacity="0"/><stop offset="0.62" stop-color="#ffffff" stop-opacity="0.12"/><stop offset="0.86" stop-color="#6e4630" stop-opacity="0.15"/><stop offset="1" stop-color="#6e4630" stop-opacity="0.6"/></linearGradient>`);
+  defs.push(`<radialGradient id="${id}-water" cx="0.45" cy="0.4" r="0.7"><stop offset="0" stop-color="#bfe8ef"/><stop offset="0.6" stop-color="#7fc4d4"/><stop offset="1" stop-color="#4f97ab"/></radialGradient>`);
+  defs.push(`<radialGradient id="${id}-tubglow"><stop offset="0" stop-color="#9ff0ff" stop-opacity="0.95"/><stop offset="0.6" stop-color="#5fd0e8" stop-opacity="0.5"/><stop offset="1" stop-color="#5fd0e8" stop-opacity="0"/></radialGradient>`);
+  const body = `M${cx - rx} ${top}L${cx - rx + 1.5} ${bot}Q${cx} ${bot + 5} ${cx + rx - 1.5} ${bot}L${cx + rx} ${top}Z`;
+  // Staves: lines spaced like the slats of a round tub, closer together towards the sides.
+  const staves = mini
+    ? ""
+    : Array.from({ length: 15 }, (_, i) => {
+        const t = -1 + ((i + 0.5) / 15) * 2;
+        const x = cx + Math.sin((t * Math.PI) / 2) * (rx - 0.5);
+        return `<path d="M${f(x)} ${top + 3}L${f(x - (x - cx) * 0.04)} ${f(bot + 4.6 * (1 - t * t))}" stroke="${cedarDk}" stroke-width="0.55" opacity="0.8"/>`;
+      }).join("");
+  const hoop = (y: number) =>
+    `<path d="M${cx - rx + 0.3} ${y}Q${cx} ${y + 5} ${cx + rx - 0.3} ${y}" stroke="${band}" stroke-width="${mini ? 3 : 1.8}" fill="none"/>${
+      mini ? "" : `<circle cx="${cx + rx - 4}" cy="${f(y + 0.9)}" r="0.8" fill="#9aa3a8"/><path d="M${cx - rx + 0.3} ${y - 0.7}Q${cx} ${y + 4.3} ${cx + rx - 0.3} ${y - 0.7}" stroke="#ffffff" stroke-width="0.4" opacity="0.35" fill="none"/>`
+    }`;
+  const deck = `<path d="M30 20V15H134V20Z" fill="${deckC}" stroke="${line(deckC)}" stroke-width="${W * 0.8}"/>${
+    mini ? "" : `<path d="M30 17.5H134" stroke="${cedarDk}" stroke-width="0.5"/><path d="M40 15V20M56 15V20M108 15V20M124 15V20" stroke="${cedarDk}" stroke-width="0.5"/>`
+  }`;
+  const rail = mini ? "" : `<path d="M12 20V8M12 9H28M146 20V8M130 9H146M140 9V20" stroke="#9aa3a8" stroke-width="1.3" fill="none" stroke-linecap="round"/>`;
+  const steps = mini ? "" : `<path d="M16 20V16H24V20ZM20 16V12H28V16" fill="${deckC}" stroke="${line(deckC)}" stroke-width="0.6"/>`;
+  const ladder = `<path d="M4 22V94M10 22V94${mini ? "" : "M4 32h6M4 44h6M4 56h6M4 68h6M4 80h6M4 22Q4 15 10 15H14M10 22Q10 18 14 18"}" stroke="#7d868b" stroke-width="${mini ? 3 : 1.2}" fill="none"/>`;
+  const rim = `<ellipse cx="${cx}" cy="${top}" rx="${rx + 1.2}" ry="${mini ? 5 : 6.2}" fill="${cedar}" stroke="${line(cedar)}" stroke-width="${W}"/>`;
+  const water = `<ellipse cx="${cx}" cy="${top + 0.3}" rx="${rx - 2.2}" ry="${mini ? 3.4 : 4.4}" fill="url(#${id}-water)"/>`;
+  const glow = `<ellipse class="tk-tubglow" cx="${cx}" cy="${top + 0.3}" rx="${rx - 2.2}" ry="${mini ? 3.4 : 4.4}" fill="url(#${id}-tubglow)"/>`;
+  const ripples = mini
+    ? ""
+    : `<path class="tk-ripple" d="M${cx - 18} ${top}q5 -1.4 10 0t10 0M${cx + 2} ${top + 1.6}q4 -1.2 8 0t8 0" stroke="#ffffff" stroke-width="0.8" fill="none" opacity="0.7" stroke-linecap="round"/>`;
+  const towel = mini
+    ? ""
+    : `<path d="M${cx + 16} ${top + 3.5}Q${cx + 21} ${top + 2} ${cx + 25} ${top + 3}L${cx + 26} ${top + 15}Q${cx + 21} ${top + 16.5} ${cx + 17} ${top + 15}Z" fill="${CREAM}" stroke="${line(CREAM)}" stroke-width="0.6" stroke-linejoin="round"/><path d="M${cx + 16.6} ${top + 11}Q${cx + 21} ${top + 12.4} ${cx + 25.6} ${top + 11}" stroke="${CORAL}" stroke-width="1.6" fill="none"/>`;
+  const steam = mini
+    ? ""
+    : [cx - 18, cx - 4, cx + 10, cx + 22]
+        .map((x, i) => `<path class="tk-steam" style="animation-delay:${(i * 0.7).toFixed(1)}s" d="M${x} ${top - 3}q-4 -6 0 -11t0 -11" fill="none" stroke="#ffffff" stroke-width="${i % 2 ? 2 : 3}" stroke-linecap="round"/>`)
+        .join("");
+  return `${ladder}${rail}${deck}${steps}
+    <path d="${body}" fill="${cedar}" stroke="${line(cedar)}" stroke-width="${W}" stroke-linejoin="round"/>
+    ${mini ? "" : `<path d="${body}" fill="url(#${id}-staves)"/>`}${staves}${hoop(top + 7)}${hoop(bot - 4)}
+    ${rim}${water}${glow}${ripples}${towel}${steam}`;
 }
 
 function trailer(paint: Paint, bodyFill: string, W: number, mini: boolean): string {

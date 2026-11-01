@@ -310,6 +310,8 @@ export class CounterView {
   bins: { kind: Kind; x: number; z: number; y: number }[] = [];
   /** Upgrade multipliers. */
   fryBoost = 1;
+  /** The searing plate bonus: everything on the grill cooks faster. */
+  grillBoost = 1;
   autoStopPour = false;
   grillItems: GrillItem[] = [];
   /** Each grill zone's setting, left to right; the buttons on the griddle's front ledge cycle them. */
@@ -1165,7 +1167,7 @@ export class CounterView {
         const zi = this.zoneAt(it.x);
         const zone = this.zones[zi];
         const touching = !it.below;
-        const heat = touching ? ZONE_RATE[zone] * (COOK_SPEED[it.piece.kind] ?? 1) * (it.piece.smashed ? 1.6 : 1) : 0;
+        const heat = touching ? ZONE_RATE[zone] * (COOK_SPEED[it.piece.kind] ?? 1) * (it.piece.smashed ? 1.6 : 1) * this.grillBoost : 0;
         const before = cookLevel(it.piece);
         if (it.topping) {
           const c = it.topping.piece;

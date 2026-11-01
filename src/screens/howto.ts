@@ -4,6 +4,7 @@
  * game menu's second tab.
  */
 import { CROWD } from "../game/business";
+import { RANGE_MI } from "../game/day";
 import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "../game/menu";
 import { HOLD_GRACE } from "../game/scoring";
 import type { Recipe } from "../game/stops";
@@ -184,9 +185,9 @@ function sections(): Sec[] {
         .join("")}</ul>
       <p class="hw-cap">The standard count. Some recipes differ: check the Menu.</p>
       <div class="hw-scale">
-        <div class="lo"><b>Fewer</b><span>Saves money. May cost a review.</span></div>
+        <div class="lo"><b>Fewer</b><span>Customers notice. May cost a review.</span></div>
         <div class="std"><b>Standard</b><span>Exactly right.</span></div>
-        <div class="hi"><b>+1 or 2</b><span>Can win a better review.</span></div>
+        <div class="hi"><b>+1 or 2</b><span>Can win a better review, but comes off your takings.</span></div>
         <div class="paid"><b>Extra</b><span>On the receipt. They pay +${price(EXTRA_PRICE)}.</span></div>
       </div>`,
       points: [
@@ -268,10 +269,10 @@ function sections(): Sec[] {
         "Check the receipt first: a forgotten side or drink costs stars.",
         "To fix a burger, <b>drag down</b> off its tray to lift the top layer: drop it in the trash slot, back on the grill, or on another tray.",
         "Held items light up the <b>trash slot</b> red when a drop would bin them.",
-        "<b>Unordered extras</b>, like fries or a drink they didn't ask for, can soften a bad review, and nobody ever turns down a freebie. They cost you, so save them for rescues.",
+        "<b>Unordered extras</b>, like fries or a drink they didn't ask for, can soften a bad review, and nobody ever turns down a freebie. They come off your takings, so save them for rescues.",
         "The bell shows how many are in line. Waiting has its own patience: the back of the line drifts off first, and people nearly at the window almost never leave. An order's patience only starts once they've ordered.",
-        "A truck nobody knows yet draws a small crowd, and strangers won't join a long line. Good shifts spread the word; <b>social media</b> on the town sheet buys a busier day.",
-        "How picky customers are, how patient, how many may stand at the window and how busy the line gets depends on the <b>Difficulty</b> setting in the menu.",
+        "A truck nobody knows yet draws a small crowd, and strangers won't join a long line. Good shifts spread the word, and a good rating brings a few more.",
+        "How picky customers are, how patient, how many may stand at the window and how busy the line gets depends on the <b>Pacing</b> you pick on Prep &amp; Open.",
       ],
     },
     {
@@ -293,7 +294,8 @@ function sections(): Sec[] {
       </div>`,
       points: [
         "<b>Tips</b> come from good food served before the customer gets worried.",
-        "<b>Pass a shift</b> by serving at least half your customers with an average of 1 star or more. Passing earns a truck upgrade.",
+        "<b>Pass a shift</b> by serving at least half your customers with an average of 1 star or more.",
+        "A <b>great shift</b> (a 2.4★ average with almost everyone served) unlocks that town's <b>bonus</b>. Every town has its own.",
       ],
     },
     {
@@ -318,37 +320,39 @@ function sections(): Sec[] {
         <path d="M248.5 57v-2.2a3.5 3.5 0 0 1 7 0V57M247 57h10v6h-10z" class="lock"/>
       </svg>
       <div class="hw-drive">
-        <span>${icon("moon")}<b>Within range</b><small>Tonight, a little gas</small></span>
-        <span>${icon("sun")}<b>Further away</b><small>A whole day, gas by distance</small></span>
+        <span>${icon("moon")}<b>One road</b><small>Tonight, before you sleep</small></span>
+        <span>${icon("sun")}<b>Further away</b><small>A whole day on the road</small></span>
       </div>
       <div class="hw-cal" aria-label="A town's calendar">${[1, 2, 3, 4, 5, 6, 7].map((d) => `<span class="${d === 2 ? "today" : ""} ${d === 5 ? "ev" : ""}"><b class="bv-mono">${d}</b>${d === 5 ? "<i>Fair</i>" : ""}</span>`).join("")}</div>
       <p class="hw-cap">${icon("calendar")}A town's week ahead: today is day 2, and there's a fair on day 5.</p>`,
       points: [
         "Towns are dots joined by roads. Work <b>3 shifts</b> in a town to open the roads to its neighbours.",
-        `${icon("moon")} After a shift the map goes dark. Roads <b>within tonight's range</b> (100 miles to start) glow, and you can hop along them before you sleep. An engine tune-up from a city's supply yard stretches the range.`,
-        `${icon("sun")} Going <b>further</b> takes a whole day on the road, and gas costs more the further you drive. Sleeping costs <b>$10</b> a night for the generator; a roof solar panel trims it.`,
+        `${icon("moon")} After a shift the map goes dark. Roads <b>within tonight's range</b> (${RANGE_MI} miles, any one road) glow, and you can hop along them before you sleep.`,
+        `${icon("sun")} Going <b>further</b> takes a whole day on the road, with no shift that day.`,
         `${icon("calendar")} <b>Tap a town</b> to see its crowd and calendar. Events (markets, fairs, rodeos) bring bigger crowds and sometimes a special recipe.`,
-        `${icon("critic")} A <b>critic</b> may order; their receipt is marked. A great review lands in the paper or on TV and raises your <b>popularity</b>, which brings customers and lets you charge more.`,
+        `${icon("critic")} A <b>critic</b> may order; their receipt is marked. A great review lands in the paper or on TV and raises your <b>popularity</b>, which brings more customers.`,
       ],
       foot: `<p class="hw-sub">Who turns up</p><ul class="hw-crowds">${crowdLine}</ul>`,
     },
     {
-      id: "biz",
-      chip: "Complexity",
-      icon: "chart",
-      title: "Complexity",
-      lede: "Simple cooks and serves. Balanced and Complex run the books as well as the grill.",
+      id: "prep",
+      chip: "Prep & Open",
+      icon: "bell",
+      title: "Prep & Open",
+      lede: "Before each shift: who to expect, what's on the menu, when to open, and one bonus.",
       fig: `<div class="hw-biz">
-        <span class="bv-eyebrow">Ingredients</span>
-        <div class="bv-seg compact" aria-hidden="true"><button tabindex="-1">Budget</button><button tabindex="-1" aria-pressed="true">Standard</button><button tabindex="-1">Premium</button></div>
-        <span class="bv-eyebrow">Prices</span>
-        <div class="bv-seg compact" aria-hidden="true"><button tabindex="-1">Low</button><button tabindex="-1" aria-pressed="true">Fair</button><button tabindex="-1">High</button></div>
+        <span class="bv-eyebrow">Expect today</span>
+        <b class="bv-mono" style="font-size:28px">~12 customers</b>
+        <span class="bv-eyebrow">Pacing</span>
+        <div class="bv-seg compact" aria-hidden="true"><button tabindex="-1">Chill</button><button tabindex="-1" aria-pressed="true">Balanced</button><button tabindex="-1">Stressful</button></div>
       </div>`,
       points: [
-        "At <b>Balanced</b> or <b>Complex</b>, pick <b>ingredient quality</b>, <b>prices</b> and <b>today's menu</b> on the Prep screen before each shift. Complex opens the ledger too.",
-        "Better food rates higher; higher prices bring fewer, pickier customers. Premium at high prices rates like standard at fair.",
-        "Ingredients, cups and spills all cost money, so waste shows in your profit.",
-        "Reviews build a <b>reputation</b> that follows the truck from town to town. Change complexity any time in Settings; stepping down keeps your reputation and upgrades for later.",
+        "How many people come depends on your <b>popularity</b> (who has heard of you) and your <b>rating</b> (what they say), both earned by cooking well.",
+        "A longer <b>menu</b> brings more people and more kinds of order; hide recipes to keep it simple.",
+        "Lunch peaks from noon to one. <b>Open early or close late</b> for a few quieter hours either side.",
+        "<b>Pacing</b> and your <b>bonus</b> are set here and stay put for the whole shift. Bring one bonus at most.",
+        "<b>Takings</b> are your score for the shift: orders, plus tips for speed, less anything you gave away free. They go into your <b>savings</b>.",
+        "Spend savings in the <b>Garage</b> (the truck button by Settings): unlocked bonuses, and looks for the truck that show on the map and at night.",
       ],
     },
   ];
@@ -368,7 +372,7 @@ function menuSec(): Sec {
     fig: "",
     points: [],
     raw: `<div class="hw-std"><span class="bv-eyebrow">Standard counts</span><div>${counts}</div></div>
-      ${town ? `<div class="hw-menu">${town.menu.map((r) => recipeHtml(r, d?.priceMult?.() ?? 1, false)).join("")}</div>
+      ${town ? `<div class="hw-menu">${town.menu.map((r) => recipeHtml(r, 1, false)).join("")}</div>
       <button class="bv-btn block" data-m="menuref">${icon("menu-book")}Sides, drinks and extras</button>` : ""}`,
   };
 }

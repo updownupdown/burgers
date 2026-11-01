@@ -509,3 +509,47 @@ James's build #53 gameplay notes, as built.
 - **Fryer.** No knobs; gravy in a heated well at the back right, curds in a cooled tray in front of the potato freezer, salt below the gravy.
 - **Carrying.** Held things hover at the point under the finger at hover height, so they don't jump on release. Over the trays a cup or carton previews at its landing spot and size; dashed outlines mark where ordered sides go. A leaving customer takes the plate.
 - **Tray study.** `?tray=kraft|diner|sheet|board|basket` (or the bv-tray setting); default kraft until James picks.
+
+## 21. A simpler economy: savings, town bonuses and the Garage
+
+James asked (2026-11-01) to strip the money layer back, then picked option C from the study: money is kept as **savings**, spent on bonuses and on looks for the truck.
+
+**Gone:** gas money, Supplies and range upgrades (range is a flat 175 mi a night), the Complexity slider, social media / ads, ingredient-quality and price toggles, running costs and solar, the ledger and the business-mode plan.
+
+**Who comes.** Customers = town trade × crowd traffic × popularity × rating × menu length (0.8 with two recipes to 1.1 from six) × the shift window's share of the lunch curve × the Sandwich board (1.15) ÷ pacing. Popularity and rating are only earned by cooking (`src/game/day.ts` `expectedCustomers`).
+
+**Prep & Open** (`prepHtml`, before every shift after the tutorial). One big number, *Expect today*, with popularity, rating and critic odds under it. Then the **shift window** on the day's lunch curve, opened or closed an hour at a time between 9am and 5pm (default 11 to 2; quiet hours either side; `src/game/shift.ts`). The **menu** as recipe cards to show or hide (at least two). **Pacing**. And **one bonus** to bring, from the ones owned, with a line about this town's bonus. All of it is frozen when the window opens.
+
+**Takings** are a shift's score: what orders paid, plus tips for speed, less anything given away unordered (at its menu price) and spilled soda. They go into **savings** (`save.bank`); old saves keep their gas money as savings.
+
+**Bonuses, one per town** (`src/game/bonus.ts`). A **great shift** (an average of 2.4★, 85% of the people who ordered served, at least six served) in a town unlocks that town's bonus; it then appears for sale in the Garage (and on Closing, with *Buy now* if savings cover it). Bought bonuses are kept; one is brought per shift. They run along the road from forgiving to fine-tuning, and get dearer:
+
+| Town | Bonus | Effect | Price |
+|---|---|---|---|
+| Pinecrest | Comfy bench | Patience ×1.3, in line and at the window | $40 |
+| Elk Pass | Smart fountain | Drinks stop pouring by themselves | $70 |
+| Cedar Falls | Steady hands | Tossed toppings land neatly | $90 |
+| Summit City | Heat lamp | Tray food stays fresh twice as long | $140 |
+| Saltwater Bay | Apology cookies | Walk-outs cost no popularity | $180 |
+| Gull Point | Turbo fryer | Fries 35% faster | $220 |
+| Driftwood | Sandwich board | 15% more customers | $260 |
+| Harbor City | Guest book | Twice the good word of mouth | $320 |
+| Red Mesa | Searing plate | Grill cooks 25% faster (`counter.grillBoost`) | $380 |
+| Cactus Junction | Shiny tip jar | Tips ×1.3 | $440 |
+| Dust Bowl Flats | Press pass | A critic is sure to come | $500 |
+| Sun Valley | Meal deal sign | Burger + fries + drink orders tip ×1.5 | $600 |
+
+Open towns whose bonus is still to unlock carry a small gold diamond on the map, and each town's sheet shows its bonus and how far along it is. In the Garage, bonuses of towns not yet reached show as "?".
+
+**The Garage** (`src/screens/garage.ts`, the savings button by Settings on the map; a dot when an unlocked bonus is affordable). The truck stands on a little stage (a moon button shows it at night). Tabs: **Bonuses** by region, and **Looks** by slot. Tapping a look tries it on; the bar under the truck buys or wears it.
+
+**Looks** (`src/game/looks.ts`, drawn by `src/screens/truckart.ts`). Six slots, one worn in each, all purchases kept. They change nothing in the kitchen. Some are modest; the *Grand* ones are priced as long goals; three souvenirs are sold only after a shift in their town.
+
+- Paint: Coral (free), Sage $150, Butter $150, Dusk blue $250, Diner two-tone $600, Woodie $1,200, Polished aluminium $4,000, Gold leaf $40,000 (glints).
+- Awning: Mustard (free), Candy stripes $120, Teal scallops $200, Velvet and fringe $6,000.
+- Roof: bare (free), Herb garden $300, Canoe $450 (Cedar Falls), Surfboards $450 (Driftwood), Windmill $900 (Dust Bowl Flats, turns), Neon sign $1,500 (glows after dark), Giant burger $2,500 (slowly turns), Rooftop hot tub $25,000 (steams).
+- Lights: none (free), String lights $250, Marquee bulbs $900 (chase at night), Searchlights $12,000 (sweep the night sky, across the road map too).
+- Wheels: Steel (free), Whitewalls $200, Chrome spokes $500, Gold spinners $8,000 (keep spinning).
+- Tag-along: nobody (free), Shop dog $350 (sleeps at night), Teardrop trailer $3,000 (matching paint), Hot-air balloon $30,000 (tethered, bobbing), Airship $75,000 (floats above the truck from town to town).
+
+**Where looks show.** The road map's truck (the same art, drawn small with thicker lines; it lights up on the evening map), the night card when the truck sleeps (parked under the stars with the window lit, bulbs and neon on, beams sweeping and the dog asleep, then dawn), and the Garage. The catalogue page is `looks.html` beside the game. Counters in the kitchen don't show looks yet.

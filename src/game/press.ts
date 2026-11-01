@@ -4,7 +4,7 @@ import type { Stop, TownEvent } from "./stops";
 /**
  * Food critics and the press. Now and then a critic orders; how they rate the burger becomes
  * a newspaper piece, a magazine article or a TV spot, which moves the truck's popularity.
- * Popularity brings more customers, and together with reputation it raises what people will pay.
+ * Popularity brings more customers.
  */
 
 export type Outlet = "paper" | "magazine" | "tv";
@@ -70,12 +70,4 @@ export function fadePopularity(pop: number): number {
  */
 export function popularityTraffic(pop: number): number {
   return 0.45 + 0.85 * Math.min(100, Math.max(0, pop)) / 100;
-}
-
-/**
- * How much above a fair price people will happily pay, in price steps: a famous, well-reviewed
- * truck can charge High prices without customers feeling ripped off.
- */
-export function willingnessToPay(pop: number, rep: number): number {
-  return Math.max(-0.5, Math.min(1, (rep - 2) * 0.5 + (pop / 100) * 0.8));
 }

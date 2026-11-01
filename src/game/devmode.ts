@@ -5,7 +5,8 @@
  * turned off (or dev mode is).
  */
 import type { Review } from "./business";
-import { freshSave, UPGRADES, type Save } from "./progress";
+import { townBonus, type BonusId } from "./bonus";
+import { freshSave, START_POPULARITY, type Save } from "./progress";
 import { START_TOWN, STOPS, townById } from "./stops";
 import { SHIFTS_TO_UNLOCK } from "./travel";
 
@@ -101,13 +102,20 @@ export function simulatedSave(level: SimLevel): Save {
   // Park at the frontier: the last town worked, or the end of the road at 100%.
   s.town = worked[worked.length - 1];
   s.day = 1 + worked.length * (SHIFTS_TO_UNLOCK + 1);
-  s.popularity = Math.round(10 + 85 * k);
+  s.popularity = Math.round(START_POPULARITY + (95 - START_POPULARITY) * k);
   const orders = worked.length * SHIFTS_TO_UNLOCK * 9;
   s.ratingCount = orders;
   s.ratingSum = Math.round(orders * (1.9 + 0.7 * k));
   s.rep = Number((1.9 + 0.7 * k).toFixed(2));
   s.repWeight = 30;
-  s.upgrades = UPGRADES.slice(0, level === 100 ? UPGRADES.length : 2).map((u) => u.id);
+  // Great shifts unlocked the bonuses of the towns worked; most are bought; some savings left.
+  s.found = worked.map((id) => townBonus(id)?.id).filter((b): b is BonusId => !!b);
+  s.bonuses = level === 100 ? [...s.found] : s.found.slice(0, 4);
+  s.bank = level === 100 ? 24000 : 640;
+  if (level === 100) {
+    s.looks = ["dusk", "teal", "string", "whitewall", "dog", "canoe"];
+    s.look = { paint: "dusk", awning: "teal", roof: "canoe", lights: "string", wheels: "whitewall", tag: "dog" };
+  }
   s.reviews = worked
     .flatMap((id, i) => SAMPLE_REVIEWS.slice(0, 2 + (i % 3)).map(([stars, text]): Review => ({ stars: Math.min(3, stars + (level === 100 && stars < 3 ? 1 : 0)), text, stop: townById(id).name })))
     .reverse()

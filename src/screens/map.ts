@@ -1,3 +1,6 @@
+import { mix } from "./ink";
+import { truckGroup } from "./truckart";
+import type { Look } from "../game/looks";
 import { eventOn, REGIONS, STOPS, townById, type RegionId } from "../game/stops";
 import { unlockProgress } from "../game/travel";
 import "./map.css";
@@ -44,56 +47,11 @@ const RELIEF = "#6b5a4b";
 const ROOF = "#8a5a48";
 const CORAL = "#ff8a70";
 const MUSTARD = "#f3c45a";
-const CREAM = "#faf3e6";
 const REGION_WASH: Record<RegionId, [string, string]> = {
   mountains: [FOREST, FOREST_DEEP],
   coast: [SAND, SAND_DEEP],
   desert: [DESERT, DESERT_DEEP],
 };
-
-function hexToRgb(hex: string): [number, number, number] {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-function rgbToHex(r: number, g: number, b: number): string {
-  const c = (v: number) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0");
-  return `#${c(r)}${c(g)}${c(b)}`;
-}
-function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
-  r /= 255;
-  g /= 255;
-  b /= 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  if (max === min) return [0, 0, l];
-  const d = max - min;
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-  let h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-  h /= 6;
-  return [h, s, l];
-}
-function hslToRgb(h: number, s: number, l: number): [number, number, number] {
-  const f = (n: number) => {
-    const k = (n + h * 12) % 12;
-    const a = s * Math.min(l, 1 - l);
-    return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
-  };
-  return [f(0) * 255, f(8) * 255, f(4) * 255];
-}
-function mix(a: string, b: string, t: number): string {
-  const [r1, g1, b1] = hexToRgb(a);
-  const [r2, g2, b2] = hexToRgb(b);
-  return rgbToHex(r1 + (r2 - r1) * t, g1 + (g2 - g1) * t, b1 + (b2 - b1) * t);
-}
-
-/** Outline colour for a fill: darkened, a touch more saturated and cooler, then 55% toward ink. */
-export function line(fill: string): string {
-  const [h, s, l] = rgbToHsl(...hexToRgb(fill));
-  if (l < 0.22) return INK;
-  const [r, g, b] = hslToRgb((h - 0.025 + 1) % 1, Math.min(1, s * 1.1 + 0.1), Math.max(0.12, l * 0.38));
-  return mix(rgbToHex(r, g, b), INK, 0.55);
-}
 
 // ---------------------------------------------------------------------------
 // Geometry helpers
@@ -688,6 +646,10 @@ export interface MapState {
   night: boolean;
   /** Towns a drive can reach right now without the day passing, with the road there. */
   reach: readonly { id: string; path: readonly string[] }[];
+  /** What the truck wears (see game/looks.ts). */
+  look: Look;
+  /** Open towns whose bonus a great shift would still unlock: a small gold mark by the name. */
+  bonusHere: readonly string[];
 }
 
 export function townPoint(id: string): Pt {
@@ -730,6 +692,7 @@ export function renderMap(st: MapState): string {
         ? `<g class="pips" transform="translate(0 ${f(r + 6.1)})">${[0, 1, 2].map((i) => `<circle class="pip ${i < done ? "on" : ""}" cx="${f((i - 1) * 1.7)}" r="0.55"/>`).join("")}</g>`
         : "";
     const label = t.capital ? t.name.toUpperCase() : t.name;
+    const prize = isOpen && st.bonusHere.includes(t.id) ? `<path class="prize" transform="translate(${f(-r - 1.3)} ${f(-r - 0.6)})" d="M0 -1.25L1 0L0 1.25L-1 0Z"/>` : "";
     // The marker and its name keep a readable size on screen as the map zooms (see --mk in home.css).
     return `<g class="${classes}" data-town="${t.id}" transform="translate(${t.x} ${t.y})">
       <circle class="hit" r="7.5"/>
@@ -739,7 +702,7 @@ export function renderMap(st: MapState): string {
         <circle class="node" r="${r}"/>
         ${t.capital ? `<circle class="core" r="1.1"/>` : ""}
         <text class="tname" y="${f(r + 3.7)}">${label}</text>
-        ${pips}${flag}${lock}
+        ${pips}${flag}${lock}${prize}
       </g>
     </g>`;
   }).join("");
@@ -748,7 +711,7 @@ export function renderMap(st: MapState): string {
     ? `<g class="home-reach">${st.reach.map((r) => `<path class="road reach" d="${r.path.slice(1).map((b, i) => roadPath(r.path[i], b)).join(" ")}"/>`).join("")}</g>`
     : "";
   const here = townById(st.town);
-  const truck = `<g class="home-truck" style="transform:translate(${here.x}px, ${here.y}px)"><g class="mk">${truckSvg()}</g></g>`;
+  const truck = `<g class="home-truck" style="transform:translate(${here.x}px, ${here.y}px)"><g class="mk">${truckSvg(st.look, st.night)}</g></g>`;
 
   const grad = (id: string, c: string, peak = 1) =>
     `<radialGradient id="${id}"><stop offset="0" stop-color="${c}" stop-opacity="${peak}"/><stop offset="0.35" stop-color="${c}" stop-opacity="${f(peak * 0.8)}"/><stop offset="0.7" stop-color="${c}" stop-opacity="${f(peak * 0.3)}"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient>`;
@@ -770,18 +733,8 @@ export function renderMap(st: MapState): string {
   </svg>`;
 }
 
-/** The truck, drawn above its town, facing right. */
-function truckSvg(): string {
-  const body = CORAL;
-  const ink = line(body);
-  return `<ellipse class="shadow" cx="0.3" cy="0.4" rx="4.8" ry="1.2"/>
-  <g class="truck-body" transform="translate(0 -4.6)">
-    <rect x="-5.4" y="-3.6" width="7.4" height="5.6" rx="0.9" fill="${body}" stroke="${ink}" stroke-width="0.45"/>
-    <rect x="-5.7" y="-4.3" width="8" height="1.3" rx="0.4" fill="${MUSTARD}" stroke="${line(MUSTARD)}" stroke-width="0.35"/>
-    <path d="M2 -2.6h2.4l1.9 2.2V2h-4.3z" fill="${mix(body, CREAM, 0.25)}" stroke="${ink}" stroke-width="0.45"/>
-    <path d="M2.6 -2v1.7h2.9" fill="#bfe3f2" stroke="${ink}" stroke-width="0.3"/>
-    <rect x="-4.4" y="-2.4" width="4" height="2" rx="0.3" fill="${CREAM}" stroke="${ink}" stroke-width="0.3"/>
-    <circle cx="-3.2" cy="2.1" r="1.2" fill="${INK}"/><circle cx="-3.2" cy="2.1" r="0.45" fill="${CREAM}"/>
-    <circle cx="3.6" cy="2.1" r="1.2" fill="${INK}"/><circle cx="3.6" cy="2.1" r="0.45" fill="${CREAM}"/>
-  </g>`;
+/** The truck, drawn above its town, facing right, in whatever it wears (truckart.ts, drawn small). */
+function truckSvg(look: Look, night: boolean): string {
+  return `<ellipse class="shadow" cx="0.3" cy="-0.6" rx="5.6" ry="0.9"/>
+  <g class="truck-body"><g transform="translate(0 -1) scale(0.056) translate(-108 -116)">${truckGroup(look, { mini: true, night })}</g></g>`;
 }

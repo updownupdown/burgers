@@ -1,4 +1,3 @@
-import type { Complexity } from "../game/complexity";
 import type { Difficulty } from "../game/difficulty";
 /**
  * A small stack of modal layers for the game menu, How to Play and the menu reference.
@@ -22,10 +21,8 @@ export type GfxLevel = "high" | "standard" | "low";
 export interface MenuDeps {
   /** True while a shift is running or paused: shows Resume, Restart and Quit, and closing resumes. */
   inShift(): boolean;
-  /** The town whose menu "Today's menu" shows: the one being played (event and business plan applied), else the current or selected one. */
+  /** The town whose menu "Today's menu" shows: the one being played (event and hidden recipes applied), else the current or selected one. */
   town(): Stop;
-  /** Price multiplier for today's menu (1 at simple complexity or outside a shift). */
-  priceMult?(): number;
   /** Poutine's price if it's on today's menu, else null. */
   poutine?(): number | null;
   /** Small line under the menu title, e.g. "Day 4 · Pinecrest". */
@@ -36,8 +33,6 @@ export interface MenuDeps {
   setDifficulty(d: Difficulty): void;
   gfx(): GfxLevel;
   setGfx(level: GfxLevel): void;
-  complexity(): Complexity;
-  setComplexity(c: Complexity): void;
   /** How the shift is going, for the pause menu. */
   shift?(): ShiftSummary;
   /** Which towns are open and how many shifts each has, for the menu's locked dishes. */

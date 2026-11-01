@@ -167,7 +167,7 @@ export function openMenuRef(town?: Stop, opts: { priceMult?: number } = {}): voi
   const d = getDeps();
   const t = town ?? d?.town();
   if (!t) return;
-  const mult = opts.priceMult ?? (town ? 1 : (d?.priceMult?.() ?? 1));
+  const mult = opts.priceMult ?? 1;
   const stacked = modalDepth() > 0;
   const prog = d?.progress?.() ?? null;
   const card = pushModal({

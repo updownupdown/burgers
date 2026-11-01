@@ -1,11 +1,15 @@
 import { CROWD } from "../game/business";
-import { expectedCustomers, rangeMiles, rangeUnits } from "../game/day";
-import { UPGRADES, type Save, type UpgradeId } from "../game/progress";
+import { expectedCustomers, RANGE_MI, rangeUnits } from "../game/day";
+import type { Save } from "../game/progress";
 import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent, type Stop } from "../game/stops";
-import { applyTrip, canAfford, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Legs, type Trip } from "../game/travel";
+import { applyTrip, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Legs, type Trip } from "../game/travel";
 import { icon } from "../ui/icons";
 import { simLevel } from "../game/devmode";
 import { dropBack, pushBack } from "./nav";
+import { townBonus } from "../game/bonus";
+import { readyToBuy } from "../game/garage";
+import { truckSvg as truckArt } from "./truckart";
+import { dollars } from "./garage";
 import { renderMap, roadPath, routePoints, SEA, townPoint, VIEW } from "./map";
 import { PanZoom } from "./panzoom";
 import "./home.css";
@@ -26,6 +30,8 @@ export interface HomeDeps {
   openResults(): void;
   openReviews(): void;
   openMenuRef(): void;
+  /** The Garage: savings, bonuses and looks. */
+  openGarage(): void;
   sleep(): void;
   /** The save changed here (a drive, an upgrade picked): persist it and sync the truck's town. */
   commit(): void;
@@ -71,7 +77,6 @@ let cur: Mounted | null = null;
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const CROWD_ICON: Record<string, string> = { commuters: "truck", families: "people", foodies: "critic", party: "sparkle" };
-const UPGRADE_ICON: Record<UpgradeId, string> = { bench: "patience", tipjar: "coin", turbo: "fryer", autostop: "tap", steady: "spatula" };
 
 // ---------------------------------------------------------------------------
 // Mounting
@@ -111,7 +116,6 @@ export function mountHome(root: HTMLElement, deps: HomeDeps): void {
   renderMapInto(m);
   fitMap(false);
   renderDock(m);
-  renderOffer(m);
   if (deps.night) playNight(m, deps.night);
   const focus = !deps.night && deps.focus && deps.focus !== deps.save.town && STOPS.some((t) => t.id === deps.focus) ? deps.focus : null;
   if (focus) select(m, focus, false);
@@ -141,8 +145,8 @@ export function refreshHome(): void {
   // A fresh SVG has no size until fitMap gives it one; without this the map came back as open sea.
   fitMap(true);
   cur.el.querySelector(".home-stats")!.outerHTML = statsHtml(cur.deps.save);
+  cur.el.querySelector(".home-bank")!.outerHTML = bankHtml(cur.deps.save);
   renderDock(cur);
-  renderOffer(cur);
   if (cur.selected) renderSheet(cur, cur.selected);
 }
 
@@ -153,6 +157,7 @@ function shellHtml(save: Save): string {
         <span class="home-logo" aria-label="Bun Voyage"><img class="mark" src="./logo.svg" alt="" width="30" height="30" /><span class="w1">Bun</span><span class="w2">Voyage</span></span>${save.trips > 0 ? `<span class="bv-eyebrow">Trip ${save.trips + 1}</span>` : ""}${simLevel() !== null ? `<span class="home-dev bv-mono" title="Simulated progress (dev mode, in Settings)">Sim ${simLevel()}%</span>` : ""}
       </div>
       <div class="home-actions">
+        ${bankHtml(save)}
         <button class="bv-btn icon" data-home="howto" aria-label="How to play" title="How to play">${icon("help")}</button>
         <button class="bv-btn icon" data-home="settings" aria-label="Settings" title="Settings">${icon("settings")}</button>
       </div>
@@ -167,9 +172,14 @@ function shellHtml(save: Save): string {
       </div>
       <div class="home-dock bv-light"></div>
       <div class="home-sheet bv-light" hidden></div>
-      <div class="home-offer" hidden></div>
     </div>
   </div>`;
+}
+
+/** Savings, one tap from the Garage; a dot when an unlocked bonus is affordable. */
+function bankHtml(save: Save): string {
+  const ready = readyToBuy(save);
+  return `<button class="home-bank" data-home="garage" aria-label="Garage: savings ${dollars(save.bank)}${ready ? `, ${ready} bonus${ready > 1 ? "es" : ""} ready to buy` : ""}">${icon("truck")}<b class="bv-mono">${dollars(save.bank)}</b>${ready ? `<i class="dot"></i>` : ""}</button>`;
 }
 
 /**
@@ -178,7 +188,7 @@ function shellHtml(save: Save): string {
  * and the menu (or, in the evening, today's results).
  */
 function statsHtml(save: Save): string {
-  const avg = save.ratingCount ? save.ratingSum / save.ratingCount : null;
+  const avg = save.ratingCount ? save.rep : null;
   const evening = save.time === "evening";
   const last = save.last && save.last.town === save.town ? save.last : null;
   return `<div class="home-stats" role="group" aria-label="Your truck">
@@ -201,7 +211,7 @@ function statsHtml(save: Save): string {
 
 /** The time of day and the range left, which decide when a drive can happen. */
 function legs(s: Save): Legs {
-  return { time: s.time, range: rangeUnits(s.gear), driven: s.driven };
+  return { time: s.time, range: rangeUnits(), driven: s.driven };
 }
 
 /** Towns a drive reaches right now without the day passing. */
@@ -218,7 +228,11 @@ function reachable(s: Save): { id: string; path: string[] }[] {
 function renderMapInto(m: Mounted): void {
   const s = m.deps.save;
   const night = s.time === "evening" || m.night;
-  m.world.innerHTML = renderMap({ town: s.town, unlocked: s.unlocked, shiftsIn: s.shiftsIn, day: s.day, selected: m.selected, night, reach: m.night ? [] : reachable(s) });
+  const bonusHere = s.unlocked.filter((id) => {
+    const b = townBonus(id);
+    return b && !s.found.includes(b.id);
+  });
+  m.world.innerHTML = renderMap({ town: s.town, unlocked: s.unlocked, shiftsIn: s.shiftsIn, day: s.day, selected: m.selected, night, reach: m.night ? [] : reachable(s), look: s.look, bonusHere });
   for (const t of m.world.querySelectorAll<SVGGElement>(".home-town")) t.classList.toggle("sel", t.dataset.town === m.selected);
 }
 
@@ -347,7 +361,7 @@ function renderDock(m: Mounted): void {
       ${
         evening
           ? `<button class="bv-btn primary lg" data-home="sleep">${icon("moon")}Sleep</button>`
-          : `<button class="bv-btn primary lg" data-home="open" ${s.offer.length ? "disabled" : ""}>${icon("bell")}Prep &amp; Open</button>`
+          : `<button class="bv-btn primary lg" data-home="open">${icon("bell")}Prep &amp; Open</button>`
       }
     </div>`;
 }
@@ -392,7 +406,6 @@ function renderSheet(m: Mounted, id: string): void {
   const crowd = CROWD[ev?.crowd ?? t.crowd];
   const trip = here || !open ? null : planTrip(s.town, id, s.unlocked, legs(s));
   const best = s.best[id];
-  const busy = s.offer.length > 0;
   const evening = s.time === "evening";
 
   let action: string;
@@ -400,20 +413,17 @@ function renderSheet(m: Mounted, id: string): void {
     action = evening
       ? `<button class="bv-btn primary lg block" data-home="sleep">${icon("moon")}Sleep here</button>
       <span class="bv-caption">Tomorrow: ${eventOn(id, s.day + 1) ? `${esc(eventOn(id, s.day + 1)!.name)} here.` : `shift ${(s.shiftsIn[id] ?? 0) + 1} here, or set off.`}</span>`
-      : `<button class="bv-btn primary lg block" data-home="open" ${busy ? "disabled" : ""}>${icon("bell")}Prep &amp; Open${ev ? ` · ${esc(ev.name)}` : ""}</button>
-      <span class="bv-caption">${busy ? "Pick your upgrade first." : ev ? "Event day: a longer, busier shift with its own crowd." : `Shift ${(s.shiftsIn[id] ?? 0) + 1} here. A shift fills the day.`}</span>`;
+      : `<button class="bv-btn primary lg block" data-home="open">${icon("bell")}Prep &amp; Open${ev ? ` · ${esc(ev.name)}` : ""}</button>
+      <span class="bv-caption">${ev ? "Event day: a longer, busier shift with its own crowd." : `Shift ${(s.shiftsIn[id] ?? 0) + 1} here. A shift fills the day.`}</span>`;
   } else if (trip) {
-    const afford = canAfford(trip, s.bank);
-    const can = afford && !busy && trip.when !== "tomorrow";
+    const can = trip.when !== "tomorrow";
     const how = trip.when === "now" ? (evening ? "tonight" : "this morning") : trip.when === "day" ? "takes the day" : "tomorrow";
     const roads = `${trip.hops} road${trip.hops === 1 ? "" : "s"}, ${miles(trip.distance)} mi`;
-    const range = rangeMiles(s.gear);
+    const range = RANGE_MI;
     const left = Math.max(0, Math.round(range - s.driven * 3));
     action = `<button class="bv-btn primary lg block" data-home="drive" data-id="${id}" ${can ? "" : "disabled"}>${icon("truck")}Drive here · ${how}</button>
-      <span class="bv-caption ${afford ? "" : "warn"}">${
-        !afford
-          ? `Not enough gas money: $${trip.cost} needed, $${s.bank} in the tin.`
-          : trip.when === "now"
+      <span class="bv-caption">${
+        trip.when === "now"
             ? evening
               ? `${roads}. Fits tonight's range (${left} mi left). Wake up there tomorrow.`
               : `${roads}. Within range, so you're there before the window opens.`
@@ -450,11 +460,24 @@ function renderSheet(m: Mounted, id: string): void {
     <div class="home-facts">
       <div><span class="bv-eyebrow">Shifts here</span><b>${t.roads.length ? pipsHtml(unlockProgress(s.shiftsIn, id).done, SHIFTS_TO_UNLOCK) : ""}${s.shiftsIn[id] ?? 0}</b></div>
       <div><span class="bv-eyebrow">Best shift</span><b>${best !== undefined ? `${icon("star")}${best.toFixed(1)}` : "–"}</b></div>
-      <div><span class="bv-eyebrow">${trip ? "From here" : "Customers"}</span><b>${trip ? `${miles(trip.distance)} mi` : `${icon("people")}~${expectedCustomers({ stop: withEvent(t, ev), plan: null, popularity: s.popularity, ads: here ? s.ads : 0, rep: s.rep, upgrades: s.upgrades, gear: s.gear })}`}</b></div>
+      <div><span class="bv-eyebrow">${trip ? "From here" : "Customers"}</span><b>${trip ? `${miles(trip.distance)} mi` : `${icon("people")}~${expectedCustomers({ stop: withEvent(t, ev), popularity: s.popularity, rep: s.rep, hidden: s.hidden, shift: s.shift })}`}</b></div>
     </div>
+    ${bonusRow(s, id)}
     ${open && t.newThing && !(s.shiftsIn[id] ?? 0) ? `<div class="bv-callout new">${icon("new")}<span>${esc(t.newThing)}</span></div>` : ""}
     <div class="home-action">${action}</div>`;
   sheet.hidden = false;
+}
+
+/** The town's bonus on its sheet: what it is and how far along it is. Unknown until the town is open. */
+function bonusRow(s: Save, id: string): string {
+  const b = townBonus(id);
+  if (!b || !s.unlocked.includes(id)) return "";
+  const state = s.bonuses.includes(b.id)
+    ? `<em class="own">${icon("check")}Owned</em>`
+    : s.found.includes(b.id)
+      ? `<em class="sale">${dollars(b.price)} in the Garage</em>`
+      : `<em>${icon("lock")}Great shift to unlock</em>`;
+  return `<div class="home-bonus ${s.found.includes(b.id) ? "found" : ""}"><span class="ic">${icon(b.icon)}</span><span class="t"><span class="bv-eyebrow">Town bonus</span><b>${esc(b.name)}</b><small>${esc(b.text)}</small></span>${state}</div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -471,7 +494,6 @@ function onClick(e: Event): void {
   const s = m.deps.save;
   switch (act) {
     case "open":
-      if (s.offer.length && s.time === "morning") break;
       m.deps.sfx?.tap();
       m.deps.startShift();
       break;
@@ -491,6 +513,10 @@ function onClick(e: Event): void {
       break;
     case "menuref":
       m.deps.openMenuRef();
+      break;
+    case "garage":
+      m.deps.sfx?.tap();
+      m.deps.openGarage();
       break;
     case "here":
       m.deps.sfx?.tap();
@@ -513,9 +539,6 @@ function onClick(e: Event): void {
       m.pz.centerOn(x, y, Math.max(m.pz.scale, 1.4), { x: w / 2, y: Math.max(h * 0.35, (h - covered) / 2) }, true);
       break;
     }
-    case "pick":
-      pick(m, btn.dataset.id as UpgradeId);
-      break;
     case "settings":
       m.deps.openSettings();
       break;
@@ -525,24 +548,13 @@ function onClick(e: Event): void {
   }
 }
 
-function toast(m: Mounted, text: string): void {
-  m.el.querySelector(".home-toast")?.remove();
-  const t = document.createElement("div");
-  t.className = "home-toast";
-  t.innerHTML = `${icon("warning")}<span>${esc(text)}</span>`;
-  m.map.appendChild(t);
-  setTimeout(() => t.remove(), 2400);
-}
 
 function drive(m: Mounted, to: string): void {
   const s = m.deps.save;
-  if (m.driving || s.offer.length) return;
+  if (m.driving) return;
   const trip = planTrip(s.town, to, s.unlocked, legs(s));
   if (!trip || trip.when === "tomorrow") return;
-  if (!applyTrip(s, trip)) {
-    toast(m, `Not enough gas money: $${trip.cost} needed.`);
-    return;
-  }
+  if (!applyTrip(s, trip)) return;
   m.deps.commit();
   m.deps.sfx?.whoosh();
   animateDrive(m, trip);
@@ -594,37 +606,6 @@ function animateDrive(m: Mounted, trip: Trip): void {
   };
 }
 
-function pick(m: Mounted, id: UpgradeId): void {
-  const s = m.deps.save;
-  if (!s.offer.includes(id)) return;
-  s.upgrades.push(id);
-  s.offer = [];
-  m.deps.commit();
-  m.deps.sfx?.coin();
-  renderOffer(m);
-  renderDock(m);
-  if (m.selected) renderSheet(m, m.selected);
-}
-
-function renderOffer(m: Mounted): void {
-  const s = m.deps.save;
-  const box = m.el.querySelector<HTMLElement>(".home-offer")!;
-  const offers = s.offer.map((id) => UPGRADES.find((u) => u.id === id)!).filter(Boolean);
-  // In the evening the pick lives on the Closing screen (Results); the card here catches a pick left until morning.
-  if (!offers.length || s.time === "evening" || m.night) {
-    box.hidden = true;
-    box.innerHTML = "";
-    return;
-  }
-  box.innerHTML = `<div class="bv-card">
-    <span class="bv-eyebrow">Shift passed · ${esc(townById(s.town).name)}</span>
-    <h2 class="bv-title">Pick a truck upgrade</h2>
-    <p class="bv-body">One of these goes on the truck for good.</p>
-    <div class="home-offers">${offers.map((u) => `<button class="home-offer-btn" data-home="pick" data-id="${u.id}"><b>${icon(UPGRADE_ICON[u.id] ?? "sparkle")}${esc(u.name)}</b><span>${esc(u.text)}</span></button>`).join("")}</div>
-  </div>`;
-  box.hidden = false;
-}
-
 // ---------------------------------------------------------------------------
 // The night passing
 
@@ -651,6 +632,7 @@ function playNight(m: Mounted, n: NightShow): void {
   box.innerHTML = `<div class="sky"></div>
     <div class="home-night-c">
       <div class="orb" aria-hidden="true"><i class="moon"></i><i class="sun"></i></div>
+      <div class="home-night-truck" aria-hidden="true">${truckArt(m.deps.save.look, { night: true, cls: "nt" })}</div>
       <span class="bv-eyebrow">Night in ${esc(n.town)}</span>
       <div class="home-dayroll" aria-label="Day ${n.toDay}"><span>Day</span><span class="num"><span class="track"><b>${n.fromDay}</b><b>${n.toDay}</b></span></span></div>
       <div class="home-night-deltas">${
@@ -683,10 +665,10 @@ function playNight(m: Mounted, n: NightShow): void {
     if (!m.night) return;
     m.night = false;
     box.classList.add("dawn");
+    box.querySelector(".home-night-truck .tk")?.classList.remove("night");
     m.el.classList.toggle("evening", m.deps.save.time === "evening");
     renderMapInto(m);
     fitMap(true);
-    renderOffer(m);
   };
   const finish = () => {
     if (done) return;

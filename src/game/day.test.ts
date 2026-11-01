@@ -1,81 +1,156 @@
 import { describe, expect, it } from "vitest";
-import { defaultPlan } from "./business";
-import { expectedCustomers, gearBlocker, GEAR, gearById, projectShift, rangeMiles, rangeUnits, runningCost, RUNNING_COST, sleep, solarSaving } from "./day";
-import { distance, MILES_PER_UNIT } from "./travel";
+import { BONUSES, greatShift, migrateBonuses, townBonus } from "./bonus";
+import { buyBonus, buyLook, readyToBuy, wearLook } from "./garage";
+import { DEFAULT_LOOK, LOOKS, SLOTS } from "./looks";
+import { roadOrder } from "./devmode";
+import { expectedCustomers, RANGE_MI, rangeUnits, sleep } from "./day";
+import { migrateSave, freshSave, START_POPULARITY } from "./progress";
+import { arrivalGap, clockAt, crowdShare, DEFAULT_SHIFT, shiftSeconds, validShift } from "./shift";
+import { distance } from "./travel";
 import { STOPS, townById } from "./stops";
 
-describe("running cost and solar", () => {
-  it("costs ten a night, less what the panels cover", () => {
-    expect(runningCost([])).toBe(RUNNING_COST);
-    expect(solarSaving(["solar1"])).toBe(5);
-    expect(runningCost(["solar1", "solar2"])).toBe(2);
-  });
-
-  it("is charged when the truck sleeps, which turns the day", () => {
-    const s = { day: 4, time: "evening" as const, bank: 50, driven: 12, gear: ["solar1" as const] };
-    const n = sleep(s);
-    expect(n).toEqual({ charge: 10, saving: 5, paid: 5, waived: 0, day: 4 });
-    expect(s).toEqual({ day: 5, time: "morning", bank: 45, driven: 0, gear: ["solar1"] });
-  });
-
-  it("waives what an empty tin can't pay, and never goes negative", () => {
-    const s = { day: 1, time: "evening" as const, bank: 3, driven: 0, gear: [] };
-    const n = sleep(s);
-    expect(n.paid).toBe(3);
-    expect(n.waived).toBe(7);
-    expect(s.bank).toBe(0);
+describe("sleeping", () => {
+  it("turns the day and resets the night's driving", () => {
+    const s = { day: 4, time: "evening" as const, driven: 12 };
+    expect(sleep(s)).toEqual({ day: 4 });
+    expect(s).toEqual({ day: 5, time: "morning", driven: 0 });
   });
 });
 
 describe("range", () => {
-  it("grows with the engine and fits the roads it promises", () => {
-    expect(rangeMiles([])).toBe(100);
-    expect(rangeMiles(["range1"])).toBe(175);
-    expect(rangeMiles(["range1", "range2"])).toBe(250);
-    // Every town road fits the base range; the two highways need the tune-up.
-    for (const t of STOPS) for (const r of t.roads) {
-      const mi = distance(t.id, r) * MILES_PER_UNIT;
-      const highway = townById(t.id).region !== townById(r).region;
-      expect(distance(t.id, r) <= rangeUnits([])).toBe(!highway);
-      if (highway) expect(distance(t.id, r) <= rangeUnits(["range1"])).toBe(true);
-      expect(mi).toBeGreaterThan(40);
-    }
+  it("fits any single road, highways included", () => {
+    expect(RANGE_MI).toBe(175);
+    for (const t of STOPS) for (const r of t.roads) expect(distance(t.id, r)).toBeLessThanOrEqual(rangeUnits());
   });
 });
 
-describe("the supply yard", () => {
-  it("sells each part in one capital, in order, for cash", () => {
-    const panel = gearById("solar1");
-    expect(gearBlocker(panel, [], "summit", 100)).toBeNull();
-    expect(gearBlocker(panel, [], "pinecrest", 100)).toBe("Not sold here");
-    expect(gearBlocker(panel, [], "summit", 10)).toBe("$50 short");
-    expect(gearBlocker(panel, ["solar1"], "summit", 100)).toBe("Fitted");
-    expect(gearBlocker(gearById("solar2"), [], "harbor", 500)).toMatch(/Needs the roof solar panel/);
-    expect(GEAR.every((g) => STOPS.some((t) => t.id === g.soldAt && t.capital))).toBe(true);
-  });
-});
-
-describe("projecting a shift", () => {
+describe("who turns up", () => {
   const stop = townById("pinecrest");
-  const base = { stop, popularity: 10, ads: 0 as const, rep: 2, upgrades: [], gear: [] };
+  const base = { stop, popularity: START_POPULARITY, rep: 2, hidden: [] as string[] };
 
-  it("expects a quiet first day for an unknown truck", () => {
-    expect(expectedCustomers({ ...base, plan: null })).toBeLessThan(stop.customers);
-    expect(expectedCustomers({ ...base, plan: null, popularity: 80 })).toBeGreaterThan(stop.customers);
+  it("expects a modest first day and a bigger crowd as the truck gets known", () => {
+    const first = expectedCustomers(base);
+    expect(first).toBeGreaterThanOrEqual(5);
+    expect(first).toBeLessThan(stop.customers);
+    expect(expectedCustomers({ ...base, popularity: 90, rep: 2.8 })).toBeGreaterThan(stop.customers);
   });
 
-  it("nets takings and tips less costs, with a range around it", () => {
-    const p = projectShift({ ...base, plan: null });
-    expect(p.ingredients).toBe(0);
-    expect(p.net).toBeCloseTo(p.takings + p.tips - p.running);
-    expect(p.lo).toBeLessThan(p.net);
-    expect(p.hi).toBeGreaterThan(p.net);
-    const biz = projectShift({ ...base, plan: defaultPlan(stop) });
-    expect(biz.ingredients).toBeGreaterThan(0);
-    expect(biz.net).toBeLessThan(p.net);
-    const premium = projectShift({ ...base, plan: { ...defaultPlan(stop), quality: "premium" } });
-    expect(premium.perOrder).toBeGreaterThan(biz.perOrder);
-    const solar = projectShift({ ...base, plan: null, gear: ["solar1"] });
-    expect(solar.net).toBeCloseTo(p.net + 5);
+  it("brings fewer people to a short menu and more to a long window", () => {
+    const all = expectedCustomers({ ...base, popularity: 70 });
+    const two = expectedCustomers({ ...base, popularity: 70, hidden: stop.menu.slice(2).map((r) => r.name) });
+    expect(two).toBeLessThan(all);
+    expect(expectedCustomers({ ...base, popularity: 70, shift: { start: 9, end: 16 } })).toBeGreaterThan(all);
+    expect(expectedCustomers({ ...base, popularity: 70, shift: { start: 12, end: 13 } })).toBeLessThan(all);
+  });
+
+  it("spaces people out on calmer pacing, and the sandwich board pulls more", () => {
+    expect(expectedCustomers({ ...base, popularity: 70, pacing: "chill" })).toBeLessThan(expectedCustomers({ ...base, popularity: 70 }));
+    expect(expectedCustomers({ ...base, popularity: 70, bonus: "board" })).toBeGreaterThan(expectedCustomers({ ...base, popularity: 70 }));
+  });
+});
+
+describe("the shift window", () => {
+  it("defaults to the lunch rush and stays inside the day", () => {
+    expect(validShift(null)).toEqual(DEFAULT_SHIFT);
+    expect(validShift({ start: 5, end: 30 })).toEqual({ start: 9, end: 17 });
+    expect(validShift({ start: 14, end: 12 })).toEqual({ start: 14, end: 15 });
+    expect(crowdShare(DEFAULT_SHIFT)).toBeCloseTo(1);
+  });
+
+  it("plays a third of the town's shift per hour and runs the clock across it", () => {
+    expect(shiftSeconds(DEFAULT_SHIFT, 180)).toBe(180);
+    expect(shiftSeconds({ start: 10, end: 15 }, 180)).toBe(300);
+    expect(clockAt(0, DEFAULT_SHIFT, 180)).toBe(11);
+    expect(clockAt(90, DEFAULT_SHIFT, 180)).toBe(12.5);
+  });
+
+  it("brings people closer together at the noon peak", () => {
+    expect(arrivalGap(12.5, DEFAULT_SHIFT, 180, 12)).toBeLessThan(arrivalGap(11.2, DEFAULT_SHIFT, 180, 12));
+    // Over the window, the gaps add up to roughly the planned crowd.
+    let t = 0;
+    let n = 0;
+    while (t < 180) {
+      t += arrivalGap(clockAt(t, DEFAULT_SHIFT, 180), DEFAULT_SHIFT, 180, 12);
+      n++;
+    }
+    expect(n).toBeGreaterThanOrEqual(10);
+    expect(n).toBeLessThanOrEqual(14);
+  });
+});
+
+describe("bonuses", () => {
+  it("one per town, in road order, getting dearer down the road", () => {
+    expect(new Set(BONUSES.map((b) => b.town)).size).toBe(STOPS.length);
+    for (const t of STOPS) expect(townBonus(t.id)).toBeDefined();
+    const order = roadOrder();
+    const byRoad = [...BONUSES].sort((a, b) => order.indexOf(a.town) - order.indexOf(b.town));
+    for (let i = 1; i < byRoad.length; i++) expect(byRoad[i].price).toBeGreaterThanOrEqual(byRoad[i - 1].price);
+    expect(townBonus("pinecrest")!.id).toBe("bench");
+  });
+
+  it("great shifts ask for stars and most orders served", () => {
+    expect(greatShift([3, 3, 2, 3, 2, 3], 6, 6)).toBe(true);
+    expect(greatShift([3, 3, 2, 3, 2, 3], 6, 8)).toBe(false);
+    expect(greatShift([2, 2, 2, 2, 2, 3], 6, 6)).toBe(false);
+    expect(greatShift([3, 3, 3], 3, 3)).toBe(false);
+  });
+
+  it("are bought only once unlocked, and only with enough savings", () => {
+    const s = freshSave();
+    s.bank = 1000;
+    expect(buyBonus(s, "bench")).toBe(false);
+    s.found.push("bench");
+    s.bank = 10;
+    expect(buyBonus(s, "bench")).toBe(false);
+    expect(readyToBuy(s)).toBe(0);
+    s.bank = 100;
+    expect(readyToBuy(s)).toBe(1);
+    expect(buyBonus(s, "bench")).toBe(true);
+    expect(s.bank).toBe(100 - townBonus("pinecrest")!.price);
+    expect(s.bonuses).toEqual(["bench"]);
+    expect(buyBonus(s, "bench")).toBe(false);
+  });
+
+  it("keeps old kitchen upgrades as bonuses", () => {
+    expect(migrateBonuses(["bench", "tipjar", "nonsense", "bench"])).toEqual(["bench", "tipjar"]);
+  });
+});
+
+describe("looks", () => {
+  it("every slot has a free default and items unique by id", () => {
+    expect(new Set(LOOKS.map((l) => l.id)).size).toBe(LOOKS.length);
+    for (const s of SLOTS) expect(LOOKS.find((l) => l.id === DEFAULT_LOOK[s.id])!.price).toBe(0);
+  });
+
+  it("are bought with savings, worn on purchase, and souvenirs wait for their town", () => {
+    const s = freshSave();
+    s.bank = 500;
+    expect(buyLook(s, "sage")).toBe(true);
+    expect(s.look.paint).toBe("sage");
+    expect(s.bank).toBe(350);
+    expect(wearLook(s, "coral")).toBe(true);
+    expect(s.look.paint).toBe("coral");
+    expect(wearLook(s, "dusk")).toBe(false);
+    expect(buyLook(s, "canoe")).toBe(false);
+    s.shiftsIn.cedarfalls = 1;
+    s.bank = 500;
+    expect(buyLook(s, "canoe")).toBe(true);
+    expect(buyLook(s, "airship")).toBe(false);
+  });
+});
+
+describe("old saves", () => {
+  it("drop business mode, keep their money as savings, and keep upgrades and the menu", () => {
+    const old = { ...freshSave(), bank: 300, gear: ["solar1"], biz: true, simplePlan: true, ads: 1, offer: ["tipjar"], upgrades: ["bench", "turbo"], plan: { quality: "premium", price: "high", menu: ["Pine Classic"] } } as unknown as Parameters<typeof migrateSave>[0];
+    delete (old as Record<string, unknown>).bonuses;
+    delete (old as Record<string, unknown>).hidden;
+    const s = migrateSave(old) as unknown as Record<string, unknown>;
+    for (const k of ["gear", "biz", "simplePlan", "ads", "offer", "upgrades", "plan"]) expect(s[k]).toBeUndefined();
+    expect(s.bank).toBe(300);
+    expect(s.bonuses).toEqual(["bench", "turbo"]);
+    expect(s.found).toEqual(["bench", "turbo"]);
+    expect(s.look).toEqual(DEFAULT_LOOK);
+    expect(s.shift).toEqual(DEFAULT_SHIFT);
+    expect((s.hidden as string[]).length).toBeGreaterThan(0);
   });
 });

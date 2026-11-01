@@ -4,7 +4,7 @@ import { STOPS, townById } from "./stops";
 /**
  * Driving between towns on the road map.
  *
- * Roads join towns as nodes, and every drive costs gas by distance. The truck has an overnight
+ * Roads join towns as nodes. The truck has an overnight
  * range (see day.ts): a drive that fits the range left tonight, or this morning, happens at once
  * and no time passes. In the morning a longer drive takes the whole day and lands on the evening
  * map, with no shift that day. In the evening a longer drive has to wait for the morning.
@@ -13,12 +13,6 @@ import { STOPS, townById } from "./stops";
  * city opens the next region the same way.
  */
 
-/** What a new truck starts with. */
-export const START_BANK = 120;
-/** Gas per map unit driven (towns on a road are 17–55 units apart). */
-export const GAS_PER_UNIT = 0.4;
-/** The least a drive costs. */
-export const MIN_GAS = 4;
 /** Passed shifts in a town before its roads open. */
 export const SHIFTS_TO_UNLOCK = 3;
 /** For the map's distance labels only: one map unit is about three miles. */
@@ -44,10 +38,6 @@ export function distance(a: string, b: string): number {
   const ta = townById(a);
   const tb = townById(b);
   return Math.hypot(ta.x - tb.x, ta.y - tb.y);
-}
-
-export function gasCost(dist: number): number {
-  return Math.max(MIN_GAS, Math.round(dist * GAS_PER_UNIT));
 }
 
 export function miles(dist: number): number {
@@ -108,15 +98,12 @@ export interface Trip {
   hops: number;
   /** Road distance in map units. */
   distance: number;
-  /** Gas money. */
-  cost: number;
   when: TripWhen;
 }
 
 /** The part of a save that driving touches. */
 export interface Traveller {
   town: string;
-  bank: number;
   time: TimeOfDay;
   /** Map units driven since the last shift or sleep; today's hops add up against the range. */
   driven: number;
@@ -140,17 +127,12 @@ export function planTrip(from: string, to: string, unlocked: readonly string[], 
   const hops = path.length - 1;
   const fits = dist + legs.driven <= legs.range + 1e-6;
   const when: TripWhen = fits ? "now" : legs.time === "morning" ? "day" : "tomorrow";
-  return { from, to, path, hops, distance: dist, cost: gasCost(dist), when };
+  return { from, to, path, hops, distance: dist, when };
 }
 
-export function canAfford(trip: Trip, bank: number): boolean {
-  return bank >= trip.cost;
-}
-
-/** Drive: pay the gas and move the truck; a day-long drive lands in the evening. False when it can't happen now. */
+/** Drive: move the truck; a day-long drive lands in the evening. False when it can't happen now. */
 export function applyTrip(s: Traveller, trip: Trip): boolean {
-  if (trip.when === "tomorrow" || !canAfford(trip, s.bank)) return false;
-  s.bank -= trip.cost;
+  if (trip.when === "tomorrow") return false;
   s.town = trip.to;
   if (trip.when === "day") {
     s.time = "evening";

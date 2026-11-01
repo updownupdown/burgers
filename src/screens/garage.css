@@ -1,0 +1,52 @@
+/* The Garage (garage.ts): the truck on a little stage, then bonuses or looks. */
+.garage .gar-bank { display: grid; justify-items: end; line-height: 1.05; }
+.garage .gar-bank b { font-size: 20px; }
+
+.gar-stage {
+  position: relative; border-radius: var(--bv-r-lg); padding: 10px 8px 4px;
+  background: linear-gradient(#f3ead8, #efe2c8 70%, #e4d4b4);
+  transition: background 0.5s;
+}
+.gar-stage.night { background: linear-gradient(#1b2036, #2a3356 72%, #313a5c); }
+.gar-stage .gar-truck { width: 100%; height: auto; max-height: 240px; }
+.gar-stage .gar-sky { position: absolute; top: 8px; right: 8px; background: var(--bv-paper); }
+
+.gar-bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--bv-r-lg); background: var(--bv-paper-2); }
+.gar-bar .t { display: grid; flex: 1; min-width: 0; line-height: 1.25; }
+.gar-bar .t b { font-size: 15px; }
+.gar-bar .t em { font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #a87a22; margin-left: 4px; }
+.gar-bar .t small { font-size: 12px; color: var(--bv-ink-2); }
+
+.gar-tabs { align-self: stretch; }
+.gar-tabs button { display: inline-flex; gap: 6px; align-items: center; justify-content: center; }
+
+.gar-list { display: grid; gap: 6px; }
+.gar-item { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 10px; border: 1px solid var(--bv-rule-2); border-radius: var(--bv-r-lg); background: var(--bv-paper); }
+.gar-item .ic { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--bv-paper-2); font-size: 18px; color: var(--bv-ink-2); }
+.gar-item .t { display: grid; line-height: 1.25; min-width: 0; }
+.gar-item .t b { font-size: 14px; }
+.gar-item .t small { font-size: 11.5px; color: var(--bv-ink-2); }
+.gar-item .t em { font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--bv-mute); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+.gar-item.forSale { border-color: var(--bv-amber); background: var(--bv-amber-soft); }
+.gar-item.forSale .ic { background: var(--bv-paper); color: var(--bv-ink); }
+.gar-item.owned .ic { background: var(--bv-paprika-soft); color: var(--bv-paprika); }
+.gar-item.locked { opacity: 0.78; }
+.gar-owned, .gar-lock { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--bv-ink-2); white-space: nowrap; }
+.gar-owned { color: var(--bv-paprika); }
+.gar-lock { font-family: var(--bv-font-mono); font-weight: 500; color: var(--bv-mute); }
+
+.gar-slots { display: flex; flex-wrap: wrap; gap: 6px; }
+.gar-slots button { flex: none; padding: 6px 11px; border-radius: var(--bv-r-pill); border: 1px solid var(--bv-rule-2); background: var(--bv-paper); font-size: 13px; font-weight: 700; }
+.gar-slots button[aria-pressed="true"] { background: var(--bv-ink); color: var(--bv-paper); border-color: var(--bv-ink); }
+
+.gar-looks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.gar-look { display: grid; gap: 2px; justify-items: start; padding: 8px; border: 1px solid var(--bv-rule-2); border-radius: var(--bv-r-lg); background: var(--bv-paper); text-align: left; }
+.gar-look .gar-thumb { width: 100%; height: 74px; border-radius: 8px; background: #f3ead8; }
+.gar-look .gar-thumb.night { background: #232a46; }
+.gar-look b { font-size: 13px; line-height: 1.2; }
+.gar-look[aria-pressed="true"] { border: 1.5px solid var(--bv-paprika); background: var(--bv-paprika-soft); }
+.gar-look.grand .gar-thumb { box-shadow: inset 0 0 0 1.5px #e2b84a; }
+.gar-tag { display: inline-flex; gap: 3px; align-items: center; font-size: 11px; font-weight: 700; color: var(--bv-mute); }
+.gar-tag.price { font-family: var(--bv-font-mono); font-weight: 500; color: var(--bv-ink-2); }
+.gar-tag.on { color: var(--bv-paprika); }
+.gar-tag .bv-icon { font-size: 12px; }

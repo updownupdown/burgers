@@ -769,3 +769,19 @@ James, after build #72: the customers' lines were repetitive, and the clever one
 - **Old saves.** `SAVE_VERSION` 2 (`save.version`): a save from before it has its ratings, review text, clippings and town bests wiped (they were out of three); savings, bonuses, looks, popularity and the road are kept.
 
 Supersedes the critic weighting in §9, the review list and filters in §13, and the 2.4★ great shift in §21.
+
+## 28. Customers (study pick)
+
+James found the old customers odd, mostly their eyes: white eye whites lit by the purple-blue
+sky light read as cold blue goggles. A study (build #74) put five designs in the real window:
+bean, chibi townsfolk, storybook grown-ups, animal locals per region, and pencil-drawn faces.
+**James picked the bean** (2026-11-02), and the others were removed.
+
+- Same chunky one-piece bean in ten shirt colours, light belly, nub arms.
+- Painted face: small dark oval eyes with a white glint, brows, a mouth and blush. Every face
+  part is unlit (MeshBasic), so the sky can never tint it. Happy closes the eyes into arcs;
+  angry squints and drops the brows; sad tilts them up.
+- A sprout of hair when the head is bare; regional headwear otherwise (beanie, cap, ranger hat,
+  antlers, sun hat, shades, cowboy hat, bandana), scaled to the head.
+- Code: `src/render/people.ts` (`buildPerson`, `Face`, `addHat`); `CustomerFigure` in
+  `src/scenes/customers.ts` adds the bob, hop and glance.

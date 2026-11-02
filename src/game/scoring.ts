@@ -350,7 +350,7 @@ export const LEOPARD_BONUS = 0.04;
 export const LEOPARD_EVEN = 0.15;
 /** A crust more uneven than this (its dark side ahead of its pale side) was baked on one side: done, but marked down a little. */
 export const UNEVEN = 0.2;
-export const UNEVEN_Q = 0.86;
+export const UNEVEN_Q = 0.7;
 /** A flatbread's crust came out with leopard spots: golden and even all round, never past the band. */
 export function leopard(piece: Piece): boolean {
   const sc = COOK_SCALE.dough;

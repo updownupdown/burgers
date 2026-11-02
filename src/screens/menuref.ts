@@ -86,8 +86,8 @@ export function recipeHtml(r: Recipe, mult: number, special: boolean, locked = f
   } else if (r.dish === "quesadilla") tags.push(`<span class="bv-chip pill">${icon("toast")}Folded, flipped once</span>`);
   else if (r.dish === "tacos") tags.push(`<span class="bv-chip pill">${icon("toast")}Warm tortillas</span>`);
   else if (r.dish === "tostada") tags.push(`<span class="bv-chip pill">${icon("flame")}Fried shell</span>`);
-  else if (r.pie === "calzone") tags.push(`<span class="bv-chip pill">${icon("flame")}Folded, turned twice</span>`);
-  else if (r.pie) tags.push(`<span class="bv-chip pill">${icon("flame")}Baked, turned once</span>`);
+  else if (r.pie === "calzone") tags.push(`<span class="bv-chip pill">${icon("flame")}Folded, baked</span>`);
+  else if (r.pie) tags.push(`<span class="bv-chip pill">${icon("flame")}Baked in the oven</span>`);
   else if (r.toasted) tags.push(`<span class="bv-chip pill">${icon("toast")}Toasted bun</span>`);
   if (r.smash) tags.push(`<span class="bv-chip pill">${icon("smash")}Smashed, well done</span>`);
   if (r.melt) tags.push(`<span class="bv-chip pill">${icon("cheese")}Melted cheese</span>`);
@@ -176,7 +176,7 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
   ${mult !== 1 ? `<p class="bv-callout mref-biz">${icon("tag")}<span>Your prices: today's are ${mult > 1 ? "raised" : "lowered"} (×${mult.toFixed(2).replace(/0$/, "")}).</span></p>` : ""}
   <section class="mref-sec" data-sec="burgers">
     <h3 class="menu-h">${icon(mainIcon)}${main} in ${esc(town.name)} <span>${town.menu.length}</span></h3>
-    <p class="mref-note">${press ? `Every panini is pressed golden, the cheese melted inside.${town.press?.slice ? " Here they go out cut in half." : ""}` : comal ? `Tortillas are warmed on the comal until soft and spotted; a quesadilla is folded and flipped once, its cheese melted.${town.comal?.tpress ? " Hand-pressed tortillas earn a tip." : ""}` : oven ? `Every flatbread is built on the peel, baked in the deck oven and nudged round once so both halves go golden; basil, rocket and honey go on after.${town.oven?.board ? " Here they go out cut in four." : ""}` : "Every patty goes out medium. Nobody asks for rare or well done."}</p>
+    <p class="mref-note">${press ? `Every panini is pressed golden, the cheese melted inside.${town.press?.slice ? " Here they go out cut in half." : ""}` : comal ? `Tortillas are warmed on the comal until soft and spotted; a quesadilla is folded and flipped once, its cheese melted.${town.comal?.tpress ? " Hand-pressed tortillas earn a tip." : ""}` : oven ? `Every flatbread is built on the peel and baked in the deck oven; turned round so it bakes evenly, it comes out with leopard spots. Basil, rocket and honey go on after.${town.oven?.board ? " Here they go out cut in four." : ""}` : "Every patty goes out medium. Nobody asks for rare or well done."}</p>
     ${town.menu.map((r) => recipeHtml(r, mult, !base.has(r.name))).join("")}
   </section>
   ${elsewhereHtml(town, new Set(town.menu.map((r) => r.name)), prog)}

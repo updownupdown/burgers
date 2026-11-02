@@ -141,7 +141,7 @@ function foldSvg(): string {
 
 const FLATBREAD: Recipe = { name: "Harvest Red", price: 10, layers: ["dough", "redsauce", "mozzarella", "basil"], toasted: true, pie: "flatbread", melt: true, counts: { mozzarella: 4 } };
 
-/** The deck oven from above: brick back and side walls, the element glowing along the back, a pie nudged round by the peel's corner. */
+/** The deck oven from above: brick back and side walls, the element glowing along the back, a pie browner on the side facing it, turned round by the peel's tip. */
 function ovenSvg(): string {
   const INK = `stroke="#2a2622" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"`;
   return `<svg class="hw-svg" viewBox="0 0 160 90" aria-hidden="true">
@@ -164,11 +164,10 @@ function ovenSvg(): string {
     <path d="M97 28l3 3-4 2" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
     <rect x="14" y="70" width="52" height="8" rx="4" fill="#2c2f33" stroke="#0f1012" stroke-width="1.2"/>
     <rect x="14" y="70" width="34" height="8" rx="4" fill="#e3ad5a"/>
-    <rect x="120" y="68" width="36" height="12" rx="4" fill="#ffd99a" ${INK}/><text x="138" y="77" text-anchor="middle" font-size="7" font-weight="800" fill="#6b3a00">↻ Nudge</text>
   </svg>`;
 }
 
-/** The deck oven, for Orchard Isle (DESIGN §24, phase 4; the peel after build #69). */
+/** The deck oven, for Orchard Isle (DESIGN §24, phase 4; the peel after builds #69 and #71). */
 function ovenSec(board: boolean, fritters: boolean): Sec {
   return {
     id: "oven",
@@ -180,11 +179,11 @@ function ovenSec(board: boolean, fritters: boolean): Sec {
       <div class="hw-stack">${stackArt(FLATBREAD)}<p class="hw-cap">Harvest Red: dough, tomato sauce, mozzarella ×4, then basil after the oven.</p></div>`,
     points: [
       "<b>Tap the dough</b> to lay a base on the peel. <b>Hold the ladle</b> in the pot and spread the sauce in a spiral out to the crust (white bases get a drizzle of olive oil instead). Then the toppings: tap a pan for one piece, or drag them on.",
-      "<b>Drag the peel by its handle</b> into the oven and <b>swipe down</b> to slide the pie off onto the deck. To lift a pie, slide the blade right under it and <b>swipe up</b>. Swipe down over the <b>bench</b> to set one aside, or let go and the peel goes back where it lies.",
-      "The half facing the <b>hot back wall</b> bakes <b>twice as fast</b>. The meter under the pie shows its <b>paler half</b>; when it says <b>Nudge</b>, set the peel's tip against the front of the pie and slide it sideways to <b>spin it round</b>. Once, about halfway, is right.",
-      "Left as it is, the hot side <b>scorches</b>. Turned just right, both halves come out even, with <b>leopard spots</b> on the crust: a small bonus.",
+      "<b>Drag the peel by its handle</b> into the oven and <b>swipe down</b> to slide the pie off onto the deck. To lift a pie, <b>push the blade in under it</b> (or set the blade under it and <b>swipe up</b>). Swipe down over the <b>bench</b> to set one aside, or let go and the peel goes back where it lies.",
+      "The side facing the <b>hot back wall</b> browns faster: watch the crust darken round that side. The meter under the pie shows its <b>palest side</b>. Turning is up to you: set the peel's tip against the front of the pie and <b>push it firmly sideways</b> to spin it round.",
+      "Left as it is, a pie is still fine once its pale side is done, just uneven (and the dark side <b>scorches</b> if it's left too long). Turned round about halfway, it bakes evenly all round, with <b>leopard spots</b> on the crust: a better pie and a small bonus.",
       "To serve, lift it out on the peel, carry it up to a tray and <b>swipe down</b>. <b>Mushrooms</b> want the longer bake. <b>Basil, rocket and honey go on after</b>, at the tray (honey squeezes like any sauce).",
-      ...(board ? ["In <b>Port Amber</b>: a third spot in the oven, the <b>Calzone</b> (fold it on the peel by dragging the dough's edge across the middle, then <b>nudge it round twice</b>), and the board in the bench's place: set a flatbread on it and <b>swipe across it twice</b> to cut it in four."] : []),
+      ...(board ? ["In <b>Port Amber</b>: a third spot in the oven, the <b>Calzone</b> (fold it on the peel by dragging the dough's edge across the middle; it's thick and bakes slower), and the board in the bench's place: set a flatbread on it and <b>swipe across it twice</b> to cut it in four."] : []),
       `At the fryer, drop the <b>zucchini</b> in the <b>batter bowl</b>, then pick it up again for the basket; salt the fritti in the carton.${fritters ? " <b>Apple fritters</b> fry like fries and get cinnamon sugar from the sugar shaker." : ""}`,
     ],
   };

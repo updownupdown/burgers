@@ -1,4 +1,4 @@
-import { avgCook, bunToast, CHAR_FACE, cookLevel, COOK_SCALE, cookZone, friesQuality, friesZone, FRY_ZONE, isFlipped, isMelted, DRINK_FILL, MARKED, paleSide, pattyDoneness, SALT, SCORCHED } from "./cooking";
+import { avgCook, bunToast, CHAR_FACE, cookLevel, COOK_SCALE, cookZone, friesQuality, friesZone, FRY_ZONE, isFlipped, isMelted, DRINK_FILL, MARKED, paleSide, darkSide, pattyDoneness, SALT } from "./cooking";
 import type { Drink, ExpectedLayer, Fries, Kind, Layer, Order, Piece, Plate } from "./types";
 import { BREADS, COUNTED, FRY_LABEL, fryOf, KIND_LABEL, SAUCE_RADIUS, sauceRadius, SIZE_LABEL, SUGARED, TORTILLAS, type FryKind } from "./types";
 
@@ -225,18 +225,21 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
       if (exp.melted && !isMelted(piece)) return [0.55, "cheese not melted"];
       return [1, null];
     case "dough": {
-      // A flatbread: judged on its paler half (it has to be baked through), a half that ran too far
-      // ahead at the fire scorches, and a calzone has to be folded.
+      // A flatbread: judged on its palest side (it has to be baked through) and its darkest (it
+      // mustn't scorch); one baked on one side only is fine, just not as good as an even one. A
+      // calzone has to be folded.
       if (exp.folded && !piece.folded) return [0.45, "wanted a calzone, folded"];
       if (!exp.folded && piece.folded) return [0.5, "didn't want it folded"];
       const t = paleSide(piece);
+      const dark = darkSide(piece);
       const z = cookZone("dough", t);
       const word = piece.folded ? "calzone" : "crust";
-      if (Math.max(...piece.cook) >= COOK_SCALE.dough.burnt) return [0.15, `burnt ${word}`];
+      if (dark >= COOK_SCALE.dough.burnt) return [0.15, `burnt ${word}`];
       if (t < 0.12) return [0.1, "raw dough"];
-      if (z === "under") return [0.5, Math.max(...piece.cook) >= COOK_SCALE.dough.done ? "pale on one side" : "pale, doughy crust"];
-      if ((piece.scorch ?? 0) >= SCORCHED) return [0.6, "scorched on one side"];
+      if (z === "under") return [0.5, dark >= COOK_SCALE.dough.done ? "pale on one side" : "pale, doughy crust"];
       if (z === "over") return [0.85, `${word} a bit dark`];
+      if (dark >= COOK_SCALE.dough.over) return [0.7, "scorched on one side"];
+      if (dark - t > UNEVEN) return [UNEVEN_Q, "baked on one side"];
       return [1, null];
     }
     case "redsauce":
@@ -335,15 +338,19 @@ export function dishOrder(expected: ExpectedLayer[], layers: Layer[]): Layer[] {
 /** Extra score (out of 1) when a taco's corn tortillas were pressed by hand (Sun Valley); it also adds to the tip. */
 export const HANDMADE_BONUS = 0.04;
 
-/** Extra score (out of 1) for a flatbread turned as it should be, both halves golden: leopard spots on the crust. */
+/** Extra score (out of 1) for a flatbread baked evenly all round: leopard spots on the crust. */
 export const LEOPARD_BONUS = 0.04;
-/** Halves this close at the end count as evenly baked (leopard spots). */
+/** Crust this even all round at the end counts as evenly baked (leopard spots). */
 export const LEOPARD_EVEN = 0.15;
-/** A flatbread's crust came out with leopard spots: turned (twice for a calzone), never scorched, both halves golden and even. */
-export function leopard(piece: Piece, turns = 1): boolean {
-  const [a, b] = piece.cook;
+/** A crust more uneven than this (its dark side ahead of its pale side) was baked on one side: done, but marked down a little. */
+export const UNEVEN = 0.2;
+export const UNEVEN_Q = 0.86;
+/** A flatbread's crust came out with leopard spots: golden and even all round, never past the band. */
+export function leopard(piece: Piece): boolean {
   const sc = COOK_SCALE.dough;
-  return (piece.turns ?? 0) >= turns && (piece.scorch ?? 0) < SCORCHED && Math.min(a, b) >= sc.done && Math.max(a, b) < sc.over && Math.abs(a - b) <= LEOPARD_EVEN;
+  const pale = paleSide(piece);
+  const dark = darkSide(piece);
+  return pale >= sc.done && dark < sc.over && dark - pale <= LEOPARD_EVEN;
 }
 /** Mushrooms on a flatbread want a long bake: roasted from here (OVEN_ROAST, about 24 s in the oven). */
 export const MUSHROOM_ROAST = 1;
@@ -484,9 +491,9 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
     perks.push("grill marks");
   }
 
-  // A flatbread turned right comes out with leopard spots on its crust: a little extra, like grill marks.
+  // A flatbread baked evenly comes out with leopard spots on its crust: a little extra, like grill marks.
   const dough = exp[0]?.kind === "dough" ? plate.layers.find((l) => l.piece.kind === "dough")?.piece : null;
-  if (dough && total > 0 && leopard(dough, exp[0].turns ?? 1) && layerQuality(exp[0], dough)[0] >= 1) {
+  if (dough && total > 0 && leopard(dough) && layerQuality(exp[0], dough)[0] >= 1) {
     total = Math.min(1, total + LEOPARD_BONUS);
     perks.push("leopard spots");
   }

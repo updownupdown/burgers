@@ -182,7 +182,7 @@ export function prepHtml(p: PrepInput): string {
         : r.dish
           ? [r.dish === "quesadilla" ? "Folded, flipped once" : r.dish === "tostada" ? "Fried shell" : "Warm tortillas", r.melt ? "Melted cheese" : ""].filter(Boolean)
           : r.pie
-            ? [r.pie === "calzone" ? "Folded, turned twice" : "Baked, turned once", r.layers.some((k) => k === "basil" || k === "rocket" || k === "honey") ? `${r.layers.filter((k) => k === "basil" || k === "rocket" || k === "honey").map((k) => KIND_LABEL[k]).join(", ")} after` : ""].filter(Boolean)
+            ? [r.pie === "calzone" ? "Folded, baked" : "Baked in the oven", r.layers.some((k) => k === "basil" || k === "rocket" || k === "honey") ? `${r.layers.filter((k) => k === "basil" || k === "rocket" || k === "honey").map((k) => KIND_LABEL[k]).join(", ")} after` : ""].filter(Boolean)
           : [r.toasted ? "Toasted bun" : "", r.smash ? "Smashed patty" : "", r.melt ? "Melted cheese" : ""].filter(Boolean);
       // Between the buns (or on the bread of an open-faced toast, or in the tortillas), bottom to top; counted toppings once, with their count.
       const inner = r.open || r.dish || r.pie ? r.layers.slice(r.dish && COUNTED.has(r.layers[0]) ? 0 : 1) : r.layers.slice(1, -1);

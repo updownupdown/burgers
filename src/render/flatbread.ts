@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { COOK_SCALE, isMelted } from "../game/cooking";
+import { isMelted, RIM_SEGS } from "../game/cooking";
 import { pieYawOf } from "../game/peel";
 import { leopard } from "../game/scoring";
 import type { Kind, Piece } from "../game/types";
@@ -10,13 +10,13 @@ import { paniniParts } from "./panini";
 
 /*
  * Orchard Isle's flatbreads (DESIGN §24, phase 4), in ingredient units like the burger parts (a
- * bun is 2 across): an oval, hand-shaped base with a raised crust, whose two halves bake on their
- * own (the half facing the oven's fire browns twice as fast), tomato sauce spread in a spiral or a
- * drizzle of olive oil, torn mozzarella that melts, and the toppings scattered over it: mushroom
- * slices, ham, fig quarters, pear slices, blue cheese crumbles, then basil, rocket and honey after
- * the oven. A calzone is the base folded over into a puffed half moon. Leopard spots show on the
- * crust of one turned right; cuts show as lines across. One object does the peel, the oven, the
- * board and the tray: makeFlatbread(pieces), with the dough first.
+ * bun is 2 across): an oval, hand-shaped base with a raised crust that bakes segment by segment
+ * round the rim (the side facing the oven's hot wall browns faster), tomato sauce spread in a
+ * spiral or a drizzle of olive oil, torn mozzarella that melts, and the toppings scattered over it:
+ * mushroom slices, ham, fig quarters, pear slices, blue cheese crumbles, then basil, rocket and
+ * honey after the oven. A calzone is the base folded over into a puffed half moon. Leopard spots
+ * show on the crust of one baked evenly all round; cuts show as lines across. One object does the
+ * peel, the oven, the board and the tray: makeFlatbread(pieces), with the dough first.
  */
 
 /** Half sizes of the oval base, ingredient units: a flatbread is a little wider than two buns. */
@@ -47,9 +47,8 @@ const CREAM = new THREE.Color("#f6ecd6");
 const tmp = new THREE.Color();
 
 /** The base's outline from angle a0 to a1: a slightly lopsided, hand-shaped oval (shape x, y = world x, -z). */
-function outline(scale = 1, a0 = 0, a1 = Math.PI * 2, seed = 1.3): THREE.Vector2[] {
+function outline(scale = 1, a0 = 0, a1 = Math.PI * 2, seed = 1.3, n = 20): THREE.Vector2[] {
   const pts: THREE.Vector2[] = [];
-  const n = 20;
   for (let i = 0; i <= n; i++) {
     const a = a0 + (i / n) * (a1 - a0);
     const k = (1 + 0.035 * Math.sin(3 * a + seed) + 0.02 * Math.sin(7 * a + seed * 2)) * scale;
@@ -58,27 +57,29 @@ function outline(scale = 1, a0 = 0, a1 = Math.PI * 2, seed = 1.3): THREE.Vector2
   return pts;
 }
 
-/** One half of the base (shape y >= 0 is the back half, world z < 0), as a slab. */
-function halfSlab(back: boolean): THREE.BufferGeometry {
-  const pts = back ? outline(1, 0, Math.PI) : outline(1, Math.PI, Math.PI * 2);
-  const s = new THREE.Shape(pts);
+/** The angles bounding crust segment k (shape space; segments 0..3 are half A, the back half). */
+const segSpan = (k: number): [number, number] => [(k / RIM_SEGS) * Math.PI * 2, ((k + 1) / RIM_SEGS) * Math.PI * 2];
+/** One wedge of the base, from the middle out to segment k's edge, as a slab. */
+function wedgeSlab(k: number): THREE.BufferGeometry {
+  const [a0, a1] = segSpan(k);
+  const s = new THREE.Shape([new THREE.Vector2(0, 0), ...outline(1, a0, a1, 1.3, 5)]);
   const g = new THREE.ExtrudeGeometry(s, { depth: BASE_H, bevelEnabled: false, curveSegments: 4 });
   g.rotateX(-Math.PI / 2);
   return faceted(g);
 }
-/** The raised crust along one half of the edge: a round tube, squashed a little. */
-function halfRim(back: boolean): THREE.BufferGeometry {
-  const pts = (back ? outline(0.97, 0, Math.PI) : outline(0.97, Math.PI, Math.PI * 2)).map((p) => new THREE.Vector3(p.x, 0, -p.y));
-  const g = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, RIM_R, 7, false);
+/** The raised crust along segment k of the edge: a round tube, squashed a little. */
+function rimSeg(k: number): THREE.BufferGeometry {
+  const [a0, a1] = segSpan(k);
+  // A touch past each end so neighbouring segments meet without a gap.
+  const pts = outline(0.97, a0 - 0.03, a1 + 0.03, 1.3, 6).map((p) => new THREE.Vector3(p.x, 0, -p.y));
+  const g = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 10, RIM_R, 7, false);
   g.scale(1, 0.75, 1);
   g.translate(0, BASE_H + RIM_R * 0.45, 0);
   return faceted(g);
 }
 const GEO = {
-  slabA: shareGeometry(halfSlab(true)),
-  slabB: shareGeometry(halfSlab(false)),
-  rimA: shareGeometry(halfRim(true)),
-  rimB: shareGeometry(halfRim(false)),
+  slabs: Array.from({ length: RIM_SEGS }, (_, k) => shareGeometry(wedgeSlab(k))),
+  rims: Array.from({ length: RIM_SEGS }, (_, k) => shareGeometry(rimSeg(k))),
   /** A calzone: a puffed dome over each half of a half moon (left, x < 0, and right), its straight crease along the back. */
   calA: shareGeometry(faceted(new THREE.SphereGeometry(1, 14, 7, 0, Math.PI / 2, 0, Math.PI / 2))),
   calB: shareGeometry(faceted(new THREE.SphereGeometry(1, 14, 7, Math.PI / 2, Math.PI / 2, 0, Math.PI / 2))),
@@ -252,8 +253,8 @@ export interface FlatbreadObject extends THREE.Group {
 }
 
 /**
- * A flatbread (or a calzone), dough first then everything on it. The base's half A is the back
- * half (where the fire is) until it's turned; `rotation.y` is left to the caller (the oven turns it).
+ * A flatbread (or a calzone), dough first then everything on it. The base's half A (crust
+ * segments 0..3) is the back half (facing the hot wall) until it's turned; `rotation.y` is left to the caller (the oven turns it).
  */
 export function makeFlatbread(pieces: Piece[]): FlatbreadObject {
   const g = new THREE.Group() as FlatbreadObject;
@@ -286,9 +287,10 @@ export function makeFlatbread(pieces: Piece[]): FlatbreadObject {
       g.add(s);
     }
   } else {
-    for (const [slab, rim] of [[GEO.slabA, GEO.rimA], [GEO.slabB, GEO.rimB]] as const) {
-      const s = mesh(slab, "#f4e8ce", { unique: true, ink: 1.02 });
-      const r = mesh(rim, "#f4e8ce", { unique: true, ink: 1.04 });
+    // The base and its crust in segments round the rim, each browning by how it has faced the hot wall.
+    for (let k = 0; k < RIM_SEGS; k++) {
+      const s = mesh(GEO.slabs[k], "#f4e8ce", { unique: true, ink: 1.02 });
+      const r = mesh(GEO.rims[k], "#f4e8ce", { unique: true, ink: 1.04 });
       g.add(s, r);
       halves.push(s);
       rims.push(r);
@@ -377,11 +379,22 @@ export function makeFlatbread(pieces: Piece[]): FlatbreadObject {
     update: (ps) => {
       const d = ps[0];
       if (!d) return;
-      // Each half of the crust browns on its own; the middle under the toppings stays paler.
-      halves.forEach((h, i) => (h.material as THREE.MeshToonMaterial).color.copy(doughRamp(d.cook[i], tmp)).lerp(CREAM, folded ? 0 : 0.15));
-      if (folded) (rims[0].material as THREE.MeshToonMaterial).color.copy(doughRamp((d.cook[0] + d.cook[1]) / 2 + 0.05, tmp));
-      else rims.forEach((r, i) => (r.material as THREE.MeshToonMaterial).color.copy(doughRamp(d.cook[i] + 0.05, tmp)));
-      leo.visible = leopard(d, d.folded ? 2 : 1) || ((d.turns ?? 0) > 0 && Math.min(...d.cook) >= COOK_SCALE.dough.done + 0.1 && Math.abs(d.cook[0] - d.cook[1]) < 0.2);
+      // Each segment of the crust browns on its own, so the side that faced the hot wall shows
+      // darker; the middle under the toppings stays paler. A calzone's two domes are its halves.
+      const rim = d.rim ?? [];
+      const raw = (k: number) => rim[k] ?? d.cook[k < RIM_SEGS / 2 ? 0 : 1];
+      // How far each segment is ahead of or behind the pie as a whole, drawn a little stronger
+      // than it is, so the side that needs to face the wall reads at a glance.
+      const mean = (d.cook[0] + d.cook[1]) / 2;
+      const seg = (k: number, more = 1) => raw(k) + (raw(k) - mean) * more;
+      if (folded) {
+        halves.forEach((h, i) => (h.material as THREE.MeshToonMaterial).color.copy(doughRamp(d.cook[i], tmp)));
+        (rims[0].material as THREE.MeshToonMaterial).color.copy(doughRamp((d.cook[0] + d.cook[1]) / 2 + 0.05, tmp));
+      } else {
+        halves.forEach((h, k) => (h.material as THREE.MeshToonMaterial).color.copy(doughRamp(seg(k, 0.4), tmp)).lerp(CREAM, 0.15));
+        rims.forEach((r, k) => (r.material as THREE.MeshToonMaterial).color.copy(doughRamp(seg(k) + 0.05, tmp)));
+      }
+      leo.visible = leopard(d);
       cuts[0].visible = (d.cuts ?? 0) >= 1;
       cuts[1].visible = (d.cuts ?? 0) >= 2;
       const k = ps

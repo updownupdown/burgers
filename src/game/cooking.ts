@@ -97,41 +97,54 @@ export const COOK_SCALE: Record<Cookable, CookScale> = {
 };
 
 /**
- * Orchard Isle's hearth oven (DESIGN §24, phase 4). The fire is at the back: the half of a pie
- * facing it bakes at twice the pace of the half facing the mouth (OVEN_RATE per second, against
- * the dough's scale). Turned once near halfway, both halves are golden at about 21 s and stay in
- * the band until about 28 s. Left unturned, the fire side runs more than OVEN_LEAD ahead of the
- * pale side by about 17 s, before the pale side is done, and scorches. A folded calzone is
- * thicker: it bakes at OVEN_FOLDED of the pace and scorches with a smaller lead, so one turn can't
- * see it through: turned at about 6 s and again at about 16 s, it's done from about 19 s to 26 s.
+ * Orchard Isle's deck oven (DESIGN §24; per segment after build #71). The heat is at the back
+ * wall. A pie's crust bakes in RIM_SEGS segments round its rim, each at OVEN_RATE x (1.5 +
+ * OVEN_SKEW x how squarely it faces the back wall) per second: the side facing the wall about 1.9x,
+ * the side facing the mouth about 1.1x. Turned half round near halfway, every segment is golden
+ * and even at about 21 s and stays in the band until about 30 s (leopard spots). Turning is
+ * optional: left as it is, the pale side is done from about 18 s and the dark side only goes too
+ * far at about 24 s, so a pie pulled in that window is done, just uneven. A folded calzone is
+ * thicker and bakes at OVEN_FOLDED of the pace.
  */
 export const OVEN_RATE = 0.0176;
-export const OVEN_FIRE = 2;
+export const OVEN_SKEW = 0.4;
 export const OVEN_FOLDED = 0.75;
-export const OVEN_LEAD = { open: 0.3, folded: 0.08 };
-/** Seconds a fire side can run over the lead before it counts as scorched. */
+export const RIM_SEGS = 8;
+/** Seconds a side can sit past its band before it counts as scorched. */
 export const SCORCHED = 1;
 /** On a pie in the oven: cheese melts (melted at 0.5, about 6 s); other toppings roast. Mushrooms want a long bake (roasted at 1, about 24 s). */
 export const OVEN_MELT = 0.09;
 export const OVEN_ROAST = 0.042;
-/** A flatbread's paler side, and how far its fire side has run ahead (negative: the other half leads). */
-export const paleSide = (p: Piece): number => Math.min(p.cook[0], p.cook[1]);
-/** Which half of a pie faces the fire: 0 until it's turned, then 1, and so on. */
-export const fireHalf = (p: Piece): 0 | 1 => ((p.turns ?? 0) % 2) as 0 | 1;
-export const fireLead = (p: Piece): number => p.cook[fireHalf(p)] - p.cook[1 - fireHalf(p)];
-export const ovenLead = (p: Piece): number => (p.folded ? OVEN_LEAD.folded : OVEN_LEAD.open);
+/**
+ * The angle of a pie's crust segment `k`, in the pie's own frame (shape x, y = world x, -z before
+ * it's turned): segments 0..3 are its half A, the back half while it hasn't been turned.
+ */
+export const rimAngle = (k: number): number => ((k + 0.5) / RIM_SEGS) * Math.PI * 2;
+/** How squarely crust segment `k` of a pie turned `yaw` faces the hot back wall (1 square on, -1 facing the mouth). */
+export const rimFacing = (k: number, yaw: number): number => Math.sin(rimAngle(k) + yaw);
+/** A flatbread's crust, segment by segment (made from its two halves the first time it's asked for). */
+export function rimOf(p: Piece): number[] {
+  if (!p.rim) p.rim = Array.from({ length: RIM_SEGS }, (_, k) => (k < RIM_SEGS / 2 ? p.cook[0] : p.cook[1]) ?? 0);
+  return p.rim;
+}
+/** A flatbread's palest and darkest crust. */
+export const paleSide = (p: Piece): number => (p.rim ? Math.min(...p.rim) : Math.min(p.cook[0], p.cook[1]));
+export const darkSide = (p: Piece): number => (p.rim ? Math.max(...p.rim) : Math.max(p.cook[0], p.cook[1]));
 
 /**
- * A second in the oven for a pie's dough (`boost` is the Hot plate upgrade): the fire half bakes at
- * OVEN_FIRE times the pace of the other, and while it runs more than its lead ahead it scorches.
- * True while it's scorching.
+ * A second in the oven for a pie's dough (`boost` is the Hot plate upgrade): each crust segment
+ * bakes by how it faces the back wall, and `cook` keeps the two halves' averages. True while its
+ * darkest side is past the band (scorching).
  */
 export function bakeStep(d: Piece, dt: number, boost = 1): boolean {
   const r = OVEN_RATE * boost * (d.folded ? OVEN_FOLDED : 1) * dt;
-  const f = fireHalf(d);
-  d.cook[f] += r * OVEN_FIRE;
-  d.cook[1 - f] += r;
-  if (fireLead(d) <= ovenLead(d)) return false;
+  const rim = rimOf(d);
+  const yaw = d.yaw ?? 0;
+  for (let k = 0; k < RIM_SEGS; k++) rim[k] += r * (1.5 + OVEN_SKEW * rimFacing(k, yaw));
+  const half = RIM_SEGS / 2;
+  d.cook[0] = rim.slice(0, half).reduce((a, b) => a + b, 0) / half;
+  d.cook[1] = rim.slice(half).reduce((a, b) => a + b, 0) / half;
+  if (darkSide(d) < COOK_SCALE.dough.over) return false;
   d.scorch = (d.scorch ?? 0) + dt;
   return true;
 }

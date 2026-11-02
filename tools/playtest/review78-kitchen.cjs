@@ -66,7 +66,7 @@ const pc = `(() => { let uid = 9000; return (kind, cook = 0.55, extra = {}) => (
     const t = await p.$('[data-r=ticket]:not([hidden])');
     if (t) {
       const mode = await t.getAttribute('data-mode');
-      if (mode && mode !== 'stub') { await t.click(); await step(p, 0.6); }
+      if (mode === 'big') { await t.click(); await step(p, 0.6); }
     }
     await step(p, 1);
     await p.waitForTimeout(300);

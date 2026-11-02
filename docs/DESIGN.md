@@ -893,7 +893,7 @@ From the kitchen review of build #78 (`review-3-kitchen.md`, P1-1 to P3-10). Cod
 **Serving and the tray**
 - **Serve sits on the tray's front lip**, a slim 90 × 28 pill (44 px hit area) that appears 0.3 s after the order is complete, so it never covers the dish.
 - **Call from the tray.** A tap on an empty tray calls the next person in line to that tray; while people wait, the empty tray shows "Call next · N". The header bell stays.
-- **The tray's food draws 1.3× larger** while its ticket is folded or hidden (a true camera zoom isn't possible: three trays already fill the width).
+- **The tray's food draws 1.3× larger** while its ticket is folded (half or stub) or hidden (a true camera zoom isn't possible: three trays already fill the width).
 
 **What the player sees**
 - **Chef's touches pay.** Perfect sauce, grill marks, leopard spots, a clean cut, perfect salt and a garnish add $1 each to the tip (hand-pressed $2), on 4★ or better orders. The coin that flies up carries a small stamp for each.

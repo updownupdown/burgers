@@ -5387,7 +5387,7 @@ function updateUi(dt = 0): void {
     trayView.fitUnder(i, (bottom - bands.tray.y) / bands.tray.h);
     // Receipt folded (or none): the dish zooms in to fill the wall the receipt left (after build #78).
     const t = ui.tickets[i];
-    pv.boost = t.hidden || t.dataset.mode === "stub" || !t.dataset.mode ? TRAY_ZOOM : 1;
+    pv.boost = t.hidden || t.dataset.mode !== "big" ? TRAY_ZOOM : 1;
   });
   updateAskChip();
   updateSauce(dt);

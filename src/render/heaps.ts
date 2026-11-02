@@ -282,7 +282,8 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
     // Raw breasts on paper, fanned so each reads.
     const s = HEAP_S;
     parts.add(G.paper, "#f4f1ea", { p: [0, PAN.floor, 0], r: [0, 0.1, 0], s, ink: 0.01 });
-    for (let i = 0; i < 4; i++) parts.addParts(rawParts("chicken"), { p: [jitter(r, 0.04), PAN.floor + 0.02 + i * 0.07, -0.18 + i * 0.12], r: [-0.22 + jitter(r, 0.05), (i % 2 ? 0.3 : -0.25) + jitter(r, 0.1), jitter(r, 0.05)], s: s * 0.95 });
+    // Plump and peachy, thicker than a slice of ham (after build #76), each breast's narrow end the same way.
+    for (let i = 0; i < 4; i++) parts.addParts(rawParts("chicken"), { p: [jitter(r, 0.04), PAN.floor + 0.02 + i * 0.08, -0.2 + i * 0.13], r: [-0.22 + jitter(r, 0.05), (i % 2 ? 0.25 : -0.2) + jitter(r, 0.1), jitter(r, 0.05)], s: [s * 0.92, s * 1.4, s * 0.92] });
   },
   veggie: (parts, r) => {
     const s = HEAP_S;

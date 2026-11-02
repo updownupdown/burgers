@@ -41,7 +41,7 @@ const breadRamp = ramp([
   [1.0, "#3b2216"],
 ]);
 const chickenRamp = ramp([
-  [0, "#f2aaa4"],
+  [0, "#f5bfb2"],
   [0.25, "#f3c9bc"],
   [0.42, "#f5ead8"],
   [0.7, "#ecd3a6"],
@@ -209,7 +209,7 @@ const CHICKEN_LINES = (() => {
   return bakeShared(p);
 })();
 function makeChicken(body: THREE.Group): (p: Piece) => void {
-  const m = mesh(CHICKEN_GEO, "#f2aaa4", { unique: true, ink: 1.03 });
+  const m = mesh(CHICKEN_GEO, "#f5bfb2", { unique: true, ink: 1.03 });
   const lineMat = toon("#a9683a", { unique: true });
   const lines = new THREE.Mesh(CHICKEN_LINES.geo, lineMat);
   lines.position.y = PANINI_HEIGHT.chicken! + 0.006;
@@ -468,7 +468,7 @@ export function rawParts(kind: Kind): Parts {
       break;
     }
     case "chicken":
-      p.add(CHICKEN_GEO, "#f2aaa4", { ink: 0.03 });
+      p.add(CHICKEN_GEO, "#f5bfb2", { ink: 0.03 });
       break;
     case "veggie":
       p.add(VEGGIE_GEO, "#bccb8e", { ink: 0.03 });

@@ -213,6 +213,12 @@ export function fillParts(kind: Kind | "cilantroSprigs", rx: number, rz: number,
     case "beans":
       p.add(beanGeo, "#7a4a32", { p: [0, 0, 0], s: [rx, 0.12 * n + 0.02, rz], ink });
       spread(5, (x, z) => p.add(crumbGeo, "#9a6446", { p: [x * 0.6, 0.1 * n, z * 0.6], s: [0.8, 0.3, 0.8], ink: false }));
+      // Whole beans showing in the mash, so it reads as beans and not a sauce.
+      spread(Math.round(9 * n), (x, z) => {
+        const H = 0.12 * n + 0.02;
+        const y = H * Math.sqrt(Math.max(0, 1 - ((x * 0.75) / rx) ** 2 - ((z * 0.75) / rz) ** 2));
+        p.add(beanGeo, "#5e3420", { p: [x * 0.75, y - 0.01, z * 0.75], r: [0, r() * 3, 0], s: [0.07, 0.035, 0.045], ink: false });
+      });
       break;
     case "cilantro":
       spread(Math.round(12 * n), (x, z, i) => p.add(leafGeo, i % 3 ? "#3f9a3a" : "#5fb24a", { p: [x, 0.02 + r() * 0.03, z], r: [r() * 0.5, r() * 6, r() * 0.5], s: 0.8 + r() * 0.5, ink: ink * 0.6 }));

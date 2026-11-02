@@ -111,6 +111,22 @@ export function sauceCoverage(stroke: { x: number; z: number }[] | undefined, r 
   return hit / covInner.length;
 }
 
+/**
+ * A quick squeeze (a tap on the bottle): a loose spiral that covers about a fifth of the top,
+ * "a bit more" on the meter. Good enough; drawing it yourself is how you get Perfect.
+ */
+export function quickSauceStroke(target = 0.2): { x: number; z: number }[] {
+  const pts: { x: number; z: number }[] = [];
+  for (let k = 0; k <= 200; k++) {
+    const t = k / 12;
+    const r = 0.06 * t;
+    if (r > 0.75) break;
+    pts.push({ x: Math.cos(t) * r, z: Math.sin(t) * r });
+    if (k % 4 === 0 && sauceCoverage(pts) >= target) break;
+  }
+  return pts;
+}
+
 export type SauceWord = "stingy" | "light" | "perfect" | "heavy" | "drowning";
 /**
  * Tomato sauce on a flatbread is spread with the ladle in a spiral: it should cover most of the

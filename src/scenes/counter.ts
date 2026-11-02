@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { bakeStep, bakeTopping, COMAL_SPEED, cookLevel, COOK_SCALE, DRINK_FILL, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, GRILL_RATE, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, type Cookable } from "../game/cooking";
+import { bakeStep, bakeTopping, CHAR_FACE, COMAL_SPEED, cookLevel, COOK_SCALE, DRINK_FILL, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, GRILL_RATE, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, type Cookable } from "../game/cooking";
 import type { DrinkId, FriesSize, FryKind, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
 import { BREADS, CUP_SPEED, GRILLABLE, isSauce, OVEN_CHEESE, PRESS_CHEESE, PROTEINS, SCOOPED, TORTILLAS } from "../game/types";
 import { fountainFor, type MiddleCounter } from "../game/stops";
@@ -448,6 +448,32 @@ const HELD_LIFT = 0.9;
 /** Overflow puddles grow to this many times their old size. */
 const PUDDLE_GROW = 2;
 
+/**
+ * Chill: stop a piece cooking once it's well done (halfway into its "over" band) or a face is
+ * about to char, by putting back this frame's heat. It still reads as well done, never burnt.
+ */
+function holdBelowBurnt(p: Piece, was: [number, number]): void {
+  const z = COOK_SCALE[p.kind as Cookable];
+  if (!z) return;
+  const cap = (z.over + z.burnt) / 2;
+  if (cookLevel(p) > cap || (MEATS.has(p.kind) && Math.max(p.cook[0], p.cook[1]) >= CHAR_FACE - 0.02)) {
+    p.cook[0] = was[0];
+    p.cook[1] = was[1];
+  }
+}
+/**
+ * A sauce bottle's touch box: as wide as the gap between bottles (they're thin, and fingers
+ * aren't), a bit deeper and taller than the bottle, so any press on the caddy finds one.
+ */
+function bottleBox(caddy: THREE.Object3D): THREE.BoxGeometry {
+  const xs = Object.values(caddy.userData.spots.bottles as Record<string, { x: number }>).map((b) => b.x).sort((a, b) => a - b);
+  let pitch = Infinity;
+  for (let i = 1; i < xs.length; i++) pitch = Math.min(pitch, xs[i] - xs[i - 1]);
+  const w = Number.isFinite(pitch) ? Math.max(0.55, pitch * 0.98) : 0.8;
+  return new THREE.BoxGeometry(w, 1.9, 1.15);
+}
+const MEATS = new Set<string>(["patty", "bacon", "chicken", "veggie"]);
+
 export class CounterView {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(32, 0.9, 0.1, 80);
@@ -466,6 +492,8 @@ export class CounterView {
   /** The searing plate bonus: everything on the grill cooks faster. */
   grillBoost = 1;
   autoStopPour = false;
+  /** Chill: food on the grill holds at well done and fries at dark golden instead of burning. */
+  noBurn = false;
   grillItems: GrillItem[] = [];
   /** Each grill zone's setting, left to right; the buttons on the griddle's front ledge cycle them. */
   zones: ZoneHeat[] = [...ZONE_START];
@@ -646,7 +674,7 @@ export class CounterView {
     Object.assign(this.bottles, caddy.userData.bottles);
     for (const k of ["ketchup", "mustard"] as SauceKind[]) {
       const b = caddy.userData.spots.bottles[k]!;
-      this.proxy(new THREE.BoxGeometry(0.55, 1.6, 0.85), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k }, G);
+      this.proxy(bottleBox(caddy), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k }, G);
     }
 
     const puffMat = new THREE.MeshBasicMaterial({ color: "#f2f2f2", transparent: true, opacity: 0.3, depthWrite: false });
@@ -680,7 +708,7 @@ export class CounterView {
     Object.assign(this.bottles, caddy.userData.bottles);
     for (const k of ["pesto", "aioli"] as SauceKind[]) {
       const b = caddy.userData.spots.bottles[k]!;
-      this.proxy(new THREE.BoxGeometry(0.55, 1.6, 0.85), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k }, P);
+      this.proxy(bottleBox(caddy), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k }, P);
     }
     const board = makeCuttingBoard();
     board.position.copy(at(PRESS_BOARD.x, 0, PRESS_BOARD.z));
@@ -773,7 +801,7 @@ export class CounterView {
     Object.assign(this.bottles, caddy.userData.bottles);
     for (const k of caddy.userData.kinds) {
       const b = caddy.userData.spots.bottles[k]!;
-      this.proxy(new THREE.BoxGeometry(0.55, 1.6, 0.85), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k }, caddy);
+      this.proxy(bottleBox(caddy), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k }, caddy);
     }
   }
 
@@ -1082,7 +1110,7 @@ export class CounterView {
     Object.assign(this.bottles, caddy.userData.bottles);
     for (const k of caddy.userData.kinds) {
       const b = caddy.userData.spots.bottles[k]!;
-      this.proxy(new THREE.BoxGeometry(0.55, 1.6, 0.85), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k }, caddy);
+      this.proxy(bottleBox(caddy), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k }, caddy);
     }
   }
   private comalCaddyOwner: THREE.Object3D | null = null;
@@ -2268,8 +2296,10 @@ export class CounterView {
           c.melt = Math.min(1, (c.melt ?? 0) + (zone === "hot" ? MELT_RATE.hot : zone === "warm" ? MELT_RATE.warm : 0) * dt);
           it.topping.obj.userData.update(c);
         }
+        const was: [number, number] = [it.piece.cook[0], it.piece.cook[1]];
         it.piece.cook[0] += GRILL_RATE * heat * dt;
         it.piece.cook[1] += GRILL_RATE * heat * (UP_HEAT[it.piece.kind] ?? 0) * dt;
+        if (this.noBurn) holdBelowBurnt(it.piece, was);
         // The ridged grille sears marks into the face down.
         if (touching && this.middle === "grill" && zi === GRILLE_ZONE && zone === "hot" && it.piece.kind === "patty") {
           const m = (it.piece.marks ??= [0, 0]);
@@ -2471,6 +2501,7 @@ export class CounterView {
         const zone = FRY_ZONE[b.fry];
         const perfect = fryPerfect(b.fry);
         b.cook += FRY_RATE * this.fryBoost * FRY_SPEED[b.fry] * dt;
+        if (this.noBurn) b.cook = Math.min(b.cook, (zone.over + zone.burnt) / 2);
         if (before < zone.done && b.cook >= zone.done) this.events.done();
         if (!b.goldenRung && b.cook >= perfect - 0.04) {
           b.goldenRung = true;

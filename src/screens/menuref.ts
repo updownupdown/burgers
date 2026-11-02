@@ -89,7 +89,7 @@ export function recipeHtml(r: Recipe, mult: number, special: boolean, locked = f
   else if (r.pie === "calzone") tags.push(`<span class="bv-chip pill">${icon("flame")}Folded, baked</span>`);
   else if (r.pie) tags.push(`<span class="bv-chip pill">${icon("flame")}Baked in the oven</span>`);
   else if (r.toasted) tags.push(`<span class="bv-chip pill">${icon("toast")}Toasted bun</span>`);
-  if (r.smash) tags.push(`<span class="bv-chip pill">${icon("smash")}Smashed, well done</span>`);
+  if (r.smash) tags.push(`<span class="bv-chip pill">${icon("smash")}Smashed thin</span>`);
   if (r.melt) tags.push(`<span class="bv-chip pill">${icon("cheese")}Melted cheese</span>`);
   const after = r.pie ? r.layers.filter((k) => AFTER_OVEN.has(k)) : [];
   if (after.length) tags.push(`<span class="bv-chip pill">${icon("sparkle")}${after.map((k) => KIND_LABEL[k]).join(", ")} after the oven</span>`);

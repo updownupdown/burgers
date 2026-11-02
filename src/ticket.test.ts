@@ -98,3 +98,13 @@ describe("method line and step chips (after build #76)", () => {
     expect(chips(o, "Cheese")).toContain("Melt");
   });
 });
+
+describe("counts on the ticket (review #78 B10)", () => {
+  it("doesn't mark a single onion on tacos with x1, but keeps x3 on the pork", () => {
+    const tacos = orderFromRecipe(1, townById("redmesa").menu.find((r) => r.name === "Street Tacos")!, false, null);
+    const html = ticketHtml(tacos, plate(), 1, true);
+    const line = (label: string) => html.split("<li").slice(1).find((x) => x.includes(`<span class="l">${label}`)) ?? "";
+    expect(line("Onion")).not.toContain("x1");
+    expect(line("Pork")).toContain("x3");
+  });
+});

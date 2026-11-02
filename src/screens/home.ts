@@ -1,6 +1,6 @@
 import { CROWD } from "../game/business";
 import { expectedCustomers, rangeUnits } from "../game/day";
-import type { Save } from "../game/progress";
+import { todaysClosing, type Save } from "../game/progress";
 import { ratingPull, reviewAverage } from "../game/reviews";
 import { EVENTS, eventOn, FINAL_TOWN, nextDay, STOPS, townById, withEvent, type Stop } from "../game/stops";
 import { applyTrip, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Legs, type Trip } from "../game/travel";
@@ -212,7 +212,7 @@ function bankHtml(save: Save): string {
 function statsHtml(save: Save): string {
   const avg = reviewAverage(save.reviewCounts);
   const evening = save.time === "evening";
-  const last = save.last && save.last.town === save.town ? save.last : null;
+  const last = todaysClosing(save);
   return `<div class="home-stats bv-light" role="group" aria-label="Your truck">
     <button class="home-pill" data-home="reviews" aria-label="Popularity ${save.popularity}: see popularity and reviews">${icon("people")}<span><small>Popularity</small><b class="bv-mono">${save.popularity}</b></span></button>
     <button class="home-pill" data-home="reviews" aria-label="Rating ${avg === null ? "none yet" : avg.toFixed(1)}: see popularity and reviews">${icon("star")}<span><small>Rating</small><b class="bv-mono">${avg === null ? "–" : avg.toFixed(1)}</b></span></button>
@@ -372,7 +372,7 @@ function renderDock(m: Mounted): void {
   const ev = eventOn(s.town, s.day);
   const dock = m.el.querySelector<HTMLElement>(".home-dock")!;
   const evening = s.time === "evening";
-  const last = s.last && s.last.town === s.town ? s.last : null;
+  const last = todaysClosing(s);
   const today = last ? `${last.stars.length ? `${(last.stars.reduce((a, b) => a + b, 0) / last.stars.length).toFixed(1)}★ · ` : ""}${last.served} served today` : "A day on the road";
   dock.innerHTML = `
     <div class="home-dock-row">
@@ -640,7 +640,7 @@ const ARRIVE_MS = { shrink: 1350, fade: 850, sheet: 1350 };
  */
 function playArrive(m: Mounted, a: Arrival): void {
   const s = m.deps.save;
-  const last = s.last && s.last.town === s.town ? s.last : null;
+  const last = todaysClosing(s);
   if (!last) return;
   const sheet = m.el.querySelector<HTMLElement>(".home-results")!;
   sheet.innerHTML = resultsSheetHtml(last, s);

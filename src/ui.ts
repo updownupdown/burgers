@@ -534,7 +534,8 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     // topping asked for extra keeps its one line with the full count and says how many are added.
     const add = addedAt.get(i);
     if (add === "add") label = `${kw("ADD")}${label}`;
-    if (exp.count) {
+    // A count of one ("Onion x1") says nothing; it shows while short or when some are added.
+    if (exp.count && (exp.count > 1 || add === "extra")) {
       const short = got[i] && got[i] < exp.count;
       label += countMark(short ? `${got[i]}/${exp.count}` : `x${exp.count}`);
       if (add === "extra") tail = modBox("add", `ADD ${extraCount(exp.kind)}`) + tail;

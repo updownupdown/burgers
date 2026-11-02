@@ -10,7 +10,6 @@ import { clockLabel, FIRST_HOUR, hourRate, LAST_HOUR, MIN_SHIFT, shiftHours, typ
 import { eventOn, townById, type Stop } from "../game/stops";
 import { SHIFTS_TO_UNLOCK } from "../game/travel";
 import { icon } from "../ui/icons";
-import { buildLabel } from "../update";
 import { stackArt } from "./menuref";
 import { COUNTED, KIND_LABEL } from "../game/types";
 import { recipeCount } from "../game/stops";
@@ -258,6 +257,7 @@ export function prepHtml(p: PrepInput): string {
         <h3 class="prep-h">${icon("food-menu")}Menu
           <button class="bv-toggle prep-ing" role="switch" aria-checked="${showIngredients}" data-act="prep-ing"><span class="lbl">Show ingredients</span><span class="sw"></span></button>
         </h3>
+        <p class="day-hint prep-min" role="status" hidden>Keep at least ${MIN_MENU === 2 ? "two" : MIN_MENU} recipes on the menu.</p>
         <div class="prep-rows">${rows}</div>
       </section>
 
@@ -281,8 +281,11 @@ export function prepHtml(p: PrepInput): string {
 function verdictLine(c: Closing): string {
   const town = townById(c.town);
   const avg = c.stars.length ? c.stars.reduce((a, b) => a + b, 0) / c.stars.length : 0;
+  const gone = c.lost + c.leftLine;
   return c.served === 0
-      ? "The truck stayed quiet today."
+    ? gone > 0
+      ? `Nobody got their food today: ${gone} walked out.`
+      : "The truck stayed quiet today."
       : c.outcome === "failed"
         ? `${town.name} wasn't impressed. Serve at least half the customers with a ${PASS_STARS}★ average to count the day.`
         : c.great
@@ -321,7 +324,7 @@ export function resultsSheetHtml(c: Closing, save: Save): string {
   return `<div class="home-res-head">
       <div class="t">
         <span class="bv-eyebrow">Closed · Day ${c.day} · ${hourLabel(c.shift.start)} to ${hourLabel(c.shift.end)}</span>
-        <div class="nm"><h2 class="bv-title">${esc(town.name)}</h2><span class="home-res-stars" aria-label="${avg.toFixed(1)} stars average">${stars(Math.round(avg))}<span class="bv-mono">${avg.toFixed(1)}</span></span></div>
+        <div class="nm"><h2 class="bv-title">${esc(town.name)}</h2>${c.stars.length ? `<span class="home-res-stars" aria-label="${avg.toFixed(1)} stars average">${stars(Math.round(avg))}<span class="bv-mono">${avg.toFixed(1)}</span></span>` : `<span class="home-res-stars" aria-label="Nobody served"><span class="bv-mono">–</span></span>`}</div>
       </div>
       <button class="bv-btn icon" data-home="results-close" aria-label="Hide today's results">${icon("close")}</button>
     </div>
@@ -392,7 +395,7 @@ export function closingHtml(c: Closing, save: Save): string {
   });
   boxes.push({
     id: "closing:press",
-    icon: "critic",
+    icon: "people",
     title: "Popularity",
     sub: c.press ? `A critic ate here today` : "Word of mouth",
     value: c.pop[0] === c.pop[1] ? "—" : `${c.pop[1] > c.pop[0] ? "+" : "−"}${Math.abs(c.pop[1] - c.pop[0])}`,
@@ -449,19 +452,13 @@ export function closingHtml(c: Closing, save: Save): string {
     <header class="day-hero">
       <span class="bv-eyebrow">Closing time · Day ${c.day} · ${hourLabel(c.shift.start)} to ${hourLabel(c.shift.end)}</span>
       <h2 class="bv-title">${esc(town.name)}</h2>
-      <div class="day-hero-stars" aria-label="${avg.toFixed(1)} stars average">${stars(Math.round(avg))} <span class="bv-mono">${avg.toFixed(1)}</span></div>
+      ${c.stars.length ? `<div class="day-hero-stars" aria-label="${avg.toFixed(1)} stars average">${stars(Math.round(avg))} <span class="bv-mono">${avg.toFixed(1)}</span></div>` : `<div class="day-hero-stars" aria-label="Nobody served"><span class="bv-mono">–</span></div>`}
       <p>${verdict}</p>
     </header>
     <div class="day-scroll">
       ${reward}
-      <div class="day-kpis">
-        <div class="day-kpi"><span class="bv-eyebrow">Takings</span><b class="${newBest ? "up" : ""}">${money(c.takings)}</b><small>${newBest ? "town best" : `best ${money(c.bestBefore ?? 0)}`}</small></div>
-        <div class="day-kpi"><span class="bv-eyebrow">Rating</span><b>${c.rating === null ? "–" : c.rating.toFixed(1)}</b><small>${ratingDelta(c)}</small></div>
-        <div class="day-kpi"><span class="bv-eyebrow">Served</span><b>${c.served}</b><small>${c.lost + c.leftLine ? `${c.lost + c.leftLine} left` : "nobody left"}</small></div>
-      </div>
       ${goal}
       ${boxes.map((b) => boxHtml(b, "closing-box")).join("")}
-      <p class="day-build">${esc(buildLabel())}</p>
     </div>
     <footer class="day-foot">
       <button class="bv-btn primary lg block" data-act="evening">${icon("map")}Back to the map</button>

@@ -6,7 +6,7 @@ import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { expectedCustomers, sleep } from "./game/day";
 import { greatShift, townBonus, type BonusId } from "./game/bonus";
 import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, validShift, type ShiftWindow } from "./game/shift";
-import { freshSave, loadSave, passed, passTown, writeSave, type Closing } from "./game/progress";
+import { freshSave, loadSave, passed, passTown, todaysClosing, writeSave, type Closing } from "./game/progress";
 import { eventOn, fountainFor, fryerOf, middleOf, townById, withEvent, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
@@ -373,7 +373,8 @@ function spawnCustomer(slotIdx: number, seed: number, early?: Order): void {
   }
   s.lesson = lesson;
   s.order = order;
-  s.plate = emptyPlate();
+  // The plate is kept: the slot was free, so anything on it was put there ahead for whoever steps up
+  // (served, refused and walked-out trays are cleared when they leave).
   s.sentBack = null;
   s.kept = { fries: null, drink: null };
   // Recipes you haven't made a couple of times yet start with the full layer list showing.
@@ -4210,8 +4211,16 @@ ui.root.addEventListener("click", (e) => {
       // Hide or show a recipe; the menu never drops below two.
       const v = btn!.dataset.v!;
       if (save.hidden.includes(v)) save.hidden = save.hidden.filter((n) => n !== v);
-      else if (menuFor(stop(), [...save.hidden, v]).some((r) => r.name === v)) showHint("Keep at least two recipes on the menu.", 2);
-      else save.hidden = [...save.hidden, v];
+      else if (menuFor(stop(), [...save.hidden, v]).some((r) => r.name === v)) {
+        // Hints only show in a shift: say it on the card, and shake the row.
+        const note = ui.summary.querySelector<HTMLElement>(".prep-min");
+        if (note) note.hidden = false;
+        btn!.classList.remove("nope");
+        void btn!.offsetWidth;
+        btn!.classList.add("nope");
+        buzz(30);
+        break;
+      } else save.hidden = [...save.hidden, v];
       writeSave(save);
       showPrep();
       break;
@@ -4393,8 +4402,9 @@ initMenu({
   },
   restart: () => showPrep(),
   quit: () => showTitle(),
-  replayTutorial: () => {
-    save.tutorialDone = false;
+  setTutorial: (on) => {
+    // On replays the guided first shift; off means no guided shift either, as on the welcome card.
+    save.tutorialDone = !on;
     writeSave(save);
   },
   simulate: (level) => {
@@ -4474,7 +4484,8 @@ function startShift(): void {
     ordered: 0,
     nextSpawn: 1.2,
     active: 0,
-    tutorial: !save.tutorialDone,
+    // The guided shift's lessons are the grill's: anywhere else a replayed tutorial is a normal shift.
+    tutorial: !save.tutorialDone && middleOf(stop()) === "grill",
     comped: 0,
     reviews: [],
     line: [],
@@ -4492,9 +4503,7 @@ function startShift(): void {
   game.bonus = save.bonus && save.bonuses.includes(save.bonus) ? save.bonus : null;
   game.shiftLength = shiftSeconds(game.shift, stop().shiftLength);
   game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: game.shift, bonus: game.bonus, pacing: game.pacing });
-  // A shift starts a fresh block of driving: the evening's hops count against the whole range.
-  save.driven = 0;
-  writeSave(save);
+  // The range is refuelled by endShift, not here: a shift quit or reloaded half way doesn't count.
   ui.bell.hidden = false;
   applyStop();
   // Maybe a critic in today's line, never the very first customer.
@@ -4624,7 +4633,7 @@ function showReviews(): void {
  */
 function sleepNow(): void {
   if (save.time !== "evening") return;
-  const last = save.last && save.last.town === save.town ? save.last : null;
+  const last = todaysClosing(save);
   const fromDay = save.day;
   // Today's reviews moved the rating: from where it stood this morning (or, for a first review, from itself).
   const rating: [number, number] | null = last && last.reviews.length && last.rating !== null ? [last.ratingBefore ?? last.rating, last.rating] : null;
@@ -4807,7 +4816,8 @@ function endShift(arrive: Arrival): void {
   const takings = Math.max(0, Math.round(game.money + game.tips - game.comped - spills()));
   const bestBefore = save.bestTakings[here.id] ?? null;
   save.bestTakings[here.id] = Math.max(bestBefore ?? 0, takings);
-  save.best[here.id] = Math.max(save.best[here.id] ?? 0, avg);
+  // A shift with nobody served has no average to be best at.
+  if (game.stars.length) save.best[here.id] = Math.max(save.best[here.id] ?? 0, avg);
   // The takings go into savings, for the Garage.
   save.bank += takings;
   // A great shift unlocks this town's bonus, for sale in the Garage from now on.
@@ -4939,7 +4949,8 @@ function tick(dt: number): void {
     // The line: patience drains slowest at the front, where they're nearly there.
     for (let k = game.line.length - 1; k >= 0; k--) {
       const w = game.line[k];
-      w.patience -= dt * lineDrain(k);
+      // While the guided clock stands still, nobody in line loses patience either.
+      if (!guiding) w.patience -= dt * lineDrain(k);
       if (w.patience <= 0) {
         game.line.splice(k, 1);
         game.leftLine++;

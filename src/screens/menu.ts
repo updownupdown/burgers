@@ -327,7 +327,7 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
       case "tutorial": {
         const on = !coachOn();
         setCoachOn(on);
-        if (on) d.replayTutorial?.();
+        d.setTutorial?.(on);
         setToggle(btn, on);
         break;
       }

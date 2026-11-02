@@ -262,6 +262,10 @@
 .prep-row .mref-stack { width: 50px; justify-self: end; }
 .prep-row.off > :not(.tick) { opacity: 0.45; filter: grayscale(0.8); }
 .prep-row[aria-disabled="true"] .tick { background: var(--bv-mute); }
+.prep-row.nope { animation: prep-nope 0.36s var(--bv-ease); }
+@keyframes prep-nope { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+@media (prefers-reduced-motion: reduce) { .prep-row.nope { animation: none; } }
+.prep-min { margin: 0 0 8px; }
 
 /* Bonus: one a row, a tick on the one brought. */
 .prep-bonuses { grid-template-columns: minmax(0, 1fr); }

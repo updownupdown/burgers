@@ -710,6 +710,15 @@ export class TrayView {
     });
   }
 
+  /**
+   * Float the ghost at a screen point (band NDC) instead of over its plate: Undo carries a thing
+   * back through the tray band this way (DESIGN §31). Null puts it back over its plate.
+   */
+  floatGhost(ndc: THREE.Vector2 | null): void {
+    this.ghostFloat = ndc ? ndc.clone() : null;
+  }
+  private ghostFloat: THREE.Vector2 | null = null;
+
   /** Hold the ghost (a sauce bottle) over a burger-local point of its plate, or let it bob over the stack again. */
   ghostOver(at: { x: number; z: number } | null): void {
     this.ghostAt = at;
@@ -738,6 +747,12 @@ export class TrayView {
       this.ghostT += dt;
       const pv = this.plates[this.ghostSlot];
       const s = pv.group.scale.x;
+      if (this.ghostFloat) {
+        this.ghost.position.copy(this.groundAt(this.ghostFloat, 0.5));
+        const side = this.ghostKind === "burger" ? pv.s : relScale(this.ghostKind === "cup" ? "cup" : "fries") * TRAY_SIDES * ((this.ghost.userData.sizeScale as number | undefined) ?? 1);
+        this.ghost.scale.setScalar(s * side);
+        return;
+      }
       if (this.ghostKind !== "burger") {
         const at = pv.sideSpot(this.ghostKind);
         this.ghost.position.copy(pv.group.position).add(new THREE.Vector3(at.x * s, 0.13 * s + Math.abs(Math.sin(this.ghostT * 5)) * 0.04, at.z * s));

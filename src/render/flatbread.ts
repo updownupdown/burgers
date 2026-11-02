@@ -121,23 +121,38 @@ export function figParts(): Parts {
   p.add(GEO.disc, "#f2c2a2", { p: [0, 0.118, 0], s: [0.045, 1, 0.035], ink: false });
   return p;
 }
-/** A thin crescent of pear. */
-export function pearParts(): Parts {
+/** A whole button mushroom for the pan: a tan dome of a cap on a short pale stem. */
+export function wholeMushroomParts(): Parts {
   const p = new Parts();
-  const s = new THREE.Shape();
-  s.absarc(0, 0, 0.28, Math.PI * 0.15, Math.PI * 0.85, false);
-  s.absarc(0, 0.1, 0.2, Math.PI * 0.83, Math.PI * 0.17, true);
-  const g = new THREE.ExtrudeGeometry(s, { depth: 0.035, bevelEnabled: false, curveSegments: 8 });
-  g.rotateX(-Math.PI / 2);
-  g.translate(0, 0, 0.12);
-  p.add(faceted(g), "#f3ecd0", { ink: 0.016 });
-  const rim = new THREE.Shape();
-  rim.absarc(0, 0, 0.28, Math.PI * 0.15, Math.PI * 0.85, false);
-  rim.absarc(0, 0, 0.25, Math.PI * 0.85, Math.PI * 0.15, true);
-  const rg = new THREE.ExtrudeGeometry(rim, { depth: 0.038, bevelEnabled: false, curveSegments: 8 });
-  rg.rotateX(-Math.PI / 2);
-  rg.translate(0, 0.002, 0.12);
-  p.add(faceted(rg), "#c8c25a", { ink: false });
+  p.add(faceted(new THREE.CylinderGeometry(0.08, 0.09, 0.12, 8)), "#eadcc0", { p: [0, 0.06, 0], ink: 0.014 });
+  p.add(faceted(new THREE.SphereGeometry(0.22, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2)), "#c49c6e", { p: [0, 0.1, 0], s: [1, 0.72, 1], ink: 0.018 });
+  p.add(faceted(new THREE.CircleGeometry(0.2, 12).rotateX(Math.PI / 2)), "#8a6a48", { p: [0, 0.099, 0], ink: false });
+  p.add(GEO.disc, "#cfab7e", { p: [-0.05, 0.255, -0.04], s: [0.07, 1, 0.05], ink: false });
+  return p;
+}
+/**
+ * Half a pear, cut face up: pale flesh in a green-gold skin, the core and its pips, a stalk. With
+ * a smaller `h`, a thin slice cut down through the middle (the piece that goes on a flatbread).
+ */
+export function pearHalfParts(h = 0.12): Parts {
+  const p = new Parts();
+  const L = 0.62;
+  const pts: THREE.Vector2[] = [];
+  const w = (t: number) => 0.24 * Math.pow(Math.sin(Math.PI * t), 0.55) * (1 - 0.42 * THREE.MathUtils.smoothstep(t, 0.4, 0.8));
+  for (let i = 0; i <= 24; i++) pts.push(new THREE.Vector2(w(i / 24), (i / 24) * L - L * 0.42));
+  const outline = [...pts, ...pts.slice(1, -1).reverse().map((v) => new THREE.Vector2(-v.x, v.y))];
+  const shape = (k: number) => new THREE.Shape(outline.map((v) => new THREE.Vector2(v.x * k, (v.y + L * 0.06) * k - L * 0.06)));
+  const slab = (k: number, h: number) => {
+    const g = new THREE.ExtrudeGeometry(shape(k), { depth: h, bevelEnabled: false, curveSegments: 6 });
+    g.rotateX(-Math.PI / 2);
+    return faceted(g);
+  };
+  p.add(slab(1, h), "#c3bf55", { ink: 0.016 });
+  p.add(slab(0.9, h + 0.005), "#f4eed2", { ink: false });
+  // The core: a pale oval with dark pips, low in the bulb.
+  p.add(GEO.disc, "#e6dcb0", { p: [0, h + 0.008, 0.08], s: [0.07, 1, 0.1], ink: false });
+  for (const x of [-0.025, 0.025]) p.add(GEO.disc, "#5a3a1e", { p: [x, h + 0.011, 0.08], s: [0.016, 1, 0.03], ink: false });
+  p.add(faceted(new THREE.BoxGeometry(0.025, 0.03, 0.12)), "#6b4a2a", { p: [0, h, -L * 0.62], ink: 0.01 });
   return p;
 }
 /** Blue cheese: a few crumbles, veined; melted, a soft flat puddle with the veins still showing. */
@@ -145,12 +160,16 @@ export function blueParts(melted: boolean, seed: number): Parts {
   const p = new Parts();
   const r = rng(seed);
   if (melted) {
-    p.add(GEO.blob, "#eef0f2", { p: [0, 0.02, 0], s: [0.22, 0.04, 0.18], ink: 0.014 });
+    p.add(GEO.blob, "#f1ead4", { p: [0, 0.02, 0], s: [0.22, 0.04, 0.18], ink: 0.014 });
     for (let i = 0; i < 3; i++) p.add(GEO.disc, "#7d8aa6", { p: [(r() - 0.5) * 0.2, 0.062, (r() - 0.5) * 0.16], s: [0.03, 1, 0.02], ink: false });
     return p;
   }
-  for (let i = 0; i < 3; i++) p.add(GEO.crumb, i % 2 ? "#e9ecf1" : "#dfe3ea", { p: [(r() - 0.5) * 0.2, 0.06 + r() * 0.03, (r() - 0.5) * 0.16], r: [r(), r(), r()], s: 1 + r() * 0.4, ink: 0.014 });
-  p.add(GEO.crumb, "#6f7d9a", { p: [0, 0.1, 0], s: 0.35, ink: false });
+  // Ivory crumbles, each flecked with blue (creamier than mozzarella, never white).
+  for (let i = 0; i < 3; i++) {
+    const at: [number, number, number] = [(r() - 0.5) * 0.2, 0.06 + r() * 0.03, (r() - 0.5) * 0.16];
+    p.add(GEO.crumb, i % 2 ? "#efe6cc" : "#e6dbbd", { p: at, r: [r(), r(), r()], s: 1 + r() * 0.4, ink: 0.014 });
+    p.add(GEO.crumb, i % 2 ? "#4f6496" : "#3f527e", { p: [at[0] + 0.02, at[1] + 0.06, at[2] - 0.01], s: [0.5, 0.3, 0.4], ink: false });
+  }
   return p;
 }
 /** Torn mozzarella: a soft lump; melted, a flat round with a few golden blisters. */
@@ -186,7 +205,7 @@ export function toppingMesh(kind: Kind): THREE.Mesh | null {
     case "fig":
       return part("fig", () => new Parts().addParts(figParts(), { s: 1.6 }));
     case "pear":
-      return part("pear", () => new Parts().addParts(pearParts(), { s: 1.5 }));
+      return part("pear", () => new Parts().addParts(pearHalfParts(0.04), { s: 1.05 }));
     case "blue":
       return part("blue", () => new Parts().addParts(blueParts(false, 4), { s: 1.6 }));
     case "dough":
@@ -365,7 +384,7 @@ export function makeFlatbread(pieces: Piece[]): FlatbreadObject {
       else if (p.kind === "mushroom") m = part(`mush${roasted ? "r" : ""}`, () => mushroomParts(roasted));
       else if (p.kind === "ham") m = part(`ham${k % 3}`, () => hamParts(k + 1));
       else if (p.kind === "fig") m = part("figq", figParts);
-      else if (p.kind === "pear") m = part("pears", pearParts);
+      else if (p.kind === "pear") m = part("pears", () => new Parts().addParts(pearHalfParts(0.035), { s: 0.62 }));
       if (!m) return;
       m.position.set(ux * PIE.rx * INNER, y0 + (p.kind === "mozzarella" || p.kind === "blue" ? 0.01 : 0.03), uz * PIE.rz * INNER);
       m.rotation.y = k * 1.7 + idx;

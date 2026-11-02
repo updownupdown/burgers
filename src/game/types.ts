@@ -1,3 +1,4 @@
+import { setFolded } from "./cooking";
 export type Kind =
   | "bun"
   | "patty"
@@ -107,6 +108,8 @@ export interface Piece {
   scorch?: number;
   /** Cuts across a flatbread on the board (Port Amber cuts in four: two cuts). */
   cuts?: number;
+  /** How well it was cut with the knife, 0..1 (straight, through the middle; see game/knife.ts). Missing counts as clean. */
+  cutQ?: number;
   /** The order a flatbread was started for (its ticket ticks off as it's built on the peel). */
   forOrder?: number;
 }
@@ -235,11 +238,11 @@ export const SCOOPED: ReadonlySet<Kind> = new Set<Kind>(["tuna", "pork", "beans"
 export const COMAL_FILL: ReadonlySet<Kind> = new Set<Kind>(["jack", "pork", "beans", "jalapeno", "onion", "cilantro"]);
 /**
  * Open a folded tortilla back out on the comal (a long press), so its filling can be fixed. The
- * filling and the cook on its faces are kept. False if it wasn't folded.
+ * filling stays, and so does the reading on its meter (setFolded). False if it wasn't folded.
  */
 export function unfoldTortilla(p: Piece): boolean {
   if (!TORTILLAS.has(p.kind) || !p.folded) return false;
-  p.folded = false;
+  setFolded(p, false);
   delete p.foldYaw;
   return true;
 }

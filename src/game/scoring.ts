@@ -1,3 +1,4 @@
+import { CROOKED, cutFactor } from "./knife";
 import { avgCook, bunToast, CHAR_FACE, cookLevel, COOK_SCALE, cookZone, friesQuality, friesZone, FRY_ZONE, isFlipped, isMelted, DRINK_FILL, MARKED, paleSide, darkSide, pattyDoneness, SALT } from "./cooking";
 import type { Drink, ExpectedLayer, Fries, Kind, Layer, Order, Piece, Plate } from "./types";
 import { BREADS, COUNTED, FRY_LABEL, fryOf, KIND_LABEL, SAUCE_RADIUS, sauceRadius, SIZE_LABEL, SUGARED, TORTILLAS, type FryKind } from "./types";
@@ -128,6 +129,18 @@ export function quickSauceStroke(target = 0.2): { x: number; z: number }[] {
   return pts;
 }
 
+/**
+ * Dragging a bottle up from the caddy, the thumb crosses the near edge of the bun on its way in:
+ * no sauce lands until the nozzle has come in over the middle of the bun (within SAUCE_GRACE of its
+ * radius). After that the edge is fair game: going back out there is meant.
+ */
+export const SAUCE_GRACE = 0.7;
+/** Whether the nozzle at `r` (bun radii from the middle) squeezes, and whether the grace is over. */
+export function sauceGate(armed: boolean, r: number): { armed: boolean; squeeze: boolean } {
+  const on = armed || r <= SAUCE_GRACE;
+  return { armed: on, squeeze: on };
+}
+
 export type SauceWord = "stingy" | "light" | "perfect" | "heavy" | "drowning";
 /**
  * Tomato sauce on a flatbread is spread with the ladle in a spiral: it should cover most of the
@@ -187,9 +200,10 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
       return [1, null];
     }
     case "pineapple": {
-      const t = Math.max(piece.cook[0], piece.cook[1]);
-      if (t >= 1) return [0.2, "burnt pineapple"];
-      if (t < 0.35) return [0.5, "pineapple not grilled"];
+      // One reading for the ring, whichever side went down (cookLevel).
+      const t = cookLevel(piece);
+      if (t >= COOK_SCALE.pineapple.burnt) return [0.2, "burnt pineapple"];
+      if (t < COOK_SCALE.pineapple.done) return [0.5, "pineapple not grilled"];
       return [1, null];
     }
     case "egg": {
@@ -443,10 +457,17 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
       if (cuts < 2) {
         quality *= cuts ? 0.94 : 0.88;
         notes.push(cuts ? "only cut in half" : "wanted it cut in four");
+      } else {
+        // The knife (DESIGN §31): a crooked cut costs a little.
+        quality *= cutFactor(base.cutQ);
+        if ((base.cutQ ?? 1) < CROOKED) notes.push("cut a bit crooked");
       }
     } else if (top && BREADS.has(top.kind) && !top.cut) {
       quality *= 0.88;
       notes.push("wanted it cut in half");
+    } else if (top && BREADS.has(top.kind)) {
+      quality *= cutFactor(top.cutQ);
+      if ((top.cutQ ?? 1) < CROOKED) notes.push("cut a bit crooked");
     }
   }
 

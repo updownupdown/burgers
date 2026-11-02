@@ -41,7 +41,7 @@ const breadRamp = ramp([
   [1.0, "#3b2216"],
 ]);
 const chickenRamp = ramp([
-  [0, "#f2aaa4"],
+  [0, "#f5bfb2"],
   [0.25, "#f3c9bc"],
   [0.42, "#f5ead8"],
   [0.7, "#ecd3a6"],
@@ -97,10 +97,32 @@ function blob(hw: number, hd: number, n: number, k = 1, segs = 40, wobble = 0, s
   return new THREE.Shape(pts);
 }
 
-/** Bread outlines: ciabatta a floury rounded oblong, sourdough a squarish slice. */
+/**
+ * A slice off a round loaf: a straight bottom crust and a domed top (the shape a child draws for
+ * "bread"), in the (x, y) plane with the dome toward +y (the back, once laid flat).
+ */
+function tombstone(hw: number, hd: number, dome: number): THREE.Shape {
+  const s = new THREE.Shape();
+  const r = 0.16;
+  s.moveTo(-hw + r, -hd);
+  s.lineTo(hw - r, -hd);
+  s.quadraticCurveTo(hw, -hd, hw, -hd + r);
+  s.lineTo(hw, hd - dome);
+  s.absellipse(0, hd - dome, hw, dome, 0, Math.PI, false, 0);
+  s.lineTo(-hw, -hd + r);
+  s.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
+  return s;
+}
+
+/**
+ * Bread outlines (after build #76, so the two never look alike): ciabatta a wide, flat, floury
+ * oblong with a thin pale crust and big holes; sourdough a tall slice off a round loaf, domed at
+ * the top, with a thick dark crust all round and a close crumb. `inset` is how much of the slice
+ * the crumb covers (the rest shows as crust).
+ */
 const BREAD = {
-  ciabatta: { shape: roundRect(1.12, 0.74, 0.4), crust: "#cf9a5a", h: PANINI_HEIGHT.ciabatta! },
-  sourdough: { shape: blob(1.02, 0.82, 3.2, 1, 44, 0.015, 1.3), crust: "#a8743c", h: PANINI_HEIGHT.sourdough! },
+  ciabatta: { shape: roundRect(1.2, 0.6, 0.24), crust: "#d9b27a", h: PANINI_HEIGHT.ciabatta!, inset: 0.92 },
+  sourdough: { shape: tombstone(0.92, 0.86, 0.5), crust: "#7e4a22", h: PANINI_HEIGHT.sourdough!, inset: 0.8 },
 };
 const breadGeo = new Map<string, { body: THREE.BufferGeometry; face: THREE.BufferGeometry }>();
 function breadShapes(kind: "ciabatta" | "sourdough") {
@@ -108,26 +130,31 @@ function breadShapes(kind: "ciabatta" | "sourdough") {
   if (!g) {
     const b = BREAD[kind];
     const face = b.shape.clone();
-    g = { body: shareGeometry(slab(b.shape, b.h)), face: shareGeometry(flat(new THREE.Shape(face.getPoints(10).map((p) => p.clone().multiplyScalar(0.9))), b.h + 0.004)) };
+    g = { body: shareGeometry(slab(b.shape, b.h)), face: shareGeometry(flat(new THREE.Shape(face.getPoints(10).map((p) => p.clone().multiplyScalar(b.inset))), b.h + 0.004)) };
     breadGeo.set(kind, g);
   }
   return g;
 }
-/** Ciabatta's floury top and big holes; sourdough's ear of crust. */
+/** Ciabatta's big, open holes and a dusting of flour at the edge; sourdough's fine, close crumb. */
 const BREAD_DETAIL: Record<"ciabatta" | "sourdough", Baked> = {
   ciabatta: (() => {
     const p = new Parts();
     const r = rng(41);
     const dot = faceted(new THREE.CircleGeometry(0.07, 7).rotateX(-Math.PI / 2));
-    for (let i = 0; i < 18; i++) p.add(dot, "#fbf6ea", { p: [(r() - 0.5) * 1.7, 0.006, (r() - 0.5) * 1.05], s: [1 + r(), 1, 0.7 + r() * 0.6], ink: false });
-    for (let i = 0; i < 6; i++) p.add(dot, "#c99a5c", { p: [(r() - 0.5) * 1.5, 0.008, (r() - 0.5) * 0.9], s: [0.8 + r() * 0.6, 1, 0.6], ink: false });
+    // Big irregular holes, the ciabatta mark.
+    for (let i = 0; i < 11; i++) p.add(dot, i % 3 ? "#c6965a" : "#b27e45", { p: [(r() - 0.5) * 1.75, 0.008, (r() - 0.5) * 0.78], s: [1.3 + r() * 1.1, 1, 0.8 + r() * 0.7], ink: false });
+    // Flour caught along the crust.
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2 + r() * 0.3;
+      p.add(dot, "#fdfaf2", { p: [Math.cos(a) * 1.02, 0.006, Math.sin(a) * 0.5], s: [0.9 + r() * 0.8, 1, 0.6 + r() * 0.5], ink: false });
+    }
     return bakeShared(p);
   })(),
   sourdough: (() => {
     const p = new Parts();
     const r = rng(17);
-    const dot = faceted(new THREE.CircleGeometry(0.05, 6).rotateX(-Math.PI / 2));
-    for (let i = 0; i < 14; i++) p.add(dot, "#bf9156", { p: [(r() - 0.5) * 1.4, 0.006, (r() - 0.5) * 1.1], s: [0.8 + r() * 0.8, 1, 0.6 + r() * 0.5], ink: false });
+    const dot = faceted(new THREE.CircleGeometry(0.035, 6).rotateX(-Math.PI / 2));
+    for (let i = 0; i < 26; i++) p.add(dot, "#c99a62", { p: [(r() - 0.5) * 1.2, 0.006, (r() - 0.5) * 1.0 - 0.05], s: [0.8 + r() * 0.8, 1, 0.6 + r() * 0.5], ink: false });
     return bakeShared(p);
   })(),
 };
@@ -182,7 +209,7 @@ const CHICKEN_LINES = (() => {
   return bakeShared(p);
 })();
 function makeChicken(body: THREE.Group): (p: Piece) => void {
-  const m = mesh(CHICKEN_GEO, "#f2aaa4", { unique: true, ink: 1.03 });
+  const m = mesh(CHICKEN_GEO, "#f5bfb2", { unique: true, ink: 1.03 });
   const lineMat = toon("#a9683a", { unique: true });
   const lines = new THREE.Mesh(CHICKEN_LINES.geo, lineMat);
   lines.position.y = PANINI_HEIGHT.chicken! + 0.006;
@@ -247,6 +274,62 @@ function makeMozzarella(body: THREE.Group): (p: Piece) => void {
   };
 }
 
+/** A flat leaf outline along +y from (0, 0): half-width `w(t)` at each step t of its length. */
+function leafOutline(len: number, w: (t: number) => number, steps = 14): THREE.Shape {
+  const right: THREE.Vector2[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    right.push(new THREE.Vector2(w(t), t * len));
+  }
+  const pts = [new THREE.Vector2(0, 0), ...right, ...right.slice(0, -1).reverse().map((v) => new THREE.Vector2(-v.x, v.y))];
+  return new THREE.Shape(pts);
+}
+/** A leaf laid flat pointing along +x, cupped a little (its edges lift), `h` thick. */
+function leafGeo(shape: THREE.Shape, h: number, cup: number): THREE.BufferGeometry {
+  const g = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false, curveSegments: 6 });
+  g.rotateX(-Math.PI / 2);
+  g.rotateY(-Math.PI / 2);
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) pos.setY(i, pos.getY(i) + cup * pos.getZ(i) ** 2);
+  return faceted(g);
+}
+const BASIL_LEAF = leafGeo(leafOutline(1, (t) => 0.42 * Math.sin(Math.PI * Math.pow(t, 0.8)) * (1 - 0.25 * t)), 0.025, 0.9);
+const RIB = faceted(new THREE.BoxGeometry(1, 0.012, 0.03));
+/** A basil sprig lying flat: a stem along +x with two pairs of broad leaves and a small tip. */
+export function basilSprig(ink = 0.03): Parts {
+  const p = new Parts();
+  const stem = faceted(new THREE.CylinderGeometry(0.022, 0.028, 0.9, 6).rotateZ(Math.PI / 2));
+  p.add(stem, "#5d9a3c", { p: [0, 0.035, 0], ink: ink * 0.7 });
+  const leaf = (x: number, side: number, len: number, col: string, lift: number) => {
+    // Out from the stem, angled toward the tip.
+    const yaw = side * (Math.PI / 2 - 0.62);
+    p.add(BASIL_LEAF, col, { p: [x, 0.04 + lift, 0], r: [0, yaw, 0], s: [len, 1, len], ink });
+    p.add(RIB, "#6cb853", { p: [x + Math.cos(yaw) * len * 0.42, 0.07 + lift, -Math.sin(yaw) * len * 0.42], r: [0, yaw, 0], s: [len * 0.7, 1, 1], ink: false });
+  };
+  leaf(-0.22, 1, 0.46, "#3f9a35", 0);
+  leaf(-0.22, -1, 0.44, "#47a23c", 0.004);
+  leaf(0.12, 1, 0.36, "#4aa83f", 0.012);
+  leaf(0.12, -1, 0.38, "#3f9a35", 0.016);
+  // The tip: two little leaves either side of a bud.
+  leaf(0.4, 1, 0.22, "#5bb84a", 0.022);
+  leaf(0.4, -1, 0.2, "#5bb84a", 0.024);
+  p.add(BASIL_LEAF, "#62bd50", { p: [0.42, 0.07, 0], s: [0.2, 1, 0.2], ink });
+  return p;
+}
+/** A rocket leaf lying flat along +x: long and narrow, with deep rounded lobes and a pale rib. */
+export function rocketLeaf(len: number, col: string, ink = 0.024): Parts {
+  const shape = leafOutline(1, (t) => {
+    // Narrow at the stalk, a bigger rounded lobe at the tip, notches between the side lobes.
+    const body = 0.06 + 0.16 * t + (t > 0.72 ? 0.14 * Math.sin(((t - 0.72) / 0.28) * Math.PI) : 0);
+    const lobe = t > 0.15 && t < 0.72 ? 0.55 + 0.45 * Math.abs(Math.sin(t * Math.PI * 5.2)) : 1;
+    return body * lobe * (t > 0.96 ? (1 - t) / 0.04 : 1);
+  }, 40);
+  const p = new Parts();
+  p.add(leafGeo(shape, 0.02, 0.25), col, { s: [len, 1, len], ink });
+  p.add(RIB, "#8dbd6c", { p: [len * 0.42, 0.025, 0], s: [len * 0.75, 1, 0.4], ink: false });
+  return p;
+}
+
 /**
  * Parts for the cold panini fillings, in ingredient units (the bins' heaps use these too):
  * basil leaves, a fanned avocado slice, a tangle of rocket, a pickled red onion ring and a scoop of tuna.
@@ -254,16 +337,11 @@ function makeMozzarella(body: THREE.Group): (p: Piece) => void {
 export function paniniParts(kind: Kind, ink = 0.03): Parts {
   const p = new Parts();
   switch (kind) {
-    case "basil": {
-      // A spray of five glossy leaves.
-      const leaf = faceted(new THREE.SphereGeometry(1, 10, 6));
-      for (let i = 0; i < 5; i++) {
-        const a = i * 1.26 + 0.3;
-        p.add(leaf, i % 2 ? "#3f8a31" : "#4f9a3a", { p: [Math.cos(a) * 0.28, 0.03 + i * 0.006, Math.sin(a) * 0.28], r: [0, -a, 0], s: [0.36, 0.035, 0.17], ink });
-      }
-      p.add(faceted(new THREE.SphereGeometry(1, 8, 5)), "#6fb44f", { p: [0, 0.05, 0], s: [0.2, 0.03, 0.12], ink: false });
+    case "basil":
+      // A sprig on its stem (after build #76): pairs of broad, glossy, cupped leaves, the way basil
+      // comes off the plant, so it never reads as lettuce or rocket.
+      p.addParts(basilSprig(ink));
       break;
-    }
     case "avocado": {
       // A crescent slice: pale green flesh, a dark skin edge.
       const s = new THREE.Shape();
@@ -283,23 +361,14 @@ export function paniniParts(kind: Kind, ink = 0.03): Parts {
       break;
     }
     case "rocket": {
-      // Long, jagged dark leaves in a loose tangle.
+      // A loose handful of rocket: long, narrow, dark leaves with deep rounded lobes down each side
+      // and a pale rib (after build #76), so it reads apart from basil's smooth pairs on a stem.
       const r = rng(31);
-      const leaf = (len: number) => {
-        const g = new THREE.BoxGeometry(len, 0.02, 0.13, 8, 1, 1);
-        const pos = g.attributes.position;
-        for (let i = 0; i < pos.count; i++) {
-          const x = pos.getX(i);
-          const z = pos.getZ(i);
-          pos.setZ(i, z * (1 + 0.6 * Math.abs(Math.sin(x * 18))) * (1 - Math.abs(x / len)));
-          pos.setY(i, pos.getY(i) + 0.08 * Math.sin(x * 4));
-        }
-        return faceted(g);
-      };
-      for (let i = 0; i < 11; i++) {
-        const a = i * 2.39996;
-        const rr = Math.sqrt((i + 0.5) / 11) * 0.62;
-        p.add(leaf(0.7 + r() * 0.3), ["#3f7f2e", "#5a9a3a", "#2f6a25", "#4c8c34"][i % 4], { p: [Math.cos(a) * rr, 0.05 + r() * 0.04, Math.sin(a) * rr], r: [0, r() * Math.PI * 2, (r() - 0.5) * 0.3], ink: ink * 0.8 });
+      for (let i = 0; i < 6; i++) {
+        const a = i * 2.39996 + 0.4;
+        const rr = Math.sqrt((i + 0.5) / 6) * 0.42;
+        const yaw = a + Math.PI / 2 + (r() - 0.5) * 0.9;
+        p.addParts(rocketLeaf(0.62 + r() * 0.2, ["#3c7a2c", "#4a8a34", "#2f6a25"][i % 3], ink * 0.8), { p: [Math.cos(a) * rr, 0.03 + i * 0.012, Math.sin(a) * rr], r: [(r() - 0.5) * 0.25, yaw, (r() - 0.5) * 0.25] });
       }
       break;
     }
@@ -360,6 +429,33 @@ export function makePaniniPiece(piece: Piece, body: THREE.Group): ((p: Piece) =>
   return null;
 }
 
+/**
+ * A whole loaf for the bread pan, in the same units as a slice: a flat ciabatta, floured on top,
+ * or a round, dark sourdough boule with a pale cross scored in it.
+ */
+export function loafParts(kind: "ciabatta" | "sourdough"): Parts {
+  const p = new Parts();
+  const r = rng(kind === "ciabatta" ? 5 : 9);
+  const dust = faceted(new THREE.CircleGeometry(0.1, 7).rotateX(-Math.PI / 2));
+  if (kind === "ciabatta") {
+    const h = 0.4;
+    p.add(slab(roundRect(1.2, 0.6, 0.3), h, 0.1), BREAD.ciabatta.crust, { ink: 0.03 });
+    // A thick dusting of flour over the top: the ciabatta's tell.
+    for (let i = 0; i < 22; i++) p.add(dust, i % 4 ? "#fbf7ee" : "#efe4cf", { p: [(r() - 0.5) * 2.0, h + 0.004, (r() - 0.5) * 0.95], r: [0, r() * 3, 0], s: [1.2 + r() * 1.6, 1, 0.9 + r() * 1.1], ink: false });
+    return p;
+  }
+  const dome = faceted(new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2));
+  p.add(dome, BREAD.sourdough.crust, { s: [0.95, 0.66, 0.95], ink: 0.03 });
+  // The score: a pale cross where the crust opened in the oven, and a little flour.
+  for (const a of [0.5, 0.5 + Math.PI / 2]) p.add(faceted(new THREE.BoxGeometry(0.7, 0.06, 0.12)), "#e6c48c", { p: [0, 0.625, 0], r: [0, a, 0], ink: false });
+  for (let i = 0; i < 8; i++) {
+    const a = r() * Math.PI * 2;
+    const d = 0.3 + r() * 0.35;
+    p.add(dust, "#efe2c8", { p: [Math.cos(a) * d, 0.66 * Math.sqrt(Math.max(0, 1 - (d / 0.95) ** 2)) + 0.01, Math.sin(a) * d], s: [0.7, 1, 0.5], ink: false });
+  }
+  return p;
+}
+
 /** One raw piece as parts (for the pans' heaps): a bread slice, a chicken breast, a veggie patty, a mozzarella round. */
 export function rawParts(kind: Kind): Parts {
   const p = new Parts();
@@ -372,7 +468,7 @@ export function rawParts(kind: Kind): Parts {
       break;
     }
     case "chicken":
-      p.add(CHICKEN_GEO, "#f2aaa4", { ink: 0.03 });
+      p.add(CHICKEN_GEO, "#f5bfb2", { ink: 0.03 });
       break;
     case "veggie":
       p.add(VEGGIE_GEO, "#bccb8e", { ink: 0.03 });

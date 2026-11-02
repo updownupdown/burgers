@@ -248,6 +248,8 @@ html, body {
 .ticket .mb.sunny { --mb-bg: #fbe7a6; --mb-fg: #7a5200; }
 .ticket .mb.flip { --mb-bg: #e9dfcf; --mb-fg: #5a4426; }
 .ticket .mb.fold { --mb-bg: #f6ecd2; --mb-fg: #6a4d1c; }
+/* A taco tortilla warmed till soft: the same orange as the warm band on its meter. */
+.ticket .mb.warm { --mb-bg: #f4a53e; --mb-fg: #4a2400; }
 .ticket .mb.sugar { --mb-bg: #f3e1c4; --mb-fg: #7a4a1e; }
 .ticket .mb.add { --mb-bg: var(--t-mod); --mb-fg: #fff; }
 /* "NO Ketchup", "ADD Bacon": the keyword in caps, then the item; "x3" right after the name. */
@@ -269,6 +271,10 @@ html, body {
 .ticket li.done .mb, .ticket li.done .dpill { filter: grayscale(1); opacity: 0.45; }
 .ticket li.wrong .mb, .ticket li.wrong .dpill { opacity: 0.6; }
 .ticket li.fold { text-decoration: none; padding-left: 23px; font-style: italic; }
+/* The method line: steps for the whole dish ("Press › Cut"), above the build. */
+.ticket li.how { gap: 3px; padding: 1px 3px 3px; margin-bottom: 2px; border-bottom: 1px dotted var(--bv-rule-2); border-radius: 0; }
+.ticket li.how .mb { font-size: 12px; padding: 1px 6px 2px; }
+.ticket li.how i { font: 800 12px/1 var(--bv-font-ui); font-style: normal; color: var(--bv-ink-2); }
 
 /* Sides: an icon, then the item with its own modifiers stacked under it. */
 .ticket .sides { display: flex; flex-direction: column; gap: 2px; border-left: 1px dashed var(--bv-rule-2); padding-left: 6px; min-width: 0; }
@@ -755,6 +761,9 @@ html, body {
 /* Red Rock: tortillas pale to soft and spotted to hard, the tostada shell, chips and churros. */
 .cmeter.corn { --f0: #f6e6a6; --f1: #e9ad44; --f2: #a8662a; }
 .cmeter.flour { --f0: #fbf3df; --f1: #ebc98a; --f2: #b9803e; }
+/* A taco tortilla on the comal: cold and stiff (cool grey-blue), warm and soft (the ticket's Warm orange, in a warm-hatched band), hard (brown). */
+.cmeter.warmup { --f0: #b9c8d0; --f1: #f4a53e; --f2: #9a5a26; }
+.cmeter.warmup::before { background: repeating-linear-gradient(-45deg, #7a5530 0 1.3px, #2c2f33 1.3px 3.2px); }
 .cmeter.tostada, .cmeter.chips { --f0: #f6e6a6; --f1: #ebb53c; --f2: #a8662a; }
 .cmeter.churros { --f0: #f7e4b6; --f1: #d6913e; --f2: #8a4e1c; }
 /* Orchard Isle: a flatbread's crust, the zucchini fritti and the apple fritters. */
@@ -770,6 +779,8 @@ html, body {
 /* A quesadilla's cheese on the comal: melting, then melted. */
 .gtag.pt .mlt { position: absolute; left: 50%; top: 100%; transform: translate(-50%, 2px); font: 800 9.5px/1.2 var(--bv-font-ui); color: #6b5200; background: #fbeec0; border-radius: 4px; padding: 0 4px; box-shadow: 0 0 0 1px rgb(42 38 34 / 0.6); opacity: 0.75; white-space: nowrap; }
 .gtag.pt .mlt.on { background: #f9d95b; opacity: 1; }
+.gtag.pt .mlt.warm { color: #4a2400; background: #f4a53e; opacity: 1; }
+.gtag.pt .mlt.hard { color: #fff; background: #9a5a26; opacity: 1; }
 /* A press bay's meter, in front of the bay: a melt mark beside it once there's cheese inside. */
 .gtag.pt.bay { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .gtag.pt.bay[hidden] { display: none; }
@@ -926,12 +937,12 @@ html, body {
 /* The sauce fill bar is the shared level bar (.lvl), raised over the close-up and its dim. */
 .lvl.sauce { z-index: 6; }
 
-/* Serve and Undo on the trays (main.ts updateTrayActs): taps a first-time player can find. */
-#ui .tray-serve, #ui .tray-undo {
+/* Serve on the trays (main.ts updateTrayActs): a tap a first-time player can find. */
+#ui .tray-serve {
   pointer-events: auto; position: absolute; left: 0; top: 0; z-index: 4; margin: 0; border: 0; cursor: pointer;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
-#ui .tray-serve[hidden], #ui .tray-undo[hidden] { display: none; }
+#ui .tray-serve[hidden] { display: none; }
 #ui .tray-serve {
   width: 84px; height: 36px; border-radius: 999px; padding: 0 12px 0 10px;
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
@@ -941,14 +952,42 @@ html, body {
 }
 .tray-serve span { font-size: 17px; }
 @keyframes serve-glow { 50% { box-shadow: 0 0 0 2px #fff7f2, 0 0 0 6px rgb(216 87 58 / 0.35), 0 4px 10px rgb(42 38 34 / 0.3); } }
-#ui .tray-undo {
-  width: 36px; height: 36px; border-radius: 50%;
-  display: grid; place-items: center;
-  background: var(--bv-paper, #f6efe3); color: var(--bv-ink, #2a2622); font: 700 20px/1 var(--bv-font-ui);
-  box-shadow: 0 0 0 1.5px rgb(42 38 34 / 0.25), 0 3px 8px rgb(42 38 34 / 0.25);
+.tray-serve:active { transform-origin: center; filter: brightness(0.92); }
+#ui.saucing .tray-serve { opacity: 0; pointer-events: none; }
+
+/* Undo, at the left of the header (DESIGN §31): greyed out when there's nothing to take back. */
+#ui .undo-btn { flex: none; width: 34px; height: 34px; margin-left: -4px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+#ui .undo-btn svg { width: 18px; height: 18px; }
+#ui .undo-btn:disabled { border-color: var(--bv-rule, #d8d0c2); color: var(--bv-mute); opacity: 0.55; cursor: default; }
+#ui .undo-btn.pulse { animation: undo-pulse 0.35s ease-out; }
+@keyframes undo-pulse { 40% { transform: rotate(-28deg) scale(1.08); } }
+
+/* A tap on a pan, bin or bottle names it (DESIGN §31): a small bubble over the finger. */
+.name-bubble {
+  position: absolute; z-index: 7; pointer-events: none; transform: translate(-50%, -100%);
+  padding: 5px 11px 6px; border-radius: 999px; white-space: nowrap;
+  background: var(--bv-ink); color: var(--bv-paper); font: 700 14px/1.15 var(--bv-font-ui);
+  box-shadow: 0 3px 10px rgb(20 16 12 / 0.3);
 }
-.tray-undo:active, .tray-serve:active { transform-origin: center; filter: brightness(0.92); }
-#ui.saucing .tray-serve, #ui.saucing .tray-undo { opacity: 0; pointer-events: none; }
+.name-bubble::after {
+  content: ""; position: absolute; left: calc(50% + var(--tail, 0px)); bottom: -5px; margin-left: -5px;
+  border: 5px solid transparent; border-bottom: 0; border-top-color: var(--bv-ink);
+}
+.name-bubble[hidden] { display: none; }
+.name-bubble.pop { animation: name-pop 1.3s ease-out both; }
+@keyframes name-pop { 0% { opacity: 0; transform: translate(-50%, -80%) scale(0.85); } 12% { opacity: 1; transform: translate(-50%, -100%) scale(1); } 78% { opacity: 1; } 100% { opacity: 0; } }
+.name-bubble.hold { animation: none; }
+
+/* The knife's cut view (DESIGN §31): the zoomed board with the slice drawn over it, like the sauce close-up. */
+.cut-ui { position: absolute; pointer-events: none; z-index: 6; box-shadow: 0 0 0 200vmax rgb(20 16 12 / var(--dim, 0)); }
+.cut-ui[hidden] { display: none; }
+.cut-ui > * { opacity: var(--ui, 0); }
+.cut-ui svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.cut-ui .stroke { fill: none; stroke: #fff; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 2px rgb(20 16 12 / 0.6)); }
+.cut-ui .made { fill: none; stroke: rgb(42 38 34 / 0.75); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 2 6; }
+.cut-ui .sauce-score { top: 10px; }
+#ui.cutting .ticket { opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+#ui.cutting .tray-serve { opacity: 0; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .tray-serve { animation: none; } }
 
 /* ---- Sundown: the Closed sign that drops into the window at the end of a shift (DESIGN.md §30) ---- */

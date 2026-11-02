@@ -42,6 +42,7 @@ export const ICONS: Record<string, IconDef> = {
   swap: { group: "system", svg: P("M4 8h13l-3-3M20 16H7l3 3"), tags: "swipe switch counters" },
   play: { group: "system", svg: P("M8 5.5v13l10-6.5z"), tags: "resume start" },
   pause: { group: "system", svg: P("M8 5v14M16 5v14") },
+  undo: { group: "system", svg: P("M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"), tags: "back take back revert" },
   restart: { group: "system", svg: P("M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"), tags: "retry again refresh" },
   update: { group: "system", svg: P("M12 4v10M8 10l4 4 4-4M5 19h14"), tags: "download new build" },
   settings: { group: "system", svg: P("M4 8h2.6M11.4 8H20M4 16h8.6M17.4 16H20") + C(9, 8, 2.4) + C(15, 16, 2.4), tags: "sliders toggles options" },

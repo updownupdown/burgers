@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { newPiece, type Kind, type Piece } from "../../game/types";
 import { makeFood, stackBases } from "../food";
+import { makeBin } from "../heaps";
 import { applyKitchenLight, KITCHEN_BG } from "../lighting";
 import { toon } from "../materials";
 import { makeColdRail, makeFountain, makeIceWell, makeFryBasket, makeFryer, makeGriddle, makeLidStrawCaddy, makePackPad, makePrepUnit, makeSauceBottle, makeSauceCaddy, makeTrashChute, makeWarmShelf, makeSupplyShelf, FRY_BASKET } from "../machines";
@@ -219,6 +220,24 @@ const SHOWS: Record<string, () => void> = {
         c.scale.setScalar(SCALE.cup);
         at(c, -1.4 + i * 1.4, 0, lid ? 0.8 : -0.6);
       }
+    });
+  },
+  /** Look-alike check: ?show=sheet&kinds=ciabatta,sourdough|basil,rocket,... each group a row of pans with the piece in front. */
+  sheet() {
+    counterPatch(14, 7);
+    const rows = (params.get("kinds") ?? "ciabatta,sourdough,mozzarella,blue|basil,rocket,cilantro,lettuce|pork,ham,beans,tuna|mushroom,onion,redonion,pineapple").split("|").map((r) => r.split(",") as Kind[]);
+    rows.forEach((kinds, j) => {
+      const z = (j - (rows.length - 1) / 2) * 1.75 - 0.3;
+      kinds.forEach((k, i) => {
+        const x = (i - (kinds.length - 1) / 2) * 2.2;
+        const bin = makeBin(k);
+        bin.scale.setScalar(1.25);
+        at(bin, x - 0.45, 0, z);
+        const p = piece(k, k === "pineapple" ? [0.5, 0] : [0, 0]);
+        const o = makeFood(p, "top");
+        o.scale.setScalar(SCALE.burger * 0.8);
+        at(o, x + 0.75, 0, z + 0.25);
+      });
     });
   },
   rail() {

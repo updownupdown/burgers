@@ -181,9 +181,38 @@ export const PRESS_WARM = 0.12;
 export const SWEET_FRY = 1.3;
 
 /**
- * How cooked a piece is, on its kind's scale. Patties and bacon are the average of their two
- * faces (the face up only gets heat through the meat, so a flip evens them out); an egg is
- * the heat both faces have taken; a bun toasts on whichever face went down.
+ * Heat that reaches the face up on the grill or comal, against the face down: through the meat of
+ * a patty, a rasher or an egg, a little through a thin tortilla, none through a pineapple ring.
+ */
+export const UP_HEAT: Partial<Record<Kind, number>> = { patty: 0.35, bacon: 0.35, egg: 0.35, corn: 0.25, flour: 0.25 };
+
+/**
+ * A second (or `dt`) on a grill or comal at `heat` (GRILL_RATE x the zone, the kind's speed and any
+ * boost): the face down takes it all, the face up its UP_HEAT share.
+ */
+export function grillStep(p: Piece, heat: number, dt: number): void {
+  p.cook[0] += GRILL_RATE * heat * dt;
+  p.cook[1] += GRILL_RATE * heat * (UP_HEAT[p.kind] ?? 0) * dt;
+}
+
+/** Turn a piece over: the face that was up goes down. The reading on its meter doesn't change. */
+export function flipFaces(p: Piece): void {
+  p.cook = [p.cook[1], p.cook[0]];
+  if (p.marks) p.marks = [p.marks[1], p.marks[0]];
+  p.flips = (p.flips ?? 0) + 1;
+}
+
+/**
+ * How cooked a piece is, on its kind's scale. One progress per piece (after build #76): every
+ * reading is a sum of the two faces weighted the same, so it always moves on while the piece is on
+ * the heat, at the same pace whichever face is down, and a flip never makes it jump or stall
+ * (the faces still keep their own cook for the char and the grill marks).
+ * - Patties, bacon and the press's proteins: the average of the faces.
+ * - An egg: the heat both faces have taken.
+ * - A pineapple ring or an open tortilla: the heat it has taken, on the scale of the face down
+ *   (so one never flipped reads its face down, as it always did).
+ * - A folded quesadilla: the average of its two outside faces.
+ * - Buns (never flipped), the press's breads (both faces at once) and fried things: the face reading.
  */
 export function cookLevel(p: Piece): number {
   switch (p.kind) {
@@ -197,12 +226,38 @@ export function cookLevel(p: Piece): number {
     case "dough":
       // A flatbread reads on its paler half.
       return paleSide(p);
+    case "pineapple":
+      return heatTaken(p);
     case "corn":
     case "flour":
-      // A taco tortilla warms on whichever face went down; a folded quesadilla is the average of its sides.
-      return p.folded ? avgCook(p) : Math.max(p.cook[0], p.cook[1]);
+      return p.folded ? avgCook(p) : heatTaken(p);
     default:
       return Math.max(p.cook[0], p.cook[1]);
+  }
+}
+/** The heat a one-sided piece has taken, in face-down units: both faces, less what came through from below. */
+const heatTaken = (p: Piece): number => (p.cook[0] + p.cook[1]) / (1 + (UP_HEAT[p.kind] ?? 0));
+
+/**
+ * Fold a tortilla over its filling (or open it back out) without moving its meter. Folding brings
+ * the underside of the half that goes over up on top, so the new face up takes the face down's
+ * cook (exactly, for a tortilla that was never flipped). Opening it back out keeps the reading by
+ * easing the face up back (or both faces, if the top one can't give enough).
+ */
+export function setFolded(p: Piece, folded: boolean): void {
+  if (!!p.folded === folded) return;
+  const level = cookLevel(p);
+  p.folded = folded;
+  const [down, up] = p.cook;
+  if (folded) {
+    p.cook[1] = Math.max(0, 2 * level - down);
+    return;
+  }
+  const sum = level * (1 + (UP_HEAT[p.kind] ?? 0));
+  if (sum >= down) p.cook[1] = sum - down;
+  else {
+    const k = down + up > 0 ? sum / (down + up) : 0;
+    p.cook = [down * k, up * k];
   }
 }
 

@@ -28,6 +28,8 @@ export interface Ui {
   menuBtn: HTMLButtonElement;
   /** The service bell: a ring calls the next person in line. */
   bell: HTMLButtonElement;
+  /** Undo, at the left of the header: carries the last move back (DESIGN §31). */
+  undo: HTMLButtonElement;
   bellCount: HTMLElement;
   bellLabel: HTMLElement;
   title: HTMLElement;
@@ -104,6 +106,7 @@ export function setTabArt(tab: HTMLButtonElement | undefined, page: string): voi
 export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   root.innerHTML = `
   <div class="hud">
+    <button class="icon-btn undo-btn" data-r="undo" disabled aria-label="Undo the last move" title="Undo">${icon("undo")}</button>
     <div class="hud-clock" role="timer" aria-label="Shift time">
       <span class="chip" data-r="timer">11:00am</span>
       <span class="hud-bar" aria-hidden="true"><i data-r="clockFill"></i></span>
@@ -151,6 +154,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     tabs,
     menuBtn: q("menuBtn") as HTMLButtonElement,
     bell: q("bell") as HTMLButtonElement,
+    undo: q("undo") as HTMLButtonElement,
     bellCount: q("bellCount"),
     bellLabel: q("bellLabel"),
     title: q("title"),
@@ -185,12 +189,22 @@ export function donenessPill(d: string, progress?: number, cls = ""): string {
  * colour for the food and where it is (raw pink, cooked brown, dark when over-done for a patty),
  * flashing red and black once burnt. Thin half-clear black lines mark the zone edges on top. No words.
  */
-export function cookMeter(kind: Cookable, t: number): string {
+export function cookMeter(kind: Cookable, t: number, variant = ""): string {
   const z = COOK_SCALE[kind];
   const pct = (v: number) => `${((Math.min(z.burnt, Math.max(0, v)) / z.burnt) * 100).toFixed(1)}%`;
   const zone = cookZone(kind, t);
   const flash = zone === "burnt" && Math.floor(performance.now() / 260) % 2 === 0 ? " flash" : "";
-  return `<span class="cmeter ${kind} ${zone}${flash}" style="--u:${pct(z.done)};--d:${pct(z.over)};--v:${pct(t)}"><b></b></span>`;
+  return `<span class="cmeter ${kind}${variant ? ` ${variant}` : ""} ${zone}${flash}" style="--u:${pct(z.done)};--d:${pct(z.over)};--v:${pct(t)}"><b></b></span>`;
+}
+/**
+ * A taco tortilla's meter on the comal (after build #76): cold and stiff reads a cool grey-blue,
+ * warm and soft (the ticket's "Warm") the same warm orange as the ticket chip, in a band hatched
+ * warm, then brown once it goes hard. Under it, a "Warm" chip once it's there, "Hard" past it.
+ */
+export function tortillaMeter(kind: "corn" | "flour", t: number): string {
+  const zone = cookZone(kind, t);
+  const chip = zone === "done" ? `<b class="mlt warm">Warm</b>` : zone === "under" ? "" : `<b class="mlt hard">Hard</b>`;
+  return cookMeter(kind, t, "warmup") + chip;
 }
 
 /** How a waiting customer feels. The figure at the window and the face on their ticket always agree. */
@@ -363,6 +377,39 @@ function rowHtml(r: TicketRow): string {
   return `<li class="${cls}" data-l style="--k:${r.color}">${ticketIcon(r.icon, r.color)}<span class="l">${r.label}</span>${r.tail}</li>`;
 }
 
+/** What kind of dish an order is, from its bottom layer. */
+type Dish = "burger" | "panini" | "toast" | "tacos" | "quesadilla" | "tostada" | "flatbread" | "calzone";
+export function dishOf(order: Order): Dish {
+  const ls = order.layers;
+  const base = ls[0];
+  if (!base) return "burger";
+  if (BREADS.has(base.kind)) return ls.length > 1 && BREADS.has(ls[ls.length - 1].kind) ? "panini" : "toast";
+  if (TORTILLAS.has(base.kind)) return base.folded ? "quesadilla" : "tacos";
+  if (base.kind === "tostada") return "tostada";
+  if (base.kind === "dough") return base.folded ? "calzone" : "flatbread";
+  return "burger";
+}
+/**
+ * The steps for the whole dish, in order, for the line at the top of the build (after build #76):
+ * a panini is pressed whole (and cut at Harbor City), a quesadilla folded and flipped, a flatbread
+ * baked (a calzone folded first; cut in four at Port Amber). Burgers, tacos, tostadas and open
+ * toasts have none: their steps belong to single ingredients.
+ */
+export function methodOf(order: Order): { cls: string; text: string }[] {
+  const dish = dishOf(order);
+  if (dish === "panini") return [{ cls: "toast", text: "Press" }, ...(order.slice ? [{ cls: "cut", text: "Cut" }] : [])];
+  if (dish === "quesadilla") return [{ cls: "fold", text: "Fold" }, { cls: "flip", text: "Flip" }];
+  if (dish === "flatbread" || dish === "calzone")
+    return [...(dish === "calzone" ? [{ cls: "fold", text: "Fold" }] : []), { cls: "toast", text: "Bake" }, ...(order.slice ? [{ cls: "cut", text: "Cut 4" }] : [])];
+  return [];
+}
+/** The method line: the dish's steps as chips, in order, above the build. */
+function methodHtml(order: Order): string {
+  const steps = methodOf(order);
+  if (!steps.length) return "";
+  return `<li class="how">${steps.map((s) => modBox(s.cls, s.text)).join('<i aria-hidden="true">›</i>')}</li>`;
+}
+
 /** The build, top of the burger first, compared against what's on the plate so far. */
 function buildRows(order: Order, plate: Plate): TicketRow[] {
   const rows: TicketRow[] = [];
@@ -450,35 +497,39 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
   });
   // Extras above the top of the build go first in the list.
   rows.push(...(extrasAt.get(order.layers.length - 1) ?? []));
+  const dish = dishOf(order);
   for (let i = order.layers.length - 1; i >= 0; i--) {
     const exp = order.layers[i];
     let icon: string = exp.kind;
     let label = ticketLabel(exp.kind);
     let tail = "";
+    // Steps for the whole dish are on the method line (methodOf); a line only carries a step of its own.
     if (exp.kind === "dough") {
-      // Baked in the deck oven (a calzone folded first); turning it is up to the cook, for an even bake. Port Amber cuts in four.
+      // Baked in the deck oven (a calzone folded first): on the method line.
       if (exp.folded) icon = "calzone";
       label = exp.folded ? "Calzone" : "Dough";
-      tail = (exp.folded ? modBox("fold", "Fold") : "") + modBox("toast", "Bake") + (order.slice ? modBox("cut", "Cut 4") : "");
     } else if (exp.after) tail = modBox("cold", "After");
     else if (TORTILLAS.has(exp.kind)) {
-      // Warm on the comal; a quesadilla is folded over and flipped once.
-      tail = exp.folded ? modBox("fold", "Fold") + modBox("flip", "Flip") : modBox("toast", "Warm");
-    } else if (exp.kind === "tostada") tail = modBox("toast", "Fry");
+      // Taco tortillas are each warmed on the comal till soft (the meter's warm band); a
+      // quesadilla's fold and flip are on the method line.
+      if (!exp.folded) tail = modBox("warm", "Warm");
+    } else if (exp.kind === "tostada") tail = modBox("toast", "Fry corn");
     else if (exp.kind === "bun") {
       icon = i === 0 ? "bunBottom" : "bunTop";
       if (exp.toasted) tail = modBox("toast", "Toast");
     } else if (BREADS.has(exp.kind)) {
-      // Panini bread is pressed; at Harbor City the top slice says it's cut in half too.
-      tail = modBox("toast", "Press") + (order.slice && i === order.layers.length - 1 ? modBox("cut", "Cut") : "");
-    } else if (PROTEINS.has(exp.kind)) tail = modBox("toast", "Press");
+      // A closed panini is pressed whole (the method line); an open toast's bread on its own.
+      if (dish !== "panini") tail = modBox("toast", "Press");
+    } else if (PROTEINS.has(exp.kind)) tail = modBox("toast", "Press first");
     else if (exp.cold) tail = modBox("cold", "Cold");
     else if (exp.kind === "patty") {
       if (exp.smashed) icon = "smashed";
       if (exp.smashed) tail = `<span class="mb smash" title="Smash">${SMASH_SVG}</span>`;
     } else if (exp.kind === "egg") tail = exp.flipped ? modBox("flip", "Flip") : modBox("sunny", "Sunny");
     else if (exp.kind === "pineapple") tail = modBox("grill", order.layers[0] && TORTILLAS.has(order.layers[0].kind) ? "Char" : "Grill");
-    else if (exp.melted) tail = modBox("melt", "Melt");
+    // Cheese melted on a burger's patty is a step of its own; in a panini, a quesadilla or on a
+    // flatbread it melts as the dish cooks.
+    else if (exp.melted && dish === "burger") tail = modBox("melt", "Melt");
     // "ADD Bacon", "ADD Tomato x2": an add-on, or the added copy of a doubled layer. A counted
     // topping asked for extra keeps its one line with the full count and says how many are added.
     const add = addedAt.get(i);
@@ -593,6 +644,6 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, focused
   const sides = sideRows(order, plate);
   return `<div class="pat ${mood}">${moodFace(mood)}${bar}${order.critic ? `<em class="critic" title="Food critic">Critic</em>` : ""}</div>
     <div class="name"><span class="l">${esc(order.name)}</span>${nameMarks(order)}</div>
-    <div class="cols${sides ? "" : " solo"}"><div class="tb"><ol>${list.map(rowHtml).join("")}${folded}</ol></div>${sides ? `<div class="sides">${sides}</div>` : ""}</div>`;
+    <div class="cols${sides ? "" : " solo"}"><div class="tb"><ol>${methodHtml(order)}${list.map(rowHtml).join("")}${folded}</ol></div>${sides ? `<div class="sides">${sides}</div>` : ""}</div>`;
 }
 

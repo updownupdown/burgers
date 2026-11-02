@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { makeOrder, orderFromRecipe, seededRng } from "./menu";
 import { EVENTS, fryerOf, middleOf, STOPS, townById, withEvent } from "./stops";
 import { dishOrder, scorePlate } from "./scoring";
-import { COOK_SCALE, friesQuality, fryPerfect, FRIES_PERFECT } from "./cooking";
+import { cookLevel, COOK_SCALE, friesQuality, fryPerfect, FRIES_PERFECT } from "./cooking";
 import type { Kind, Layer, Order, Piece, Plate } from "./types";
 import { isSauce, newPiece, unfoldTortilla } from "./types";
 
@@ -24,12 +24,13 @@ function good(kind: Kind, folded = false): Piece {
   const p = newPiece(kind);
   if (kind === "corn" || kind === "flour") {
     const t = COOK_SCALE[kind].perfect;
-    // A quesadilla is crisped on both sides; a taco tortilla warms on the face that went down.
-    p.cook = folded ? [t, t] : [t, 0];
+    // A quesadilla is crisped on both sides; a taco tortilla warms on the face that went down (and a
+    // quarter of that comes through to the face up).
+    p.cook = folded ? [t, t] : [t, t * 0.25];
     if (folded) Object.assign(p, { folded: true, flips: 1 });
   }
   if (kind === "tostada") p.cook = [COOK_SCALE.tostada.perfect, COOK_SCALE.tostada.perfect];
-  if (kind === "pineapple") p.cook = [0.55, 0.3];
+  if (kind === "pineapple") p.cook = [0.3, 0.25];
   if (kind === "egg") Object.assign(p, { cook: [0.4, 0.2], flips: 1 });
   if (kind === "jack") p.melt = 0.8;
   if (isSauce(kind)) p.stroke = ZIGZAG.map((s) => ({ ...s }));
@@ -189,10 +190,10 @@ describe("Red Rock scoring", () => {
     expect(r.notes).toContain("cold, stiff tortilla");
     expect(r.stars).toBeLessThan(5);
     const hard = perfect(street);
-    hard.layers[0].piece.cook = [0.9, 0];
+    hard.layers[0].piece.cook = [0.9, 0.225];
     expect(scorePlate(street, hard).notes).toContain("tortilla a bit hard");
     const burnt = perfect(street);
-    burnt.layers[2].piece.cook = [1.1, 0];
+    burnt.layers[2].piece.cook = [1.1, 0.275];
     expect(scorePlate(street, burnt).notes).toContain("burnt tortilla");
   });
 
@@ -261,7 +262,7 @@ describe("Red Rock scoring", () => {
 });
 
 describe("unfolding a quesadilla (after build #68)", () => {
-  it("opens a folded tortilla back out, keeping its filling and the cook on its faces", () => {
+  it("opens a folded tortilla back out, keeping its filling and the reading on its meter", () => {
     const q = newPiece("flour");
     const jack = newPiece("jack");
     jack.melt = 0.3;
@@ -270,11 +271,13 @@ describe("unfolding a quesadilla (after build #68)", () => {
     q.foldYaw = 1.2;
     q.cook = [0.3, 0.2];
     q.flips = 1;
+    const level = cookLevel(q);
     expect(unfoldTortilla(q)).toBe(true);
     expect(q.folded).toBe(false);
     expect(q.foldYaw).toBeUndefined();
     expect(q.fill).toEqual([jack]);
-    expect(q.cook).toEqual([0.3, 0.2]);
+    expect(cookLevel(q)).toBeCloseTo(level, 6);
+    expect(q.cook[0]).toBe(0.3);
     expect(q.flips).toBe(1);
   });
   it("leaves anything that isn't a folded tortilla alone", () => {

@@ -5,7 +5,7 @@ const { open, step, out, enterShift } = require('./lib.cjs');
 const tag = process.argv[2] || 'now';
 (async () => {
   const { b, p } = await open({ w: 390, h: 844, dpr: 2 });
-  await p.evaluate(() => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: 0, tutorialDone: true })));
+  await p.evaluate(() => localStorage.setItem('bv-save-v1', JSON.stringify({ town: 'pinecrest', tutorialDone: true })));
   await p.reload(); await p.waitForTimeout(600);
   await enterShift(p);
   await p.evaluate(() => window.__bv.manual(true));

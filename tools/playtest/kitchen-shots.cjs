@@ -6,7 +6,7 @@ const sizes = (process.env.SIZES || '390x844,360x740,430x932').split(',').map((s
 (async () => {
   for (const [w, h] of sizes) {
     const { b, p } = await open({ w, h, dpr: 2 });
-    await p.evaluate(() => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: 2, tutorialDone: true })));
+    await p.evaluate((t) => localStorage.setItem('bv-save-v1', JSON.stringify({ town: t, unlocked: ['pinecrest', 'elkpass', 'cedarfalls', 'summit', t], tutorialDone: true })), process.env.TOWN || 'summit');
     await p.reload();
     await p.waitForTimeout(600);
     await enterShift(p);

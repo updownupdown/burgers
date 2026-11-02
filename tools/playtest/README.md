@@ -11,8 +11,9 @@ node tools/playtest/bot.cjs        # plays a full shift, logs each order, screen
 ```
 
 Needs Playwright with Chromium available (`require('playwright')`).
-- `STOP=1 node tools/playtest/bot.cjs` plays a given road-trip stop (0-2) with the tutorial skipped.
+- `TOWN=elkpass node tools/playtest/bot.cjs` plays a given town (default pinecrest) with the tutorial skipped.
 - `PORT=4175 node tools/playtest/pages-shots.cjs [tag]` screenshots each counter mid-shift (`out/page-<tag>-<n>.png`).
+- `PORT=4175 [ONLY=serve,aside,warm,oven,fryer,busy,...] node tools/playtest/review78-kitchen.cjs` screenshots the kitchen and mechanics fixes after the build #78 review (DESIGN §33).
 - `PORT=4175 node tools/playtest/kitchen-shots.cjs [tag]` screenshots the kitchen with the longest receipts and a burger on every plate (`out/kitchen-<tag>-*.png`). `PORT` points any script at another preview port.
 - `PORT=4175 node tools/playtest/nav-shots.cjs [tag]` screenshots the doneness meters on the grill and fryer and the counter buttons on each counter and mid-move (`out/nav-<tag>-*.png`).
 - `node tools/playtest/tutorial-bot.cjs` starts a fresh trip with tutorial mode on and plays the whole first day doing only what the coach's thumb shows (welcome card, map, Prep, three guided orders with the bell, tickets and a drink, closing, evening, sleep). Screenshots `out/tut-NN-*.png`; `NOSHOT=1` skips them, `OUT=dir/` moves them.

@@ -41,7 +41,7 @@ import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
 import { closingHtml, prepHtml, reviewsHtml, syncRange, toggleBox, toggleIngredients } from "./screens/day";
-import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, setTabArt, ticketHtml } from "./ui";
+import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, setTabArt, ticketHtml, tortillaMeter } from "./ui";
 import { DRINK_TINT } from "./render/machines";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 import { scrollShadows } from "./screens/modal";
@@ -1503,7 +1503,7 @@ function zoneHint(x: number): void {
   const heat = counter.zones[zone];
   if (counter.middle === "comal") {
     if (heat === "warm") hintOnce("comal-warm", "The right end of the comal keeps things warm without cooking them on. Warm tortillas on the hot side, then stand them in the taco rack.", 4);
-    else hintOnce("comal-hot", "Tortillas warm in about 6 seconds: soft, with brown spots. Don't leave them till they go hard.", 4);
+    else hintOnce("comal-hot", "Tortillas warm in about 6 seconds: soft, with brown spots, and the meter turns orange and says Warm. Don't leave them till they go hard.", 4);
     return;
   }
   if (heat === "off") showHint("That part of the grill is off. Tap its button on the front to heat it.", 2.5);
@@ -4152,10 +4152,12 @@ const grillTags: HTMLElement[] = [];
 /** The meter for a grill item, and how many are in its stack. */
 function itemTag(it: GrillItem): string {
   const k = it.piece.kind;
-  const meter = k in COOK_SCALE ? cookMeter(k as Cookable, cookLevel(it.piece)) : "";
+  // A taco tortilla's meter says when it's warm (the ticket's "Warm" chip); a quesadilla's, its cheese.
+  const jack = it.piece.fill?.find((f) => f.kind === "jack");
+  const taco = (k === "corn" || k === "flour") && !it.piece.folded && !jack;
+  const meter = taco ? tortillaMeter(k, cookLevel(it.piece)) : k in COOK_SCALE ? cookMeter(k as Cookable, cookLevel(it.piece)) : "";
   const n = counter.stackSize(it);
   // A quesadilla's cheese: melting, then melted.
-  const jack = it.piece.fill?.find((f) => f.kind === "jack");
   const melt = jack ? `<b class="mlt${isMelted(jack) ? " on" : ""}">${isMelted(jack) ? "Melted" : "Melting"}</b>` : "";
   return `${meter}${melt}${n > 1 ? `<b class="sc">×${n}</b>` : ""}`;
 }

@@ -24,11 +24,12 @@
   --bv-paper-3: #dfd8ca;      /* pressed / hover */
   --bv-ink: #232a33;
   --bv-ink-2: #434b55;        /* body text on paper */
-  --bv-mute: #6b727c;         /* captions, eyebrows, disabled text */
+  --bv-mute: #60666f;         /* captions, eyebrows, disabled text (4.5:1 on paper-2) */
   --bv-rule: #dfd9cd;         /* hairlines */
   --bv-rule-2: #c9c2b3;       /* a firmer rule, e.g. table header */
   --bv-paprika: #d8573a;   /* coral */
   --bv-paprika-2: #b5452b;    /* pressed paprika */
+  --bv-paprika-ink: #b8432a;  /* coral as small text (under 18px): 4.4:1 and up on paper */
   --bv-paprika-soft: #fbe3da; /* paprika wash for selected rows, badges */
   --bv-olive: #4e7d6a;      /* pine */
   --bv-olive-soft: #e3ebe6;
@@ -92,6 +93,7 @@
   --bv-rule: #46515f;
   --bv-rule-2: #586579;
   --bv-paprika: #e8694a;
+  --bv-paprika-ink: #e8694a;
   --bv-paprika-2: #d8573a;
   --bv-paprika-soft: #4a3b3b;
   --bv-olive: #9fc2ae;
@@ -112,11 +114,12 @@
   --bv-paper-3: #dfd8ca;
   --bv-ink: #232a33;
   --bv-ink-2: #434b55;
-  --bv-mute: #6b727c;
+  --bv-mute: #60666f;
   --bv-rule: #dfd9cd;
   --bv-rule-2: #c9c2b3;
   --bv-paprika: #d8573a;
   --bv-paprika-2: #b5452b;
+  --bv-paprika-ink: #b8432a;
   --bv-paprika-soft: #fbe3da;
   --bv-olive: #4e7d6a;
   --bv-olive-soft: #e3ebe6;

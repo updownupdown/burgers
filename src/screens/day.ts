@@ -10,9 +10,7 @@ import { clockLabel, FIRST_HOUR, hourRate, LAST_HOUR, MIN_SHIFT, shiftHours, typ
 import { eventOn, townById, type Stop } from "../game/stops";
 import { SHIFTS_TO_UNLOCK } from "../game/travel";
 import { icon } from "../ui/icons";
-import { stackArt } from "./menuref";
-import { COUNTED, KIND_LABEL } from "../game/types";
-import { recipeCount } from "../game/stops";
+import { buildLine, methodTags, stackArt } from "./menuref";
 import "./day.css";
 
 /**
@@ -180,19 +178,8 @@ export function prepHtml(p: PrepInput): string {
     .map((r) => {
       const on = menu.includes(r);
       const locked = on && menu.length <= MIN_MENU;
-      const chips = r.panini
-        ? [r.open ? "Open-faced, bread pressed" : "Pressed", r.melt ? "Melted cheese" : ""].filter(Boolean)
-        : r.dish
-          ? [r.dish === "quesadilla" ? "Folded, flipped once" : r.dish === "tostada" ? "Fried shell" : "Warm tortillas", r.melt ? "Melted cheese" : ""].filter(Boolean)
-          : r.pie
-            ? [r.pie === "calzone" ? "Folded, baked" : "Baked in the oven", r.layers.some((k) => k === "basil" || k === "rocket" || k === "honey") ? `${r.layers.filter((k) => k === "basil" || k === "rocket" || k === "honey").map((k) => KIND_LABEL[k]).join(", ")} after` : ""].filter(Boolean)
-          : [r.toasted ? "Toasted bun" : "", r.smash ? "Smashed patty" : "", r.melt ? "Melted cheese" : ""].filter(Boolean);
-      // Between the buns (or on the bread of an open-faced toast, or in the tortillas), bottom to top; counted toppings once, with their count.
-      const inner = r.open || r.dish || r.pie ? r.layers.slice(r.dish && COUNTED.has(r.layers[0]) ? 0 : 1) : r.layers.slice(1, -1);
-      const build = inner
-        .filter((k, i) => !COUNTED.has(k) || inner.indexOf(k) === i)
-        .map((k) => (COUNTED.has(k) ? `${KIND_LABEL[k]} ×${recipeCount(r, k)}` : KIND_LABEL[k]))
-        .join(" · ");
+      const chips = methodTags(r);
+      const build = buildLine(r);
       return `<button class="prep-row ${on ? "" : "off"}" data-act="prep-menu" data-v="${esc(r.name)}" aria-pressed="${on}" ${locked ? 'aria-disabled="true"' : ""}>
         <span class="tick">${on ? icon("check") : ""}</span>
         <span class="nm"><b>${esc(r.name)}</b>${
@@ -520,12 +507,14 @@ export function reviewsHtml(save: Save): string {
   const pct = (n: number) => `${Math.round(n * 100)}%`;
   return `<div class="day-screen bv">
     <header class="day-top">
-      <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("back")}</button>
-      <div class="where"><span class="bv-eyebrow">${total} review${total === 1 ? "" : "s"} · ${press.length} clipping${press.length === 1 ? "" : "s"}</span><b>Popularity &amp; reviews</b></div>
+      <span class="day-top-ic" aria-hidden="true">${icon("people")}</span>
+      <div class="where"><b>Popularity &amp; reviews</b></div>
+      <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("close")}</button>
     </header>
     <div class="day-scroll">
+      <p class="day-count">${total} review${total === 1 ? "" : "s"} · ${press.length} clipping${press.length === 1 ? "" : "s"}</p>
       <div class="day-kpis two">
-        <div class="day-kpi"><span class="bv-eyebrow">${icon("people")}Popularity</span><b>${save.popularity}<small class="of">/100</small></b><small>How many people have heard of the truck. Happy customers spread the word.</small></div>
+        <div class="day-kpi"><span class="bv-eyebrow">${icon("people")}Popularity</span><b>${save.popularity}<small class="of">/100</small></b><small>How many people have heard of the truck. Happy customers spread the word; walk-outs cost some.</small></div>
         <div class="day-kpi"><span class="bv-eyebrow">${icon("star")}Rating</span><b>${avg === null ? "–" : avg.toFixed(1)} <span class="st">★</span></b><small>${avg === null ? "No reviews yet." : `The average of ${total} review${total === 1 ? "" : "s"}.`} A good rating brings a few more people.</small></div>
       </div>
       <section class="day-card" aria-label="Reviews by stars">

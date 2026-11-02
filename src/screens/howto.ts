@@ -85,7 +85,7 @@ const KITCHENS: { id: MiddleCounter; label: string; region: RegionId }[] = [
   { id: "oven", label: "Oven", region: "orchard" },
 ];
 /** The chip icon for a kitchen's walkthroughs. */
-const DISH_ICON: Record<MiddleCounter, string> = { grill: "burger", press: "panini", comal: "flame", oven: "flame" };
+const DISH_ICON: Record<MiddleCounter, string> = { grill: "burger", press: "panini", comal: "taco", oven: "flatbread" };
 const regionName = (id: RegionId) => REGIONS.find((r) => r.id === id)!.name;
 /** A region's name inside a sentence ("across the Pines"). */
 const regionIn = (id: RegionId) => regionName(id).replace(/^The /, "the ").replace(/^Sunny Coast$/, "the Sunny Coast");
@@ -239,7 +239,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
         "<b>Tap a ticket</b> to make that order active and open it. Tap it again to fold it, so you can see the others.",
         "The tray with the blue outline is the one you're building.",
         "Lines tick off as they land on the tray. The ticket is forgiving: a piece ticks off its line wherever it went. The stars are not.",
-        "Now and then someone wants <b>just a drink or just a side</b>. Their tray has no plate.",
+        "Now and then someone wants <b>just a drink or just a side</b>. Their tray has no ring for food.",
       ],
     },
     {
@@ -460,7 +460,7 @@ function tripSecs(): Sec[] {
       </div>`,
       points: [
         "<b>Tips</b> come from good food served before the customer gets worried.",
-        "As they leave, everyone shows a <b>face</b> for what they thought. They only speak up when it's specific: something missing, something wrong, or especially quick or good.",
+        "As they leave, everyone shows a <b>face</b> for what they thought (the face on the ticket was their patience). They only speak up when it's specific: something missing, something wrong, or especially quick or good.",
         "Only some leave a <b>review</b>, the stars over their head. The delighted and the disappointed write most. Critics always do. Your <b>rating</b> is the average of every review.",
         `<b>Pass a shift</b>: serve at least half your customers, with an average of ${PASS_STARS}★ or more.`,
         `A <b>great shift</b> (${GREAT.stars}★ or more, with ${Math.round(GREAT.served * 100)}% served) unlocks that town's <b>bonus</b>. Every town has its own.`,
@@ -481,12 +481,6 @@ function tripSecs(): Sec[] {
       icon: "sun",
       title: "The day",
       lede: "Prep in the morning, a lunch shift, then the evening on the map.",
-      fig: `<div class="hw-biz">
-        <span class="bv-eyebrow">Expect today</span>
-        <b class="bv-mono" style="font-size:28px">~12 customers</b>
-        <span class="bv-eyebrow">Pacing</span>
-        <div class="bv-seg compact" aria-hidden="true"><button tabindex="-1">Chill</button><button tabindex="-1" aria-pressed="true">Balanced</button><button tabindex="-1">Stressful</button></div>
-      </div>`,
       points: [
         "<b>Prep & Open</b>: who to expect, the menu, the shift's hours, the pacing and one bonus.",
         "A longer <b>menu</b> brings more people and more kinds of order. Hide recipes to keep it simple.",
@@ -548,7 +542,7 @@ function tripSecs(): Sec[] {
       title: "The Garage",
       lede: "Your savings buy bonuses and looks for the truck.",
       points: [
-        "On the map, tap your <b>savings</b> (the button with the truck) to open the Garage.",
+        "On the map, tap your <b>savings</b> (the garage button by Help) to open the Garage.",
         "A great shift unlocks that town's bonus. Then it's for sale here.",
         "Bring <b>one bonus</b> per shift, picked on Prep & Open.",
         "Looks for the truck show on the map and at night.",

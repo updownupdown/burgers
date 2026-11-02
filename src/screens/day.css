@@ -29,7 +29,10 @@
 .day-top { display: flex; align-items: center; gap: 10px; padding: calc(var(--safe-t) + 10px) 12px 10px; border-bottom: 1px solid var(--bv-rule); }
 .day-top .where { display: grid; line-height: 1.05; min-width: 0; flex: 1; }
 .day-top .where b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 22px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.day-top .bv-btn.icon { border-color: transparent; }
+.day-top .bv-btn.icon { border-color: transparent; width: 44px; height: 44px; }
+.day-top-ic { flex: none; display: grid; place-items: center; width: 32px; height: 32px; margin-left: 6px; color: var(--bv-ink-2); }
+.day-top-ic .bv-icon { width: 24px; height: 24px; }
+.day-count { margin: 0; font-size: 13px; font-weight: 700; color: var(--bv-mute); }
 
 .day-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; overscroll-behavior: contain; }
 .day-scroll > * { flex-shrink: 0; }

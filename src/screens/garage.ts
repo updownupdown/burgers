@@ -35,9 +35,10 @@ export function garageHtml(save: Save, v: GarageView): string {
   const look = preview ? { ...save.look, [preview.slot]: preview.id } : save.look;
   return `<div class="day-screen bv garage">
     <header class="day-top">
-      <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("back")}</button>
-      <div class="where"><span class="bv-eyebrow">Day ${save.day} · Garage</span><b>Your truck</b></div>
+      <span class="day-top-ic" aria-hidden="true">${icon("garage")}</span>
+      <div class="where"><b>Garage</b></div>
       <div class="gar-bank"><span class="bv-eyebrow">Savings</span><b class="bv-mono">${dollars(save.bank)}</b></div>
+      <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("close")}</button>
     </header>
     <div class="day-scroll">
       <section class="gar-stage ${v.night ? "night" : ""}">
@@ -51,9 +52,6 @@ export function garageHtml(save: Save, v: GarageView): string {
       </div>
       ${v.tab === "bonuses" ? bonusesHtml(save) : looksHtml(save, v)}
     </div>
-    <footer class="day-foot">
-      <button class="bv-btn lg block" data-act="back">${icon("map")}Back to the map</button>
-    </footer>
   </div>`;
 }
 

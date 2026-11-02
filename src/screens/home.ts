@@ -201,7 +201,7 @@ function shellHtml(save: Save): string {
 /** Savings, one tap from the Garage; a dot when an unlocked bonus is affordable. */
 function bankHtml(save: Save): string {
   const ready = readyToBuy(save);
-  return `<button class="home-bank" data-home="garage" aria-label="Garage: savings ${dollars(save.bank)}${ready ? `, ${ready} bonus${ready > 1 ? "es" : ""} ready to buy` : ""}">${icon("truck")}<b class="bv-mono">${dollars(save.bank)}</b>${ready ? `<i class="dot"></i>` : ""}</button>`;
+  return `<button class="home-bank" data-home="garage" aria-label="Garage: savings ${dollars(save.bank)}${ready ? `, ${ready} bonus${ready > 1 ? "es" : ""} ready to buy` : ""}">${icon("garage")}<b class="bv-mono">${dollars(save.bank)}</b>${ready ? `<i class="dot"></i>` : ""}</button>`;
 }
 
 /**
@@ -217,8 +217,8 @@ function statsHtml(save: Save): string {
     <button class="home-pill" data-home="reviews" aria-label="Popularity ${save.popularity}: see popularity and reviews">${icon("people")}<span><small>Popularity</small><b class="bv-mono">${save.popularity}</b></span></button>
     <button class="home-pill" data-home="reviews" aria-label="Rating ${avg === null ? "none yet" : avg.toFixed(1)}: see popularity and reviews">${icon("star")}<span><small>Rating</small><b class="bv-mono">${avg === null ? "–" : avg.toFixed(1)}</b></span></button>
     ${
-      evening
-        ? `<button class="home-pill" data-home="results" ${last ? "" : "disabled"}>${icon("receipt")}<span><small>Today</small><b>Results</b></span></button>`
+      evening && last
+        ? `<button class="home-pill" data-home="results">${icon("receipt")}<span><small>Today</small><b>Results</b></span></button>`
         : `<button class="home-pill" data-home="menuref">${icon("food-menu")}<span><small>Today's</small><b>Menu</b></span></button>`
     }
   </div>`;
@@ -363,7 +363,7 @@ function shiftsLine(save: Save, t: Stop): string {
   const n = save.shiftsIn[t.id] ?? 0;
   if (!t.roads.length) return n ? `${n} shift${n === 1 ? "" : "s"} here` : t.id === FINAL_TOWN ? "Last stop of the trip" : "A side road: nothing further opens from here";
   const { done, need } = unlockProgress(save.shiftsIn, t.id);
-  return done >= need ? `${pipsHtml(done, need)} roads open` : `${pipsHtml(done, need)} ${done} of ${need} shifts to open the road`;
+  return done >= need ? `${pipsHtml(done, need)}<span class="t">roads open</span>` : `${pipsHtml(done, need)}<span class="t">${done}/${need} shifts to open the road</span>`;
 }
 
 function renderDock(m: Mounted): void {
@@ -437,7 +437,7 @@ function renderSheet(m: Mounted, id: string): void {
       ? `<button class="bv-btn primary lg block" data-home="sleep">${icon("moon")}Sleep here</button>
       <span class="bv-caption">Tomorrow: ${eventOn(id, s.day + 1) ? `${esc(eventOn(id, s.day + 1)!.name)} here.` : `shift ${(s.shiftsIn[id] ?? 0) + 1} here, or set off.`}</span>`
       : `<button class="bv-btn primary lg block" data-home="open">${icon("bell")}Prep &amp; Open${ev ? ` · ${esc(ev.name)}` : ""}</button>
-      <span class="bv-caption">${ev ? "Event day: a longer, busier shift with its own crowd." : `Shift ${(s.shiftsIn[id] ?? 0) + 1} here. A shift fills the day.`}</span>`;
+      ${ev ? `<span class="bv-caption">Event day: a longer, busier shift with its own crowd.</span>` : ""}`;
   } else if (trip) {
     const can = trip.when !== "tomorrow";
     const how = trip.when === "now" ? (evening ? "tonight" : "this morning") : trip.when === "day" ? "takes the day" : "tomorrow";
@@ -464,7 +464,7 @@ function renderSheet(m: Mounted, id: string): void {
           ${here ? `<span class="bv-chip pill here">${icon("truck")}You're here</span>` : ""}
         </div>
       </div>
-      <button class="bv-btn icon" data-home="close" aria-label="Close">${icon("close")}</button>
+      <button class="bv-btn icon ghost" data-home="close" aria-label="Close">${icon("close")}</button>
     </div>
     <p class="bv-body home-blurb">${esc(t.blurb)} ${esc(crowd.blurb)}</p>
     ${calendarHtml(t, s.day)}

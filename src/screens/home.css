@@ -50,7 +50,7 @@
 .home-logo .w2 { color: var(--bv-amber); }
 .home-brand .bv-eyebrow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-actions { margin-left: auto; display: flex; gap: 8px; }
-.home-actions .bv-btn.icon { width: 40px; min-height: 40px; border: 0; background: var(--bv-paper-2); color: var(--bv-ink); }
+.home-actions .bv-btn.icon { width: 44px; min-height: 44px; border: 0; background: var(--bv-paper-2); color: var(--bv-ink); }
 .home-actions .bv-btn.icon:active { background: var(--bv-paper-3); }
 .home-actions .bv-btn .bv-icon { font-size: 19px; }
 .home-brand .bv-eyebrow:empty { display: none; }
@@ -174,7 +174,7 @@
 /* ---- zoom buttons ------------------------------------------------------ */
 .home-zoom { position: absolute; right: 10px; top: calc(var(--safe-t) + 150px); display: grid; gap: 6px; }
 .home-zoom button {
-  width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
+  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
   background: var(--bv-paper-2); color: var(--bv-ink); box-shadow: var(--bv-shadow-2);
   font-size: 18px; transition: transform var(--bv-fast) var(--bv-ease);
 }
@@ -196,6 +196,7 @@
 .home-dock-info { display: grid; gap: 2px; min-width: 0; flex: 1; text-align: left; }
 .home-dock-info b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 22px; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-dock-info .bv-caption { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; }
+.home-dock-info .bv-caption .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .home-dock .bv-btn { flex: none; }
 .home-dock .bv-btn .bv-icon { font-size: 20px; }
 
@@ -223,7 +224,7 @@
 .home-tags .bv-chip.crowd { color: var(--bv-ink); border-color: var(--bv-rule-2); background: var(--bv-paper-2); }
 .home-tags .bv-chip.here { color: var(--bv-paprika); border-color: var(--bv-paprika); background: var(--bv-paprika-soft); }
 /* The close button is the one thing a thumb reaches for on this sheet: a full-size target. */
-.home-sheet-head .bv-btn.icon { flex: none; width: 44px; height: 44px; border: 0; background: var(--bv-ink); color: var(--bv-paper); margin: -4px -4px 0 0; }
+.home-sheet-head .bv-btn.icon { flex: none; width: 44px; height: 44px; border: 0; background: transparent; color: var(--bv-ink-2); margin: -4px -6px 0 0; }
 .home-sheet-head .bv-btn.icon .bv-icon { font-size: 22px; }
 .home-blurb { font-size: var(--bv-fs-md); }
 
@@ -241,7 +242,7 @@
 .home-cal-note { display: grid; gap: 3px; font-size: var(--bv-fs-sm); color: var(--bv-ink-2); font-weight: 600; }
 .home-cal-note div { display: flex; align-items: center; gap: 6px; }
 .home-cal-note .bv-icon { color: var(--bv-paprika); font-size: 14px; flex: none; }
-.home-cal-note .when { font-family: var(--bv-font-mono); font-weight: 500; color: var(--bv-paprika); white-space: nowrap; }
+.home-cal-note .when { font-family: var(--bv-font-mono); font-weight: 500; color: var(--bv-paprika-ink); white-space: nowrap; }
 .home-cal-note .mute { color: var(--bv-mute); }
 
 .home-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -279,7 +280,7 @@
 .home-offer { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: var(--bv-scrim); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); animation: home-fade 0.25s; }
 .home-offer[hidden] { display: none; }
 .home-offer .bv-card { width: min(380px, 100%); gap: 12px; }
-.home-offer .bv-card { --bv-paper: #f6f2ea; --bv-paper-2: #ebe6dc; --bv-paper-3: #dfd8ca; --bv-ink: #232a33; --bv-ink-2: #434b55; --bv-mute: #6b727c; --bv-rule: #dfd9cd; --bv-rule-2: #c9c2b3; --bv-paprika: #d8573a; --bv-paprika-soft: #fbe3da; color: var(--bv-ink); }
+.home-offer .bv-card { --bv-paper: #f6f2ea; --bv-paper-2: #ebe6dc; --bv-paper-3: #dfd8ca; --bv-ink: #232a33; --bv-ink-2: #434b55; --bv-mute: #60666f; --bv-rule: #dfd9cd; --bv-rule-2: #c9c2b3; --bv-paprika: #d8573a; --bv-paprika-soft: #fbe3da; color: var(--bv-ink); }
 .home-offers { display: grid; gap: 8px; }
 .home-offer-btn {
   display: grid; gap: 2px; text-align: left; padding: 10px 12px; border-radius: var(--bv-r-md);
@@ -320,6 +321,12 @@
   .home-pill b { font-size: 14px; }
   .home-dock-info b { font-size: 20px; }
   .home-sheet-head .bv-title { font-size: 23px; }
+}
+@media (max-width: 359px) {
+  .home-dock-row > .bv-btn.lg { padding: 0 12px; font-size: 18px; }
+  .home-dock-row > .bv-btn.lg .bv-icon { display: none; }
+  .home-pill > .bv-icon { display: none; }
+  .home-pill small { letter-spacing: 0; }
 }
 @media (max-height: 700px) {
   .home-sheet { gap: 8px; }
@@ -382,7 +389,7 @@
 .home-night-truck { width: min(300px, 78vw); margin: -6px 0 2px; }
 .home-night-truck .tk { width: 100%; height: auto; max-height: 34vh; }
 .home-bank {
-  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px 0 10px;
+  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px 0 10px;
   border-radius: var(--bv-r-pill); background: var(--bv-paper-2); color: var(--bv-ink); font-weight: 700;
 }
 .home-bank .bv-icon { font-size: 18px; }
@@ -428,7 +435,7 @@
 .home-res-stars { display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .home-res-stars .day-stars { font-size: 16px; letter-spacing: 1px; }
 .home-res-stars .bv-mono { font-size: 13px; font-weight: 500; }
-.home-res-head .bv-btn.icon { flex: none; width: 40px; height: 40px; border: 0; background: var(--bv-paper-2); color: var(--bv-ink); margin: -2px -2px 0 0; }
+.home-res-head .bv-btn.icon { flex: none; width: 44px; height: 44px; border: 0; background: var(--bv-paper-2); color: var(--bv-ink); margin: -2px -2px 0 0; }
 .home-res-head .bv-btn.icon .bv-icon { font-size: 20px; }
 .home-res-verdict { margin: -4px 0 0; font-size: 13.5px; color: var(--bv-ink-2); font-weight: 600; }
 .home-res-reward { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--bv-r-lg); background: var(--bv-amber-soft); border: 1px solid var(--bv-amber); text-align: left; }

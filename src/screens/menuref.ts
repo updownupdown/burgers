@@ -7,9 +7,10 @@ import * as gameMenu from "../game/menu";
 import { ADD_PRICE, DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "../game/menu";
 import { fountainFor, fryerOf, recipeCount, STOPS, townById, type Recipe, type Stop } from "../game/stops";
 import { openedBy, SHIFTS_TO_UNLOCK, unlockProgress } from "../game/travel";
-import { AFTER_OVEN, BREADS, COUNTED, DRINK_COLOR, PRESS_CHEESE, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, SIZE_LABEL, type Kind, type Size } from "../game/types";
+import { AFTER_OVEN, BREADS, COUNTED, DRINK_COLOR, PRESS_CHEESE, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, SIZE_LABEL, TORTILLAS, type Kind, type Size } from "../game/types";
 import { icon } from "../ui/icons";
 import { openHowTo } from "./howto";
+export { buildLine, methodTags, sidesLine } from "./dishtext";
 import { esc, getDeps, modalDepth, modalHead, modalOpen, price, pushModal, popModal, wireJumpChips } from "./modal";
 
 const SIZES: Size[] = ["S", "M", "L"];
@@ -49,9 +50,47 @@ export function pieArt(r: Recipe): string {
   return `<div class="mref-stack pie" aria-hidden="true"><svg viewBox="0 0 64 44" width="100%"><ellipse cx="32" cy="22" rx="29" ry="20" fill="#e3ad5a" stroke="#2a2622" stroke-width="1.6"/><ellipse cx="32" cy="22" rx="24" ry="16" fill="${sauce ?? "#f1dcaa"}"/>${bits.join("")}</svg></div>`;
 }
 
+/**
+ * Red Rock's dishes drawn as the food: tacos standing in the rack seen from the front, a
+ * quesadilla's folded half moon, a tostada's flat shell piled up, each with its fillings' colours.
+ */
+export function dishArt(r: Recipe): string {
+  const fill = r.layers.filter((k) => !TORTILLAS.has(k) && k !== "tostada");
+  const ink = `stroke="#2a2622" stroke-width="1.6" stroke-linejoin="round"`;
+  const wrap = (body: string) => `<div class="mref-stack pie" aria-hidden="true"><svg viewBox="0 0 64 44" width="100%">${body}</svg></div>`;
+  const shell = r.layers.includes("flour") ? "#efdcae" : "#f0cf6a";
+  if (r.dish === "quesadilla") {
+    const cheese = fill.find((k) => k === "jack" || k === "cheese") ?? "jack";
+    return wrap(
+      `<path d="M6 32a26 24 0 0 1 52 0z" fill="${shell}" ${ink}/><path d="M10 32c4-3 8 1 12-2s8 2 12-1 8 2 12-1 6 2 8 1" fill="none" stroke="${KIND_COLOR[cheese]}" stroke-width="2.4" stroke-linecap="round"/><path d="M8 32h48" stroke="#2a2622" stroke-width="1.6" stroke-linecap="round"/><g fill="#c4893a" opacity=".7"><circle cx="24" cy="20" r="1.6"/><circle cx="36" cy="16" r="1.4"/><circle cx="42" cy="24" r="1.5"/></g>`,
+    );
+  }
+  if (r.dish === "tostada") {
+    const dots = fill
+      .flatMap((k, j) => [0, 1, 2].map((i) => `<circle cx="${(16 + ((i * 13 + j * 7) % 32)).toFixed(1)}" cy="${(18 + ((i * 5 + j * 3) % 8)).toFixed(1)}" r="${k === "beans" ? 3.2 : 2.3}" fill="${KIND_COLOR[k]}" stroke="#2a2622" stroke-width=".8"/>`))
+      .join("");
+    return wrap(`<ellipse cx="32" cy="24" rx="28" ry="12" fill="${shell}" ${ink}/><ellipse cx="32" cy="22" rx="22" ry="8" fill="${KIND_COLOR.beans ?? "#7a4a2a"}" opacity=".55"/>${dots}`);
+  }
+  // Tacos: up to three folded tortillas standing side by side, filling showing at the top.
+  const tort = r.layers.find((k) => TORTILLAS.has(k));
+  const n = Math.max(1, Math.min(3, tort ? recipeCount(r, tort) : 2));
+  const w = 18;
+  const x0 = 32 - (n * w + (n - 1) * 2) / 2;
+  const tacos = Array.from({ length: n }, (_, i) => {
+    const x = x0 + i * (w + 2);
+    const bits = fill
+      .slice(0, 4)
+      .map((k, j) => `<circle cx="${(x + 4 + j * 3.4).toFixed(1)}" cy="${(19 - (j % 2) * 2).toFixed(1)}" r="2.3" fill="${KIND_COLOR[k]}" stroke="#2a2622" stroke-width=".7"/>`)
+      .join("");
+    return `${bits}<path d="M${x} 20a${w / 2} ${w / 2 + 2} 0 0 0 ${w} 0z" fill="${shell}" ${ink}/>`;
+  }).join("");
+  return wrap(`<path d="M4 36h56" stroke="#9aa0a0" stroke-width="3" stroke-linecap="round"/>${tacos}`);
+}
+
 /** The burger drawn as a little stack, top bun first, so a recipe reads at a glance. */
 export function stackArt(r: Recipe): string {
   if (r.pie) return pieArt(r);
+  if (r.dish) return dishArt(r);
   const n = r.layers.length;
   const parts = r.layers.map((k, i) => {
     const c = `--c:${KIND_COLOR[k]}`;
@@ -72,7 +111,7 @@ export function stackArt(r: Recipe): string {
 
 export function layerLabel(r: Recipe, k: Kind): string {
   const base = KIND_LABEL[k];
-  if (COUNTED.has(k)) return `${base} <b class="bv-mono">×${recipeCount(r, k)}</b>`;
+  if (COUNTED.has(k) && recipeCount(r, k) > 1) return `${base} <b class="bv-mono">×${recipeCount(r, k)}</b>`;
   return base;
 }
 
@@ -145,9 +184,20 @@ function elsewhereHtml(town: Stop, seen: Set<string>, prog: RoadProgress | null)
   if (!groups.length) return "";
   return `<section class="mref-sec" data-sec="road">
     <h3 class="menu-h">${icon("map")}Down the road <span>${groups.length} towns</span></h3>
-    <p class="mref-note">Every town has its own burgers. Greyed dishes are served in towns whose road hasn't opened yet.</p>
+    <p class="mref-note">Every town has its own dishes. Greyed ones are served in towns whose road hasn't opened yet.</p>
     ${groups.join("")}
   </section>`;
+}
+
+/** "a, b or c", lower case, for the Extras lines. */
+const listOf = (kinds: Kind[]): string => {
+  const w = kinds.map((k) => KIND_LABEL[k].toLowerCase());
+  return w.length > 1 ? `${w.slice(0, -1).join(", ")} or ${w[w.length - 1]}` : (w[0] ?? "");
+};
+
+/** Each kind of dish has its own icon: burgers, paninis, tacos, flatbreads. */
+export function dishIcon(town: Pick<Stop, "press" | "comal" | "oven">): string {
+  return town.press ? "panini" : town.comal ? "taco" : town.oven ? "flatbread" : "burger";
 }
 
 export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = null): string {
@@ -157,11 +207,10 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
   const oven = !!town.oven;
   const fryer = fryerOf(town);
   const main = press ? "Paninis" : comal ? "Tacos" : oven ? "Flatbreads" : "Burgers";
-  const mainIcon = press ? "panini" : "burger";
+  const mainIcon = dishIcon(town);
   const scoops = (s: Size) => Math.round(FRIES_PORTION[s] / FRIES_SCOOP);
   const poutine = poutinePrice();
-  const counted = [...COUNTED].map((k) => KIND_LABEL[k].toLowerCase());
-  const countedText = `${counted.slice(0, -1).join(", ")} or ${counted[counted.length - 1]}`;
+  const extras = gameMenu.extrasOn(town);
   const fries = SIZES.map(
     (s) => `<tr><td><span class="bv-chip size">${s}</span> ${SIZE_LABEL[s]} fries</td><td class="mref-scoops" aria-label="${scoops(s)} scoops">${'<i></i>'.repeat(scoops(s))}<span>${scoops(s)} scoop${scoops(s) > 1 ? "s" : ""}</span></td><td class="num">${price(FRIES_PRICE[s])}</td></tr>`,
   ).join("");
@@ -173,7 +222,6 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
     <button class="bv-chip pill" data-jump="drinks">${icon("drink")}Drinks</button>
     <button class="bv-chip pill" data-jump="extras">${icon("plus")}Extras</button>
   </nav>
-  ${mult !== 1 ? `<p class="bv-callout mref-biz">${icon("tag")}<span>Your prices: today's are ${mult > 1 ? "raised" : "lowered"} (×${mult.toFixed(2).replace(/0$/, "")}).</span></p>` : ""}
   <section class="mref-sec" data-sec="burgers">
     <h3 class="menu-h">${icon(mainIcon)}${main} in ${esc(town.name)} <span>${town.menu.length}</span></h3>
     <p class="mref-note">${press ? `Every panini is pressed golden, the cheese melted inside.${town.press?.slice ? " Here they go out cut in half." : ""}` : comal ? `Tortillas are warmed on the comal until soft and spotted, and tacos are filled in the rack on its warm end; a quesadilla is folded and flipped once, its cheese melted.${town.comal?.tpress ? " Hand-pressed tortillas earn a tip." : ""}` : oven ? `Every flatbread is built on the peel and baked in the deck oven; turned round so it bakes evenly, it comes out with leopard spots. Basil, rocket and honey go on after.${town.oven?.board ? " Here they go out cut in four." : ""}` : "Every patty goes out medium. Nobody asks for rare or well done."}</p>
@@ -192,7 +240,7 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
       ${poutine != null && town.poutine ? (fryer.includes("chips") ? `<tr class="mref-poutine"><td colspan="2"><b>Nachos</b><small>Chips, jalapeños, queso</small></td><td class="num">${price(poutine)}</td></tr>` : `<tr class="mref-poutine"><td colspan="2"><b>Poutine</b><small>Fries, cheese curds, gravy</small></td><td class="num">${price(poutine)}</td></tr>`) : ""}
       </tbody>
     </table>
-    <p class="mref-note">Salted unless you skip it. Cartons come from the stacks by the fryer.</p>
+    <p class="mref-note">Salted, or sugared where it says so. Cartons come from the stacks by the fryer.</p>
   </section>
   <section class="mref-sec" data-sec="drinks">
     <h3 class="menu-h">${icon("drink")}Drinks</h3>
@@ -206,11 +254,11 @@ export function menuRefHtml(town: Stop, mult = 1, prog: RoadProgress | null = nu
   <section class="mref-sec" data-sec="extras">
     <h3 class="menu-h">${icon("plus")}Extras</h3>
     <dl class="bv-stats mref-extras">
-      <dt>Extra ${esc(countedText)}</dt><dd>+${price(EXTRA_PRICE)}</dd>
-      <dt>Add or double cheese, bacon, egg, lettuce or pineapple</dt><dd>+${price(ADD_PRICE)}</dd>
+      ${extras.extra.length ? `<dt>Extra ${esc(listOf(extras.extra))}</dt><dd>+${price(EXTRA_PRICE)}</dd>` : ""}
+      ${extras.add.length ? `<dt>Add ${esc(listOf(extras.add))}</dt><dd>+${price(ADD_PRICE)}</dd>` : ""}
       <dt>Leave something off</dt><dd>±$0</dd>
     </dl>
-    <div class="bv-callout mref-tip">${icon("pickle")}<span>Toppings go on one piece at a time. A piece or two fewer saves money but can cost you a review; one or two extra can win a better one.</span></div>
+    <div class="bv-callout mref-tip">${icon("pickle")}<span>Toppings go on one piece at a time. A piece or two short can cost you a star; one or two extra can win a better one.</span></div>
     <button class="bv-btn sm ghost mref-howto" data-m="howto-toppings">${icon("help")}How toppings work</button>
   </section>`;
 }

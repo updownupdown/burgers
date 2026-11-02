@@ -196,6 +196,23 @@ const PIE_OPTIONAL: ReadonlySet<Kind> = new Set<Kind>(["basil", "rocket", "honey
 const PIE_EXTRA: ReadonlySet<Kind> = new Set<Kind>(["mozzarella", "mushroom", "ham", "fig", "pear", "blue"]);
 const PIE_ADD: Kind[] = ["mushroom", "ham", "ham", "rocket", "basil"];
 
+/**
+ * What can be asked for on top in a town, for the menu's Extras: counted toppings ordered extra
+ * (+EXTRA_PRICE), and other layers added or doubled (+ADD_PRICE), from the same lists pickMods uses.
+ */
+export function extrasOn(town: Pick<Stop, "menu" | "pantry">): { extra: Kind[]; add: Kind[] } {
+  const extra = new Set<Kind>();
+  const add = new Set<Kind>();
+  for (const r of town.menu) {
+    const ex = r.dish ? DISH_EXTRA : r.pie ? PIE_EXTRA : EXTRA_OK;
+    const ad = r.dish ? DISH_ADD : r.pie ? PIE_ADD : r.panini ? PANINI_ADD : ADD_OK;
+    for (const k of r.layers) if (ex.has(k)) (COUNTED.has(k) ? extra : add).add(k);
+    for (const k of ad) if (town.pantry.includes(k) && !(r.open && (PROTEINS.has(k) || PRESS_CHEESE.has(k)))) add.add(k);
+    if (r.dish === "quesadilla") for (const k of ["pork", "jalapeno"] as Kind[]) if (town.pantry.includes(k)) add.add(k);
+  }
+  return { extra: [...extra], add: [...add] };
+}
+
 export function pickMods(recipe: Recipe, pantry: Kind[], rng: Rng, level: number): Modifier[] {
   const mods: Modifier[] = [];
   const count = rng() < 0.15 + 0.35 * level ? (rng() < 0.25 * level ? 2 : 1) : 0;

@@ -594,7 +594,9 @@ export class CounterView {
   orchard = false;
   private curdTray!: THREE.Object3D;
   private gravyWell!: THREE.Object3D;
-  private puffs: THREE.Mesh[] = [];
+  private puffs: THREE.Sprite[] = [];
+  /** Grease spits: tiny bright dots that pop off meat on a hot zone (the sizzle you can see). */
+  private spits: THREE.Sprite[] = [];
   private held: THREE.Object3D | null = null;
   private time = 0;
   events: CounterEvents = { golden: () => {}, beep: () => {}, spill: () => {}, burning: () => {}, done: () => {}, nudge: () => {} };
@@ -702,13 +704,22 @@ export class CounterView {
       this.proxy(bottleBox(caddy), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k }, G);
     }
 
-    const puffMat = new THREE.MeshBasicMaterial({ color: "#f2f2f2", transparent: true, opacity: 0.3, depthWrite: false });
+    // Smoke and steam: soft camera-facing puffs (a flat core with a soft edge), and grease spits.
+    const puffTex = softDot();
     for (let i = 0; i < 24; i++) {
-      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 0), puffMat.clone());
+      const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, color: "#fff6e8", transparent: true, opacity: 0, depthWrite: false }));
       m.visible = false;
       m.userData = { t: Math.random(), item: -1 };
       this.scene.add(m);
       this.puffs.push(m);
+    }
+    for (let i = 0; i < 10; i++) {
+      const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, color: "#fff1c4", transparent: true, depthWrite: false }));
+      m.visible = false;
+      m.userData = { life: 0, v: new THREE.Vector3() };
+      m.scale.setScalar(0.07);
+      this.scene.add(m);
+      this.spits.push(m);
     }
   }
 
@@ -2571,12 +2582,32 @@ export class CounterView {
       const t = m.userData.t;
       const burnt = it.cook > 0.95;
       m.visible = true;
-      m.position.set(it.x + (m.userData.ox ?? 0) + Math.sin(t * 5 + i) * 0.08, it.y + t * 1.6, it.z + (m.userData.oz ?? 0));
-      m.scale.setScalar(0.6 + t * 1.5);
-      const mat = m.material as THREE.MeshBasicMaterial;
-      mat.color.set(burnt ? "#3a3532" : "#f2f2f2");
-      mat.opacity = (burnt ? 0.55 : it.light ? 0.12 : 0.28) * Math.sin(Math.PI * t) * Math.min(1, it.cook * 4);
+      // Rise about 2.2 units, growing 0.6 -> 2.4 times, drifting side to side as it goes.
+      m.position.set(it.x + (m.userData.ox ?? 0) + Math.sin(t * 5 + i) * 0.12 * (0.3 + t), it.y + t * 2.2, it.z + (m.userData.oz ?? 0));
+      m.scale.setScalar(0.24 * (0.6 + t * 1.8));
+      const mat = m.material;
+      mat.color.set(burnt ? "#6b5d55" : "#fff6e8");
+      mat.opacity = (burnt ? 0.4 : it.light ? 0.1 : 0.22) * Math.sin(Math.PI * t) * Math.min(1, it.cook * 4);
     });
+    // Grease spits off meat on a hot zone: a dot pops out and fades within a quarter second.
+    const sizzling = active.filter((g) => (g.piece.kind === "patty" || g.piece.kind === "bacon") && g.piece.cook[0] < 0.95).map((g) => ({ x: gx + g.x, z: g.z, y: GRILL_TOP + 0.3 }));
+    for (const m of this.spits) {
+      const u = m.userData as { life: number; v: THREE.Vector3 };
+      if (u.life > 0) {
+        u.life -= dt;
+        m.position.addScaledVector(u.v, dt);
+        u.v.y -= 9 * dt;
+        m.material.opacity = Math.max(0, u.life / 0.25);
+        m.visible = u.life > 0;
+      } else if (sizzling.length && Math.random() < dt * 2.2) {
+        const it = sizzling[Math.floor(Math.random() * sizzling.length)];
+        const a = Math.random() * Math.PI * 2;
+        u.life = 0.25;
+        u.v.set(Math.cos(a) * 1.4, 2.2 + Math.random() * 1.2, Math.sin(a) * 1.0);
+        m.position.set(it.x + Math.cos(a) * 0.35, it.y - 0.15, it.z + Math.sin(a) * 0.3);
+        m.visible = true;
+      } else m.visible = false;
+    }
 
     // Fryer
     for (let i = 0; i < this.baskets.length; i++) {
@@ -2672,4 +2703,23 @@ export class CounterView {
       t.puddleObj.scale.setScalar((0.35 + 0.75 * t.puddle) * (1 + (PUDDLE_GROW - 1) * t.puddle));
     }
   }
+}
+
+/** A soft round dot (32 px): a flat core with a soft edge, for steam, smoke and spits. Shared. */
+let softDotTex: THREE.Texture | null = null;
+function softDot(): THREE.Texture {
+  if (softDotTex) return softDotTex;
+  const c = document.createElement("canvas");
+  c.width = c.height = 32;
+  const x = c.getContext("2d")!;
+  const g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.45, "rgba(255,255,255,0.92)");
+  g.addColorStop(0.75, "rgba(255,255,255,0.35)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  x.fillStyle = g;
+  x.fillRect(0, 0, 32, 32);
+  softDotTex = new THREE.CanvasTexture(c);
+  softDotTex.colorSpace = THREE.SRGBColorSpace;
+  return softDotTex;
 }

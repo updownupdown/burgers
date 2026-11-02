@@ -6,6 +6,7 @@ import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
 import { faceted, grade, lineColor, lineMaterial, mesh, outline, ramp, shareGeometry, toon } from "./materials";
 import { TOPPING_BOOST } from "./units";
 import { makePaniniPiece, PANINI_HEIGHT } from "./panini";
+import { pestoSpread } from "./pesto";
 import { makeTacoPiece, TACO_HEIGHT, FOLDED_HEIGHT } from "./tacos";
 import { FLATBREAD_TOP, makeFlatbread, toppingMesh } from "./flatbread";
 
@@ -129,6 +130,7 @@ const tmpD = new THREE.Color();
 const tmpE = new THREE.Color();
 
 const cyl = (rt: number, rb: number, h: number, segs: number) => faceted(new THREE.CylinderGeometry(rt, rb, h, segs));
+const TOMATO_SEED = faceted(new THREE.SphereGeometry(0.03, 5, 3));
 const tor = (r: number, t: number, rs: number, ts: number) => faceted(new THREE.TorusGeometry(r, t, rs, ts));
 function lathe(points: [number, number][], segs = 32): THREE.BufferGeometry {
   return faceted(new THREE.LatheGeometry(points.map(([x, y]) => new THREE.Vector2(x, y)), segs));
@@ -430,9 +432,10 @@ function eggWhiteGeo(seed: number): THREE.BufferGeometry {
 /**
  * One piece of a sliced topping as parts, in ingredient units before TOPPING_BOOST: chunky
  * silhouettes made to be counted at phone size, one strong tell each. `red` picks the ripe
- * jalapeño; `ink` is the outline width after any later scale. The bins' heaps use these too.
+ * jalapeño; `ink` is the outline width after any later scale; `variant` picks one of a few cuts
+ * (tomatoes). The bins' heaps use these too.
  */
-export function vegParts(kind: Kind, red = false, ink = INK_W * 1.3): Parts {
+export function vegParts(kind: Kind, red = false, ink = INK_W * 1.3, variant = 0): Parts {
   const p = new Parts();
   switch (kind) {
     case "lettuce": {
@@ -453,19 +456,38 @@ export function vegParts(kind: Kind, red = false, ink = INK_W * 1.3): Parts {
       break;
     }
     case "tomato": {
+      // A slice off a real tomato (after build #82: "too symmetrical"): a slightly lumpy, oval
+      // red ring, the flesh a little off centre, and the pale seed chambers a lopsided star with
+      // arms of different lengths and a few seeds. `variant` picks one of TOMATO_VARIANTS cuts.
+      const r = rng(41 + variant * 17);
       const h = 0.13;
-      p.add(cyl(0.48, 0.48, h, 20), "#e0402a", { p: [0, h / 2, 0], ink });
-      p.add(cyl(0.4, 0.4, h + 0.006, 20), "#f26a4f", { p: [0, h / 2, 0], ink: false });
+      const ph = r() * 6;
+      const ovalX = 1 + (r() - 0.5) * 0.18;
+      const lump = (x: number, y: number, z: number, amp: number): [number, number, number] => {
+        const a = Math.atan2(z, x);
+        const k = 1 + amp * Math.sin(3 * a + ph) + amp * 0.6 * Math.sin(5 * a + ph * 1.7);
+        return [x * k * ovalX, y, z * k];
+      };
+      p.add(warp(new THREE.CylinderGeometry(0.48, 0.48, h, 20), (x, y, z) => lump(x, y, z, 0.045)), ["#e0402a", "#d93a26", "#e44a2e", "#dc4229"][variant % 4], { p: [0, h / 2, 0], ink });
+      const cx = (r() - 0.5) * 0.1;
+      const cz = (r() - 0.5) * 0.1;
+      p.add(warp(new THREE.CylinderGeometry(0.4, 0.4, h + 0.006, 20), (x, y, z) => lump(x, y, z, 0.04)), "#f26a4f", { p: [cx * 0.5, h / 2, cz * 0.5], ink: false });
+      const arms = [4, 3, 5, 4][variant % 4];
+      const rot = r() * Math.PI * 2;
       const star: [number, number][] = [];
-      for (let i = 0; i < 10; i++) {
-        const a = (i * Math.PI * 2) / 10;
-        const rr = i % 2 ? 0.12 : 0.3;
-        star.push([Math.cos(a) * rr, Math.sin(a) * rr]);
+      const tips: [number, number][] = [];
+      for (let i = 0; i < arms * 2; i++) {
+        const a = rot + ((i + (r() - 0.5) * 0.5) * Math.PI * 2) / (arms * 2);
+        const rr = i % 2 ? 0.08 + r() * 0.06 : 0.2 + r() * 0.14;
+        star.push([cx + Math.cos(a) * rr, cz + Math.sin(a) * rr]);
+        if (i % 2 === 0) tips.push([cx + Math.cos(a) * rr * 0.6, cz + Math.sin(a) * rr * 0.6]);
       }
       const s = new THREE.Shape(star.map(([x, z]) => new THREE.Vector2(x, -z)));
       const g = new THREE.ExtrudeGeometry(s, { depth: h + 0.012, bevelEnabled: false });
       g.rotateX(-Math.PI / 2);
       p.add(faceted(g), "#ffd2bf", { ink: false });
+      // A seed or two in each chamber.
+      for (const [x, z] of tips) p.add(TOMATO_SEED, "#e9cf6a", { p: [x, h + 0.014, z], r: [0, r() * 3, 0], s: [1.3, 0.5, 0.8], ink: false });
       break;
     }
     case "onion":
@@ -493,11 +515,13 @@ export function vegParts(kind: Kind, red = false, ink = INK_W * 1.3): Parts {
   }
   return p;
 }
+/** How many different tomato slices there are (each piece is one, picked by its uid). */
+export const TOMATO_VARIANTS = 4;
 const VEG_BAKED = new Map<string, Baked>();
-function veg(kind: Kind, red: boolean): THREE.Mesh {
-  const key = kind + (red ? "r" : "");
+function veg(kind: Kind, red: boolean, variant = 0): THREE.Mesh {
+  const key = kind + (red ? "r" : "") + variant;
   let b = VEG_BAKED.get(key);
-  if (!b) VEG_BAKED.set(key, (b = bakeShared(vegParts(kind, red))));
+  if (!b) VEG_BAKED.set(key, (b = bakeShared(vegParts(kind, red, undefined, variant))));
   return bakedMesh(b);
 }
 
@@ -646,8 +670,18 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
       });
       break;
     }
+    case "tomato": {
+      // No two slices alike: a different cut, a little bigger or smaller, turned and tipped a
+      // touch (so a run of them overlaps unevenly), all seeded by the piece.
+      const r = rng((piece.uid * 2246822519) >>> 0);
+      const m = veg("tomato", false, piece.uid % TOMATO_VARIANTS);
+      m.scale.setScalar(0.86 + r() * 0.22);
+      m.rotation.set((r() - 0.5) * 0.1, r() * Math.PI * 2, (r() - 0.5) * 0.1);
+      m.position.y = 0.008 + r() * 0.015;
+      body.add(m);
+      break;
+    }
     case "lettuce":
-    case "tomato":
     case "onion":
     case "pickle":
     case "jalapeno":
@@ -674,6 +708,10 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
         lastLen = pts.length;
         for (const c of holder.children) (c as THREE.Mesh).geometry.dispose();
         holder.clear();
+        if (p.kind === "pesto") {
+          if (pts.length) holder.add(pestoSpread(pts, p.uid));
+          return;
+        }
         if (pts.length < 2) {
           if (pts.length === 1) {
             const blob = mesh(new THREE.SphereGeometry(SAUCE_RADIUS * 1.3, 8, 5), color, { ink: false });
@@ -734,8 +772,11 @@ const SLICE_RING: Partial<Record<Kind, number>> = { tomato: 0.42, onion: 0.28, p
 
 /** Where the `k`th slice of a counted topping goes (x, z), spread around the burger so they don't pile up. */
 export function sliceSpot(kind: Kind, k: number): [number, number] {
-  const r = (SLICE_RING[kind] ?? 0.4) * (k % 3 === 2 ? 0.45 : 1);
-  const a = 0.6 + k * 2.39996;
+  // Off the exact ring: each slice's angle and distance wander a little (fixed per k, so a
+  // build lands the same way every time), as a hand would lay them.
+  const j = rng(k * 97 + 13);
+  const r = (SLICE_RING[kind] ?? 0.4) * (k % 3 === 2 ? 0.45 : 1) * (0.86 + j() * 0.24);
+  const a = 0.6 + k * 2.39996 + (j() - 0.5) * 0.5;
   return [Math.cos(a) * r, Math.sin(a) * r];
 }
 

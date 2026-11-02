@@ -16,6 +16,11 @@ import { faceted, grade, mesh, toon } from "./materials";
 
 /** Ground level: customers' feet. */
 const G = 0.2;
+/**
+ * Where the near ground starts: just behind the cabin wall (its back face is at z 4.5, see
+ * CustomersView.buildFrame), so no strip of ground shows in front of the painted wall.
+ */
+const NEAR_Z = 4.4;
 
 let seed = 1;
 const rnd = () => {
@@ -223,7 +228,7 @@ export function buildScenery(g: THREE.Group, kind: Backdrop): Built {
   seed = 11;
   const edge = -8;
   if (kind === "mountains") {
-    k.ground("#9cc77a", G, 6, edge - 1);
+    k.ground("#9cc77a", G, NEAR_Z, edge - 1);
     k.fence(edge + 0.3, -15, 15, "#8a6a4a", "rail");
     k.signpost(-5.4, edge + 0.9, "#5b7f5a");
     k.picnic(5.6, edge + 1.4, "#a87b4f");
@@ -244,7 +249,7 @@ export function buildScenery(g: THREE.Group, kind: Backdrop): Built {
     return { background: sky("#9fd3e8", "#dcecf2"), fog: new THREE.Fog(grade("#dcecf2"), 38, 162) };
   }
   if (kind === "beach") {
-    k.ground("#e9d6a2", G, 6, edge - 1);
+    k.ground("#e9d6a2", G, NEAR_Z, edge - 1);
     k.fence(edge + 0.3, -15, 15, "#a98a5a", "rope");
     for (let i = 0; i < 14; i++) {
       const x = rr(-12, 12);
@@ -279,12 +284,16 @@ export function buildScenery(g: THREE.Group, kind: Backdrop): Built {
     return { background: sky("#8fd6f0", "#e6f4f4"), fog: new THREE.Fog(grade("#e6f4f4"), 42, 288) };
   }
   if (kind === "desert") {
-    k.ground("#e0b07a", G, 6, edge - 1);
+    // A step darker than the haze, so the customers stand out against it.
+    k.ground("#d49a62", G, NEAR_Z, edge - 1);
     k.fence(edge + 0.3, -15, 15, "#8a6a4a", "rail");
     k.saguaro(-7, edge + 1.2, 3.2);
     k.agave(6, edge + 1, 1);
     k.rock(8.5, edge + 1.3, 0.5, "#c4623a");
     k.signpost(4.2, edge + 0.9, "#b8483a");
+    // Sparse sage scrub along the fence line.
+    const scrub: [number, number, number][] = [[-11.5, 1.1, 0.3], [-3.2, 1.5, 0.22], [2.1, 0.8, 0.26], [10.8, 1.6, 0.32], [13.2, 0.9, 0.24]];
+    for (const [x, dz, r] of scrub) k.bush(x, edge + dz, r, "#8fa37a");
     // Desert floor running to cliffs: mesas in red bands, buttes in the gaps, an arch.
     terrain(k, "#dca476", (x, z) => G - 0.1 + smooth(-12, -40, z) * Math.sin(x * 0.4) * 0.3, edge - 0.5, -120, 120, 40, 20);
     const strata = ["#b8553a", "#d98a5f", "#c4623a", "#e0a070"];
@@ -308,10 +317,12 @@ export function buildScenery(g: THREE.Group, kind: Backdrop): Built {
     k.box(1.5, 2.6, 1.5, "#c4623a", 1.3, G + 1.1, -36, 1.01);
     k.box(1.5, 2.6, 1.5, "#c4623a", 5.7, G + 1.1, -36, 1.01);
     for (let i = 0; i < 10; i++) k.bush(rr(-14, 14), rr(-12, -22), rr(0.2, 0.35), "#9aa86a", false);
-    return { background: sky("#f2c79a", "#f8e4cc"), fog: new THREE.Fog(grade("#f8e4cc"), 40, 234) };
+    // A clear desert blue above a warm horizon, so the mesas stand against blue rather than peach,
+    // and the haze starts further back so the near mesas keep their red.
+    return { background: sky("#8ec3dc", "#f3dcc0"), fog: new THREE.Fog(grade("#f3dcc0"), 70, 234) };
   }
   // Orchard Isle
-  k.ground("#a8c97a", G, 6, edge - 1);
+  k.ground("#a8c97a", G, NEAR_Z, edge - 1);
   k.fence(edge + 0.3, -15, 15, "#f2ede2", "picket");
   k.signpost(5.4, edge + 0.9, "#6f9a6a");
   k.crate(7.6, edge + 1, "#d9443a");

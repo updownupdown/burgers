@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { CABIN } from "./render/cabin";
 import { buzz, Sfx } from "./audio";
-import { cookLevel, COOK_SCALE, cookZone, darkSide, DRINK_FILL, friesZone, FRY_ZONE, isMelted, paleSide, SALT, type Cookable } from "./game/cooking";
+import { cookLevel, COOK_SCALE, cookZone, darkSide, DRINK_FILL, friesZone, FRY_ZONE, isMelted, paleSide, SALT, setFolded, type Cookable } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { expectedCustomers, sleep } from "./game/day";
 import { greatShift, townBonus, type BonusId } from "./game/bonus";
@@ -2296,7 +2296,8 @@ function foldMove(pt: Pointer, it: GrillItem): boolean {
   // How far past the middle the finger has come, along the line from the edge it started on.
   const along = ((cur.x - it.x) * ux + (cur.z - it.z) * uz) / ul;
   if (along < -R * 0.2) {
-    it.piece.folded = true;
+    // Folding keeps the meter where it was (the half that goes over brings its cooked face up).
+    setFolded(it.piece, true);
     // The half moon lies on the side the finger went, its crease across the drag.
     it.piece.foldYaw = Math.atan2(-ux, -uz);
     pt.foldFrom = undefined;

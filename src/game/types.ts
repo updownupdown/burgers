@@ -1,3 +1,4 @@
+import { setFolded } from "./cooking";
 export type Kind =
   | "bun"
   | "patty"
@@ -235,11 +236,11 @@ export const SCOOPED: ReadonlySet<Kind> = new Set<Kind>(["tuna", "pork", "beans"
 export const COMAL_FILL: ReadonlySet<Kind> = new Set<Kind>(["jack", "pork", "beans", "jalapeno", "onion", "cilantro"]);
 /**
  * Open a folded tortilla back out on the comal (a long press), so its filling can be fixed. The
- * filling and the cook on its faces are kept. False if it wasn't folded.
+ * filling stays, and so does the reading on its meter (setFolded). False if it wasn't folded.
  */
 export function unfoldTortilla(p: Piece): boolean {
   if (!TORTILLAS.has(p.kind) || !p.folded) return false;
-  p.folded = false;
+  setFolded(p, false);
   delete p.foldYaw;
   return true;
 }

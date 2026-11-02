@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { bakeStep, bakeTopping, CHAR_FACE, COMAL_SPEED, cookLevel, COOK_SCALE, DRINK_FILL, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, GRILL_RATE, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, type Cookable } from "../game/cooking";
+import { bakeStep, bakeTopping, CHAR_FACE, COMAL_SPEED, cookLevel, COOK_SCALE, DRINK_FILL, flipFaces, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, grillStep, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, type Cookable } from "../game/cooking";
 import type { DrinkId, FriesSize, FryKind, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
 import { BREADS, CUP_SPEED, GRILLABLE, isSauce, OVEN_CHEESE, PRESS_CHEESE, PROTEINS, SCOOPED, TORTILLAS } from "../game/types";
 import { fountainFor, type MiddleCounter } from "../game/stops";
@@ -443,8 +443,6 @@ export interface CounterEvents {
  * 18 s, overdone from 44 s. Buns toast in about 10 s.
  */
 const COOK_SPEED: Record<string, number> = { patty: 0.377, bacon: 0.41, egg: 0.18, bun: 0.45, pineapple: 0.4, ...COMAL_SPEED };
-/** Heat reaching the face up, against the face down (a thin tortilla warms through a little). */
-const UP_HEAT: Partial<Record<Kind, number>> = { patty: 0.35, bacon: 0.35, egg: 0.35, corn: 0.25, flour: 0.25 };
 
 /** Nozzle spacing on the soda fountain. */
 export const TAP_GAP = FOUNTAIN_SPOTS.cups[1].x - FOUNTAIN_SPOTS.cups[0].x;
@@ -2338,10 +2336,7 @@ export class CounterView {
         if (it.flipT >= 1) {
           it.flipT = -1;
           it.obj.rotation.set(0, 0, 0);
-          const p = it.piece;
-          p.cook = [p.cook[1], p.cook[0]];
-          if (p.marks) p.marks = [p.marks[1], p.marks[0]];
-          p.flips = (p.flips ?? 0) + 1;
+          flipFaces(it.piece);
           it.squashV = 6;
         }
       } else {
@@ -2363,8 +2358,7 @@ export class CounterView {
           it.topping.obj.userData.update(c);
         }
         const was: [number, number] = [it.piece.cook[0], it.piece.cook[1]];
-        it.piece.cook[0] += GRILL_RATE * heat * dt;
-        it.piece.cook[1] += GRILL_RATE * heat * (UP_HEAT[it.piece.kind] ?? 0) * dt;
+        grillStep(it.piece, heat, dt);
         if (this.noBurn) holdBelowBurnt(it.piece, was);
         // The ridged grille sears marks into the face down.
         if (touching && this.middle === "grill" && zi === GRILLE_ZONE && zone === "hot" && it.piece.kind === "patty") {

@@ -187,9 +187,10 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
       return [1, null];
     }
     case "pineapple": {
-      const t = Math.max(piece.cook[0], piece.cook[1]);
-      if (t >= 1) return [0.2, "burnt pineapple"];
-      if (t < 0.35) return [0.5, "pineapple not grilled"];
+      // One reading for the ring, whichever side went down (cookLevel).
+      const t = cookLevel(piece);
+      if (t >= COOK_SCALE.pineapple.burnt) return [0.2, "burnt pineapple"];
+      if (t < COOK_SCALE.pineapple.done) return [0.5, "pineapple not grilled"];
       return [1, null];
     }
     case "egg": {

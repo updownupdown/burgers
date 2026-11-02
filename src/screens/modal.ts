@@ -48,6 +48,8 @@ export interface MenuDeps {
   quit(): void;
   /** Wipe the trip and start over (already confirmed). */
   newTrip(): void;
+  /** Tutorial mode was switched back on: the next shift is talked through again. */
+  replayTutorial?(): void;
   /** Dev mode: swap in a simulated trip at 0, 50 or 100% of the road, or bring the real one back (null). */
   simulate?(level: number | null): void;
 }

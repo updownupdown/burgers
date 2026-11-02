@@ -1929,6 +1929,20 @@ export class CounterView {
   }
   private trashGlow: (THREE.Mesh | undefined)[] = [];
 
+  /**
+   * Where the first shown hit box matching `match` sits, world space: the tutorial's thumb points
+   * at stations through these, so it follows them wherever the layout puts them.
+   */
+  proxyPoint(match: (h: Hit) => boolean): THREE.Vector3 | null {
+    const m = this.hitMeshes.find((h) => match(h.userData.hit as Hit) && shown(h.userData.owner));
+    return m ? m.getWorldPosition(new THREE.Vector3()) : null;
+  }
+
+  /** Where a cup stands under nozzle i, world space (the tutorial's thumb). */
+  tapCupPoint(i: number): THREE.Vector3 {
+    return new THREE.Vector3(this.taps[i].x, CUP_Y + 0.5, CUP_Z);
+  }
+
   /** The middle of the trash slot on the current counter, world space (for the playtest bot). */
   trashPoint(): THREE.Vector3 {
     return this.world(this.page, 0, 0, (TRASH.z0 + TRASH.z1) / 2);

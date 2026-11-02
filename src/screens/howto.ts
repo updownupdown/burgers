@@ -1,20 +1,49 @@
 /**
- * How to Play: a skimmable guide, one short section per part of the kitchen and the trip,
- * each with a small drawing. It opens on its own (from the home screen) and inline in the
- * game menu's second tab.
+ * How to Play (after build #80): three tabs along the bottom of the card.
+ * - **Basics**: what every kitchen shares. Tap and drag, tickets, the tray and serving, Undo,
+ *   sauce, the knife, the meters, topping counts, the fryer and the drinks.
+ * - **Kitchen**: the middle counter of each region (Grill, Press, Comal, Oven), picked along the
+ *   top. Each has its counter, then recipes step by step with their real tickets, then where the
+ *   dishes come on. It opens on the kitchen of the town you're in (or picked on the map).
+ * - **The trip**: stars and reviews, pacing, the day, the map and the Garage.
+ * Each tab (and each kitchen) is its own scroller with sticky jump chips. The drawings are small
+ * looping SVGs (howto-art.ts), still under reduced motion. See DESIGN §32.
  */
+import "./howto.css";
 import { CROWD } from "../game/business";
 import { RANGE_MI } from "../game/day";
-import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "../game/menu";
+import { DIFFICULTIES, DIFFICULTY } from "../game/difficulty";
+import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE, orderFromRecipe } from "../game/menu";
 import { GREAT } from "../game/bonus";
 import { PASS_STARS } from "../game/progress";
 import { HOLD_GRACE } from "../game/scoring";
+import { SHIFTS_TO_UNLOCK } from "../game/travel";
 import { opinionFace } from "../ui/faces";
-import { fryerOf, type Recipe } from "../game/stops";
-import { COUNTED, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, STANDARD_COUNT, type Kind, type Size } from "../game/types";
+import { EVENTS, fountainFor, fryerOf, middleOf, REGIONS, STOPS, type MiddleCounter, type Recipe, type RegionId, type Stop } from "../game/stops";
+import { COUNTED, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, FRY_LABEL, KIND_COLOR, KIND_LABEL, STANDARD_COUNT, type FryKind, type Kind, type Modifier, type Size } from "../game/types";
+import { tabArt, ticketHtml } from "../ui";
 import { icon } from "../ui/icons";
-import { getDeps, jumpTo, modalHead, modalOpen, popModal, price, pushModal, wireJumpChips } from "./modal";
+import { esc, getDeps, jumpTo, modalHead, modalOpen, popModal, price, pushModal, wireJumpChips } from "./modal";
 import { openMenuRef, recipeHtml, stackArt } from "./menuref";
+import {
+  ART_KEYFRAMES,
+  comalArt,
+  dragArt,
+  flipArt,
+  grillArt,
+  knifeArt,
+  meterArt,
+  ovenArt,
+  peelArt,
+  pressArt,
+  quesaArt,
+  sauceArt,
+  tapArt,
+  tostadaFlow,
+  undoArt,
+} from "./howto-art";
+
+type Tab = "basics" | "kitchen" | "trip";
 
 interface Sec {
   id: string;
@@ -23,30 +52,92 @@ interface Sec {
   icon: string;
   title: string;
   lede: string;
-  fig: string;
-  points: string[];
-  /** Optional footer (links). */
+  fig?: string;
+  points?: string[];
+  /** Optional footer (links, lists). */
   foot?: string;
   /** Free-form body in place of the drawing and points. */
   raw?: string;
+  /** A counter drawing for the heading, in place of the icon. */
+  art?: string;
 }
 
-/* ---- small drawings ------------------------------------------------------- */
-
-function face(mood: "calm" | "worried" | "fuming"): string {
-  const mouth = mood === "calm" ? "M8.6 14.2c1.9 1.6 4.9 1.6 6.8 0" : mood === "worried" ? "M9 15.4h6" : "M8.6 16c1.9-1.8 4.9-1.8 6.8 0";
-  const brows = mood === "fuming" ? `<path d="M7.4 8.2l3 1.3M16.6 8.2l-3 1.3"/>` : mood === "worried" ? `<path d="M7.6 9.2l2.8-1M16.4 9.2l-2.8-1"/>` : "";
-  return `<svg class="hf ${mood}" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><g><circle cx="9.2" cy="11.2" r="1.1"/><circle cx="14.8" cy="11.2" r="1.1"/>${brows}<path d="${mouth}"/></g></svg>`;
+/** A recipe, step by step, with its real ticket. */
+interface Walk {
+  id: string;
+  chip: string;
+  recipe: Recipe;
+  /** Make the ticket's slice step show (Harbor City, Port Amber). */
+  slice?: boolean;
+  /** Where it's on the menu. */
+  where: string;
+  art: string;
+  steps: string[];
+  tip?: string;
+  /** A row of frames over the ticket. */
+  flow?: string;
 }
 
-/** The doneness pill, as on the grill (with progress) and on receipts (without). */
-export function donePill(level: "raw" | "rare" | "medium" | "well" | "burnt", progress?: number): string {
-  const label = { raw: "Raw", rare: "Rare", medium: "Med", well: "Well", burnt: "Burnt" }[level];
-  const bar = progress == null ? "" : `<i style="--p:${Math.round(progress * 100)}%"></i>`;
-  return `<span class="dn-pill ${level}"><span>${label}</span>${bar}</span>`;
+const KITCHENS: { id: MiddleCounter; label: string; region: RegionId }[] = [
+  { id: "grill", label: "Grill", region: "mountains" },
+  { id: "press", label: "Press", region: "coast" },
+  { id: "comal", label: "Comal", region: "desert" },
+  { id: "oven", label: "Oven", region: "orchard" },
+];
+/** The chip icon for a kitchen's walkthroughs. */
+const DISH_ICON: Record<MiddleCounter, string> = { grill: "burger", press: "panini", comal: "flame", oven: "flame" };
+const regionName = (id: RegionId) => REGIONS.find((r) => r.id === id)!.name;
+/** A region's name inside a sentence ("across the Pines"). */
+const regionIn = (id: RegionId) => regionName(id).replace(/^The /, "the ").replace(/^Sunny Coast$/, "the Sunny Coast");
+
+/* ---- facts from the game data -------------------------------------------- */
+
+/** "A", "A and B", "A, B and C". */
+function and(list: string[]): string {
+  return list.length < 2 ? (list[0] ?? "") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+}
+const townsWhere = (f: (t: Stop) => boolean) => STOPS.filter(f).map((t) => t.name);
+
+/** A recipe by name, from the towns' menus or an event's special. */
+function recipe(name: string): Recipe {
+  for (const t of STOPS) for (const r of t.menu) if (r.name === name) return r;
+  const ev = EVENTS.find((e) => e.special?.name === name);
+  if (ev?.special) return ev.special;
+  throw new Error(`No recipe ${name}`);
 }
 
-const arrow = `<span class="hw-arrow" aria-hidden="true">${icon("forward")}</span>`;
+/** Where a dish first comes on the menu, or the event that brings it. */
+function whereOn(name: string): string {
+  const t = STOPS.find((s) => s.menu.some((r) => r.name === name));
+  if (t) return `On the menu from ${t.name}`;
+  const ev = EVENTS.find((e) => e.special?.name === name);
+  if (ev) return `The ${ev.name} special in ${STOPS.find((s) => s.id === ev.town)!.name}`;
+  return "";
+}
+
+/** The kitchen's dishes in the order they come on, with the first town and price. */
+function dishList(k: MiddleCounter, today?: Stop): string {
+  const seen = new Map<string, { r: Recipe; from: string }>();
+  for (const t of STOPS) if (middleOf(t) === k) for (const r of t.menu) if (!seen.has(r.name)) seen.set(r.name, { r, from: t.name });
+  for (const e of EVENTS) {
+    const t = STOPS.find((s) => s.id === e.town)!;
+    if (e.special && middleOf(t) === k && !seen.has(e.special.name)) seen.set(e.special.name, { r: e.special, from: `${e.name}, ${t.name}` });
+  }
+  const on = new Set(today?.menu.map((r) => r.name) ?? []);
+  return `<ul class="hw-dishes">${[...seen.values()]
+    .map(({ r, from }) => `<li class="${on.has(r.name) ? "on" : ""}"><span class="nm">${esc(r.name)}</span><span class="fr">${esc(from)}</span><span class="pr">${price(r.price)}</span></li>`)
+    .join("")}</ul>`;
+}
+
+/** The real ticket for a recipe, as it hangs on the rail with nothing on the tray yet. */
+function ticketFor(r: Recipe, o: { slice?: boolean; fries?: boolean; drink?: "water" | null; mods?: Modifier[]; ice?: boolean } = {}): string {
+  const order = orderFromRecipe(12, r, !!o.fries, o.drink ?? null, o.mods ?? [], "M", "S");
+  if (o.slice) order.slice = true;
+  if (o.ice != null) order.ice = o.ice;
+  return `<div class="ticket active">${ticketHtml(order, { layers: [], fries: null, drink: null }, 0.82, true)}</div>`;
+}
+
+/* ---- small drawings kept from the old guide ------------------------------- */
 
 function cupSvg(step: "cup" | "ice" | "pour" | "lid"): string {
   const body = "M9 16h22l-2.6 32H11.6z";
@@ -67,317 +158,196 @@ function carton(size: Size): string {
 
 const scoops = (s: Size) => Math.round(FRIES_PORTION[s] / FRIES_SCOOP);
 
-/** A worked example for the stacking drawing. */
-const EXAMPLE: Recipe = { name: "Trailhead Classic", price: 9, layers: ["bun", "ketchup", "patty", "lettuce", "tomato", "bun"], toasted: true };
+/** Map key marks, drawn like the map's own (home.css). */
+const MK = {
+  town: `<circle cx="14" cy="11" r="6" fill="#faf3e6" stroke="#3b2a3a" stroke-width="1.4"/>`,
+  capital: `<circle cx="14" cy="11" r="8.6" fill="none" stroke="#3b2a3a" stroke-width="1"/><circle cx="14" cy="11" r="6" fill="#faf3e6" stroke="#3b2a3a" stroke-width="1.4"/><circle cx="14" cy="11" r="2.4" fill="#3b2a3a"/>`,
+  pips: `<circle cx="7" cy="11" r="2.6" fill="#5f6b4a"/><circle cx="14" cy="11" r="2.6" fill="#5f6b4a"/><circle cx="21" cy="11" r="2.6" fill="#faf3e6" stroke="#3b2a3a" stroke-width="1"/>`,
+  flag: `<path d="M9 19V3h11l-3 4 3 4H9" fill="#c8472e" stroke="#3b2a3a" stroke-width="1.1" stroke-linejoin="round"/>`,
+  lock: `<path d="M8 10h12v9H8zM10.5 10V7.5a3.5 3.5 0 0 1 7 0V10" fill="#faf3e6" stroke="#6b645b" stroke-width="1.5" stroke-linejoin="round"/>`,
+  prize: `<path d="M14 3l6 8-6 8-6-8z" fill="#e1b55c" stroke="#3b2a3a" stroke-width="1.1" stroke-linejoin="round"/>`,
+  gated: `<path d="M2 11h24" stroke="#4d4239" stroke-width="2.4" stroke-dasharray="4 3"/><path d="M14 4v14" stroke="#c8472e" stroke-width="2.4" stroke-linecap="round"/>`,
+  reach: `<rect width="28" height="22" rx="4" fill="#2a3340"/><path d="M3 15c6-6 14-6 22-8" fill="none" stroke="#a9ba88" stroke-width="2.4" stroke-linecap="round"/><circle cx="22" cy="8" r="3.4" fill="#ffe6a8" stroke="#e1b55c" stroke-width="1.2"/>`,
+};
+const mk = (svg: string) => `<svg viewBox="0 0 28 22" aria-hidden="true">${svg}</svg>`;
 
-/** The panini example: a Caprese, pressed. */
-const PANINI: Recipe = { name: "Caprese", price: 10, layers: ["ciabatta", "pesto", "mozzarella", "tomato", "basil", "ciabatta"], toasted: true, panini: true, melt: true, counts: { mozzarella: 3, tomato: 3 } };
+/* ---- the sections ---------------------------------------------------------- */
 
-/** Two press bays: one open with bread on its ribbed plate, one shut with its meter in front. */
-function pressSvg(): string {
-  const INK = `stroke="#2a2622" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"`;
-  const ribs = (x: number, y: number, w: number) => [0, 1, 2, 3].map((i) => `<path d="M${x + 3} ${y + 2 + i * 3}h${w - 6}" stroke="#5a6064" stroke-width="1"/>`).join("");
-  return `<svg class="hw-press" viewBox="0 0 168 84" aria-hidden="true">
-    <g>
-      <path d="M8 22 6 4h64l-2 18z" fill="#c9cfcd" ${INK}/>
-      <path d="M10 6h56" stroke="#2a2622" stroke-width="1" opacity=".3"/>
-      <path d="M4 3h68" stroke="#2a2622" stroke-width="5" stroke-linecap="round"/><path d="M4 3h68" stroke="#d8573a" stroke-width="3" stroke-linecap="round"/>
-      <rect x="6" y="44" width="64" height="26" rx="3" fill="#aab3b1" ${INK}/>
-      <rect x="10" y="34" width="56" height="12" rx="1.5" fill="#2f3336" ${INK}/>${ribs(10, 34, 56)}
-      <rect x="20" y="31" width="36" height="9" rx="3" fill="#f0d49a" ${INK}/>
-      <path d="M26 33.5h4M34 35.5h5M44 33.5h4" stroke="#c49a55" stroke-width="1.2"/>
-    </g>
-    <g>
-      <rect x="96" y="44" width="64" height="26" rx="3" fill="#aab3b1" ${INK}/>
-      <rect x="98" y="30" width="60" height="15" rx="4" fill="#c9cfcd" ${INK}/>
-      <path d="M104 41h48" stroke="#e8b25c" stroke-width="2.4"/>
-      <path d="M94 46h68" stroke="#2a2622" stroke-width="5" stroke-linecap="round"/><path d="M94 46h68" stroke="#d8573a" stroke-width="3" stroke-linecap="round"/>
-      <circle cx="152" cy="62" r="2.4" fill="#ff9a2a" ${INK}/>
-      <path d="M112 26c-1.4-1.8 1.4-3 0-5M124 24c-1.4-1.8 1.4-3 0-5M136 26c-1.4-1.8 1.4-3 0-5" fill="none" stroke="#9aa0a0" stroke-width="1.4" stroke-linecap="round"/>
-      <rect x="104" y="74" width="48" height="8" rx="4" fill="#2c2f33" stroke="#0f1012" stroke-width="1.2"/>
-      <rect x="104" y="74" width="30" height="8" rx="4" fill="#e9a64a"/>
-    </g>
-    <path d="M80 20v22" stroke="#2a2622" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="2 3"/>
-    <path d="M76 36l4 6 4-6" fill="none" stroke="#2a2622" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-}
+const CLASSIC = () => recipe("Trailhead Classic");
 
-/** The panini press, for the Sunny Coast (DESIGN §24). */
-function pressSec(): Sec {
-  return {
-    id: "press",
-    chip: "Press",
-    icon: "panini",
-    title: "The panini press",
-    lede: "On the Sunny Coast the grill makes way for a clamshell press. Both sides cook at once.",
-    fig: `${pressSvg()}
-      <div class="hw-stack">${stackArt(PANINI)}<p class="hw-cap">A Caprese: ciabatta, pesto, mozzarella ×3, tomato ×3, basil, ciabatta. Built bread first, then pressed.</p></div>`,
-    points: [
-      "<b>Build the sandwich</b> bread first, right in an <b>open bay</b>, on the tray or on the board. With the top slice on, drag down on the tray to lift the whole sandwich into a bay.",
-      "<b>Pull the handle down</b> to close the lid. It only closes on a bread or a patty on its own, or a sandwich with bread top and bottom. The lid hides the food, so watch the <b>meter on the lid</b>: pale, golden with press lines, then dark. <b>Swipe the handle up</b> to lift the lid, then drag the panini back to the tray.",
-      "The cheese inside melts while it's shut, and a little <b>oozes out</b> at the front when it has.",
-      "<b>Chicken and veggie patties</b> are pressed on their own first, until their meter says done, then go in the sandwich and back in the press.",
-      "<b>Avocado Toast</b> is open-faced: press only the sourdough, then add the avocado and rocket on the tray. The avocado never goes in the press.",
-      "The <b>tuna well</b>: each tap is one scoop onto the active tray. Pesto and aioli squeeze from the bottles like any sauce.",
-      "In <b>Harbor City</b> there's a third bay and a cutting board: drop a finished panini on the board and <b>swipe across it</b> to cut it in half before it goes out.",
-    ],
-  };
-}
-
-const TACOS: Recipe = { name: "Street Tacos", price: 10, layers: ["corn", "pork", "onion", "cilantro", "lime"], toasted: true, dish: "tacos", counts: { corn: 3, pork: 3, onion: 1 } };
-
-/** A tortilla on the comal, its edge dragged across its middle into a half moon. */
-function foldSvg(): string {
-  return `<svg class="hw-svg" viewBox="0 0 160 90" aria-hidden="true">
-    <rect x="6" y="18" width="148" height="56" rx="8" fill="#2f3335" stroke="#2a2622" stroke-width="1.6"/>
-    <rect x="104" y="18" width="50" height="56" rx="0" fill="#ffb04a" opacity=".12"/>
-    <ellipse cx="44" cy="46" rx="26" ry="20" fill="#f3e2b8" stroke="#2a2622" stroke-width="1.6"/>
-    <g fill="#f6d77a"><rect x="34" y="40" width="14" height="3" rx="1.5"/><rect x="40" y="47" width="12" height="3" rx="1.5"/><rect x="30" y="50" width="10" height="3" rx="1.5"/></g>
-    <path d="M44 66c0-10 0-20 0-30" stroke="#2a2622" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="2 3"/>
-    <path d="M30 60c8-2 14-10 26-18" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round"/>
-    <path d="M52 38l5 3-2 6" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M96 30h0a26 20 0 0 1 0 40z" fill="#ebc98a" stroke="#2a2622" stroke-width="1.6"/>
-    <path d="M96 30v40" stroke="#2a2622" stroke-width="1.6"/>
-    <path d="M120 52c2 0 3 2 2 4" fill="none" stroke="#f4c54a" stroke-width="3" stroke-linecap="round"/>
-  </svg>`;
-}
-
-const FLATBREAD: Recipe = { name: "Harvest Red", price: 10, layers: ["dough", "redsauce", "mozzarella", "basil"], toasted: true, pie: "flatbread", melt: true, counts: { mozzarella: 4 } };
-
-/** The deck oven from above: brick back and side walls, the element glowing along the back, a pie browner on the side facing it, turned round by the peel's tip. */
-function ovenSvg(): string {
-  const INK = `stroke="#2a2622" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"`;
-  return `<svg class="hw-svg" viewBox="0 0 160 90" aria-hidden="true">
-    <rect x="10" y="6" width="140" height="56" rx="2" fill="#dcc8a4" ${INK}/>
-    <rect x="10" y="6" width="140" height="10" fill="#c8664a" ${INK}/>
-    <rect x="10" y="6" width="10" height="56" fill="#b05e40" ${INK}/>
-    <rect x="140" y="6" width="10" height="56" fill="#b05e40" ${INK}/>
-    <path d="M20 11h120M45 6v5M70 6v5M95 6v5M120 6v5" stroke="#e7c9a8" stroke-width="1"/>
-    <rect x="20" y="16" width="120" height="14" fill="#ffa860" opacity=".35"/>
-    <rect x="22" y="16.5" width="116" height="3" rx="1.5" fill="#ff8a2a"/>
-    <text x="80" y="27" text-anchor="middle" font-size="6.5" font-weight="800" fill="#8a3a10">HOT WALL</text>
-    <ellipse cx="72" cy="42" rx="24" ry="13" fill="#f1dcaa" ${INK}/>
-    <path d="M48 42a24 13 0 0 1 48 0z" fill="#d99a48"/>
-    <ellipse cx="72" cy="42" rx="18" ry="9" fill="#c8402a"/>
-    <g fill="#fbf6e6"><circle cx="65" cy="41" r="2.4"/><circle cx="75" cy="45" r="2.4"/><circle cx="79" cy="38" r="2.2"/></g>
-    <path d="M76 54h26v8H76z" fill="#d9ad74" ${INK}/>
-    <path d="M89 62v24" stroke="#b98a54" stroke-width="4" stroke-linecap="round"/>
-    <path d="M106 58h16M118 54l4 4-4 4" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M100 31a28 16 0 0 1 0 20" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round"/>
-    <path d="M97 28l3 3-4 2" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-    <rect x="14" y="70" width="52" height="8" rx="4" fill="#2c2f33" stroke="#0f1012" stroke-width="1.2"/>
-    <rect x="14" y="70" width="34" height="8" rx="4" fill="#e3ad5a"/>
-  </svg>`;
-}
-
-/** The deck oven, for Orchard Isle (DESIGN §24, phase 4; the peel after builds #69 and #71). */
-function ovenSec(board: boolean, fritters: boolean): Sec {
-  return {
-    id: "oven",
-    chip: "Oven",
-    icon: "flame",
-    title: "The oven and the peel",
-    lede: "On Orchard Isle the grill makes way for a deck oven, its back wall glowing hot. Flatbreads are built on the peel, and only the peel moves them.",
-    fig: `${ovenSvg()}
-      <div class="hw-stack">${stackArt(FLATBREAD)}<p class="hw-cap">Harvest Red: dough, tomato sauce, mozzarella ×4, then basil after the oven.</p></div>`,
-    points: [
-      "<b>Tap the dough</b> to lay a base on the peel. <b>Hold the ladle</b> in the pot and spread the sauce in a spiral out to the crust (white bases get a drizzle of olive oil instead). Then the toppings: tap a pan for one piece, or drag them on.",
-      "<b>Drag the peel by its handle</b> into the oven and <b>swipe down</b> to slide the pie off onto the deck. To lift a pie, <b>push the blade in under it</b> (or set the blade under it and <b>swipe up</b>). Swipe down over the <b>bench</b> to set one aside, or let go and the peel goes back where it lies.",
-      "The side facing the <b>hot back wall</b> browns faster: watch the crust darken round that side. The meter under the pie shows its <b>palest side</b>. Turning is up to you: set the peel's tip against the front of the pie and <b>push it firmly sideways</b> to spin it round.",
-      "Left as it is, a pie is still fine once its pale side is done, just uneven (and the dark side <b>scorches</b> if it's left too long). Turned round about halfway, it bakes evenly all round, with <b>leopard spots</b> on the crust: a better pie and a small bonus.",
-      "To serve, lift it out on the peel, carry it up to a tray and <b>swipe down</b>. <b>Mushrooms</b> want the longer bake. <b>Basil, rocket and honey go on after</b>, at the tray (honey squeezes like any sauce).",
-      ...(board ? ["In <b>Port Amber</b>: a third spot in the oven, the <b>Calzone</b> (fold it on the peel by dragging the dough's edge across the middle; it's thick and bakes slower), and the board in the bench's place: set a flatbread on it and <b>swipe across it twice</b> to cut it in four."] : []),
-      `At the fryer, drop the <b>zucchini</b> in the <b>batter bowl</b>, then pick it up again for the basket; salt the fritti in the carton.${fritters ? " <b>Apple fritters</b> fry like fries and get cinnamon sugar from the sugar shaker." : ""}`,
-    ],
-  };
-}
-
-/** The comal, for Red Rock (DESIGN §24, phase 3). */
-function comalSec(tpress: boolean): Sec {
-  return {
-    id: "comal",
-    chip: "Comal",
-    icon: "flame",
-    title: "The comal",
-    lede: "In Red Rock the grill makes way for a comal: one long steel plate, hot on the left two thirds and warm on the right end, where the taco rack stands. No buttons to set.",
-    fig: `${foldSvg()}
-      <div class="hw-stack">${stackArt(TACOS)}<p class="hw-cap">Street Tacos: 3 corn tortillas, a scoop of pork in each, onion, cilantro and a lime wedge.</p></div>`,
-    points: [
-      "<b>Tortillas</b> warm on the hot side in about 6 seconds: pale and stiff, then <b>soft with brown spots</b> (done), then hard. Watch the meter under each one. The warm end keeps things warm without cooking them on.",
-      "<b>Tacos</b> are built in the <b>taco rack</b> on the warm end: drag each warm tortilla into it, while the next ones warm on the hot side. With tacos in the rack, each <b>tap on the pork or bean well</b> is one scoop into it, one per taco; tap or drag the toppings in <b>once</b> (they go over every taco). Then <b>drag the rack up to the tray</b>, and squeeze any salsa or crema there.",
-      "Tacos only start to cool once they're on the tray, so take your time in the rack. On a tray, tacos go cold from the <b>last one placed</b>, not the first.",
-      "<b>Quesadilla</b>: a flour tortilla on the comal, cheese on it, then <b>fold it</b>: press its edge and drag across the middle. <b>Flip it once</b>, and take it off when the cheese has melted, before the shell goes dark. Forgot something? <b>Press and hold</b> it to unfold it.",
-      "<b>Pineapple</b> chars on the comal like on the grill; flick it to flip. Eggs crack on the hot side: flip once for over easy.",
-      "<b>Tostadas</b> come from the fryer: drop a corn tortilla in an empty basket and lower it. The fryer also makes <b>chips</b> from the tortilla wedges, and nachos get jalapeños and queso where a poutine gets curds and gravy.",
-      ...(tpress ? ["In <b>Sun Valley</b> there's a <b>tortilla press</b>: hold it down to flatten a ball of masa, then drag the tortilla to the comal. Hand-pressed tortillas earn a $2 tip. Churros come from the fryer: shake sugar on them."] : []),
-    ],
-  };
-}
-
-/* ---- the guide ------------------------------------------------------------ */
-
-function sections(): Sec[] {
-  const counted = [...COUNTED];
+/** Basics: what every kitchen shares. */
+function basicsSecs(town: Stop | undefined): Sec[] {
+  const here = town ? middleOf(town) : "grill";
+  const cook = { grill: "Cook", press: "Press", comal: "Warm", oven: "Bake" }[here];
+  const cookIc = { grill: "grill", press: "panini", comal: "flame", oven: "flame" }[here];
+  const knifeTowns = and(townsWhere((t) => !!t.press?.slice || !!t.oven?.board));
+  const counted = countedFor(town);
   const count = (k: Kind) => STANDARD_COUNT[k] ?? 1;
-  const crowdLine = (Object.keys(CROWD) as (keyof typeof CROWD)[]).map((c) => `<li><b>${CROWD[c].label}</b> ${CROWD[c].blurb.replace(/\.$/, "").toLowerCase()}</li>`).join("");
+  const ex = CLASSIC();
   return [
     {
       id: "basics",
       chip: "Basics",
       icon: "sparkle",
       title: "The basics",
-      lede: "Customers queue at the window. Cook what's on their receipt, stack it on their tray, tap Serve.",
+      lede: "Customers queue at the window. Make what's on their ticket, build it on their tray, then serve it.",
       fig: `<ol class="hw-steps">
-        <li>${icon("receipt")}<b>Read</b><span>the receipt</span></li>
-        <li>${icon("grill")}<b>Cook</b><span>the food</span></li>
-        <li>${icon("burger")}<b>Stack</b><span>on the tray</span></li>
-        <li>${icon("arrow-up")}<b>Swipe up</b><span>to serve</span></li>
+        <li>${icon("receipt")}<b>Read</b><span>the ticket</span></li>
+        <li>${icon(cookIc)}<b>${cook}</b><span>the food</span></li>
+        <li>${icon("tray")}<b>Build</b><span>on the tray</span></li>
+        <li>${icon("arrow-up")}<b>Serve</b><span>tap or swipe up</span></li>
       </ol>
       <div class="hw-nav" aria-hidden="true">
         <span class="b">${icon("drink")}</span><span class="chute"></span><span class="b lit">${icon("fryer")}</span>
       </div>
-      <p class="hw-cap">${icon("swap")}The round buttons at the edges take you to the next counter; a glowing ring means it needs you. You can also swipe along the trash chute with empty hands.</p>`,
+      <p class="hw-cap">The round buttons at the edges take you to the next counter. A glowing ring means it needs you. With empty hands you can also swipe along the trash chute.</p>`,
       points: [
-        "<b>Customers and trays stay put</b> while you switch counters, so you never lose an order.",
-        "Most things are a <b>drag</b>: from a bin, the grill or a counter up to a tray.",
-        "People wait in a <b>line</b> outside. When the window is empty the first steps up by themselves; otherwise <b>ring the bell</b> to call the next one (a quick double ring still calls one; pause a moment before calling another). Serving more at once earns more, if you can keep up.",
+        "Three counters: <b>Drinks</b>, the kitchen in the middle, and the <b>Fryer</b>. Customers and trays stay put while you switch.",
+        "People wait in a <b>line</b> outside. When the window is empty the first one steps up alone. Otherwise tap the bell, marked <b>Next</b>, to call one. More at the window earns more, if you can keep up.",
+        "An order's patience only starts once they've ordered. In the line, the back drifts off first.",
+      ],
+    },
+    {
+      id: "hands",
+      chip: "Tap & drag",
+      icon: "tap",
+      title: "Tap and drag",
+      lede: "Tap anything to see its name; drag to place it. One drag from a well is one scoop.",
+      fig: `<div class="hw-pair">
+          <div>${tapArt()}<p class="hw-cap"><b>Tap</b>: its name. Nothing moves.</p></div>
+          <div>${dragArt()}<p class="hw-cap"><b>Drag</b>: one piece, onto the tray.</p></div>
+        </div>
+        <div class="hw-pair">
+          <div>${flipArt()}<p class="hw-cap"><b>Tap or flick up</b> on the heat to flip.</p></div>
+          <div class="hw-pair-t"><p class="hw-cap">A <b>flick up</b> from a pan tosses a piece onto the active tray.</p><p class="hw-cap">Some things stay a tap: cracking an egg, lowering a basket.</p></div>
+        </div>`,
+      points: [
+        "A tap on a pan, bin, stack or well only shows a name bubble. Placing always takes a drag.",
+        "Each drag is <b>one piece</b>, so count as you go. From the pork, bean or tuna well, one drag is one scoop.",
+        "Hold something over a counter button for a moment and that counter comes up, so you can carry food across.",
       ],
     },
     {
       id: "orders",
-      chip: "Orders",
+      chip: "Tickets",
       icon: "receipt",
-      title: "Orders",
-      lede: "Each customer's receipt hangs on the rail under them.",
-      fig: `<div class="hw-order">
-        <div class="hw-railwrap">
-          <div class="hw-rail" aria-hidden="true"></div>
-          <div class="hw-receipt">
-            <span class="rc-id bv-mono">#12</span>
-            <b class="rc-name">Trailhead Classic</b>
-            <span class="rc-row">${donePill("medium")}<em class="rc-n">1</em></span>
-            <span class="rc-mod">+ Extra pickles<em class="rc-n">2</em></span>
-            <span class="rc-side"><i class="sz">M</i>Fries<em class="rc-n">3</em></span>
-            <span class="rc-side"><i class="sz">S</i>Water <span class="no">No ice</span></span>
-          </div>
-        </div>
-        <ol class="hw-keys">
-          <li><em class="rc-n">1</em>How to cook the patty</li>
-          <li><em class="rc-n">2</em>Changes from the recipe</li>
-          <li><em class="rc-n">3</em>Sides, size first</li>
-        </ol>
-      </div>
-      <div class="hw-moods">
-        <span class="mood calm">${face("calm")}<b>Calm</b></span>${arrow}
-        <span class="mood worried">${face("worried")}<b>Worried</b></span>${arrow}
-        <span class="mood fuming">${face("fuming")}<b>Fuming</b></span>
-      </div>`,
+      title: "Tickets",
+      lede: "Each customer's ticket hangs on the rail. The open one shows the whole build, top first.",
+      fig: `<div class="hw-tk ex">${ticketFor(ex, { fries: true, drink: "water", ice: false, mods: [{ type: "no", kind: "ketchup" }, { type: "extra", kind: "tomato" }] })}</div>
+        ${ticketKey()}`,
       points: [
-        "<b>Tap a receipt</b> (or its tray) to make that order the active one. Tap it again to see every layer.",
-        "The face is their patience: <b>calm, worried, then fuming</b>. Fuming customers walk off without paying.",
-        "Lines in paprika are changes: <b>No onion</b>, <b>Extra cheese</b>, <b>+ Bacon</b>. Items tick off as they land on the tray.",
-        "Now and then someone wants <b>just a drink or just fries</b>. Their tray has no plate: no burger needed.",
-      ],
-    },
-    {
-      id: "grill",
-      chip: "Grill",
-      icon: "grill",
-      title: "The grill",
-      lede: "Patties cook slowly. Put them on early, then go do something else.",
-      fig: `<div class="hw-dn">
-        <div class="hw-dnrow">${donePill("rare", 0.5)}${donePill("medium", 0.5)}${donePill("well", 0.5)}${donePill("burnt")}</div>
-        <p class="hw-cap">Every patty goes out <b>Medium</b>. Rare or Well will do, but customers notice; Burnt won't. The bar fills as the patty moves through a level.</p>
-      </div>`,
-      points: [
-        "Drag a patty onto a hot part of the grill. <b>No flipping:</b> it cooks through on one side. Take it off when its tag says <b>Medium</b>.",
-        "The grill has <b>three zones</b>, each with a button on the front: tap it to go <b>off, warm, hot</b>. The strip along the front shows it in blue, orange or red. A shift starts hot, hot, off.",
-        "<b>Smash:</b> press and hold a fresh patty to flatten it. Smashed patties cook fast.",
-        "<b>Melt:</b> drop a cheese slice on a patty while it's on the grill. They come off together.",
-        "<b>Toast</b> buns face down. Bacon and pineapple grill too.",
-        "<b>Eggs:</b> tap one in the tray to pick it up, then tap it on the grill to crack it. A quick, crisp tap opens it in one; otherwise tap again. Then drop the <b>shells in the trash</b>.",
-        "A <b>warm</b> zone barely cooks and keeps food hot: park finished food there. Food on an off zone doesn't cook at all.",
+        "<b>Tap a ticket</b> to make that order active and open it. Tap it again to fold it, so you can see the others.",
+        "The tray with the blue outline is the one you're building.",
+        "Lines tick off as they land on the tray. The ticket is forgiving: a piece ticks off its line wherever it went. The stars are not.",
+        "Now and then someone wants <b>just a drink or just a side</b>. Their tray has no plate.",
       ],
     },
     {
       id: "stack",
-      chip: "Stacking",
-      icon: "burger",
-      title: "Stacking",
-      lede: "Build on the customer's tray, from the bottom bun up. A plate on the tray means they ordered a burger.",
+      chip: "Tray",
+      icon: "tray",
+      title: "The tray and serving",
+      lede: "Build on the customer's tray, from the bottom up. Then hand it over.",
       fig: `<div class="hw-stack">
-        ${stackArt(EXAMPLE)}
-        <ol class="hw-layers" reversed>${[...EXAMPLE.layers].reverse().map((k, i) => `<li><span class="bv-mono">${EXAMPLE.layers.length - i}</span><i class="swc" style="--c:${KIND_COLOR[k]}"></i>${KIND_LABEL[k]}${COUNTED.has(k) ? ` <b class="bv-mono">×${count(k)}</b>` : ""}</li>`).join("")}</ol>
+        ${stackArt(ex)}
+        <ol class="hw-layers" reversed>${[...ex.layers].reverse().map((k, i) => `<li><span class="bv-mono">${ex.layers.length - i}</span><i class="swc" style="--c:${KIND_COLOR[k]}"></i>${KIND_LABEL[k]}${COUNTED.has(k) ? ` <b class="bv-mono">×${count(k)}</b>` : ""}</li>`).join("")}</ol>
         <span class="hw-up">${icon("arrow-up")}<small>Build up</small></span>
       </div>
       <div class="hw-lamp">
         <span class="lampic">${icon("clock")}</span>
-        <div><b>Waiting on the tray</b><span>Cooked food keeps for about ${HOLD_GRACE} s, then goes cold: the bar along the tray shows it</span><i class="q" aria-hidden="true"></i></div>
+        <div><b>Waiting on the tray</b><span>Cooked food keeps about ${HOLD_GRACE} s on a tray, then goes cold. The bar along the tray shows it.</span><i class="q" aria-hidden="true"></i></div>
       </div>`,
       points: [
-        "<b>Drag</b> ingredients up onto the active tray, or <b>flick</b> them up to toss them on.",
-        "<b>Sauce:</b> press a bottle in the caddy and drag it up onto a burger on the tray. The view zooms in; keep moving to squeeze and watch the bar on the right for Perfect. Let go and the bottle goes back. In a hurry? <b>Tap</b> the bottle for a quick, rougher squeeze.",
-        "Wrong layer? <b>Swipe down</b> on the tray to take the top one off. Mistakes go down the garbage chute.",
-        "Cooking ahead? Leave finished food on a <b>warm</b> grill zone rather than on the tray, where it goes cold.",
+        "To fix a tray, drag a wrong layer to the trash. Held food lights the trash red when a drop would bin it.",
+        "When everything is on, a <b>Serve</b> button pops up. Tap it, tap the tray, or swipe the tray up.",
+        "Check the ticket first: a forgotten side or drink costs stars.",
+        "<b>Unordered extras</b>, like fries they didn't ask for, can soften a bad review. They come off your takings, so save them for rescues.",
+      ],
+      foot: `<p class="hw-sub">What they do with it</p>
+      <ol class="hw-verdicts">
+        <li><b>Looks good</b><span>They take it and pay. The better it is, the more they pay and tip.</span></li>
+        <li><b>Sent back</b><span>Clearly off: they hand it back saying what's wrong. Fix it and serve again. This time they take it.</span></li>
+        <li><b>Refused</b><span>Really wrong: no sale, and they leave.</span></li>
+      </ol>`,
+    },
+    {
+      id: "undo",
+      chip: "Undo",
+      icon: "undo",
+      title: "Undo",
+      lede: "Undo (top left) puts back your last move.",
+      fig: `${undoArt()}<p class="hw-cap">Tap Undo and the last thing you moved flies back.</p>`,
+      points: [
+        "It puts back an ingredient in its pan, food where it was, a squeeze of sauce, even something you binned.",
+        "<b>Cooking keeps going.</b> A patty undone off a tray goes back on the grill as cooked as it is now.",
+        "Served orders can't be undone. Neither can flips, folds, cuts or a turn in the oven.",
+        "The button is grey when there's nothing to undo.",
+      ],
+    },
+    {
+      id: "sauce",
+      chip: "Sauce",
+      icon: "sauce",
+      title: "Sauce",
+      lede: "Tap the bottle, then the burger, and draw it on. Or drag the bottle straight on: it only starts once you're over the bun.",
+      fig: `${sauceArt()}<p class="hw-cap">The bar on the left fills as you go. Lift at <b>Perfect</b>.</p>`,
+      points: [
+        "The close-up opens and waits for one stroke: press, draw, lift. It reads <b>Keep going</b>, <b>A bit more</b>, <b>Perfect</b>, <b>That's plenty</b>, then <b>Too much</b>.",
+        "Sauce goes on at the tray, whatever the dish: ketchup and mustard, pesto and aioli, salsa and crema, honey.",
+        "The red sauce pot at the oven is a ladle: drag it to spread, out to the crust.",
+      ],
+    },
+    {
+      id: "knife",
+      chip: "Knife",
+      icon: "knife",
+      title: "The knife",
+      lede: `Knife (${knifeTowns}): tap the knife, then the food, or drag the knife onto it, and draw a slice right across.`,
+      fig: `<div class="hw-pair">
+          <div>${knifeArt()}<p class="hw-cap"><b>Paninis</b>: once, in half.</p></div>
+          <div>${knifeArt(true)}<p class="hw-cap"><b>Flatbreads</b>: twice, for four.</p></div>
+        </div>`,
+      points: [
+        "The food must be on the board. The cut view opens over the counter.",
+        "A slice counts once it goes in one side and out the other. The second cut on a flatbread goes the other way.",
+        "Uncut costs the dish more than a crooked cut. A crooked one costs a little, never much.",
+        "The ticket shows it: <b>Press › Cut</b> or <b>Bake › Cut 4</b>. A calzone goes out whole.",
+      ],
+    },
+    {
+      id: "meters",
+      chip: "Meters",
+      icon: "thermometer",
+      title: "Doneness meters",
+      lede: "Food on the heat has a meter under it. Done is the hatched middle band.",
+      fig: `${meterArt()}<p class="hw-cap">Before the band it's not done yet. Past it, over, then burnt.</p>`,
+      points: [
+        "Patties, buns, eggs and bacon, the press lid, the fryer baskets and the pies in the oven all use it.",
+        "Tortillas show their own colours: pale blue-grey, then orange with a <b>Warm</b> chip, then brown with <b>Hard</b>.",
+        "A flatbread's meter reads its <b>palest side</b>.",
+        "Fryer baskets beep from perfect until you lift them.",
       ],
     },
     {
       id: "toppings",
-      chip: "Toppings",
+      chip: "Counts",
       icon: "pickle",
-      title: "Toppings",
-      lede: "Sliced toppings go on one piece at a time, and every recipe has a count.",
+      title: town ? `Counts in ${town.name}` : "Topping counts",
+      lede: "Sliced things go on one piece at a time, and every recipe has a count.",
       fig: `<ul class="hw-counts">${counted
         .map((k) => `<li><i class="swc" style="--c:${KIND_COLOR[k]}"></i><span>${KIND_LABEL[k]}</span><span class="pcs ${k}" style="--c:${KIND_COLOR[k]}">${"<b></b>".repeat(count(k))}</span><b class="bv-mono">×${count(k)}</b></li>`)
         .join("")}</ul>
-      <p class="hw-cap">The standard count. Some recipes differ: check the Menu.</p>
+      <p class="hw-cap">The standard count. Some recipes differ: the ticket shows it.</p>
       <div class="hw-scale">
-        <div class="lo"><b>Fewer</b><span>Customers notice. May cost a review.</span></div>
+        <div class="lo"><b>Fewer</b><span>Customers notice. It may cost a review.</span></div>
         <div class="std"><b>Standard</b><span>Exactly right.</span></div>
-        <div class="hi"><b>+1 or 2</b><span>Can win a better review, but comes off your takings.</span></div>
-        <div class="paid"><b>Extra</b><span>On the receipt. They pay +${price(EXTRA_PRICE)}.</span></div>
+        <div class="hi"><b>+1 or 2</b><span>A small bonus for generosity. More than that won't help.</span></div>
+        <div class="paid"><b>Extra</b><span>On the ticket. They pay +${price(EXTRA_PRICE)}.</span></div>
       </div>`,
-      points: [
-        "Each drag puts <b>one piece</b> on the burger: count them as you go.",
-        "<b>Extra</b> on a receipt means a bigger helping, and the customer pays a little more.",
-        "Going light saves on ingredients, but customers notice. A little generosity can tip a good review into a great one; a pile of pickles won't.",
-      ],
-      foot: `<button class="bv-btn sm ghost" data-goto="menu">${icon("food-menu")}Counts for every recipe</button>`,
+      points: ["<b>Extra</b> on a ticket means a bigger helping, and the customer pays a little more."],
+      foot: getDeps() ? `<button class="bv-btn sm ghost" data-m="menuref">${icon("food-menu")}Counts for every recipe</button>` : undefined,
     },
-    {
-      id: "fryer",
-      chip: "Fryer",
-      icon: "fries",
-      title: "The fryer",
-      lede: "Scoop, lower, watch the meter, lift, pack, salt.",
-      fig: `<div class="hw-scoops">${(["S", "M", "L"] as Size[])
-        .map((s) => `<div><span class="dots">${"<i></i>".repeat(scoops(s))}</span><span class="cap">${scoops(s)} scoop${scoops(s) > 1 ? "s" : ""}</span>${carton(s)}<b><span class="bv-chip size">${s}</span> <span class="bv-mono">${price(FRIES_PRICE[s])}</span></b></div>`)
-        .join("")}</div>
-      <div class="hw-fz">
-        <div class="fz-labels" aria-hidden="true"><span>Under</span><span>Just right</span><span>Over</span></div>
-        <div class="fz-bar" role="img" aria-label="Cook bar: under, just right, over, with a line marking perfect">
-          <span class="z under"></span><span class="z right"></span><span class="z over"></span>
-          <i class="fz-line"></i><i class="fz-mark"></i>
-        </div>
-        <svg class="fz-curve" viewBox="0 0 300 34" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M0 33 L100 25 L100 18 Q140 14 150 2 Q160 14 200 18 L200 25 L300 33 L300 34 L0 34Z" class="area"/>
-          <path d="M0 33 L100 25 L100 18 Q140 14 150 2 Q160 14 200 18 L200 25 L300 33" class="ln"/>
-        </svg>
-        <p class="hw-cap fz-legend"><span>${face("worried")}</span>Customer happiness peaks at the line, and drops off within each zone too.<span>${face("calm")}</span></p>
-      </div>
-      <div class="hw-poutine">
-        <span>${icon("fries")}Fries</span><b>+</b><span><i class="curd"></i>Cheese curds</span><b>+</b><span><i class="gravy"></i>Gravy</span><span class="eq"><b>=</b><span class="out">Poutine</span></span>
-      </div>`,
-      points: [
-        "Drag <b>1, 2 or 3 scoops</b> of frozen fries into a basket for a small, medium or large.",
-        "The basket waits for you: <b>tap it to lower</b> it into the oil, and tap again to lift. Fries take <b>about half a minute</b>, so get them going while the patties cook.",
-        "Lift when the marker on the fryer's meter is on the line: the fryer <b>beeps</b> from perfect until you lift the basket. <b>Under</b> is soggy, <b>over</b> is burnt.",
-        "Put an empty carton on a pad and <b>pack the fries</b> into it.",
-        "<b>Salt:</b> hold the shaker over the carton and <b>shake it</b>. A bar on the left shows how salty they are: stop at <b>Perfect</b>. None tastes flat, too much is worse.",
-        "Then drag the carton to the tray.",
-        "<b>Poutine</b> is a meal of its own: fries in a carton, then cheese curds, then gravy.",
-      ],
-    },
+    fryerSec(town),
     {
       id: "drinks",
       chip: "Drinks",
@@ -386,42 +356,90 @@ function sections(): Sec[] {
       lede: "Four steps, always in this order.",
       fig: `<ol class="hw-drink">
         <li>${cupSvg("cup")}<b>Cup</b><span>S · M · L</span></li>
-        <li>${cupSvg("ice")}<b>Ice</b><span>optional</span></li>
+        <li>${cupSvg("ice")}<b>Ice</b><span>unless No ice</span></li>
         <li>${cupSvg("pour")}<b>Pour</b><span>hold</span></li>
         <li>${cupSvg("lid")}<b>Lid</b></li>
       </ol>`,
       points: [
-        `Take a cup of the right size from the front row: <b>S, M or L</b> (${price(DRINK_PRICE.S)} to ${price(DRINK_PRICE.L)}). Stand it anywhere on the counter, or straight under a nozzle; you can move a cup any time.`,
-        "Add ice from the ice bin unless the receipt says <b>No ice</b>.",
-        "<b>Hold</b> the drink's button on top of the fountain to pour. A bar on the left shows the level: let go at <b>Perfect</b>. Overflowing leaves a spill: <b>wipe it</b> before that nozzle takes another cup.",
+        `Take a cup of the right size: <b>S, M or L</b> (${price(DRINK_PRICE.S)} to ${price(DRINK_PRICE.L)}). Stand it under a nozzle. You can move a cup any time.`,
+        "Add ice from the ice bin unless the ticket says <b>No ice</b>.",
+        "<b>Hold</b> the drink's button to pour. The bar on the left shows the level: let go at <b>Perfect</b>. On Chill it stops at the line by itself.",
+        "An overflow leaves a spill. <b>Wipe it</b> before that nozzle takes another cup.",
         "Snap on a <b>lid of the cup's size</b>, then drag the drink up to the tray.",
       ],
     },
-    {
-      id: "serve",
-      chip: "Serving",
-      icon: "arrow-up",
-      title: "Serving",
-      lede: "When everything on the receipt is on a tray, a Serve button pops up on it: tap it (or swipe the tray up) to hand it over.",
-      fig: `<div class="hw-serve">
-        <div class="plates"><i></i><i class="on"></i><i></i></div>
-        <div class="hw-swipe">${icon("arrow-up")}</div>
-      </div>
-      <ol class="hw-verdicts">
-        <li><b>Looks good</b><span>They take it and pay. The better it is, the more they pay and tip.</span></li>
-        <li><b>Sent back</b><span>Clearly off: they hand it back with what's wrong. Fix it and serve it again; this time they take it, and review what they got.</span></li>
-        <li><b>Refused</b><span>Really wrong: no sale, and they leave.</span></li>
-      </ol>`,
-      points: [
-        "Check the receipt first: a forgotten side or drink costs stars.",
-        "To fix a burger, tap <b>undo</b> on its tray to bin the top layer, or <b>drag down</b> off the tray to lift it: drop it in the trash slot, back on the grill, or on another tray.",
-        "Held items light up the <b>trash slot</b> red when a drop would bin them.",
-        "<b>Unordered extras</b>, like fries or a drink they didn't ask for, can soften a bad review, and nobody ever turns down a freebie. They come off your takings, so save them for rescues.",
-        "The bell shows how many are in line. Waiting has its own patience: the back of the line drifts off first, and people nearly at the window almost never leave. An order's patience only starts once they've ordered.",
-        "A truck nobody knows yet draws a small crowd, and strangers won't join a long line. Good shifts spread the word, and a good rating brings a few more.",
-        "How picky customers are, how patient, how many may stand at the window and how busy the line gets depends on the <b>Pacing</b> you pick on Prep &amp; Open.",
-      ],
-    },
+  ];
+}
+
+/** The counted toppings this town's menu uses (all of them away from a town). */
+function countedFor(town: Stop | undefined): Kind[] {
+  const all = [...COUNTED];
+  if (!town) return all;
+  const used = new Set(town.menu.flatMap((r) => r.layers));
+  const mine = all.filter((k) => used.has(k));
+  return mine.length ? mine : all;
+}
+
+/** The ticket key: what each mark on a ticket means, drawn as on the ticket. */
+function ticketKey(): string {
+  return `<dl class="hw-key ticket">
+    <dt><span class="kbar"><i></i></span></dt><dd>Patience: green, amber, then red. At the end they walk off.</dd>
+    <dt><span class="ln nx">Lettuce</span></dt><dd>Next to go on.</dd>
+    <dt><span class="ln dn">Bun</span></dt><dd>On the tray.</dd>
+    <dt><span class="ln wr">Onion</span></dt><dd>Not wanted, or in the wrong place.</dd>
+    <dt><span class="ln mod"><span class="kw">NO</span> Ketchup</span></dt><dd>A change from the menu. A <b>*</b> on a folded ticket.</dd>
+    <dt><i class="mb toast">Toast</i><i class="mb melt">Melt</i></dt><dd>How to cook that layer.</dd>
+    <dt><span class="how"><i class="mb toast">Press</i><i>›</i><i class="mb cut">Cut</i></span></dt><dd>Steps for the whole dish.</dd>
+    <dt><i class="sz">M</i></dt><dd>Sides and drinks, size first.</dd>
+  </dl>`;
+}
+
+/** What the fryer makes, one line each. */
+const FRY_NOTE: Record<FryKind, string> = {
+  fries: "done from about 20 s, perfect near 30.",
+  sweet: "faster than fries, with a narrower done band.",
+  chips: "tortilla wedges, golden in about 8 s.",
+  churros: "a little quicker than fries. Shake sugar on them.",
+  zucchini: "drop it in the batter bowl, pick it up again, then fry and salt.",
+  fritters: "fry like fries, then cinnamon sugar from the shaker.",
+};
+
+function fryerSec(town: Stop | undefined): Sec {
+  const kinds = town ? fryerOf(town) : (["fries"] as FryKind[]);
+  const tostada = !!town?.menu.some((r) => r.dish === "tostada");
+  const poutineFrom = STOPS.find((t) => t.poutine && middleOf(t) === "grill")?.name;
+  const nachosFrom = STOPS.find((t) => t.poutine && middleOf(t) === "comal")?.name;
+  const here = town
+    ? `<div class="hw-key lite ticket" style="display:grid">${kinds
+        .map((k) => `<span><b>${FRY_LABEL[k]}</b>: ${FRY_NOTE[k]}</span>`)
+        .join("")}${tostada ? `<span><b>Tostada</b>: a corn tortilla in an empty basket. See the Comal.</span>` : ""}</div>`
+    : "";
+  return {
+    id: "fryer",
+    chip: "Fryer",
+    icon: "fries",
+    title: "The fryer",
+    lede: "Scoop, lower, watch the meter, lift, pack, salt.",
+    fig: `<div class="hw-scoops">${(["S", "M", "L"] as Size[])
+      .map((s) => `<div><span class="dots">${"<i></i>".repeat(scoops(s))}</span><span class="cap">${scoops(s)} scoop${scoops(s) > 1 ? "s" : ""}</span>${carton(s)}<b><span class="bv-chip size">${s}</span> <span class="bv-mono">${price(FRIES_PRICE[s])}</span></b></div>`)
+      .join("")}</div>
+      ${town ? `<p class="hw-sub">In ${esc(town.name)}</p>${here}` : ""}`,
+    points: [
+      "Drag <b>1, 2 or 3 scoops</b> into a basket for a small, medium or large.",
+      "<b>Tap the basket</b> to lower it into the oil, and tap again to lift. Fries take about half a minute, so start them early.",
+      "It <b>beeps</b> from perfect until you lift it. Early is soggy, late is dark.",
+      "Set an empty carton on a pad and drag the fries into it.",
+      "<b>Salt</b>: pick up the shaker and shake it over the carton. Stop at the line on the bar.",
+      "Then drag the carton up to the tray.",
+      `<b>Poutine</b>${poutineFrom ? ` (from ${poutineFrom})` : ""}: fries in a carton, then cheese curds, then gravy.${nachosFrom ? ` <b>Nachos</b> (from ${nachosFrom}): chips, jalapeños, then queso.` : ""}`,
+    ],
+  };
+}
+
+/** The trip: everything around the cooking. */
+function tripSecs(): Sec[] {
+  const crowdLine = (Object.keys(CROWD) as (keyof typeof CROWD)[]).map((c) => `<li><b>${CROWD[c].label}</b> ${CROWD[c].blurb.replace(/\.$/, "").toLowerCase()}</li>`).join("");
+  return [
     {
       id: "score",
       chip: "Stars",
@@ -433,7 +451,7 @@ function sections(): Sec[] {
         <span class="hw-faces" aria-label="Faces from delighted to angry">${[5, 4, 3, 2, 1].map((n) => opinionFace(n)).join("")}</span>
         <ul>
           <li>${icon("check")}Right layers, in order</li>
-          <li>${icon("check")}Doneness, toast and melt</li>
+          <li>${icon("check")}Cooked, toasted, melted</li>
           <li>${icon("check")}Topping counts</li>
           <li>${icon("check")}Sides and drinks</li>
           <li>${icon("check")}A neat, fresh stack</li>
@@ -442,54 +460,27 @@ function sections(): Sec[] {
       </div>`,
       points: [
         "<b>Tips</b> come from good food served before the customer gets worried.",
-        "As they go, every customer shows a <b>face</b> for what they thought. They only say something when it's specific: a missing item, what was wrong, or that it was especially quick or good.",
-        "Only some leave a <b>review</b>, the stars that pop up over their head. The delighted and the disappointed write in most; critics always do. Your <b>rating</b> is the average of every review.",
-        `<b>Pass a shift</b> by serving at least half your customers with an average of ${PASS_STARS} stars or more.`,
-        `A <b>great shift</b> (a ${GREAT.stars}★ average with almost everyone served) unlocks that town's <b>bonus</b>. Every town has its own.`,
+        "As they leave, everyone shows a <b>face</b> for what they thought. They only speak up when it's specific: something missing, something wrong, or especially quick or good.",
+        "Only some leave a <b>review</b>, the stars over their head. The delighted and the disappointed write most. Critics always do. Your <b>rating</b> is the average of every review.",
+        `<b>Pass a shift</b>: serve at least half your customers, with an average of ${PASS_STARS}★ or more.`,
+        `A <b>great shift</b> (${GREAT.stars}★ or more, with ${Math.round(GREAT.served * 100)}% served) unlocks that town's <b>bonus</b>. Every town has its own.`,
+        `${icon("critic")} A <b>critic</b>'s ticket is marked. A great review lands in the paper and brings more customers.`,
       ],
     },
     {
-      id: "trip",
-      chip: "Road trip",
-      icon: "map",
-      title: "The road trip",
-      lede: "Drive from town to town, and plan your route around events.",
-      fig: `<svg class="hw-map" viewBox="0 0 300 116" role="img" aria-label="Three shifts in a town open the roads to its neighbours">
-        <path d="M54 58 L150 24" class="road"/><path d="M54 58 L150 92" class="road"/>
-        <path d="M150 24 L252 58" class="road locked"/><path d="M150 92 L252 58" class="road locked"/>
-        <circle cx="54" cy="58" r="11" class="node here"/>
-        <circle cx="54" cy="58" r="3.4" class="here-dot"/>
-        <circle cx="150" cy="24" r="8" class="node"/><circle cx="150" cy="92" r="8" class="node"/>
-        <circle cx="252" cy="58" r="9" class="node locked"/>
-        <g class="pips">${[0, 1, 2].map((i) => `<circle cx="${44 + i * 10}" cy="80" r="3.6"/>`).join("")}</g>
-        <text x="54" y="98" class="nl" text-anchor="middle">3 shifts here</text>
-        <text x="54" y="38" class="nl" text-anchor="middle">You</text>
-        <text x="172" y="28" class="nl">Open</text>
-        <text x="172" y="96" class="nl">Open</text>
-        <text x="252" y="84" class="nl" text-anchor="middle">Locked</text>
-        <path d="M248.5 57v-2.2a3.5 3.5 0 0 1 7 0V57M247 57h10v6h-10z" class="lock"/>
-      </svg>
-      <div class="hw-drive">
-        <span>${icon("moon")}<b>One road</b><small>Tonight, before you sleep</small></span>
-        <span>${icon("sun")}<b>Further away</b><small>A whole day on the road</small></span>
-      </div>
-      <div class="hw-cal" aria-label="A town's calendar">${[1, 2, 3, 4, 5, 6, 7].map((d) => `<span class="${d === 2 ? "today" : ""} ${d === 5 ? "ev" : ""}"><b class="bv-mono">${d}</b>${d === 5 ? "<i>Fair</i>" : ""}</span>`).join("")}</div>
-      <p class="hw-cap">${icon("calendar")}A town's week ahead: today is day 2, and there's a fair on day 5.</p>`,
-      points: [
-        "Towns are dots joined by roads. Work <b>3 shifts</b> in a town to open the roads to its neighbours.",
-        `${icon("moon")} After a shift the map goes dark. Roads <b>within tonight's range</b> (${RANGE_MI} miles, any one road) glow, and you can hop along them before you sleep.`,
-        `${icon("sun")} Going <b>further</b> takes a whole day on the road, with no shift that day.`,
-        `${icon("calendar")} <b>Tap a town</b> to see its crowd and calendar. Events (markets, fairs, rodeos) bring bigger crowds and sometimes a special recipe.`,
-        `${icon("critic")} A <b>critic</b> may order; their receipt is marked. A great review lands in the paper or on TV and raises your <b>popularity</b>, which brings more customers.`,
-      ],
-      foot: `<p class="hw-sub">Who turns up</p><ul class="hw-crowds">${crowdLine}</ul>`,
+      id: "pacing",
+      chip: "Pacing",
+      icon: "dial",
+      title: "Pacing",
+      lede: "How busy and how picky. Pick it on Prep & Open. It stays put for the shift.",
+      raw: `<ul class="hw-pace">${DIFFICULTIES.map((d) => `<li><b>${DIFFICULTY[d].label}</b>${esc(DIFFICULTY[d].blurb)}</li>`).join("")}</ul>`,
     },
     {
-      id: "prep",
-      chip: "Prep & Open",
-      icon: "bell",
-      title: "Prep & Open",
-      lede: "Before each shift: who to expect, what's on the menu, when to open, and one bonus.",
+      id: "day",
+      chip: "The day",
+      icon: "sun",
+      title: "The day",
+      lede: "Prep in the morning, a lunch shift, then the evening on the map.",
       fig: `<div class="hw-biz">
         <span class="bv-eyebrow">Expect today</span>
         <b class="bv-mono" style="font-size:28px">~12 customers</b>
@@ -497,94 +488,508 @@ function sections(): Sec[] {
         <div class="bv-seg compact" aria-hidden="true"><button tabindex="-1">Chill</button><button tabindex="-1" aria-pressed="true">Balanced</button><button tabindex="-1">Stressful</button></div>
       </div>`,
       points: [
-        "How many people come depends on your <b>popularity</b> (who has heard of you) and your <b>rating</b> (what they say), both earned by cooking well.",
-        "A longer <b>menu</b> brings more people and more kinds of order; hide recipes to keep it simple.",
-        "Drag the <b>shift</b> slider to open early or close late: lunch peaks from noon to one, with quieter hours either side. A shift is at least four hours.",
-        "Every burger on the menu can be ordered all day; the taller ones come up more as the shift goes on. Tap the chevron on a burger to read its recipe.",
-        "<b>Pacing</b> and your <b>bonus</b> are set here and stay put for the whole shift. Bring one bonus at most.",
-        "<b>Takings</b> are your score for the shift: orders, plus tips for speed, less anything you gave away free. They go into your <b>savings</b>.",
-        "Spend savings in the <b>Garage</b> (the truck button by Settings): unlocked bonuses, and looks for the truck that show on the map and at night.",
+        "<b>Prep & Open</b>: who to expect, the menu, the shift's hours, the pacing and one bonus.",
+        "A longer <b>menu</b> brings more people and more kinds of order. Hide recipes to keep it simple.",
+        "Drag the <b>shift</b> slider to open early or close late. Lunch peaks from noon to one. A shift is at least four hours.",
+        "At sundown the <b>Closed</b> sign goes up. The results come up over the evening map, then <b>Sleep</b> starts tomorrow.",
+        "<b>Takings</b> are your score: orders and tips, less anything given away. They go into your <b>savings</b>.",
+      ],
+    },
+    {
+      id: "trip",
+      chip: "Map",
+      icon: "map",
+      title: "The road trip",
+      lede: "Drive from town to town, and plan your route around events.",
+      fig: `<svg class="hw-map" viewBox="0 0 300 116" role="img" aria-label="Three passed shifts in a town open the roads to its neighbours">
+        <path d="M54 58 L150 24" class="road"/><path d="M54 58 L150 92" class="road"/>
+        <path d="M150 24 L252 58" class="road locked"/><path d="M150 92 L252 58" class="road locked"/>
+        <circle cx="54" cy="58" r="11" class="node here"/>
+        <circle cx="54" cy="58" r="3.4" class="here-dot"/>
+        <circle cx="150" cy="24" r="8" class="node"/><circle cx="150" cy="92" r="8" class="node"/>
+        <circle cx="252" cy="58" r="9" class="node locked"/>
+        <g class="pips">${[0, 1, 2].map((i) => `<circle cx="${44 + i * 10}" cy="80" r="3.6"/>`).join("")}</g>
+        <text x="54" y="98" class="nl" text-anchor="middle">${SHIFTS_TO_UNLOCK} passed shifts</text>
+        <text x="54" y="38" class="nl" text-anchor="middle">You</text>
+        <text x="172" y="28" class="nl">Open</text>
+        <text x="172" y="96" class="nl">Open</text>
+        <text x="252" y="84" class="nl" text-anchor="middle">Locked</text>
+        <path d="M248.5 57v-2.2a3.5 3.5 0 0 1 7 0V57M247 57h10v6h-10z" class="lock"/>
+      </svg>
+      <ul class="hw-mapkey">
+        <li>${mk(MK.town)}A town</li>
+        <li>${mk(MK.capital)}A capital: it opens the next region</li>
+        <li>${mk(MK.pips)}Passed shifts toward the next roads</li>
+        <li>${mk(MK.flag)}An event: red today, gold in a day or two</li>
+        <li>${mk(MK.lock)}Not open yet</li>
+        <li>${mk(MK.prize)}A bonus still to win there</li>
+        <li>${mk(MK.gated)}A highway that opens later: its note says when</li>
+        <li>${mk(MK.reach)}At night: what you can still reach</li>
+      </ul>
+      <div class="hw-drive">
+        <span>${icon("moon")}<b>Tonight</b><small>Short hops, ${RANGE_MI} miles in all</small></span>
+        <span>${icon("sun")}<b>Further away</b><small>A whole day on the road</small></span>
+      </div>
+      <div class="hw-cal" aria-label="A town's calendar">${[1, 2, 3, 4, 5, 6, 7].map((d) => `<span class="${d === 2 ? "today" : ""} ${d === 5 ? "ev" : ""}"><b class="bv-mono">${d}</b>${d === 5 ? "<i>Fair</i>" : ""}</span>`).join("")}</div>
+      <p class="hw-cap">A town's week ahead: today is day 2, and there's a fair on day 5.</p>`,
+      points: [
+        `Pass <b>${SHIFTS_TO_UNLOCK} shifts</b> in a town to open the roads to its neighbours.`,
+        `${icon("moon")} After a shift, roads within tonight's range glow. Hop along them before you sleep: the hops add up to ${RANGE_MI} miles.`,
+        `${icon("sun")} Going <b>further</b> takes a whole day on the road, with no shift that day.`,
+        `${icon("calendar")} <b>Tap a town</b> to see its crowd and calendar. Events bring bigger crowds and sometimes a special.`,
+        "Good shifts spread the word. Every few customers who give 4★ or more bring in a little more <b>popularity</b>. Walk-outs, and people who give up on the line, cost some.",
+      ],
+      foot: `<p class="hw-sub">Who turns up</p><ul class="hw-crowds">${crowdLine}</ul>`,
+    },
+    {
+      id: "garage",
+      chip: "Garage",
+      icon: "truck",
+      title: "The Garage",
+      lede: "Your savings buy bonuses and looks for the truck.",
+      points: [
+        "On the map, tap your <b>savings</b> (the button with the truck) to open the Garage.",
+        "A great shift unlocks that town's bonus. Then it's for sale here.",
+        "Bring <b>one bonus</b> per shift, picked on Prep & Open.",
+        "Looks for the truck show on the map and at night.",
       ],
     },
   ];
 }
 
-/** The last section: today's recipes with their counts, as in the Menu. */
-function menuSec(): Sec {
-  const d = getDeps();
-  const town = d?.town();
-  const counts = [...COUNTED].map((k) => `<span class="bv-chip pill"><i class="swc" style="--c:${KIND_COLOR[k]}"></i>${KIND_LABEL[k]} <b class="bv-mono">×${STANDARD_COUNT[k] ?? 1}</b></span>`).join("");
+/* ---- kitchens -------------------------------------------------------------- */
+
+/** The counter section of a kitchen. */
+function counterSec(k: MiddleCounter): Sec {
+  const art = tabArt(KITCHENS.find((x) => x.id === k)!.label);
+  if (k === "grill") {
+    const smash = and(townsWhere((t) => middleOf(t) === "grill" && t.menu.some((r) => !!r.smash)));
+    return {
+      id: "counter",
+      chip: "The grill",
+      icon: "grill",
+      art,
+      title: "The grill",
+      lede: "Three zones: the ridged grille, the flat and the warm end. Patties cook slowly, so start them early.",
+      fig: `${grillArt()}<p class="hw-cap">Each zone's button on the front goes off, warm, hot. Two red lamps are hot, one orange is warm.</p>`,
+      points: [
+        "A shift starts <b>hot, hot, warm</b>. Warm holds food without cooking it, and nothing goes stale there. Park finished food on it.",
+        "<b>Tap or flick up</b> to flip. Flip a patty once, about halfway, or its face down chars. Buns don't flip: they toast cut side down.",
+        "Four seconds face down on the hot grille leaves <b>grill marks</b>, a small bonus.",
+        "<b>Melt</b>: drop a cheese slice on a patty on the grill. They come off together.",
+        "<b>Eggs</b>: tap the egg tray to pick one up, then tap the flat to crack it. One quick, clean tap opens it in one. On the grille it makes a mess to rub off. Drop the shells in the trash.",
+        `<b>Smash</b> (${smash}): press and hold a fresh patty to flatten it. Thin patties cook fast.`,
+        "Only the piece touching the grill cooks. Bacon grills too.",
+      ],
+    };
+  }
+  if (k === "press") {
+    return {
+      id: "counter",
+      chip: "The press",
+      icon: "panini",
+      art,
+      title: "The panini press",
+      lede: "A clamshell press: both sides cook at once, under a lid that hides the food.",
+      fig: `${pressArt()}<p class="hw-cap">Pull the handle down. At golden, swipe it up.</p>`,
+      points: [
+        "Build bread first, in an open bay or on a tray. Sauce goes on at the tray only. To move a whole sandwich from the tray into a bay, drag down on the tray.",
+        "<b>Pull the handle down</b> to close. It only shuts on bread or a patty on its own, or a sandwich with bread top and bottom.",
+        "Watch the <b>meter on the lid</b>: pale, golden with press lines, then dark. <b>Swipe the handle up</b> to open. A tap only gives a hint.",
+        "Cheese inside melts while it's shut, and a little oozes out at the front when it has.",
+        "<b>Chicken and veggie patties</b> are pressed on their own first, until their meter says done.",
+        "The <b>tuna well</b>: one drag is one scoop.",
+        `In <b>${and(townsWhere((t) => !!t.press?.slice))}</b>: a third bay and the board. Paninis are cut in half with the knife (see Basics).`,
+      ],
+    };
+  }
+  if (k === "comal") {
+    const tpress = and(townsWhere((t) => !!t.comal?.tpress));
+    return {
+      id: "counter",
+      chip: "The comal",
+      icon: "flame",
+      art,
+      title: "The comal",
+      lede: "One long steel plate: hot, hot, then warm at the right end, where the taco rack stands. No buttons.",
+      fig: `${comalArt()}<p class="hw-cap">Tortillas warm on the hot side. Tacos are filled in the rack.</p>`,
+      points: [
+        "<b>Tortillas</b> are warm in about 6 seconds: soft with brown spots, and the <b>Warm</b> chip. From about 13 they go <b>Hard</b>.",
+        "Drag a warm tortilla by its middle into the <b>taco rack</b>: four slots. A tortilla that's still cold is refused.",
+        "In the rack, one drag from the pork or bean well is one scoop into one taco. Other toppings go in once and land on every taco.",
+        "Salsa and crema go on at the tray, not in the rack. <b>Drag the rack up to a tray</b>.",
+        "Nothing in the rack cooks on or goes stale. On a tray, tacos are as fresh as the last one placed.",
+        "<b>Pineapple</b> chars on the comal: flick it to flip. <b>Eggs</b> crack on the hot side.",
+        `<b>Tortilla press</b> (${tpress}): hold it to flatten a ball of masa, then drag the tortilla to the comal. Hand-pressed tortillas add ${price(2)} to the tip.`,
+      ],
+    };
+  }
+  const board = and(townsWhere((t) => !!t.oven?.board));
   return {
-    id: "menu",
-    chip: "Menu",
-    icon: "food-menu",
-    title: town ? `The menu in ${town.name}` : "The menu",
-    lede: town?.press ? "How each panini is built, bottom to top, with its filling counts." : "How each burger is built, bottom to top, with its topping counts.",
-    fig: "",
-    points: [],
-    raw: `<div class="hw-std"><span class="bv-eyebrow">Standard counts</span><div>${counts}</div></div>
-      ${town ? `<div class="hw-menu">${town.menu.map((r) => recipeHtml(r, 1, false)).join("")}</div>
-      <button class="bv-btn block" data-m="menuref">${icon("food-menu")}Sides, drinks and extras</button>` : ""}`,
+    id: "counter",
+    chip: "The oven",
+    icon: "flame",
+    art,
+    title: "The oven and the peel",
+    lede: "A deck oven with a hot back wall. Pies are built on the peel, and only the peel moves them.",
+    fig: `${peelArt()}<p class="hw-cap">Push the blade in under a pie, carry it out, swipe down over the tray.</p>
+      ${ovenArt()}<p class="hw-cap">The side facing the back wall browns first. Nudge the pie with the peel's tip to turn it.</p>`,
+    points: [
+      "Drag the dough onto the peel. A tap only names it.",
+      "Drag from the pot to ladle the sauce, out to the crust. The bar on the left shows how much. White bases get olive oil instead: drag from its bottle.",
+      "<b>Drag the peel by its handle</b> into the oven and <b>swipe down</b> to set the pie on the deck.",
+      "To lift a pie, <b>push the blade in under it</b>, or set it under and flick up.",
+      "The meter shows the <b>palest side</b>. Turned about halfway, a pie bakes evenly, with <b>leopard spots</b>: a small bonus.",
+      "Swipe down over the <b>bench</b> to set a pie aside. <b>Basil, rocket and honey</b> go on after, at the tray.",
+      `In <b>${board}</b>: a third spot and the board in the bench's place, for cutting flatbreads in four.`,
+    ],
   };
 }
 
-export function howToHtml(): string {
-  const all = sections();
-  // On the Sunny Coast the press section follows the grill's (and the menu shows paninis).
-  if (getDeps()?.town()?.press) all.splice(all.findIndex((x) => x.id === "grill") + 1, 0, pressSec());
-  // In Red Rock the comal's follows it.
-  const comal = getDeps()?.town()?.comal;
-  if (comal) all.splice(all.findIndex((x) => x.id === "grill") + 1, 0, comalSec(!!comal.tpress));
-  // On Orchard Isle the oven's.
-  const town = getDeps()?.town();
-  if (town?.oven) all.splice(all.findIndex((x) => x.id === "grill") + 1, 0, ovenSec(town.oven.board, fryerOf(town).includes("fritters")));
-  const secs = [...all, menuSec()];
+function kitchenWalks(k: MiddleCounter): Walk[] {
+  if (k === "grill") {
+    const sunrise = recipe("Sunrise Summit");
+    const lj = recipe("Lumberjack Stack");
+    return [
+      {
+        id: "sunrise",
+        chip: "Sunrise",
+        recipe: sunrise,
+        where: whereOn(sunrise.name),
+        art: stackArt(sunrise),
+        steps: [
+          "Start the <b>patty</b>: drag one onto the grille. It takes longest.",
+          "Drag <b>two buns</b> onto the grill to toast, cut side down.",
+          "Tap the egg tray, then tap the flat to <b>crack an egg</b>. Sunny side up: no flip.",
+          "<b>Flip the patty</b> once, about halfway.",
+          "On the tray: a toasted bun, lettuce, the patty once its meter is in the band, the egg, the top bun.",
+          "<b>Serve</b>.",
+        ],
+        tip: "Done early? Park it on the <b>warm</b> zone. It won't cook on or go stale there.",
+      },
+      {
+        id: "lumberjack",
+        chip: "Lumberjack",
+        recipe: lj,
+        where: whereOn(lj.name),
+        art: stackArt(lj),
+        steps: [
+          "<b>Two patties</b> on the grill, bacon beside them, and two buns to toast.",
+          "Flip each patty once. Then drop a <b>cheese slice</b> on one to melt.",
+          "On the tray: a bun, the patty with its cheese (they come up together), bacon, the second patty.",
+          "<b>Ketchup</b>: tap the bottle, then the burger, and draw it on. Lift at Perfect.",
+          "The top bun, then <b>serve</b>.",
+        ],
+      },
+    ];
+  }
+  if (k === "press") {
+    const cap = recipe("Caprese");
+    const avo = recipe("Avocado Toast");
+    const cut = and(townsWhere((t) => !!t.press?.slice));
+    return [
+      {
+        id: "caprese",
+        chip: "Caprese",
+        recipe: cap,
+        slice: true,
+        where: `${whereOn(cap.name)}. Cut in ${cut}`,
+        art: knifeArt(),
+        steps: [
+          "On a tray: <b>ciabatta</b>, then <b>pesto</b>. Tap the bottle, then the bread, and draw it on.",
+          "Mozzarella ×3, tomato ×3, basil, then the top ciabatta.",
+          "<b>Drag down</b> on the tray to lift the sandwich into an open bay. <b>Pull the handle down</b>.",
+          "Watch the lid's meter. At golden, <b>swipe the handle up</b>.",
+          `${cut}: drag it onto the board. Tap the knife, then the panini, and <b>draw one slice</b> across.`,
+          "Drag it up to the tray and <b>serve</b>.",
+        ],
+        tip: "Without a cut it scores less than with a crooked one.",
+      },
+      {
+        id: "avocado",
+        chip: "Avocado",
+        recipe: avo,
+        where: whereOn(avo.name),
+        art: stackArt(avo),
+        steps: [
+          "Drag a slice of <b>sourdough</b> into an open bay and pull the handle down.",
+          "At golden, swipe the handle up and drag the toast to a tray.",
+          "<b>Avocado ×4</b>, then rocket. The avocado never goes in the press.",
+        ],
+      },
+    ];
+  }
+  if (k === "comal") {
+    const rodeo = recipe("Rodeo Platter");
+    const q = recipe("Quesadilla");
+    const t = recipe("Bean Tostada");
+    return [
+      {
+        id: "tostada",
+        chip: "Tostada",
+        recipe: t,
+        where: `${whereOn(t.name)}. The shell comes from the fryer`,
+        art: stackArt(t),
+        flow: tostadaFlow(),
+        steps: [
+          "Pick up a <b>corn tortilla</b> at the comal. Hold it over the Fryer button and the fryer comes up.",
+          "Drop it in an <b>empty basket</b>. It becomes a tostada shell.",
+          "<b>Tap the basket</b> to lower it. About 10 s to done. It beeps from perfect: tap again to lift.",
+          "Drag the shell <b>up to a tray</b>.",
+          "<b>Beans</b> (one drag, one scoop), <b>lettuce</b>, <b>cheese</b>, in any order.",
+          "<b>Crema</b>: tap the bottle, then the tostada, and draw it on. Then <b>serve</b>.",
+        ],
+        tip: "Lifted early, the shell is soggy. Left in, it goes dark, then burns.",
+      },
+      {
+        id: "tacos",
+        chip: "Platter",
+        recipe: rodeo,
+        where: whereOn(rodeo.name),
+        art: comalArt(),
+        steps: [
+          "Lay <b>four corn tortillas</b> on the hot side.",
+          "When each shows <b>Warm</b>, drag it by its middle into the rack.",
+          "Fill in the rack: one drag from the <b>pork</b> well per taco.",
+          "<b>Onion, cilantro, lime</b>: drag each in once. It goes over every taco.",
+          "<b>Drag the rack up</b> to the tray, then serve.",
+        ],
+        tip: "Dragging a tortilla by its edge across the middle folds it. Drag by the middle to move it.",
+      },
+      {
+        id: "quesadilla",
+        chip: "Quesadilla",
+        recipe: q,
+        where: whereOn(q.name),
+        art: quesaArt(),
+        steps: [
+          "A <b>flour tortilla</b> on the hot side, then drag <b>cheese</b> onto it.",
+          "Press near its edge and <b>drag across the middle</b> to fold it.",
+          "<b>Tap or flick up</b> to flip it once.",
+          "The chip says Melting, then <b>Melted</b>. Take it to the tray before the shell goes dark.",
+        ],
+        tip: "Forgot something? <b>Press and hold</b> it for half a second to unfold it.",
+      },
+    ];
+  }
+  const red = recipe("Harvest Red");
+  const cz = recipe("Calzone");
+  const board = and(townsWhere((t) => !!t.oven?.board));
+  return [
+    {
+      id: "harvest",
+      chip: "Harvest Red",
+      recipe: red,
+      slice: true,
+      where: `${whereOn(red.name)}. Cut in four in ${board}`,
+      art: peelArt(),
+      steps: [
+        "Drag the dough onto the peel.",
+        "Drag from the <b>sauce pot</b> and spread it out to the crust. Stop at Perfect.",
+        "<b>Mozzarella ×4</b>.",
+        "Drag the peel into the oven by its handle and <b>swipe down</b>.",
+        "About halfway, <b>turn it</b> with the peel's tip.",
+        `Push the blade in under it and carry it out. In ${board}, swipe down over the board.`,
+        "Tap the knife, then the pie, and slice across. Then once more, the other way, for <b>four</b>.",
+        "Lift it with the peel, swipe down over a tray, then add <b>basil</b>.",
+      ],
+      tip: "Elsewhere it goes straight from the oven to the tray, uncut.",
+    },
+    {
+      id: "calzone",
+      chip: "Calzone",
+      recipe: cz,
+      where: whereOn(cz.name),
+      art: stackArt(cz),
+      steps: [
+        "Dough, sauce, then the fillings on the peel.",
+        "Press near its side and <b>drag across</b> to fold it.",
+        "Bake it. It's thick, so it takes longer. Turn it as usual.",
+        "It goes out whole: no cut.",
+      ],
+    },
+  ];
+}
+
+function walkHtml(w: Walk): string {
+  return `<section class="hw-sec" data-sec="${w.id}">
+    <div class="hw-walk">
+      <p class="hw-sub">Step by step</p>
+      <div class="hw-walk-h"><h4>${esc(w.recipe.name)}</h4><span class="pr">${price(w.recipe.price)}</span><span class="wh">${esc(w.where)}</span></div>
+      ${w.flow ?? ""}
+      <div class="hw-walk-top">
+        <div class="hw-tk">${ticketFor(w.recipe, { slice: w.slice })}</div>
+        <div class="hw-walk-art">${w.art}</div>
+      </div>
+      <ol class="hw-do">${w.steps.map((s) => `<li><span>${s}</span></li>`).join("")}</ol>
+      ${w.tip ? `<p class="hw-tip">${w.tip}</p>` : ""}
+    </div>
+  </section>`;
+}
+
+/** A kitchen's sections: its counter, the walkthroughs, the sides here, its dishes, and today's menu if you're there. */
+function kitchenHtml(k: MiddleCounter, town: Stop | undefined): string {
+  const here = town && middleOf(town) === k ? town : undefined;
+  const kt = KITCHENS.find((x) => x.id === k)!;
+  const walks = kitchenWalks(k);
+  const region = STOPS.filter((t) => middleOf(t) === k);
+  const fry = [...new Set(region.flatMap((t) => fryerOf(t)))];
+  const fountain = fountainFor(kt.region).map((d) => DRINK_LABEL[d]);
+  const secs: Sec[] = [counterSec(k)];
+  const sides: Sec = {
+    id: "sides",
+    chip: "Sides",
+    icon: "fries",
+    title: "Fryer and drinks here",
+    lede: `Across ${regionIn(kt.region)}, the fryer makes ${and(fry.map((f) => FRY_LABEL[f].toLowerCase()))}.`,
+    points: [
+      ...fry.map((f) => `<b>${FRY_LABEL[f]}</b> (from ${STOPS.find((t) => middleOf(t) === k && fryerOf(t).includes(f))!.name}): ${FRY_NOTE[f]}`),
+      ...(k === "comal" ? ["<b>Tostada shells</b>: a corn tortilla dropped in an empty basket."] : []),
+      `The fountain pours two local drinks, <b>${fountain[0]}</b> and <b>${fountain[1]}</b>, beside ${and(fountain.slice(2))}.`,
+    ],
+    foot: `<button class="bv-btn sm ghost" data-goto="basics:fryer">${icon("fryer")}The fryer, step by step</button>`,
+  };
+  const dishes: Sec = {
+    id: "dishes",
+    chip: "Dishes",
+    icon: "food-menu",
+    title: `Dishes in ${regionIn(kt.region)}`,
+    lede: "Each town adds to the menu. The capital has them all.",
+    raw: dishList(k, here),
+  };
+  const today: Sec | null = here
+    ? {
+        id: "today",
+        chip: "Today",
+        icon: "food-menu",
+        title: `Today in ${here.name}`,
+        lede: "How each dish is built, bottom to top, with its counts.",
+        raw: `<div class="hw-menu">${here.menu.map((r) => recipeHtml(r, 1, EVENTS.some((e) => e.special === r))).join("")}</div>
+          ${getDeps() ? `<button class="bv-btn block" data-m="menuref">${icon("food-menu")}Sides, drinks and extras</button>` : ""}`,
+      }
+    : null;
+  const chips = [secs[0], ...walks, sides, dishes, ...(today ? [today] : [])];
+  return `<nav class="menu-chips" aria-label="Sections">${chips
+    .map((s) => `<button class="bv-chip pill" data-jump="${s.id}">${icon("icon" in s ? s.icon : DISH_ICON[k])}${s.chip}</button>`)
+    .join("")}</nav>
+    ${secHtml(secs[0])}
+    ${walks.map(walkHtml).join("")}
+    ${secHtml(sides)}${secHtml(dishes)}${today ? secHtml(today) : ""}`;
+}
+
+function secHtml(s: Sec): string {
+  const ic = s.art ? `<span class="hw-ic art">${s.art}</span>` : `<span class="hw-ic">${icon(s.icon)}</span>`;
+  return `<section class="hw-sec" data-sec="${s.id}">
+    <header class="hw-h">${ic}<div><h3 class="bv-title sm">${s.title}</h3><p class="hw-lede">${s.lede}</p></div></header>
+    ${s.raw ?? `${s.fig ? `<figure class="hw-fig">${s.fig}</figure>` : ""}
+    ${s.points?.length ? `<ul class="hw-pts">${s.points.map((p) => `<li>${p}</li>`).join("")}</ul>` : ""}`}
+    ${s.foot ? `<div class="hw-foot">${s.foot}</div>` : ""}
+  </section>`;
+}
+
+function listBody(secs: Sec[], end = ""): string {
   return `<nav class="menu-chips" aria-label="Sections">${secs.map((s) => `<button class="bv-chip pill" data-jump="${s.id}">${icon(s.icon)}${s.chip}</button>`).join("")}</nav>
-  ${secs
-    .map(
-      (s) => `<section class="hw-sec" data-sec="${s.id}">
-      <header class="hw-h"><span class="hw-ic">${icon(s.icon)}</span><div><h3 class="bv-title sm">${s.title}</h3><p class="hw-lede">${s.lede}</p></div></header>
-      ${s.raw ?? `<figure class="hw-fig">${s.fig}</figure>
-      <ul class="hw-pts">${s.points.map((p) => `<li>${p}</li>`).join("")}</ul>`}
-      ${s.foot ? `<div class="hw-foot">${s.foot}</div>` : ""}
-    </section>`,
-    )
-    .join("")}
-  <p class="hw-end">${icon("truck")}That's the lot. Happy trails!</p>`;
+    ${secs.map(secHtml).join("")}${end}`;
 }
 
-/** Wire a body holding howToHtml(): jump chips, and the links out of the guide. */
-export function mountHowTo(body: HTMLElement): void {
-  wireJumpChips(body);
-  if (!getDeps()) body.querySelectorAll('[data-m="menuref"]').forEach((b) => b.remove());
-  body.addEventListener("click", (e) => {
-    const goto = (e.target as HTMLElement).closest<HTMLElement>("[data-goto]");
-    if (goto) {
-      const sec = body.querySelector<HTMLElement>(`[data-sec="${goto.dataset.goto}"]`);
-      const bar = body.querySelector<HTMLElement>(".menu-chips");
-      if (sec) body.scrollTo({ top: sec.offsetTop - (bar?.offsetHeight ?? 0) - 6, behavior: "smooth" });
-      return;
-    }
-    if (!(e.target as HTMLElement).closest('[data-m="menuref"]')) return;
-    // Came here from the menu reference: just go back to it.
-    if (modalOpen("menuref")) popModal();
-    else openMenuRef();
-  });
+/* ---- the card -------------------------------------------------------------- */
+
+const BASICS_IDS = ["basics", "hands", "orders", "stack", "undo", "sauce", "knife", "meters", "toppings", "fryer", "drinks", "serve"];
+const TRIP_IDS = ["score", "pacing", "day", "trip", "garage", "prep"];
+
+/** Where a target ("toppings", "comal", "kitchen:comal:tostada", "basics:drinks") lands. */
+function resolve(target: string | undefined, home: MiddleCounter): { tab: Tab; kitchen: MiddleCounter; sec?: string } {
+  if (!target) {
+    const d = getDeps();
+    const at = d?.inShift() ? d.counter?.() : undefined;
+    if (at === "drinks") return { tab: "basics", kitchen: home, sec: "drinks" };
+    if (at === "fryer") return { tab: "basics", kitchen: home, sec: "fryer" };
+    return { tab: "kitchen", kitchen: home };
+  }
+  const [a, b, c] = target.split(":");
+  const isK = (x: string | undefined): x is MiddleCounter => KITCHENS.some((k) => k.id === x);
+  if (a === "kitchen") return { tab: "kitchen", kitchen: isK(b) ? b : home, sec: c };
+  if (isK(a)) return { tab: "kitchen", kitchen: a, sec: b };
+  if (a === "basics" || a === "trip") return { tab: a, kitchen: home, sec: b };
+  if (a === "serve") return { tab: "basics", kitchen: home, sec: "stack" };
+  if (a === "prep") return { tab: "trip", kitchen: home, sec: "day" };
+  if (BASICS_IDS.includes(a)) return { tab: "basics", kitchen: home, sec: a };
+  if (TRIP_IDS.includes(a)) return { tab: "trip", kitchen: home, sec: a };
+  return { tab: "kitchen", kitchen: home };
 }
 
-/** Open How to Play on its own, optionally at one section ("grill", "toppings"...). */
+function howToHtml(town: Stop | undefined, home: MiddleCounter, stacked: boolean, eyebrow: string): string {
+  const pick = KITCHENS.map(
+    (k) => `<button type="button" data-k="${k.id}" class="${k.id === home && town ? "here" : ""}" aria-pressed="false">${tabArt(k.label)}<span>${k.label}</span><small>${k.id === home && town ? "Here" : regionName(k.region)}</small></button>`,
+  ).join("");
+  const tabs: [Tab, string, string][] = [
+    ["basics", "sparkle", "Basics"],
+    ["kitchen", "spatula", "Kitchen"],
+    ["trip", "map", "The trip"],
+  ];
+  const footer = `<p class="hw-end">${icon("truck")}That's the lot. Happy trails!<small>To play a guided shift again, turn on Tutorial mode in Settings, under Learning.</small></p>`;
+  return `${modalHead({ icon: "help", title: "How to Play", stacked, eyebrow })}
+    <style>${ART_KEYFRAMES}</style>
+    <div class="hw-kpick" role="group" aria-label="Kitchens" hidden>${pick}</div>
+    <div class="menu-body menu-scroll hw-body" data-tab="basics" hidden>${listBody(basicsSecs(town))}</div>
+    ${KITCHENS.map((k) => `<div class="menu-body menu-scroll hw-body" data-tab="kitchen" data-k="${k.id}" hidden>${kitchenHtml(k.id, town)}</div>`).join("")}
+    <div class="menu-body menu-scroll hw-body" data-tab="trip" hidden>${listBody(tripSecs(), footer)}</div>
+    <nav class="hw-tabs" role="tablist" aria-label="How to Play">${tabs
+      .map(([id, ic, label]) => `<button type="button" role="tab" data-tab="${id}" aria-selected="false">${icon(ic)}<span>${label}</span></button>`)
+      .join("")}</nav>`;
+}
+
+/** Open How to Play, optionally at one place: "toppings", "comal", "kitchen:comal:tostada", "trip:garage". */
 export function openHowTo(section?: string): void {
   if (modalOpen("howto")) return;
   const stacked = modalOpen();
-  const card = pushModal({
-    key: "howto",
-    label: "How to Play",
-    cls: "howto",
-    html: `${modalHead({ icon: "help", title: "How to Play", stacked, eyebrow: "Menu" })}
-      <div class="menu-body menu-scroll">${howToHtml()}</div>`,
+  const d = getDeps();
+  const town = d?.town();
+  const home: MiddleCounter = town ? middleOf(town) : "grill";
+  const eyebrow = modalOpen("menuref") ? "Menu" : d?.inShift() ? "Paused" : "Menu";
+  const card = pushModal({ key: "howto", label: "How to Play", cls: "howto", html: howToHtml(town, home, stacked, eyebrow) });
+  const bodies = [...card.querySelectorAll<HTMLElement>(".hw-body")];
+  const pick = card.querySelector<HTMLElement>(".hw-kpick")!;
+  bodies.forEach((b) => wireJumpChips(b));
+  let kitchen: MiddleCounter = home;
+
+  const show = (t: Tab, k: MiddleCounter, sec?: string) => {
+    kitchen = k;
+    let shown: HTMLElement | null = null;
+    for (const b of bodies) {
+      const on = b.dataset.tab === t && (t !== "kitchen" || b.dataset.k === k);
+      b.hidden = !on;
+      if (on) shown = b;
+    }
+    pick.hidden = t !== "kitchen";
+    pick.querySelectorAll<HTMLElement>("[data-k]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.k === k)));
+    card.querySelectorAll<HTMLElement>(".hw-tabs [data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+    if (!shown) return;
+    const body: HTMLElement = shown;
+    if (sec) jumpTo(body, sec);
+    // Let the jump chips and the scroll shadows catch up with the body that's now showing.
+    body.dispatchEvent(new Event("scroll"));
+  };
+
+  card.addEventListener("click", (e) => {
+    const el = e.target as HTMLElement;
+    if (el.closest('[data-m="close"]')) return popModal();
+    const t = el.closest<HTMLElement>(".hw-tabs [data-tab]");
+    if (t) return show(t.dataset.tab as Tab, kitchen);
+    const k = el.closest<HTMLElement>(".hw-kpick [data-k]");
+    if (k) return show("kitchen", k.dataset.k as MiddleCounter);
+    const go = el.closest<HTMLElement>("[data-goto]");
+    if (go) {
+      const r = resolve(go.dataset.goto, home);
+      return show(r.tab, r.kitchen, r.sec);
+    }
+    if (el.closest('[data-m="menuref"]')) {
+      // Came here from the menu reference: just go back to it.
+      if (modalOpen("menuref")) popModal();
+      else openMenuRef();
+    }
   });
-  const body = card.querySelector<HTMLElement>(".menu-body")!;
-  mountHowTo(body);
-  card.querySelectorAll('[data-m="close"]').forEach((b) => b.addEventListener("click", () => popModal()));
-  if (section) jumpTo(body, section);
+
+  const r = resolve(section, home);
+  show(r.tab, r.kitchen, r.sec);
 }

@@ -860,3 +860,15 @@ James, after build #74: mistakes cost too much to fix, a tap that drops an ingre
 - **Fixing a tray.** The tray's own Undo button is gone (the header's covers it); a wrong layer is dragged off to the trash, and Undo brings it back if that was a mistake too.
 
 Supersedes the tray Undo button, tap-to-place on pans and bins, the sauce drag as the only way, and the swipe-to-cut in §24.
+
+## 32. How to Play, by region (after build #80)
+
+James: explain the Bean Tostada, and go through the whole help menu, with animations. Code: `src/screens/howto.ts` (structure and words), `src/screens/howto-art.ts` (the drawings), `src/screens/howto.css`; checked by `tools/playtest/help.cjs`.
+
+- **Three tabs at the bottom** of the card, where the thumb is: **Basics**, **Kitchen**, **The trip**. Each tab, and each kitchen, is its own scroller with sticky jump chips (40px tall).
+- **Kitchen** has a picker over it: Grill, Press, Comal, Oven, each with its counter drawing and region. The one for the town you're in (or picked on the map) is marked Here, and Help opens on it. Opened from the Drinks or Fryer counter in a shift, it opens on that part of Basics instead. Each kitchen: its counter, then recipes **step by step** (the real ticket, a drawing, short numbered steps, a tip), then the fryer and drinks there, its dishes with the town each first comes on, and today's menu when you're there.
+  - Walkthroughs: Sunrise Summit and Lumberjack Stack (grill); Caprese, Press › Cut, and Avocado Toast (press); Bean Tostada, the Rodeo Platter in the rack and the Quesadilla (comal); Harvest Red, Bake › Cut 4, and the Calzone (oven).
+- **Basics**: tap and drag, tickets (with a key), the tray and serving, Undo, sauce, the knife, the doneness meter, counts (filtered to the town's menu), the fryer (with what it makes here) and drinks. **The trip**: stars, pacing (the difficulty blurbs), the day, the map with a key to its marks, the Garage.
+- **Drawings** are inline SVG looping in CSS, one verb each: tap for a name, drag a piece, flick to flip, a sauce stroke, a knife slice (once, or twice for four), the peel in and out, the press lid, the quesadilla fold and hold, Undo flying a piece back, the meter filling through its three regions. Motion paths are generated as keyframes so a moving thing follows its drawn guide. Each drawing's resting state is a still frame that explains the move, and that's all that shows under reduced motion.
+- Names of towns, counts, prices and times come from the game data (`STOPS`, `EVENTS`, `COUNT`s, `FRY_SPEED`), so they stay true when those change.
+- `openHowTo(target)` takes "toppings", a kitchen ("comal"), "kitchen:comal:tostada" or "trip:garage".

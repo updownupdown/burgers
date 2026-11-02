@@ -107,7 +107,7 @@ export function openMenu(over: Partial<MenuDeps> = {}): void {
         ${row("menuref", "food-menu", "Menu", `${esc(town.name)} · ${town.menu.length} burgers, sides and drinks`)}
         <h3 class="menu-h">${icon("truck")}Bun Voyage</h3>
         ${row("settings", "settings", "Settings", "Sound, graphics, the app")}
-        ${row("howto", "help", "How to Play", "The grill, the fryer, the drinks, the road")}
+        ${row("howto", "help", "How to Play", "Your kitchen step by step, the fryer, drinks, the road")}
         <p class="menu-build bv-mono">${esc(buildLabel())}</p>
       </div>`,
   });

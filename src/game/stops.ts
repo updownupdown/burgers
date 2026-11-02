@@ -326,7 +326,7 @@ export const STOPS: Stop[] = [
     poutine: false,
     press: { bays: 3, slice: true },
     fryer: ["fries", "sweet"],
-    newThing: "New here: the Veggie Club, a third press bay and the cutting board. Swipe across a pressed panini on the board to cut it in half.",
+    newThing: "New here: the Veggie Club, a third press bay and the cutting board. Put a pressed panini on the board, tap the knife, then the panini, and draw a slice across to cut it in half.",
     customers: 13,
     shiftLength: 210,
     menu: [CAPRESE, AVO_TOAST, TUNA_MELT, CHICKEN_PESTO, VEGGIE_CLUB],
@@ -446,7 +446,7 @@ export const STOPS: Stop[] = [
     fryer: ["fries", "zucchini", "fritters"],
     customers: 14,
     shiftLength: 220,
-    newThing: "New here: the Calzone (fold it on the peel; it bakes slower), a third oven spot and the board: set a flatbread on it with the peel and swipe across it twice to cut it in four.",
+    newThing: "New here: the Calzone (fold it on the peel; it bakes slower), a third oven spot and the board: set a flatbread on it with the peel, then tap the knife and the pie and slice across it twice to cut it in four.",
     menu: [HARVEST_RED, MUSHROOM, FIG_HAM, PEAR_BLUE, CALZONE],
   },
 ];

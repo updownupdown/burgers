@@ -92,7 +92,7 @@ const TAB_ART: Record<string, string> = {
     <path d="M33 12.5h7.5" fill="none" stroke="#2a2622" stroke-width="2.4" stroke-linecap="round"/>
     <circle cx="14" cy="27" r="1.6" fill="#f4efe6" ${INK}/>`,
 };
-const tabArt = (page: string) => `<svg class="tab-art" viewBox="0 0 48 36" aria-hidden="true">${TAB_ART[page] ?? ""}</svg>`;
+export const tabArt = (page: string) => `<svg class="tab-art" viewBox="0 0 48 36" aria-hidden="true">${TAB_ART[page] ?? ""}</svg>`;
 
 /** Redraw a counter button for the station it leads to: the grill's becomes the panini press at the coast. */
 export function setTabArt(tab: HTMLButtonElement | undefined, page: string): void {

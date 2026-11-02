@@ -483,6 +483,15 @@ html, body {
 .hbar.dry > i { background: var(--bv-paprika); }
 .gtag .hbar { position: absolute; left: 50%; top: 100%; margin-top: 2px; transform: translateX(-50%); }
 .gtag.rackhold { background: none; box-shadow: none; padding: 0; }
+/* An uneven bake (after build #78): the oven meter splits into pale and dark sides, and a turn arrow
+   sits on the pie's pale edge. */
+.gtag .split { display: grid; gap: 2px; }
+.gtag .split .cmeter { width: 56px; height: 8px; }
+.turncue { position: absolute; z-index: 1; transform: translate(-50%, -50%); pointer-events: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  font: 800 17px/1 var(--bv-font-ui); color: #5c6f86; background: rgb(240 244 248 / 0.85); box-shadow: 0 0 0 1.5px rgb(92 111 134 / 0.7); animation: turncue 1.6s ease-in-out infinite; }
+.turncue[hidden] { display: none; }
+@keyframes turncue { 50% { transform: translate(-50%, -50%) rotate(40deg); } }
+@media (prefers-reduced-motion: reduce) { .turncue { animation: none; } }
 .gtag.rackhold .hbar { position: static; transform: none; margin: 0; }
 #ui .askchip svg { width: 13px; height: 13px; flex: none; }
 #ui .askchip b { font: 700 11px/1 var(--bv-font-mono); flex: none; }
@@ -594,6 +603,12 @@ html, body {
 @property --lamp { syntax: "<color>"; inherits: true; initial-value: #e6dfd2; }
 @property --glow { syntax: "<color>"; inherits: true; initial-value: transparent; }
 @media (prefers-reduced-motion: reduce) { .cbtn[data-lamp="coral"] { animation: none; } }
+/* The Kitchen timer bonus (after build #78): a ring round the counter button fills toward the next
+   thing to reach done on that counter. */
+.cbtn::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; pointer-events: none; opacity: 0; transition: opacity 0.2s;
+  background: conic-gradient(var(--bv-olive) calc(var(--tp, 0) * 1turn), rgb(42 38 34 / 0.12) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px)); mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px)); }
+.cbtn.timing::after { opacity: 1; }
 @keyframes blink { to { opacity: 0.35; } }
 
 /* ---- Screens --------------------------------------------------------- */

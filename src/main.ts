@@ -11,7 +11,7 @@ import { eventOn, fountainFor, fryerOf, middleOf, townById, withEvent, type Town
 import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
 import { joinChance, lineDrain, linePatience, WINDOW, windowPatience, wordOfMouth } from "./game/line";
-import { FRIES_HOLD, HOLD_GRACE, HOLD_RUIN, LADLE_BAND, payout, SAUCE_BAND, sauceCoverage, sauceGate, sauceVerdict, scorePlate, TOUCH_TIP, touchTip, type SauceWord } from "./game/scoring";
+import { FRIES_HOLD, HOLD_GRACE, HOLD_RUIN, LADLE_BAND, LEOPARD_EVEN, payout, SAUCE_BAND, sauceCoverage, sauceGate, sauceVerdict, scorePlate, TOUCH_TIP, touchTip, type SauceWord } from "./game/scoring";
 import { History, samePlace, type Move, type Place } from "./game/undo";
 import { CUT_COVER, insideFood, judgeCut, quarterQuality, type Cut, type Pt as CutPt } from "./game/knife";
 import { CROWD, menuFor } from "./game/business";
@@ -4624,6 +4624,7 @@ function startShift(): void {
   counter.holdRate = has("lamp") ? 0.5 : 1;
   // Chill pours to the line by itself and nothing on the grill or in the fryer burns.
   counter.autoStopPour = has("autostop") || game.pacing === "chill";
+  counter.autoLid = has("autostop");
   counter.noBurn = game.pacing === "chill";
   counter.setPage(HOME_PAGE);
   const intro = game.event
@@ -5364,6 +5365,16 @@ function updateUi(dt = 0): void {
     const lamp = hot[i] ? "coral" : dots[i] ? "amber" : "off";
     if (t.dataset.lamp !== lamp) t.dataset.lamp = lamp;
   });
+  // The Kitchen timer: each counter button's ring fills toward the next thing there to reach done.
+  const timing = has("timer") && game.phase === "playing" ? nextDone() : [null, null, null];
+  ui.tabs.forEach((t, i) => {
+    const p = timing[i];
+    t.classList.toggle("timing", p !== null);
+    if (p !== null) {
+      const v = p.toFixed(2);
+      if (t.style.getPropertyValue("--tp") !== v) t.style.setProperty("--tp", v);
+    }
+  });
 
   const tut = tutorialHint();
   const now = performance.now();
@@ -5516,6 +5527,44 @@ function holdBar(held: number | undefined, grace = HOLD_GRACE, ruin = HOLD_RUIN)
 /** Fries' soggy seconds as the tray bar's seconds, so one bar reads for both. */
 const friesOnTrayScale = (h: number): number => (h <= FRIES_HOLD.grace ? (h * HOLD_GRACE) / FRIES_HOLD.grace : HOLD_GRACE + ((h - FRIES_HOLD.grace) * (HOLD_RUIN - HOLD_GRACE)) / (FRIES_HOLD.ruin - FRIES_HOLD.grace));
 
+/**
+ * For the Kitchen timer's rings: per counter (drinks, middle, fryer), how far the thing closest to
+ * done has come toward it (0..1), or null when nothing there is on its way.
+ */
+function nextDone(): (number | null)[] {
+  const best = (xs: number[]) => (xs.length ? Math.min(1, Math.max(...xs)) : null);
+  const mid: number[] = [];
+  for (const g of counter.grillItems) {
+    const k = g.piece.kind as Cookable;
+    if (g.below || !(k in COOK_SCALE) || counter.heatOf(g) !== "hot") continue;
+    const lv = cookLevel(g.piece);
+    if (lv < COOK_SCALE[k].done) mid.push(lv / COOK_SCALE[k].done);
+  }
+  counter.bays.forEach((b, i) => {
+    const r = i < counter.bayCount && b.closed ? counter.bayReading(b) : null;
+    if (r && r.kind in COOK_SCALE) {
+      const lv = cookLevel(r);
+      const d = COOK_SCALE[r.kind as Cookable].done;
+      if (lv < d) mid.push(lv / d);
+    }
+  });
+  if (counter.middle === "oven")
+    for (const s of counter.ovenSpots.slice(0, counter.ovenCount)) {
+      const d = s.layers[0]?.piece;
+      if (d?.kind === "dough" && paleSide(d) < COOK_SCALE.dough.done) mid.push(paleSide(d) / COOK_SCALE.dough.done);
+    }
+  const fry: number[] = [];
+  for (const b of counter.baskets) {
+    if (!b.loaded || !b.down) continue;
+    if (b.shell) {
+      const lv = cookLevel(b.shell);
+      if (lv < COOK_SCALE.tostada.done) fry.push(lv / COOK_SCALE.tostada.done);
+    } else if (b.cook < FRY_ZONE[b.fry].done) fry.push(b.cook / FRY_ZONE[b.fry].done);
+  }
+  const drinks = counter.taps.filter((t) => t.pouring && t.cup).map((t) => t.cup!.fill / DRINK_FILL.perfect);
+  return [best(drinks), best(mid), best(fry)];
+}
+
 /** Fries read on the same meter as everything else. */
 const friesMeter = (cook: number, fry: FryKind = "fries"): string => cookMeter(fry, cook);
 
@@ -5602,6 +5651,9 @@ function updateFryTags(): void {
   });
 }
 
+/** The uneven-bake turn arrows, one per oven spot. */
+const turnCues: HTMLElement[] = [];
+
 /** A meter in front of each press bay with food in it (the lid hides the food), and on a closed panini a melt mark. */
 const bayTags: HTMLElement[] = [];
 function updatePressTags(): void {
@@ -5641,12 +5693,31 @@ function updateOvenTags(): void {
     const d = on && i < counter.ovenCount ? s.layers[0]?.piece : undefined;
     el.hidden = !d || d.kind !== "dough";
     if (el.hidden || !d) return;
-    const html = cookMeter("dough", paleSide(d));
+    // Uneven (after build #78): the meter splits into the pale side and the dark side, and a turn
+    // arrow sits on the pale edge of the pie, the side to nudge round to the back wall.
+    const uneven = darkSide(d) - paleSide(d) > LEOPARD_EVEN && darkSide(d) < COOK_SCALE.dough.over;
+    const html = uneven ? `<span class="split">${cookMeter("dough", paleSide(d))}${cookMeter("dough", darkSide(d))}</span>` : cookMeter("dough", paleSide(d));
     if (el.innerHTML !== html) el.innerHTML = html;
     const v = counter.spotTagPoint(i).project(counter.camera);
     el.style.left = `${((v.x + 1) / 2) * bands.counter.w}px`;
     el.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
+    const arrow = turnCues[i] ??= (() => {
+      const a = document.createElement("div");
+      a.className = "turncue";
+      a.textContent = "↻";
+      a.setAttribute("aria-label", "Pale side: nudge it round to the back");
+      ui.root.appendChild(a);
+      return a;
+    })();
+    const at = uneven ? counter.paleEdgePoint(i) : null;
+    arrow.hidden = !at;
+    if (at) {
+      const w = at.project(counter.camera);
+      arrow.style.left = `${((w.x + 1) / 2) * bands.counter.w}px`;
+      arrow.style.top = `${bands.counter.y + ((1 - w.y) / 2) * bands.counter.h}px`;
+    }
   });
+  for (let i = counter.ovenSpots.length; i < turnCues.length; i++) turnCues[i].hidden = true;
 }
 
 function updateGrillTags(): void {

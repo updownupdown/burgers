@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { bakeStep, bakeTopping, CHAR_FACE, COMAL_SPEED, cookLevel, COOK_SCALE, DRINK_FILL, flipFaces, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, grillStep, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, type Cookable } from "../game/cooking";
+import { bakeStep, bakeTopping, CHAR_FACE, COMAL_SPEED, cookLevel, COOK_SCALE, DRINK_FILL, flipFaces, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, grillStep, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, rimAngle, rimOf, type Cookable } from "../game/cooking";
 import type { DrinkId, FriesSize, FryKind, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
 import { BREADS, CUP_SPEED, GRILLABLE, isSauce, OVEN_CHEESE, PRESS_CHEESE, PROTEINS, SCOOPED, TORTILLAS } from "../game/types";
 import { fountainFor, type MiddleCounter } from "../game/stops";
@@ -516,6 +516,8 @@ export class CounterView {
   /** Warm holding's pace (0.5 with the heat lamp): the warm end, the taco rack, lifted fries and cartons. */
   holdRate = 1;
   autoStopPour = false;
+  /** The Smart fountain bonus (after build #78): a pour it stops at the line also gets its lid. */
+  autoLid = false;
   /** Chill: food on the grill holds at well done and fries at dark golden instead of burning. */
   noBurn = false;
   grillItems: GrillItem[] = [];
@@ -1109,6 +1111,24 @@ export class CounterView {
   spotPoint(i: number): THREE.Vector3 {
     const s = this.ovenSpots[i];
     return this.world(1, s.x, HEARTH.y, s.z);
+  }
+  /**
+   * World point on the crust of the pie in oven spot i, over its palest segment (the side that
+   * wants turning to the back wall), for the uneven-bake cue. Null if there's no pie.
+   */
+  paleEdgePoint(i: number): THREE.Vector3 | null {
+    const s = this.ovenSpots[i];
+    const d = s.layers[0]?.piece;
+    if (!d || d.kind !== "dough") return null;
+    const rim = rimOf(d);
+    const k = rim.indexOf(Math.min(...rim));
+    const a = rimAngle(k);
+    const yaw = d.yaw ?? 0;
+    const lx = PIE.rx * Math.cos(a) * 0.7;
+    const lz = -PIE.rz * Math.sin(a) * 0.7;
+    const x = (lx * Math.cos(yaw) + lz * Math.sin(yaw)) * GRILL_SCALE;
+    const z = (-lx * Math.sin(yaw) + lz * Math.cos(yaw)) * GRILL_SCALE;
+    return this.world(1, s.x + x, HEARTH.y + 0.1, s.z + z);
   }
   spotTagPoint(i: number): THREE.Vector3 {
     const s = this.ovenSpots[i];
@@ -2664,7 +2684,12 @@ export class CounterView {
       const c = t.cup;
       if (t.pouring && c) {
         c.fill += dt * 0.42 * CUP_SPEED[c.size];
-        if (this.autoStopPour && c.fill >= DRINK_FILL.perfect) t.pouring = false;
+        if (this.autoStopPour && c.fill >= DRINK_FILL.perfect) {
+          t.pouring = false;
+          if (this.autoLid && !c.lid) {
+            this.dressCupAt(c, "lid");
+          }
+        }
         if (c.fill > 1) {
           // Overflow: the cup stays full, the rest goes on the drip tray and costs money.
           if (t.spill <= 0) this.events.spill();

@@ -129,5 +129,45 @@ const pc = `(() => { let uid = 9000; return (kind, cook = 0.55, extra = {}) => (
     await shot(p, 'warm-zone-hold-bars');
     await b.close();
   }
+  if (want('oven')) {
+    // A half-baked pie, its back side well ahead of its front: split meter and the turn arrow.
+    const { b, p } = await start('applecross');
+    await p.evaluate(() => window.__bv.goToPage(1));
+    await step(p, 0.8);
+    await p.evaluate(() => {
+      const c = window.__bv.counter;
+      const rim = [0.62, 0.7, 0.66, 0.5, 0.3, 0.22, 0.28, 0.45];
+      c.setSpot(0, [{ piece: { uid: 7001, kind: 'dough', cook: [0.6, 0.31], rim, yaw: 0 }, offX: 0, offZ: 0 }]);
+      c.setSpot(1, [{ piece: { uid: 7002, kind: 'dough', cook: [0.5, 0.5], rim: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], yaw: 0 }, offX: 0, offZ: 0 }]);
+    });
+    await p.evaluate(() => { const c = window.__bv.counter; c.ovenSpots[0].layers[0].piece.rim = [0.62, 0.7, 0.66, 0.5, 0.3, 0.22, 0.28, 0.45]; });
+    await step(p, 0.1);
+    await p.waitForTimeout(300);
+    await shot(p, 'oven-uneven-bake-cue');
+    await b.close();
+  }
+  if (want('fryer')) {
+    // Kitchen timer: a ring on the counter buttons; fries lifted 40 s ago going soggy; a carton.
+    const { b, p } = await start('pinecrest', { bonuses: ['timer', 'lamp'], bonus: 'timer' });
+    await p.evaluate(() => window.__bv.goToPage(2));
+    await step(p, 0.8);
+    await p.evaluate(() => {
+      const c = window.__bv.counter;
+      Object.assign(c.baskets[0], { loaded: true, cook: 0.3, amount: 0.34, down: true, fry: 'fries' });
+      Object.assign(c.baskets[1], { loaded: true, cook: 0.75, amount: 0.34, down: false, fry: 'fries', held: 40 });
+      Object.assign(c.packs[0], { size: 'M', cook: 0.72, fill: 1, salt: 0, curds: false, gravy: false, fry: 'fries', held: 12 });
+      c.syncPack(0);
+    });
+    await step(p, 0.4);
+    await p.waitForTimeout(300);
+    await shot(p, 'fryer-soggy-bars-and-timer-ring');
+    await p.evaluate(() => window.__bv.goToPage(1));
+    await step(p, 0.8);
+    await p.evaluate(() => { const c = window.__bv.counter; const s = c.zoneSpots(0)[0]; c.addGrillItem({ uid: 8100, kind: 'patty', cook: [0.15, 0.1] }, s.x, s.z); });
+    await step(p, 0.4);
+    await p.waitForTimeout(300);
+    await shot(p, 'grill-timer-rings');
+    await b.close();
+  }
   console.log('done');
 })();

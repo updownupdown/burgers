@@ -12,7 +12,7 @@ import { readyToBuy } from "../game/garage";
 import { truckSvg as truckArt } from "./truckart";
 import { dollars } from "./garage";
 import { resultsSheetHtml } from "./day";
-import { renderMap, roadPath, routePoints, SEA, townPoint, VIEW } from "./map";
+import { renderMap, roadPath, routePoints, SEA, townPoint, VIEW, LAND_BOX } from "./map";
 import { PanZoom } from "./panzoom";
 import "./home.css";
 
@@ -263,9 +263,13 @@ function markerScale(world: HTMLElement, scale: number): void {
   const k = Math.max(0.62, Math.min(1.45, (MARKER_UNIT / pxPerUnit) ** 0.55));
   const v = k.toFixed(2);
   if (world.style.getPropertyValue("--mk") !== v) world.style.setProperty("--mk", v);
+  // Far out, only the capitals keep their names (larger), so the whole road stays readable.
+  world.classList.toggle("far", pxPerUnit < FAR_UNIT);
 }
 /** Screen px per map unit at which markers are drawn at their natural size. */
 const MARKER_UNIT = 5.2;
+/** Below this many screen px per map unit, town names give way to the capitals' (see markerScale). */
+const FAR_UNIT = 4.4;
 /** Screen px per map unit at the default zoom: neighbouring towns a comfortable thumb apart. */
 const DEFAULT_UNIT = 5.6;
 
@@ -290,7 +294,9 @@ function fitMap(keepView: boolean, lookAt?: string): void {
   svg.setAttribute("height", `${VIEW.h * m.base}`);
   const home = Math.min(3, Math.max(1, DEFAULT_UNIT / m.base));
   // Some slack past the edges, so towns near the coast can still be brought to the middle.
-  m.pz.resize(VIEW.w * m.base, VIEW.h * m.base, 0.6, 5, Math.round(Math.min(w * 0.55, h * 0.4)));
+  // Zoomed all the way out, the land (not the whole sheet of sea) fills the width, 16 px each side.
+  const minScale = Math.min(home, Math.max(0.6, (w - 32) / ((LAND_BOX[2] - LAND_BOX[0]) * m.base)));
+  m.pz.resize(VIEW.w * m.base, VIEW.h * m.base, minScale, 5, Math.round(Math.min(w * 0.55, h * 0.4)));
   const dockH = m.el.querySelector<HTMLElement>(".home-sheet:not([hidden]), .home-results:not([hidden])")?.offsetHeight ?? m.el.querySelector<HTMLElement>(".home-dock")?.offsetHeight ?? 0;
   const at = { x: w / 2, y: Math.max(h * 0.35, (h - dockH) / 2) };
   if (prev) m.pz.centerOn((prev.x / prevBase) * m.base, (prev.y / prevBase) * m.base, m.pz.scale, { x: w / 2, y: h / 2 });

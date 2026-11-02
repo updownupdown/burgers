@@ -872,3 +872,34 @@ James: explain the Bean Tostada, and go through the whole help menu, with animat
 - **Drawings** are inline SVG looping in CSS, one verb each: tap for a name, drag a piece, flick to flip, a sauce stroke, a knife slice (once, or twice for four), the peel in and out, the press lid, the quesadilla fold and hold, Undo flying a piece back, the meter filling through its three regions. Motion paths are generated as keyframes so a moving thing follows its drawn guide. Each drawing's resting state is a still frame that explains the move, and that's all that shows under reduced motion.
 - Names of towns, counts, prices and times come from the game data (`STOPS`, `EVENTS`, `COUNT`s, `FRY_SPEED`), so they stay true when those change.
 - `openHowTo(target)` takes "toppings", a kitchen ("comal"), "kitchen:comal:tostada" or "trip:garage".
+
+## 33. Review fixes after build #78: bugs and menus
+
+Two reviews of build #78 (bugs and playability; menus and Help) were all approved by James. This section is the bugs-and-menus half; the kitchen and graphics halves have their own. Checked by `tools/playtest/review78-bugs-menus.cjs`.
+
+**Bugs**
+
+- **Food built ahead stays.** Anything put on a free tray is kept for whoever steps up to it (`spawnCustomer` no longer clears the plate; served, refused and walked-out trays are cleared when the customer leaves).
+- **Tutorial mode off means off.** Switching it off in Settings marks the guided shift done, as the welcome card does; on replays it. The guided first shift only runs in a grill town (its lessons are the grill's); elsewhere a replayed tutorial is a normal shift with the coach's other lessons, and the next shift's end marks it done.
+- **Today's results outlive an evening hop.** `todaysClosing(save)` (`src/game/progress.ts`) is today's Closing in the evening, wherever the truck is; Results, the results sheet, the night card and a reload all use it (it used to need the same town).
+- **The range refuels at the end of a shift**, not when it opens: a shift quit or reloaded half way leaves the morning's driving as it was.
+- **Prep** says "Keep at least two recipes on the menu." on the card and shakes the row (hints only show in a shift).
+- **Closing** when nobody was served: "Nobody got their food today: N walked out." when people walked out, a dash instead of five empty stars and 0.0, and no 0.0★ town best (old ones are dropped on load).
+- **Words:** smash burgers are "Smashed thin" (they go out medium like the rest); a count of one shows no "x1" on tickets or menus.
+- **An unreadable save** is copied to `bv-save-broken-<time>` before a fresh trip starts, so it can be recovered.
+- **The line holds still** while the guided first shift's clock does.
+- Kept on purpose: a recipe made well before a quit still counts toward its compact ticket, and guided order 2 still marks the tutorial done (so a restart doesn't replay it).
+
+**Menus**
+
+- **Pause card.** A header bar like the other cards: the pause icon and "Paused", Settings on the right, no eyebrow. The town and day are the body's first line. Help is a labelled button, **How to play · Grill** (or Press, Comal, Oven, Drinks, Fryer: the counter on screen), opening Help there.
+- **Today's menu** (pause) and Prep share `buildLine` and `methodTags` (`src/screens/dishtext.ts`): every layer of tacos, quesadillas, open toasts and flatbreads (only a closed burger or panini drops its bread), and how each is made (Toasted bun, Pressed, Warm tortillas, Folded, flipped once, Baked in the oven…). The sides line is the town's own (`sidesLine`: fries, chips, churros, fritti, poutine or nachos).
+- **Dish drawings.** Tacos stand in the rack, a quesadilla is a folded half moon, a tostada a flat shell piled up (`dishArt` in `menuref.ts`).
+- **Food menu.** Extras come from what the town's dishes can carry (`extrasOn` in `src/game/menu.ts`, the lists `pickMods` uses). Tacos and flatbreads have their own icons (`taco`, `flatbread`, also on Help's kitchen chips). The retired price callout and the "saves money" lines are gone.
+- **Headers.** The Garage and Popularity & reviews have the icon, title and × of the other cards; their counts moved into the body, the Garage's savings stay as a plate, and the Garage's second way back (the footer button) is gone. The town sheet's × is the plain one. Settings stacked over the pause card says "Paused" over its title; elsewhere no eyebrow.
+- **Closing** is the breakdown under the results sheet: the KPI tiles (already on the sheet) and the build label are gone; Popularity uses the people icon as on the map.
+- **Taps.** 44px for the modal × and back, the map's Help, Settings and savings buttons, zoom and find-the-truck, segmented controls; jump chips are 40px. The HUD's menu and Undo buttons keep their look and take a 44px tap.
+- **Contrast.** `--bv-mute` is #60666f (4.6:1 on paper-2, was 3.9:1); coral as small text uses `--bv-paprika-ink` #b8432a (Settings' On, Start a new trip, menu counts, the calendar's events, Help's labels). Help figure text is at least 12px (11px for step numbers).
+- **Start a new trip:** "Back to the first town with an empty garage." Confirm: "Start over? Savings, bonuses, looks, popularity and reviews all reset. Town bests are kept."
+- **Small things.** The welcome card has no ×, only Start the trip, and each switch says where to change it. The town sheet drops "A shift fills the day." In the evening the dashboard shows Results only after a shift (otherwise the Menu). The savings button has a garage icon (it was a second truck next to find-the-truck) and Help points at it. Settings' headings have their own icons. Dev mode shows once it's on; to turn it on, tap the build line at the bottom of Settings five times. Help's chip bars fade at the right edge; Help says the ticket's face is patience; the drawn "~12 customers" Prep figure is gone.
+- Already right on main (Help rewrite, §32): region-aware Help, the Grill and ticket sections, Chill and popularity, the map key, the tutorial replay line, Help opening at the current counter.

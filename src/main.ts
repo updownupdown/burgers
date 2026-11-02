@@ -10,11 +10,12 @@ import { freshSave, loadSave, passed, passTown, writeSave, type Closing } from "
 import { eventOn, fountainFor, fryerOf, middleOf, townById, withEvent, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
-import { joinChance, lineDrain, linePatience, WINDOW, wordOfMouth } from "./game/line";
-import { HOLD_GRACE, HOLD_RUIN, LADLE_BAND, payout, SAUCE_BAND, sauceCoverage, sauceGate, sauceVerdict, scorePlate, type SauceWord } from "./game/scoring";
+import { joinChance, lineDrain, linePatience, WINDOW, windowPatience, wordOfMouth } from "./game/line";
+import { HOLD_GRACE, HOLD_RUIN, LADLE_BAND, payout, SAUCE_BAND, sauceCoverage, sauceGate, sauceVerdict, scorePlate, TOUCH_TIP, touchTip, type SauceWord } from "./game/scoring";
 import { History, samePlace, type Move, type Place } from "./game/undo";
 import { CUT_COVER, insideFood, judgeCut, quarterQuality, type Cut, type Pt as CutPt } from "./game/knife";
 import { CROWD, menuFor } from "./game/business";
+import { askCounts, askFor, served as askServed, type Ask } from "./game/asks";
 import { addReviews, brief, leavesReview, opinionFor, opinionLine, ratingPull, reviewAverage } from "./game/reviews";
 import { opinionFace, starRow } from "./ui/faces";
 import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "./game/menu";
@@ -47,12 +48,14 @@ import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
 import { closingHtml, prepHtml, reviewsHtml, syncRange, toggleBox, toggleIngredients } from "./screens/day";
 import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, setTabArt, ticketHtml, tortillaMeter } from "./ui";
+import { icon } from "./ui/icons";
+import { esc } from "./screens/modal";
 import { DRINK_TINT } from "./render/machines";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 import { scrollShadows } from "./screens/modal";
 import { closeAll, initMenu, openHowTo, openMenu, openMenuRef, openSettings } from "./screens/menu";
 import { dropBack, pushBack } from "./screens/nav";
-import { simulate, type SimLevel } from "./game/devmode";
+import { devOn, simulate, type SimLevel } from "./game/devmode";
 import { coachOn, coachShowing, coachState, setCoachOn, skipLessonsFor, startCoach } from "./tutorial/coach";
 import { lessons } from "./tutorial/lessons";
 import { showWelcome, welcomeDue } from "./tutorial/welcome";
@@ -173,6 +176,9 @@ const game = {
     (): Slot => ({ order: null, plate: emptyPlate(), patience: 0, maxPatience: 1, leaving: false, fig: null, ticketKey: "", bubble: null, sentBack: null, kept: { fries: null, drink: null }, lesson: -1 }),
   ),
   hintsShown: new Set<string>(),
+  /** Today's local ask (game/asks.ts) and how many served orders have counted toward it. */
+  ask: null as Ask | null,
+  askCount: 0,
   pendingUpdate: null as VersionInfo | null,
   /** Customers expected this shift (business mode changes it). */
   customers: 0,
@@ -376,10 +382,9 @@ function spawnCustomer(slotIdx: number, seed: number, early?: Order): void {
   s.plate = emptyPlate();
   s.sentBack = null;
   s.kept = { fries: null, drink: null };
-  // Recipes you haven't made a couple of times yet start with the full layer list showing.
-  // Every extra slice of a counted topping is another trip to the bin.
-  const slices = order.layers.reduce((n, l) => n + Math.max(0, (l.count ?? 1) - 1), 0);
-  s.maxPatience = (50 + order.layers.length * 7 + slices * 2 + order.layers.filter((l) => l.kind === "patty" || PROTEINS.has(l.kind)).length * 22 + (BREADS.has(order.layers[0]?.kind) ? 14 : 0) + (order.fries ? 30 : 0) + (order.poutine ? 10 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.3 : 1) * CROWD[stop().crowd].patience * DIFFICULTY[game.pacing].patience;
+  // Window patience follows the work the order takes: its layers, sides and the dish's own steps (line.ts).
+  s.maxPatience = windowPatience(order) * (has("bench") ? 1.3 : 1) * CROWD[stop().crowd].patience * DIFFICULTY[game.pacing].patience;
+  if (devOn()) console.debug(`[patience] #${order.id} ${order.name}: ${s.maxPatience.toFixed(0)} s`);
   // Guided orders wait as long as it takes.
   if (lesson >= 0) s.maxPatience = 900;
   s.patience = s.maxPatience;
@@ -413,14 +418,34 @@ const coachCounts = { bell: 0, folds: 0, opens: 0 };
  */
 const BELL_WINDOW = 1.5;
 
-/** The first in line steps up to a free place at the window, if the difficulty allows another. */
-function callNext(): boolean {
-  const free = game.slots.findIndex((s) => !s.order && !s.fig);
+/** The first in line steps up to a free place at the window (`prefer`, if it's free), if the difficulty allows another. */
+function callNext(prefer = -1): boolean {
+  const empty = (s: Slot) => !s.order && !s.fig;
+  const free = prefer >= 0 && empty(game.slots[prefer]) ? prefer : game.slots.findIndex(empty);
   const atWindow = game.slots.filter((s) => s.order || s.fig).length;
   if (free < 0 || !game.line.length || atWindow >= WINDOW[game.pacing]) return false;
   const w = game.line.shift()!;
   spawnCustomer(free, w.seed, w.order);
   return true;
+}
+
+/**
+ * A tap on an empty tray calls the next person to it (after build #78): the bell is in the hardest
+ * spot to reach with a thumb, the trays are not. The header bell still works.
+ */
+function callToTray(i: number): void {
+  if (game.phase !== "playing") return;
+  if (!game.line.length) return void hintOnce("tray-call-empty", "Nobody in line right now. A tap on an empty tray calls the next person when someone's waiting.", 3);
+  const atWindow = game.slots.filter((s) => s.order || s.fig).length;
+  if (atWindow >= WINDOW[game.pacing]) return void hintOnce("bell-full", `No room at the window: ${WINDOW[game.pacing]} at a time on ${DIFFICULTY[game.pacing].label}. Serve someone first.`, 3.5);
+  if (!callNext(i)) return;
+  ui.bell.classList.remove("ring");
+  void ui.bell.offsetWidth;
+  ui.bell.classList.add("ring");
+  sfx.bell();
+  coachCounts.bell++;
+  game.bellTaps = 1;
+  game.bellAt = game.time;
 }
 
 /** A tap on the bell: calls the next person in line, unless the bell rang only a moment ago. */
@@ -469,7 +494,7 @@ function clearSlot(i: number): void {
 }
 
 /** The customer goes, showing what they thought (a face, maybe a line) and any review they left. */
-function customerLeaves(i: number, stars: number, say: string | null, reviewed: boolean): void {
+function customerLeaves(i: number, stars: number, say: string | null, reviewed: boolean, aside = false): void {
   const s = game.slots[i];
   s.leaving = true;
   s.fig?.setMood(stars >= 4 ? "happy" : stars === 3 ? "neutral" : stars === 2 ? "sad" : "angry");
@@ -478,8 +503,23 @@ function customerLeaves(i: number, stars: number, say: string | null, reviewed: 
     const other = game.slots.findIndex((sl) => sl.order && !sl.leaving);
     if (other >= 0) setActive(other);
   }
-  showOpinion(i, stars, say, reviewed);
+  showOpinion(i, stars, say, reviewed, aside);
   setTimeout(() => customersView.leave(i, () => clearSlot(i)), 1100);
+}
+
+/** The local ask was met this shift. */
+const askMet = (): boolean => !!game.ask && game.askCount >= game.ask.need;
+
+/** A served order may count toward the local ask; meeting it pays its reward there and then. */
+function noteServed(_order: Order, r: { stars: number; touches: string[] }, patience: number): void {
+  const a = game.ask;
+  if (!a || askMet() || !askCounts(a, askServed(r, patience))) return;
+  game.askCount++;
+  if (askMet()) {
+    game.money += a.reward;
+    showHint(`Local ask done: ${a.text}. +$${a.reward}, and today counts as two shifts here.`, 4);
+    setTimeout(() => sfx.coin(), 700);
+  }
 }
 
 /**
@@ -518,9 +558,9 @@ function serve(i: number): void {
   // The meal deal sign: a main (whatever the middle counter makes: anything built in layers) with
   // a side and a drink tips half again.
   const meal = has("combo") && s.order.layers.length > 0 && !!s.order.fries && !!s.order.drink;
-  // Hand-pressed tortillas (Sun Valley's press) earn a couple of dollars on top.
-  const handmade = r.perks.includes("hand-pressed tortillas") ? 2 : 0;
-  const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1) * (meal ? 1.5 : 1) * CROWD[stop().crowd].tips) + handmade;
+  // Chef's touches (perfect sauce, grill marks, a clean cut, hand-pressed tortillas...) add a dollar or two each.
+  const touches = r.stars >= 4 ? r.touches : [];
+  const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1) * (meal ? 1.5 : 1) * CROWD[stop().crowd].tips) + touchTip(touches, r.stars);
   game.money += pay;
   game.tips += tip;
   game.served++;
@@ -532,12 +572,13 @@ function serve(i: number): void {
   if (!game.best || r.score > game.best.score) game.best = { name: `#${s.order.id} ${s.order.name} (${r.score}%)`, score: r.score };
   // Everyone shows a face; only something specific (missing, wrong, especially quick or good) gets words.
   const say = opinionLine({ stars: r.stars, missing: r.missing, notes: r.notes, perks: r.perks, patience: s.patience / s.maxPatience }, game.rng);
-  customerLeaves(i, r.stars, say, reviewed);
+  customerLeaves(i, r.stars, say, reviewed, r.stars === 4 && !r.missing && r.notes.length > 0);
+  noteServed(s.order, r, s.patience / s.maxPatience);
   // The food is handed over right away so the plate is free for the next order.
   s.plate = emptyPlate();
   syncTray(i, false);
   sfx.whoosh();
-  coinPop(i, pay + tip);
+  coinPop(i, pay + tip, touches);
   setTimeout(() => sfx.coin(), 250);
   buzz(r.stars >= 4 ? [20, 40, 20] : 60);
   // Two guided orders in, the trip counts as started: a restart won't go back to the lessons.
@@ -612,9 +653,10 @@ function showBubble(i: number, text: string, good: boolean): void {
  * Over the customer's head as they go: their opinion as a face, with a short line only when it's
  * specific, and if they left a review, its stars popping out above.
  */
-function showOpinion(i: number, stars: number, say: string | null, reviewed: boolean): void {
+function showOpinion(i: number, stars: number, say: string | null, reviewed: boolean, aside = false): void {
   const b = document.createElement("div");
-  b.className = `opinion ${opinionFor(stars)}${say ? " said" : ""}`;
+  // `aside`: a 4★'s small grey note on what cost the fifth star.
+  b.className = `opinion ${opinionFor(stars)}${say ? " said" : ""}${aside ? " aside" : ""}`;
   b.innerHTML = `${opinionFace(stars)}${say ? `<span class="say"></span>` : ""}${reviewed ? `<span class="review">${starRow(stars)}</span>` : ""}`;
   if (say) b.querySelector(".say")!.textContent = say;
   placeOverHead(i, b, reviewed ? 2800 : 2400, true);
@@ -639,10 +681,18 @@ function placeOverHead(i: number, b: HTMLElement, ms: number, narrow = false): v
   }, ms);
 }
 
-function coinPop(i: number, amount: number): void {
+function coinPop(i: number, amount: number, touches: readonly string[] = []): void {
   const c = document.createElement("div");
   c.className = "coin";
   c.textContent = `+$${amount}`;
+  // Chef's touches as small stamps under the coin ("+$1 Perfect sauce").
+  for (const t of touches) {
+    const st = document.createElement("span");
+    st.className = "stamp";
+    st.textContent = `+$${TOUCH_TIP[t] ?? 1} ${t}`;
+    c.append(st);
+  }
+  if (touches.length) c.classList.add("touched");
   const slotW = bands.customers.w / 3;
   c.style.left = `${i * slotW + slotW * 0.5}px`;
   c.style.top = `${bands.tray.y + 10}px`;
@@ -680,20 +730,80 @@ const trayActs = game.slots.map((_, i) => {
     if (game.phase === "playing" && trayReady(i)) serve(i);
   });
   ui.root.append(serveBtn);
-  return { serveBtn };
+  // On an empty tray while people wait: how many are in line; a tap calls the next one to this tray.
+  const callBtn = document.createElement("button");
+  callBtn.className = "tray-call";
+  callBtn.hidden = true;
+  callBtn.addEventListener("click", () => callToTray(i));
+  ui.root.append(callBtn);
+  return { serveBtn, callBtn };
 });
+
+/** The local ask's chip, pinned at the top of the window while the shift runs (game/asks.ts). */
+const askChip = (() => {
+  const el = document.createElement("div");
+  el.className = "askchip";
+  el.hidden = true;
+  el.setAttribute("role", "status");
+  ui.root.append(el);
+  return el;
+})();
+function updateAskChip(): void {
+  const a = game.ask;
+  const show = !!a && (game.phase === "playing" || game.phase === "paused");
+  askChip.hidden = !show;
+  if (!show || !a) return;
+  const met = game.askCount >= a.need;
+  const html = `${icon("flag")}<span>${esc(a.text)}</span><b>${met ? "Done" : `${game.askCount}/${a.need}`}</b>`;
+  if (askChip.dataset.k !== html) {
+    askChip.dataset.k = html;
+    askChip.innerHTML = html;
+    askChip.classList.toggle("met", met);
+  }
+  const hud = ui.root.querySelector<HTMLElement>(".hud");
+  const top = `${Math.round((hud?.getBoundingClientRect().bottom ?? 60) + 6)}px`;
+  if (askChip.style.top !== top) askChip.style.top = top;
+  if (askChip.style.left !== "12px") askChip.style.left = "12px";
+}
+
+/** The dish on a tray draws this much bigger while its receipt is folded (PlateView.boost). */
+const TRAY_ZOOM = 1.3;
+
+/** When each tray became ready (performance.now ms), so Serve waits for the last layer's landing. */
+const readySince: (number | null)[] = [null, null, null];
+/** Serve shows this long after the last layer lands (after build #78), so the squash plays first. */
+const SERVE_DELAY_MS = 300;
 
 function updateTrayActs(): void {
   const on = game.phase === "playing" && !ptr?.held;
-  game.slots.forEach((_, i) => {
-    const { serveBtn } = trayActs[i];
+  const now = performance.now();
+  const room = game.slots.filter((s) => s.order || s.fig).length < WINDOW[game.pacing];
+  game.slots.forEach((s, i) => {
+    const { serveBtn, callBtn } = trayActs[i];
+    // The call chip: an empty tray, someone in line and room at the window (not while guided).
+    const call = on && room && !s.order && !s.fig && game.line.length > 0 && !(game.tutorial && game.served < 2);
+    callBtn.hidden = !call;
+    if (call) {
+      const label = `Call next · ${game.line.length}`;
+      if (callBtn.textContent !== label) {
+        callBtn.textContent = label;
+        callBtn.setAttribute("aria-label", `Call the next customer to this tray, ${game.line.length} waiting`);
+      }
+      const p = plateScreen(i);
+      callBtn.style.transform = `translate(${(i * (bands.tray.w / 3) + bands.tray.w / 6 - 50).toFixed(0)}px, ${(p.y - 22).toFixed(0)}px)`;
+    }
     const ready = on && trayReady(i);
-    serveBtn.hidden = !ready;
-    if (!ready) return;
-    const p = plateScreen(i);
+    if (!ready) readySince[i] = null;
+    else readySince[i] ??= now;
+    const show = ready && now - readySince[i]! >= SERVE_DELAY_MS;
+    serveBtn.hidden = !show;
+    if (!show) return;
+    // Serve is a slim pill along the tray's front lip, under the food and its staleness bar, so the
+    // finished dish stays in view (it used to sit right over it).
+    const v = trayView.staleBarPoint(i).project(trayView.camera);
     const slotW = bands.tray.w / 3;
-    // Serve sits over the finished food.
-    serveBtn.style.transform = `translate(${(i * slotW + slotW / 2 - 42).toFixed(0)}px, ${(p.y - 18).toFixed(0)}px)`;
+    const y = bands.tray.y + ((1 - v.y) / 2) * bands.tray.h + 5;
+    serveBtn.style.transform = `translate(${(i * slotW + slotW / 2 - 45).toFixed(0)}px, ${y.toFixed(0)}px)`;
   });
 }
 
@@ -4002,6 +4112,8 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       // A tap on a finished tray hands it over too.
       else if (!pt.moved && trayReady(pt.plate)) serve(pt.plate);
       else if (!pt.moved && game.slots[pt.plate].order) hintOnce("serve", "When everything's on, tap Serve (or swipe the tray up) to hand it over.", 2.5);
+      // A tap on an empty tray calls the next person in line to it.
+      else if (!pt.moved && !game.slots[pt.plate].order && !game.slots[pt.plate].fig) callToTray(pt.plate);
       break;
   }
 }
@@ -4492,6 +4604,9 @@ function startShift(): void {
   game.bonus = save.bonus && save.bonuses.includes(save.bonus) ? save.bonus : null;
   game.shiftLength = shiftSeconds(game.shift, stop().shiftLength);
   game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: game.shift, bonus: game.bonus, pacing: game.pacing });
+  // Today's local ask, the same one Prep showed (not on the guided first shift).
+  game.ask = game.tutorial ? null : askFor(stop(), menuFor(stop(), save.hidden), save.day, game.customers);
+  game.askCount = 0;
   // A shift starts a fresh block of driving: the evening's hops count against the whole range.
   save.driven = 0;
   writeSave(save);
@@ -4784,7 +4899,7 @@ function endShift(arrive: Arrival): void {
   const popBefore = save.popularity;
   // Popularity: yesterday's fades a touch, then word of mouth and the press move it.
   // The guest book doubles the good word; apology cookies keep walk-outs from costing any.
-  const word = wordOfMouth(game.stars, has("cookies") ? 0 : game.lost, has("cookies") ? 0 : game.leftLine);
+  const word = wordOfMouth(game.stars, has("cookies") ? 0 : game.lost, has("cookies") ? 0 : game.leftLine, save.popularity);
   save.popularity = fadePopularity(save.popularity) + (word > 0 && has("guestbook") ? word * 2 : word) + (game.press?.pop ?? 0);
   save.popularity = Math.max(10, Math.min(100, save.popularity));
   if (game.gentle) save.popularity = Math.max(popBefore, save.popularity);
@@ -4811,7 +4926,7 @@ function endShift(arrive: Arrival): void {
   // The takings go into savings, for the Garage.
   save.bank += takings;
   // A great shift unlocks this town's bonus, for sale in the Garage from now on.
-  const great = !game.tutorial && greatShift(game.stars, game.served, game.served + game.lost);
+  const great = !game.tutorial && greatShift(game.stars, game.served, game.served + game.lost, game.customers);
   let unlocked: BonusId | null = null;
   const tb = townBonus(here.id);
   if (great && tb && !save.found.includes(tb.id)) {
@@ -4821,6 +4936,8 @@ function endShift(arrive: Arrival): void {
   if (ok) {
     const firstTime = !save.passedTowns.includes(here.id);
     lastStop = passTown(save, here.id) && firstTime;
+    // A great shift counts as two toward opening the roads (after build #78), as does a local ask met.
+    if (great || askMet()) passTown(save, here.id);
     if (lastStop) save.trips++;
   }
   const opened = save.unlocked.filter((id) => !before.includes(id)).map(townById);
@@ -5146,6 +5263,10 @@ function updateUi(dt = 0): void {
         t.innerHTML = ticketHtml(order, plate, shownPct, false);
       }
       s.ticketKey = key;
+      if (t.dataset.tipLost) {
+        delete t.dataset.tipLost;
+        t.querySelector(".tipc")?.classList.add("lost");
+      }
       t.dataset.fit = "1";
     } else {
       // Patience runs on between redraws: just move the bar and the face's mood.
@@ -5153,7 +5274,14 @@ function updateUi(dt = 0): void {
       if (bar) bar.style.width = `${(Math.max(0, Math.min(1, shownPct)) * 100).toFixed(0)}%`;
       const mood = patienceMood(shownPct);
       const pat = t.querySelector<HTMLElement>(".pat");
-      if (pat && !pat.classList.contains(mood)) t.dataset.fit = "";
+      if (pat && !pat.classList.contains(mood)) {
+        t.dataset.fit = "";
+        // The tip just stepped down a band: a soft tick, and the coin gives a little start.
+        if (s.lesson < 0) {
+          sfx.tick();
+          t.dataset.tipLost = "1";
+        }
+      }
     }
   });
   trayView.setActive(
@@ -5171,7 +5299,11 @@ function updateUi(dt = 0): void {
       if (x > r.left - 24 && x < r.right + 24) bottom = Math.max(bottom, r.bottom);
     }
     trayView.fitUnder(i, (bottom - bands.tray.y) / bands.tray.h);
+    // Receipt folded (or none): the dish zooms in to fill the wall the receipt left (after build #78).
+    const t = ui.tickets[i];
+    pv.boost = t.hidden || t.dataset.mode === "stub" || !t.dataset.mode ? TRAY_ZOOM : 1;
   });
+  updateAskChip();
   updateSauce(dt);
   updateCut(dt);
   updateFly(dt);

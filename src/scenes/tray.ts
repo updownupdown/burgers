@@ -233,6 +233,12 @@ export class PlateView {
   full = 0.6;
   /** Tallest stack (tray-local units above the tray) that stays clear of the receipts. */
   headroom = Infinity;
+  /**
+   * How much bigger the dish may draw while the receipt over this tray is folded (after build #78):
+   * the wall it frees goes to the food, so a finished build is the hero. Eased in `update`.
+   */
+  boost = 1;
+  private boostNow = 1;
 
   constructor() {
     const trayBody = makeTrayBody(trayStyle());
@@ -344,7 +350,7 @@ export class PlateView {
   private fitScale(): number {
     const top = this.stackTop() + 0.15;
     const room = this.headroom - this.burger.position.y;
-    return Math.max(this.full * MIN_FIT, Math.min(this.full, room / top));
+    return Math.max(this.full * MIN_FIT, Math.min(this.full * this.boostNow, room / top));
   }
 
   /**
@@ -457,7 +463,9 @@ export class PlateView {
   }
 
   update(dt: number): void {
-    // A tall burger shrinks a little, all at once, so its top stays clear of the receipts.
+    // A tall burger shrinks a little, all at once, so its top stays clear of the receipts; with the
+    // receipt folded it grows into the freed wall (boost).
+    this.boostNow += (this.boost - this.boostNow) * Math.min(1, dt * 6);
     this.s += (this.fitScale() - this.s) * Math.min(1, dt * 8);
     for (const e of this.entries) {
       if (e.piece.kind === "cheese") e.obj.userData.update(e.piece);

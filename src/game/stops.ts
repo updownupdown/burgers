@@ -198,7 +198,8 @@ export const STOPS: Stop[] = [
     // The first town: the grill, the egg and the fryer, with a short cold rail.
     pantry: ["bun", "patty", "egg", "cheese", "lettuce", "tomato"],
     poutine: false,
-    customers: 9,
+    // 11 (was 9): a new truck's first real shift sees about six people (review of build #78).
+    customers: 11,
     shiftLength: 180,
     menu: [CLASSIC, SUNRISE],
   },

@@ -87,10 +87,11 @@ describe("what customers say", () => {
   const rng = () => 0;
   const base = { stars: 4, missing: null, notes: [] as string[], perks: [] as string[], patience: 0.5 };
 
-  it("stays quiet about an ordinary good order", () => {
+  it("stays quiet about an ordinary order, and says what cost a 4★ its fifth star", () => {
     expect(opinionLine(base, rng)).toBeNull();
     expect(opinionLine({ ...base, stars: 3 }, rng)).toBeNull();
-    expect(opinionLine({ ...base, notes: ["messy stack"] }, rng)).toBeNull();
+    expect(opinionLine({ ...base, notes: ["messy stack"] }, rng)).toBe("Messy stack.");
+    expect(opinionLine({ ...base, stars: 5, notes: [] }, rng)).not.toBeNull();
   });
 
   it("says what was missing or wrong", () => {

@@ -1,5 +1,6 @@
 import { CROOKED, cutFactor } from "./knife";
 import { avgCook, bunToast, CHAR_FACE, cookLevel, COOK_SCALE, cookZone, friesQuality, friesZone, FRY_ZONE, isFlipped, isMelted, DRINK_FILL, MARKED, paleSide, darkSide, pattyDoneness, SALT } from "./cooking";
+import { DRINK_PRICE, FRIES_PRICE } from "./menu";
 import type { Drink, ExpectedLayer, Fries, Kind, Layer, Order, Piece, Plate } from "./types";
 import { BREADS, COUNTED, FRY_LABEL, fryOf, KIND_LABEL, SAUCE_RADIUS, sauceRadius, SIZE_LABEL, SUGARED, TORTILLAS, type FryKind } from "./types";
 
@@ -19,6 +20,36 @@ export interface ScoreResult {
   faulty: boolean;
   /** A whole ordered item left off the tray (the burger, the fries or the drink), as its note. Always sent back once, even on Chill. */
   missing: string | null;
+  /**
+   * Chef's touches (after build #78): crafted extras that each add to the tip, shown as stamps on
+   * the coin ("+$1 Perfect sauce"). See TOUCH_TIP.
+   */
+  touches: string[];
+}
+
+/** Dollars each chef's touch adds to the tip. Hand-pressed tortillas were already worth $2. */
+export const TOUCH_TIP: Record<string, number> = { "Perfect sauce": 1, "Grill marks": 1, "Leopard spots": 1, "Hand-pressed": 2, "Clean cut": 1, "Perfect salt": 1, "Garnish": 1 };
+
+/** Salt this close to the Perfect line counts as a chef's touch. */
+export const SALT_TOUCH = 0.1;
+
+/**
+ * Fries go soggy once they're out of the oil (`Fries.held`, after build #78): fine for 25 s, then
+ * down to 15% off by 60 s.
+ */
+export const FRIES_HOLD = { grace: 25, ruin: 60, max: 0.15 };
+export function friesHeldPenalty(held: number | undefined): number {
+  return clamp01(((held ?? 0) - FRIES_HOLD.grace) / (FRIES_HOLD.ruin - FRIES_HOLD.grace)) * FRIES_HOLD.max;
+}
+
+/**
+ * How much the sides weigh against the main: their share of the price (after build #78; it was a
+ * flat 15%, so a wrong drink barely moved the stars), between 15% and 35%.
+ */
+export function sideWeight(order: Order): number {
+  const sides = (order.fries && !order.poutine ? FRIES_PRICE[order.friesSize] : 0) + (order.drink ? DRINK_PRICE[order.drinkSize] : 0);
+  if (!order.price || !sides) return 0.15;
+  return Math.max(0.15, Math.min(0.35, sides / order.price));
 }
 
 /** Longest common subsequence of layer kinds, returned as index pairs (expected, actual). */
@@ -507,7 +538,8 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
     total = sidesQ * (act.length ? 0.8 : 1);
   } else {
     const burger = structure * (0.25 + 0.75 * quality) * (0.85 + 0.15 * presentation);
-    total = burger * 0.85 + sides * 0.15;
+    const w = sideWeight(order);
+    total = burger * (1 - w) + sides * w;
   }
 
   // Patties seared on the grille come out with grill marks: a little extra for each one.
@@ -549,13 +581,32 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
   }
   if (!order.drink && plate.drink && plate.drink.fill > 0.6) freebie(Math.min(1, plate.drink.fill), "free drink");
 
+  // Chef's touches: the crafted extras, each worth a little on the tip.
+  const touches: string[] = [];
+  const sauced = pairs.filter(([i]) => SAUCE_TOUCH.has(exp[i].kind));
+  if (sauced.length && sauced.every(([, j]) => sauceVerdict(sauceCoverage(act[j].piece.stroke)).word === "perfect")) touches.push("Perfect sauce");
+  if (perks.includes("grill marks")) touches.push("Grill marks");
+  if (perks.includes("leopard spots")) touches.push("Leopard spots");
+  if (perks.includes("hand-pressed tortillas")) touches.push("Hand-pressed");
+  if (order.slice && exp.length) {
+    const base = plate.layers[0]?.piece;
+    const top = plate.layers[plate.layers.length - 1]?.piece;
+    const cut = base?.kind === "dough" ? ((base.cuts ?? 0) >= 2 ? base.cutQ ?? 1 : -1) : top && BREADS.has(top.kind) && top.cut ? top.cutQ ?? 1 : -1;
+    if (cut >= CROOKED) touches.push("Clean cut");
+  }
+  if (order.fries && !order.poutine && plate.fries && Math.abs((plate.fries.salt ?? 0) - SALT.perfect) <= SALT_TOUCH + 1e-9) touches.push("Perfect salt");
+  if (order.garnish && plate.drink?.garnish) touches.push("Garnish");
+
   const score = Math.round(clamp01(total) * 100);
   const sideMissing = (order.fries && (!plate.fries || friesQ < 0.35)) || (!!order.drink && (!plate.drink || drinkQ < 0.35));
   const faulty = (exp.length > 0 && (pairs.length < exp.length || worstLayer < 0.35)) || sideMissing;
   const main = !exp.length ? "burger" : TORTILLAS.has(exp[0].kind) ? (exp[0].folded ? "quesadilla" : "tacos") : exp[0].kind === "tostada" ? "tostada" : BREADS.has(exp[0].kind) ? "panini" : exp[0].kind === "dough" ? (exp[0].folded ? "calzone" : "flatbread") : "burger";
   const missing = order.drink && !plate.drink ? "forgot the drink" : order.fries && !plate.fries ? `forgot the ${sideName(order)}` : exp.length > 0 && plate.layers.length === 0 ? `forgot the ${main}` : null;
-  return { score, stars: starsFor(score), structure, quality, presentation, sides, notes, perks, faulty, missing };
+  return { score, stars: starsFor(score), structure, quality, presentation, sides, notes, perks, faulty, missing, touches };
 }
+
+/** Drawn sauces (not the ladled red sauce, oil or honey) earn the Perfect sauce touch. */
+const SAUCE_TOUCH: ReadonlySet<Kind> = new Set<Kind>(["ketchup", "mustard", "pesto", "aioli", "redsalsa", "greensalsa", "crema"]);
 
 /** What a customer calls a fried side: fries, sweet fries, chips, churros, fritti or fritters. */
 function sideWord(fry: FryKind): string {
@@ -581,6 +632,11 @@ function friesScore(order: Order, fries: Fries, notes: string[]): number {
   if (fry !== fryOf(order)) {
     q *= 0.6;
     notes.push(`wanted ${fryOf(order) === "fries" ? "regular fries" : fryOf(order) === "sweet" ? "sweet potato fries" : FRY_LABEL[fryOf(order)].toLowerCase()}`);
+  }
+  const soggy = friesHeldPenalty(fries.held);
+  if (soggy > 0) {
+    q *= 1 - soggy;
+    if (soggy > 0.05) notes.push(`${order.poutine ? sideName(order) : word} went cold`);
   }
   if (fries.size !== order.friesSize) {
     q *= 0.5;
@@ -639,6 +695,11 @@ function drinkScore(order: Order, d: Drink, notes: string[]): number {
     q *= 0.6;
     notes.push("asked for no ice");
   }
+  // The local drink comes with its garnish (Coast cucumber, Red Rock lime, Isle apple).
+  if (order.garnish && !d.garnish) {
+    q *= 0.9;
+    notes.push(`no ${order.garnish} on the drink`);
+  }
   // A drink handed over without a lid is a drink about to be spilled.
   if (!d.lid) {
     q *= 0.8;
@@ -647,10 +708,25 @@ function drinkScore(order: Order, d: Drink, notes: string[]): number {
   return q;
 }
 
+/**
+ * The tip steps down with the customer's mood (after build #78), so each order has small deadlines
+ * the ticket shows: the full tip while their face is still neutral (half their patience or more),
+ * half once they look sad, none once they're angry (under a fifth). Same bands as `patienceMood`.
+ */
+export const TIP_MOOD = { full: 0.5, half: 0.2 };
+export function tipShare(patienceLeft: number): 1 | 0.5 | 0 {
+  return patienceLeft >= TIP_MOOD.full ? 1 : patienceLeft >= TIP_MOOD.half ? 0.5 : 0;
+}
+
 /** Money earned: part of the price is always paid, the rest scales with score; tips need speed too. */
 export function payout(order: Order, score: number, patienceLeft: number): { pay: number; tip: number } {
   const s = score / 100;
   const pay = Math.round(order.price * (0.3 + 0.7 * s));
-  const tip = s >= 0.7 ? Math.round(order.price * 0.4 * s * clamp01(patienceLeft)) : 0;
+  const tip = s >= 0.7 ? Math.round(order.price * 0.4 * s * tipShare(patienceLeft)) : 0;
   return { pay, tip };
+}
+
+/** Chef's touches' dollars, paid only on an order good enough to tip on (4★ and up). */
+export function touchTip(touches: readonly string[], stars: number): number {
+  return stars >= 4 ? touches.reduce((a, t) => a + (TOUCH_TIP[t] ?? 0), 0) : 0;
 }

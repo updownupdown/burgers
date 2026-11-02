@@ -1,6 +1,7 @@
 import type { CrowdId } from "./business";
 import { CROWD } from "./business";
 import { DIFFICULTY, type Difficulty } from "./difficulty";
+import { BREADS, PROTEINS, TORTILLAS, type Order } from "./types";
 
 /**
  * The line outside the truck. People arrive over the shift and join the line (or walk past it
@@ -48,15 +49,61 @@ export function lineDrain(position: number): number {
 /**
  * Fame earned (or lost) by a shift's service alone, before the press has its say: happy
  * customers (a 4★ or 5★ opinion, reviewed or not) tell their friends; walk-outs and people who
- * gave up in line tell theirs.
+ * gave up in line tell theirs. A truck few have heard of (under EARLY_WORD popularity) gets +1 per
+ * two happy customers rather than three, so cooking well grows a small crowd past the daily fade.
  */
-export function wordOfMouth(stars: number[], walkedOut: number, leftLine: number): number {
+export const EARLY_WORD = 40;
+export function wordOfMouth(stars: number[], walkedOut: number, leftLine: number, popularity = 100): number {
   const happy = stars.filter((s) => s >= 4).length;
-  const gained = Math.min(6, Math.floor(happy / 3));
+  const gained = Math.min(6, Math.floor(happy / (popularity < EARLY_WORD ? 2 : 3)));
   const lost = Math.min(4, Math.floor(walkedOut / 2) + Math.floor(leftLine / 3));
   return gained - lost;
 }
 
 function clamp01(x: number): number {
   return Math.max(0, Math.min(1, x));
+}
+
+/**
+ * Work a dish takes beyond its layers, in seconds of window patience (after build #78): a folded
+ * quesadilla is warmed, filled, folded, melted and flipped; a flatbread bakes; a calzone folds and
+ * bakes slower; a panini is pressed. Burgers (smash included) need nothing extra.
+ */
+export const DISH_WORK = { quesadilla: 45, flatbread: 30, calzone: 40, panini: 20, cut: 8, garnish: 4 };
+
+/** Base window patience, before layers, sides and the dish's work (was 50 for every dish). */
+export const WINDOW_BASE = 40;
+
+/**
+ * How long a customer at the window waits for their order (seconds, before the bench, crowd and
+ * pacing scale it): a base, then each layer, extra counted piece, protein and side, and the
+ * dish's own work, so the regions feel about equally tight.
+ */
+export function windowPatience(order: Order): number {
+  const slices = order.layers.reduce((n, l) => n + Math.max(0, (l.count ?? 1) - 1), 0);
+  const proteins = order.layers.filter((l) => l.kind === "patty" || PROTEINS.has(l.kind)).length;
+  const base = order.layers[0];
+  const work = !base
+    ? 0
+    : TORTILLAS.has(base.kind) && base.folded
+      ? DISH_WORK.quesadilla
+      : base.kind === "dough"
+        ? base.folded
+          ? DISH_WORK.calzone
+          : DISH_WORK.flatbread
+        : BREADS.has(base.kind)
+          ? DISH_WORK.panini
+          : 0;
+  return (
+    WINDOW_BASE +
+    order.layers.length * 7 +
+    slices * 2 +
+    proteins * 22 +
+    work +
+    (order.slice ? DISH_WORK.cut : 0) +
+    (order.garnish ? DISH_WORK.garnish : 0) +
+    (order.fries ? 30 : 0) +
+    (order.poutine ? 10 : 0) +
+    (order.drink ? 9 : 0)
+  );
 }

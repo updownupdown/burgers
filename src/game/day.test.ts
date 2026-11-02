@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { BONUSES, greatShift, migrateBonuses, townBonus } from "./bonus";
+import { BONUSES, GREAT, greatMin, greatShift, migrateBonuses, townBonus } from "./bonus";
+import { wordOfMouth } from "./line";
+import { fadePopularity } from "./press";
 import { buyBonus, buyLook, readyToBuy, wearLook } from "./garage";
 import { DEFAULT_LOOK, LOOKS, SLOTS } from "./looks";
 import { roadOrder } from "./devmode";
@@ -45,9 +47,38 @@ describe("who turns up", () => {
     expect(expectedCustomers({ ...base, popularity: 70, shift: { start: 12, end: 13 } })).toBeLessThan(all);
   });
 
-  it("spaces people out on calmer pacing, and the sandwich board pulls more", () => {
-    expect(expectedCustomers({ ...base, popularity: 70, pacing: "chill" })).toBeLessThan(expectedCustomers({ ...base, popularity: 70 }));
+  it("keeps the crowd on Chill, packs more in on Stressful, and the sandwich board pulls more", () => {
+    expect(expectedCustomers({ ...base, popularity: 70, pacing: "chill" })).toBe(expectedCustomers({ ...base, popularity: 70 }));
+    expect(expectedCustomers({ ...base, popularity: 70, pacing: "stressful" })).toBeGreaterThan(expectedCustomers({ ...base, popularity: 70 }));
     expect(expectedCustomers({ ...base, popularity: 70, bonus: "board" })).toBeGreaterThan(expectedCustomers({ ...base, popularity: 70 }));
+  });
+});
+
+describe("a new truck's first shifts (review of build #78)", () => {
+  const base = { stop: townById("pinecrest"), popularity: START_POPULARITY, rating: 4, hidden: [] as string[] };
+  it("brings about six people to Pinecrest on any pacing", () => {
+    for (const pacing of ["chill", "balanced"] as const) {
+      const n = expectedCustomers({ ...base, pacing });
+      expect(n).toBeGreaterThanOrEqual(6);
+      expect(n).toBeLessThanOrEqual(7);
+    }
+  });
+  it("lets a perfect small shift be a great one", () => {
+    const n = expectedCustomers(base);
+    const min = greatMin(n);
+    expect(min).toBeLessThanOrEqual(n);
+    expect(greatShift(new Array(min).fill(5), min, min, n)).toBe(true);
+    expect(greatMin(4)).toBe(4);
+    expect(greatMin(5)).toBe(4);
+    expect(greatMin(20)).toBe(GREAT.min);
+    // Five of five at 5★ on a four-or-five crowd: great (it wasn't, with a flat six).
+    expect(greatShift([5, 5, 5, 5, 5], 5, 5, 5)).toBe(true);
+  });
+  it("grows popularity from cooking well, past the nightly fade", () => {
+    const five = [5, 5, 5, 5, 5];
+    expect(fadePopularity(START_POPULARITY) + wordOfMouth(five, 0, 0, START_POPULARITY)).toBeGreaterThan(START_POPULARITY);
+    // A known truck still needs three happy customers a point.
+    expect(wordOfMouth(five, 0, 0, 60)).toBe(1);
   });
 });
 

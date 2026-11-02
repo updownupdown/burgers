@@ -10,7 +10,7 @@ import { BATTER, DOUGH, HEARTH, makeBatterBowl, makeDoughStack, makeHearthOven, 
 import { INNER_RX, INNER_RZ, makeFlatbread, PIE, pieYaw, type FlatbreadObject } from "../render/flatbread";
 import { QUESO } from "../render/sides";
 import { tickTacos } from "../render/tacos";
-import { counterTop, wallPanels } from "../render/wear";
+import { brushedSteel, counterTop } from "../render/wear";
 import { CUP_DIMS, cupSurfaceY, makeCarton, makeCartonStack, makeCup, makeFood, makeBasketFries, makeFries, stackBases, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { dressCup } from "../render/cup";
 import { CURD_TRAY, FREEZER, GRAVY_WELL, makeCurdHandful, makeCurdTray, makeFreezer, makeGravyWell, makeLadle, makeShaker } from "../render/fryer";
@@ -19,6 +19,8 @@ import { makeGriddle, ZONE_HEATS, type GriddleObject, type ZoneHeat } from "../r
 import { makeColdRail } from "../render/machines/coldRail";
 import { makeSauceBottle, makeSauceCaddy, type SauceCaddyObject } from "../render/machines/sauces";
 import { DRINK_TINT, makeCupStack, makeFountain, type FountainObject, makeFryBasket, makeFryer, makeIceWell, makeLidStackSized, makePackPad, makeTrashChute, FRY_BASKET, type FryerObject } from "../render/machines";
+import { CABIN } from "../render/cabin";
+import { wallMaterial } from "../render/walls";
 import { applyKitchenLight, KITCHEN_BG, type KitchenLight } from "../render/lighting";
 import { COUNTER_FOOD, SCALE } from "../render/units";
 
@@ -148,6 +150,9 @@ export const GRILL_STACK_MAX = 6;
 const STACKS: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon"]);
 /** Trash slot running along the front edge of every counter, page-local z. */
 const TRASH = { z0: 3.05, z1: 3.75 };
+/** The counter's front edge: just past the trash chute's rim, so the chute is the last thing on the counter. */
+const COUNTER_FRONT = TRASH.z1 + 0.22;
+const mixHex = (a: string, b: string, t: number) => "#" + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
 /** The slot runs the full width of every counter (page-local x), and on between them. */
 const TRASH_HALF = 4.4;
 /** The chute's two ends (world x): just inside the left edge of the first view and the right edge of the last. */
@@ -163,7 +168,7 @@ const TRASH_X1 = () => pageX(PAGES.length - 1) + VIEW_W / 2 - TRASH_END_GAP;
  * screen, so lifting a basket (an upward flick) never looks like a carry.
  */
 const FRYER = {
-  fryer: { x: 0.25, z: -1.55 },
+  fryer: { x: 0.25, z: -1.3 },
   freezer: { x: -3.35, z: -1.75 },
   stacks: [["S", -3.45], ["M", -2.35], ["L", -1.25]] as [FriesSize, number][],
   stackZ: 1.75,
@@ -195,7 +200,8 @@ const STACK_SHOWN = 10;
  */
 /** The fountain is drawn this much bigger than its model, so its buttons are easy to hit. */
 const FOUNTAIN_SCALE = 1.22;
-const FOUNTAIN = { x: 1.1, z: -1.75 };
+/** Forward of the back wall, so the fountain's buttons clear the slim backsplash at the top of the view. */
+const FOUNTAIN = { x: 1.1, z: -0.85 };
 /** The ice bin is half the fountain model's width. */
 const ICE_WIDTH = 0.5;
 const ICE = { x: -3.25, z: -2.2 };
@@ -518,17 +524,54 @@ export class CounterView {
     this.light = applyKitchenLight(this.scene, { shadowBox: { left: -9, right: 9, top: 7, bottom: -7 } });
     this.sun = this.light.sun;
 
-    // The window line's counter top and the steel wall panels under the window.
-    const counter = counterTop(90, 10.6);
-    counter.position.set(7, 0, -0.7);
+    // The window line's counter top. Its front edge runs just past the trash chute; below it the
+    // counter's steel front drops away, catching less light toward the floor.
+    const counter = counterTop(90, COUNTER_FRONT + 6.0, CABIN.counter.color, CABIN.counter.streaks);
+    counter.position.set(7, 0, (COUNTER_FRONT - 6.0) / 2);
     this.scene.add(counter);
-    const wall = wallPanels(90, 6);
-    wall.position.set(7, -0.4, -3.4);
+    // The camera hangs almost over the counter's front, so a truly vertical front would be edge on.
+    // It's drawn leaning out toward the camera instead, so it fills the bottom of the view as the
+    // counter's front panel would to someone standing at it.
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(90, 4), brushedSteel(mixHex(CABIN.counter.color, "#5f6867", 0.72), { n: 500, seed: 4 }));
+    front.rotation.x = -0.75;
+    front.position.set(7, -0.3 - 2 * Math.cos(0.75), COUNTER_FRONT + 2 * Math.sin(0.75));
+    front.receiveShadow = true;
+    // The counter's rolled front edge, bright where it catches the light.
+    const nose = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 90, 10), toon("#eef2f1"));
+    nose.rotation.z = Math.PI / 2;
+    nose.position.set(7, -0.08, COUNTER_FRONT);
+    this.scene.add(front, nose);
+    // The truck's painted inside wall: only a strip of it shows above the counter (see cropFor).
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(90, 6, 0.06), toon(CABIN.wall));
+    wall.position.set(7, 2.6, -3.43);
     this.scene.add(wall);
-    // A steel backsplash strip where the counter meets the truck wall.
-    const splash = new THREE.Mesh(new THREE.BoxGeometry(90, 0.5, 0.1), toon("#b9d6a2"));
-    splash.position.set(7, 0.25, -3.35);
-    this.scene.add(splash);
+    this.wall = wall;
+    // The pass shelf above (out of view) shades the strip of wall under it and the back of the
+    // counter: a soft gradient, darkest at the top of the view.
+    {
+      const c = document.createElement("canvas");
+      c.width = 4;
+      c.height = 64;
+      const x = c.getContext("2d")!;
+      const g = x.createLinearGradient(0, 0, 0, 64);
+      g.addColorStop(0, `rgba(30,25,35,${CABIN.shadow})`);
+      g.addColorStop(1, "rgba(30,25,35,0)");
+      x.fillStyle = g;
+      x.fillRect(0, 0, 4, 64);
+      const t = new THREE.CanvasTexture(c);
+      const mat = new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false });
+      const onWall = new THREE.Mesh(new THREE.PlaneGeometry(90, CABIN.splash + 0.2), mat);
+      onWall.position.set(7, (CABIN.splash + 0.2) / 2, -3.38);
+      const onTop = new THREE.Mesh(new THREE.PlaneGeometry(90, 0.6), mat.clone());
+      (onTop.material as THREE.MeshBasicMaterial).opacity = 0.45;
+      onTop.rotation.x = -Math.PI / 2;
+      onTop.position.set(7, 0.005, -3.4 + 0.3);
+      this.scene.add(onWall, onTop);
+    }
+    // A small rolled steel cove where the counter meets the wall.
+    const cove = new THREE.Mesh(new THREE.BoxGeometry(90, 0.12, 0.14), toon(CABIN.counter.color));
+    cove.position.set(7, 0.06, -3.33);
+    this.scene.add(cove);
 
     this.scene.add(this.grillGroup, this.pressGroup, this.comalGroup, this.ovenGroup);
     this.pressGroup.visible = false;
@@ -1513,6 +1556,38 @@ export class CounterView {
     } else fill(makeColdRail({ cols: 2, rows: 3, kinds: cold }), SIDE_PANS);
     this.pantry = group;
     this.scene.add(group);
+  }
+
+  private wall!: THREE.Mesh;
+  /**
+   * How many px off the top of a counter band `fullH` px tall to leave out so only CABIN.splash
+   * units of wall show above the counter (the space goes to the window and the trays). Also sizes
+   * the wall's paint texture to the screen, so it matches the wall in the other bands.
+   */
+  cropFor(fullW: number, fullH: number): number {
+    const cam = this.camera.clone();
+    cam.clearViewOffset();
+    cam.position.set(0, CAM_H, LOOK_Z + CAM_BACK);
+    cam.lookAt(0, 0, LOOK_Z);
+    cam.updateMatrixWorld();
+    const y = new THREE.Vector3(0, CABIN.splash, -3.4).project(cam).y;
+    const crop = Math.max(0, Math.round(((1 - y) / 2) * fullH));
+    const a = new THREE.Vector3(0, 0.5, -3.4).project(cam);
+    const b = new THREE.Vector3(1, 0.5, -3.4).project(cam);
+    const c = new THREE.Vector3(0, 1.5, -3.4).project(cam);
+    const uppX = 1 / (((b.x - a.x) / 2) * fullW);
+    const uppY = 1 / (((c.y - a.y) / 2) * fullH);
+    const old = this.wall.material as THREE.Material;
+    this.wall.material = wallMaterial(CABIN.wallTex, CABIN.wall, 90, 6, uppX, uppY);
+    if (old.userData.disposable) old.dispose();
+    return crop;
+  }
+
+  /** Draw only the bottom `fullH - crop` px of a `fullW` x `fullH` view (taps map through the same camera). */
+  setCrop(fullW: number, fullH: number, crop: number): void {
+    if (crop > 0) this.camera.setViewOffset(fullW, fullH, 0, crop, fullW, fullH - crop);
+    else this.camera.clearViewOffset();
+    this.camera.updateProjectionMatrix();
   }
 
   layout(aspect: number): void {

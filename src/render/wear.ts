@@ -133,12 +133,12 @@ const COUNTER_TILE = 2.5;
  * along its front edge for the rolled lip,
  * and a brushed kick strip under it. Origin at the centre of the top surface.
  */
-export function counterTop(w: number, d: number, color: THREE.ColorRepresentation = "#c4cccc"): THREE.Group {
+export function counterTop(w: number, d: number, color: THREE.ColorRepresentation = "#c4cccc", streaks = 1600): THREE.Group {
   const g = new THREE.Group();
   const geo = new THREE.BoxGeometry(w, 0.3, d);
   geo.translate(0, -0.15, 0);
   tileUV(geo, w, d, COUNTER_TILE, COUNTER_TILE / 2);
-  const top = new THREE.Mesh(geo, brushedSteel(color, { n: 1600, seed: 9 }));
+  const top = new THREE.Mesh(geo, brushedSteel(color, { n: streaks, seed: 9 }));
   top.receiveShadow = true;
   top.name = "counterTop";
   outline(top, 1.004, lineColor(grade(color)));

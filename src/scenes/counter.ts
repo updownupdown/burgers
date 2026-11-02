@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { bakeStep, bakeTopping, CHAR_FACE, COMAL_SPEED, cookLevel, COOK_SCALE, DRINK_FILL, flipFaces, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, grillStep, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, rimAngle, rimOf, type Cookable } from "../game/cooking";
-import type { DrinkId, FriesSize, FryKind, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
+import type { DrinkId, FriesSize, Garnish, FryKind, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
 import { BREADS, CUP_SPEED, GRILLABLE, isSauce, OVEN_CHEESE, PRESS_CHEESE, PROTEINS, SCOOPED, TORTILLAS } from "../game/types";
 import { fountainFor, type MiddleCounter } from "../game/stops";
 import { BAY, BOARD, CLOSED_GAP, makeCuttingBoard, makePressBay, PLATE, type PressBayObject } from "../render/machines/press";
@@ -15,6 +15,7 @@ import { makeTacoRack } from "../render/dishes";
 import { ageLayers, goesStale, RACK_SLOTS, WARM_AGE } from "../game/hold";
 import { brushedSteel, counterTop } from "../render/wear";
 import { CUP_DIMS, cupSurfaceY, makeCarton, makeCartonStack, makeCup, makeFood, makeBasketFries, makeFries, stackBases, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
+import { makeGarnishDish } from "../render/models/garnish";
 import { dressCup } from "../render/cup";
 import { CURD_TRAY, FREEZER, GRAVY_WELL, makeCurdHandful, makeCurdTray, makeFreezer, makeGravyWell, makeLadle, makeShaker } from "../render/fryer";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
@@ -230,6 +231,8 @@ const ICE = { x: -3.25, z: -2.2 };
 const CUP_STACKS: [Size, number][] = [["S", -3.5], ["M", -2.25], ["L", -1.0]];
 const LID_STACKS: [Size, number][] = [["S", 1.0], ["M", 2.25], ["L", 3.5]];
 const FRONT_Z = 1.95;
+/** The garnish dish (after build #78): in the gap between the ice well and the small cups. */
+const GARNISH_DISH = { x: -3.05, z: 0.05 };
 type P3 = { x: number; y: number; z: number };
 const scaleP = (p: P3, k: number): P3 => ({ x: p.x * k, y: p.y * k, z: p.z * k });
 const FOUNTAIN_SPOTS = (() => {
@@ -357,6 +360,7 @@ export interface Tap {
 
 export type Hit =
   | { type: "bin"; kind: Kind }
+  | { type: "garnish" }
   | { type: "grillItem"; item: GrillItem }
   | { type: "mess"; idx: number }
   | { type: "bottle"; sauce: SauceKind }
@@ -1664,6 +1668,32 @@ export class CounterView {
 
   /** Where each lid stack stands, for its size tag and the playtest bot. */
   lidAt: { size: Size; at: THREE.Vector3 }[] = [];
+
+  /**
+   * The local drink's garnish (after build #78): a dish of it between the ice and the cups,
+   * outside the Pines. Null where the local drinks go without.
+   */
+  garnish: Garnish | null = null;
+  private garnishDish = new THREE.Group();
+  setGarnish(kind: Garnish | null): void {
+    if (kind === this.garnish) return;
+    this.garnish = kind;
+    for (const c of [...this.garnishDish.children]) {
+      this.garnishDish.remove(c);
+      disposeObject(c);
+    }
+    if (!this.garnishDish.parent) {
+      this.garnishDish.position.copy(this.world(0, GARNISH_DISH.x, 0, GARNISH_DISH.z));
+      this.scene.add(this.garnishDish);
+      this.proxy(new THREE.BoxGeometry(1.4, 0.8, 1.3), this.world(0, GARNISH_DISH.x, 0.3, GARNISH_DISH.z), { type: "garnish" }, this.garnishDish);
+    }
+    this.garnishDish.visible = !!kind;
+    if (kind) this.garnishDish.add(makeGarnishDish(kind));
+  }
+  /** Where the garnish dish stands, world space (for the playtest bot). */
+  garnishPoint(): THREE.Vector3 {
+    return this.world(0, GARNISH_DISH.x, 0.2, GARNISH_DISH.z);
+  }
 
   private fryer!: FryerObject;
   /** The fryer's spots, scaled with it. */

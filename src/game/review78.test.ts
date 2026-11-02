@@ -6,7 +6,9 @@ import { LOOKS } from "./looks";
 import { orderFromRecipe } from "./menu";
 import { pieceFor } from "./press";
 import { FRIES_HOLD, friesHeldPenalty, payout, scorePlate, sideWeight, tipShare, touchTip } from "./scoring";
-import { townById } from "./stops";
+import { garnishFor, townById } from "./stops";
+import { countRegular, REGULAR_GOAL, regularName, regularOrder } from "./regulars";
+import { RUSH, rushAt } from "./line";
 import { DONENESS_TARGET, newPiece, type Kind, type Layer, type Order, type Piece, type Plate } from "./types";
 import { seededRng } from "./menu";
 import { DIFFICULTY } from "./difficulty";
@@ -165,5 +167,61 @@ describe("bonuses and looks", () => {
   it("prices the grand looks within a trip's reach", () => {
     for (const l of LOOKS.filter((x) => x.grand)) expect(l.price).toBeLessThanOrEqual(20000);
     expect(LOOKS.find((l) => l.id === "airship")!.price).toBe(18750);
+  });
+});
+
+describe("the regional touches (P3-8, P3-9, P3-10)", () => {
+  it("garnishes the local drinks outside the Pines only", () => {
+    expect(garnishFor("mountains", "pine")).toBeUndefined();
+    expect(garnishFor("coast", "cucumber")).toBe("cucumber");
+    expect(garnishFor("desert", "hibiscus")).toBe("lime");
+    expect(garnishFor("orchard", "cider")).toBe("apple");
+    // House drinks go without.
+    expect(garnishFor("coast", "cola")).toBeUndefined();
+  });
+
+  it("costs a little when the garnish is missing, and counts as a touch when it's there", () => {
+    const st = townById("saltwater");
+    const o = { ...regularOrder(1, st), layers: [], fries: false };
+    expect(o.garnish).toBe("cucumber");
+    expect(o.regular).toBe(regularName("saltwater"));
+    const drink = { flavor: o.drink!, fill: 0.86, size: o.drinkSize, ice: true, lid: true };
+    const plain: Plate = { layers: [], fries: null, drink };
+    const dressed: Plate = { layers: [], fries: null, drink: { ...drink, garnish: "cucumber" } };
+    expect(scorePlate(o, dressed).touches).toContain("Garnish");
+    expect(scorePlate(o, plain).notes.join(" ")).toContain("no cucumber");
+  });
+
+  it("gives every town a regular with the same order every visit, with a change of their own", () => {
+    for (const id of ["pinecrest", "summit", "harbor", "sunvalley", "portamber"]) {
+      const a = regularOrder(1, townById(id));
+      const b = regularOrder(2, townById(id));
+      expect(a.name).toBe(b.name);
+      expect(a.mods).toEqual(b.mods);
+      expect(a.regular).toBe(regularName(id));
+      expect(a.fries).toBe(true);
+    }
+  });
+
+  it("makes them a regular on the third good visit, once", () => {
+    let t = 0;
+    const wins: boolean[] = [];
+    for (const stars of [5, 3, 4, 5, 5]) {
+      const r = countRegular(t, stars);
+      t = r.tally;
+      wins.push(r.won);
+    }
+    expect(t).toBe(REGULAR_GOAL);
+    expect(wins).toEqual([false, false, false, true, false]);
+  });
+
+  it("rushes once mid-shift at capitals and on event days only", () => {
+    expect(rushAt(false, false, 3, 300)).toBeNull();
+    for (let day = 1; day < 30; day++) {
+      const t = rushAt(true, false, day, 300)!;
+      expect(t).toBeGreaterThanOrEqual(300 * RUSH.from);
+      expect(t).toBeLessThanOrEqual(300 * (RUSH.from + RUSH.span));
+    }
+    expect(rushAt(false, true, 4, 300)).toBe(rushAt(true, false, 4, 300));
   });
 });

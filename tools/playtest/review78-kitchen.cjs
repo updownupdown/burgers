@@ -190,5 +190,25 @@ const pc = `(() => { let uid = 9000; return (kind, cook = 0.55, extra = {}) => (
     await shot(p, 'grill-busy-meters');
     await b.close();
   }
+  if (want('garnish')) {
+    // The coast: the cucumber dish by the ice, the regular's ticket with their name, and a
+    // garnished drink on the tray.
+    const { b, p } = await start('saltwater');
+    await p.evaluate(() => window.__bv.goToPage(0));
+    await step(p, 0.8);
+    await p.evaluate(() => {
+      const g = window.__bv.game;
+      const s = g.slots[0];
+      const o = window.__bv.regularOrder(77);
+      s.order = o; s.leaving = false; s.maxPatience = 200; s.patience = 190; s.ticketKey = '';
+      s.plate = { layers: [], fries: null, drink: { flavor: o.drink, fill: 0.86, size: o.drinkSize, ice: true, lid: true, garnish: o.garnish } };
+      window.__bv.trayView.plates[0].sync(s.plate, true, () => {});
+      g.active = 0;
+    });
+    await step(p, 0.4);
+    await p.waitForTimeout(300);
+    await shot(p, 'drinks-garnish-and-regular');
+    await b.close();
+  }
   console.log('done');
 })();

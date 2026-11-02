@@ -157,7 +157,7 @@ export interface Drink {
   ice?: boolean;
   lid?: boolean;
   /** A garnish dropped on (Order.garnish). */
-  garnish?: boolean;
+  garnish?: Garnish;
 }
 
 export interface Plate {

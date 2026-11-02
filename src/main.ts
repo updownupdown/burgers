@@ -7,10 +7,10 @@ import { expectedCustomers, sleep } from "./game/day";
 import { greatShift, townBonus, type BonusId } from "./game/bonus";
 import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, validShift, type ShiftWindow } from "./game/shift";
 import { freshSave, loadSave, passed, passTown, writeSave, type Closing } from "./game/progress";
-import { eventOn, fountainFor, fryerOf, middleOf, townById, withEvent, type TownEvent } from "./game/stops";
+import { eventOn, fountainFor, fryerOf, garnishFor, garnishOf, middleOf, townById, withEvent, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
-import { joinChance, lineDrain, linePatience, WINDOW, windowPatience, wordOfMouth } from "./game/line";
+import { joinChance, lineDrain, linePatience, MAX_LINE, RUSH, rushAt, WINDOW, windowPatience, wordOfMouth } from "./game/line";
 import { FRIES_HOLD, HOLD_GRACE, HOLD_RUIN, LADLE_BAND, LEOPARD_EVEN, payout, SAUCE_BAND, sauceCoverage, sauceGate, sauceVerdict, scorePlate, TOUCH_TIP, touchTip, type SauceWord } from "./game/scoring";
 import { History, samePlace, type Move, type Place } from "./game/undo";
 import { CUT_COVER, insideFood, judgeCut, quarterQuality, type Cut, type Pt as CutPt } from "./game/knife";
@@ -19,7 +19,10 @@ import { askCounts, askFor, served as askServed, type Ask } from "./game/asks";
 import { addReviews, brief, leavesReview, opinionFor, opinionLine, ratingPull, reviewAverage } from "./game/reviews";
 import { opinionFace, starRow } from "./ui/faces";
 import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "./game/menu";
-import type { DrinkId, FriesSize, FryKind, Layer, Order, Piece, Plate, SauceKind, Size } from "./game/types";
+import type { DrinkId, FriesSize, FryKind, Garnish, Layer, Order, Piece, Plate, SauceKind, Size } from "./game/types";
+import { GARNISH_LABEL } from "./game/types";
+import { makeGarnish } from "./render/models/garnish";
+import { countRegular, REGULAR_AT, REGULAR_GOAL, REGULAR_POP, regularOrder } from "./game/regulars";
 import { AFTER_OVEN, BREADS, COMAL_FILL, COUNTED, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, FRY_LABEL, fryOf, GRILLABLE, isSauce, KIND_LABEL, newPiece, pressable, PROTEINS, sauceRadius, SCOOPED, SIZE_LABEL, SUGARED, TORTILLAS, unfoldTortilla } from "./game/types";
 import { SCALE } from "./render/units";
 import { dressCup } from "./render/cup";
@@ -179,6 +182,10 @@ const game = {
   /** Today's local ask (game/asks.ts) and how many served orders have counted toward it. */
   ask: null as Ask | null,
   askCount: 0,
+  /** The town's regular has come by this shift (game/regulars.ts). */
+  regularCame: false,
+  /** Today's rush (line.ts rushAt): when it starts, how many are still to come, when the next joins. */
+  rush: null as { at: number; left: number; next: number } | null,
   pendingUpdate: null as VersionInfo | null,
   /** Customers expected this shift (business mode changes it). */
   customers: 0,
@@ -406,7 +413,19 @@ const GUIDED = 3;
 /** A fresh order, as hard as this point in the shift. */
 function nextOrder(): Order {
   const level = Math.min(1, game.time / game.shiftLength);
-  return makeOrder(game.orderSeq++, game.rng, level, shopStop());
+  // The town's regular is the shift's third customer, with the order they always have.
+  if (!game.tutorial && !game.regularCame && game.ordered >= REGULAR_AT) {
+    game.regularCame = true;
+    return regularOrder(game.orderSeq++, shopStop());
+  }
+  const order = makeOrder(game.orderSeq++, game.rng, level, shopStop());
+  // The area's local drinks come with its garnish (after build #78; none in the Pines).
+  const garnish = garnishFor(shopStop().region, order.drink);
+  if (garnish) {
+    order.garnish = garnish;
+    hintOnce("garnish", `Local drinks here come with ${garnish === "apple" ? "an apple slice" : garnish === "lime" ? "a lime wedge" : "a cucumber wheel"}: once the drink is on the tray, drag one up from the dish by the ice.`, 4);
+  }
+  return order;
 }
 
 /** Things the tutorial waits for the player to do once (tutorial/lessons.ts). */
@@ -511,7 +530,8 @@ function customerLeaves(i: number, stars: number, say: string | null, reviewed: 
 const askMet = (): boolean => !!game.ask && game.askCount >= game.ask.need;
 
 /** A served order may count toward the local ask; meeting it pays its reward there and then. */
-function noteServed(_order: Order, r: { stars: number; touches: string[] }, patience: number): void {
+function noteServed(order: Order, r: { stars: number; touches: string[] }, patience: number): void {
+  noteRegular(order, r.stars);
   const a = game.ask;
   if (!a || askMet() || !askCounts(a, askServed(r, patience))) return;
   game.askCount++;
@@ -520,6 +540,19 @@ function noteServed(_order: Order, r: { stars: number; touches: string[] }, pati
     showHint(`Local ask done: ${a.text}. +$${a.reward}, and today counts as two shifts here.`, 4);
     setTimeout(() => sfx.coin(), 700);
   }
+}
+
+/** A town's regular served (after build #78): count good visits; the third makes them a regular for good. */
+function noteRegular(order: Order, stars: number): void {
+  if (!order.regular) return;
+  const tally = save.regulars?.[save.town] ?? 0;
+  const r = countRegular(tally, stars);
+  if (r.tally === tally) return;
+  save.regulars = { ...save.regulars, [save.town]: r.tally };
+  if (r.won) {
+    save.popularity = Math.min(100, save.popularity + REGULAR_POP);
+    showHint(`${order.regular} is a regular now, and tells everyone. +${REGULAR_POP} popularity.`, 4);
+  } else showHint(`${order.regular} will be back (${r.tally} of ${REGULAR_GOAL}).`, 2.5);
 }
 
 /**
@@ -904,7 +937,8 @@ type Payload =
   | { type: "salt"; sugar?: boolean }
   | { type: "curds" }
   | { type: "gravy" }
-  | { type: "drink"; flavor: DrinkId | null; fill: number; size: Size; ice: boolean; lid: boolean; from: { x: number; z: number } | null; fromPlate?: number }
+  | { type: "drink"; flavor: DrinkId | null; fill: number; size: Size; ice: boolean; lid: boolean; from: { x: number; z: number } | null; fromPlate?: number; garnish?: Garnish }
+  | { type: "garnish"; kind: Garnish }
   | { type: "ice" }
   | { type: "lid"; size: Size }
   | { type: "empty"; kind: "cup" | "carton"; size: Size; stack: number };
@@ -1008,6 +1042,11 @@ function payloadVisual(p: Payload, tray = false): THREE.Object3D {
   }
   if (p.type === "lid") return counter.extraMesh("lid", p.size);
   if (p.type === "ice") return counter.extraMesh(p.type);
+  if (p.type === "garnish") {
+    const g = makeGarnish(p.kind);
+    g.scale.setScalar(1.6);
+    return g;
+  }
   const c = makeCup(p.flavor, p.lid, p.size);
   c.scale.multiplyScalar(CUP_IN_HAND);
   c.userData.setFill(p.fill);
@@ -1135,6 +1174,20 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
     showHint(`That goes on a cup at the drinks counter.`, 1.5);
     return false;
   }
+  if (payload.type === "garnish") {
+    // The local drink's garnish (after build #78) goes on once the drink is on the tray.
+    const d = s.plate.drink;
+    const label = GARNISH_LABEL[payload.kind].toLowerCase();
+    if (!d) showHint(`Put the drink on the tray first, then the ${label}.`, 2);
+    else if (d.garnish) showHint(`It already has its ${label}.`, 1.5);
+    else {
+      d.garnish = payload.kind;
+      syncTray(slot, false);
+      sfx.plop();
+      return true;
+    }
+    return false;
+  }
   if (payload.type === "curds" || payload.type === "gravy") {
     if (!s.plate.fries) {
       showHint("That goes on fries.", 1.5);
@@ -1163,7 +1216,7 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
       showHint("Fill it first!", 1.5);
       return false;
     }
-    s.plate.drink = { flavor: payload.flavor, fill: payload.fill, size: payload.size, ice: payload.ice, lid: payload.lid };
+    s.plate.drink = { flavor: payload.flavor, fill: payload.fill, size: payload.size, ice: payload.ice, lid: payload.lid, ...(payload.garnish ? { garnish: payload.garnish } : {}) };
     dropped = { place: { at: "tray", slot }, ref: s.plate.drink };
     if (!payload.lid) hintOnce("lid", "Drinks need a lid before they go out.", 3);
   }
@@ -1380,10 +1433,10 @@ function restorePayload(payload: Payload): void {
     Object.assign(b, { loaded: true, cook: payload.cook, amount: payload.amount, fry: payload.fry ?? "fries" });
   }
   if (payload.type === "drink") {
-    const { flavor, fill, size, ice, lid, from, fromPlate } = payload;
+    const { flavor, fill, size, ice, lid, from, fromPlate, garnish } = payload;
     // Lifted off a tray: back on the tray. Otherwise back where it stood (nothing else can have taken the spot meanwhile).
     if (fromPlate !== undefined && flavor) {
-      game.slots[fromPlate].plate.drink = { flavor, fill, size, ice, lid };
+      game.slots[fromPlate].plate.drink = { flavor, fill, size, ice, lid, ...(garnish ? { garnish } : {}) };
       syncTray(fromPlate, false);
     } else if (from) counter.placeCup({ flavor, fill, size, ice, lid }, new THREE.Vector3(from.x, 0.3, from.z));
   }
@@ -1989,6 +2042,8 @@ function nameOf(p: Payload): string {
       return "Ice";
     case "lid":
       return `${SIZE_LABEL[p.size]} lid`;
+    case "garnish":
+      return GARNISH_LABEL[p.kind];
     case "curds":
       return counter.redRock ? "Jalapeños" : "Cheese curds";
     case "gravy":
@@ -2816,6 +2871,7 @@ canvas.addEventListener("pointerdown", (e) => {
       startHold(pt, { type: "empty", kind: s.kind, size: s.size, stack: hit.idx });
     } else if (hit.type === "ice") startHold(pt, { type: "ice" });
     else if (hit.type === "lids") startHold(pt, { type: "lid", size: hit.size });
+    else if (hit.type === "garnish" && counter.garnish) startHold(pt, { type: "garnish", kind: counter.garnish });
     else if (hit.type === "pack") {
       const p = counter.packs[hit.idx];
       if (p.size && p.fill > 0) {
@@ -2976,7 +3032,7 @@ canvas.addEventListener("pointermove", (e) => {
       } else if (s.plate.drink) {
         const d = s.plate.drink;
         s.plate.drink = null;
-        startHold(pt, { type: "drink", flavor: d.flavor, fill: d.fill, size: d.size, ice: !!d.ice, lid: !!d.lid, from: null, fromPlate: pt.plate });
+        startHold(pt, { type: "drink", flavor: d.flavor, fill: d.fill, size: d.size, ice: !!d.ice, lid: !!d.lid, from: null, fromPlate: pt.plate, ...(d.garnish ? { garnish: d.garnish } : {}) });
       } else if (s.plate.fries) {
         const f = s.plate.fries;
         s.plate.fries = null;
@@ -4610,6 +4666,10 @@ function startShift(): void {
   // Today's local ask, the same one Prep showed (not on the guided first shift).
   game.ask = game.tutorial ? null : askFor(stop(), menuFor(stop(), save.hidden), save.day, game.customers);
   game.askCount = 0;
+  game.regularCame = false;
+  // A rush at capitals and on event days (not on the guided first shift).
+  const rush = game.tutorial ? null : rushAt(!!stop().capital, !!game.event, save.day, game.shiftLength);
+  game.rush = rush === null ? null : { at: rush, left: RUSH.people, next: rush };
   // A shift starts a fresh block of driving: the evening's hops count against the whole range.
   save.driven = 0;
   writeSave(save);
@@ -4648,6 +4708,7 @@ function applyStop(): void {
   // The fountain pours the area's two local drinks beside the three house ones.
   const drinks = fountainFor(st.region);
   counter.setDrinks(drinks);
+  counter.setGarnish(garnishOf(st.region));
   setDrinkLabels(ui, drinks);
   customersView.setBackdrop(st.backdrop);
   customersView.setLook(save.look);
@@ -5055,6 +5116,22 @@ function tick(dt: number): void {
       // People come along the lunch curve: busiest around noon, quieter early and late (see shift.ts).
       const hour = clockAt(game.time, game.shift, game.shiftLength);
       game.nextSpawn = game.time + arrivalGap(hour, game.shift, game.shiftLength, game.customers) * (0.8 + game.rng() * 0.4);
+    }
+    // The rush: a heads-up, then a few extra people join the line, one every few seconds.
+    const r = game.rush;
+    if (r && r.left > 0 && game.time >= r.next && game.time < game.shiftLength) {
+      if (r.left === RUSH.people) {
+        showHint(stop().capital ? "A tour bus pulls in!" : "The event crowd's here!", 3);
+        sfx.pop();
+      }
+      r.left--;
+      r.next = game.time + RUSH.over / RUSH.people;
+      game.customers++;
+      game.spawned++;
+      if (game.line.length < MAX_LINE) {
+        const max = linePatience(game.pacing, stop().crowd) * (has("bench") ? 1.3 : 1);
+        game.line.push({ seed: Math.floor(game.rng() * 1000), patience: max, maxPatience: max });
+      } else game.walkedPast++;
     }
     // If nobody's about, don't make the player wait for the next arrival.
     if (!game.slots.some((s) => s.order) && !game.line.length && game.nextSpawn > game.time + 2 && !guiding) game.nextSpawn = game.time + 2;
@@ -6013,6 +6090,8 @@ window.addEventListener("blur", cancelPointer);
   showTitle,
   coach: coachState,
   menu: { openMenu, openHowTo, openMenuRef, closeAll },
+  /** The town's regular's order (after build #78), for screenshots. */
+  regularOrder: (id: number) => regularOrder(id, shopStop()),
   manual: (on: boolean) => {
     manualClock = on;
   },

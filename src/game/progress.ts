@@ -67,6 +67,8 @@ export interface Save {
   known: Record<string, number>;
   /** How well known the truck is, 10..100. Word of mouth and the press move it. */
   popularity: number;
+  /** Good visits from each town's regular, by town id (after build #78; game/regulars.ts). */
+  regulars?: Record<string, number>;
   /** Recent press, newest first. */
   press: PressPiece[];
 }

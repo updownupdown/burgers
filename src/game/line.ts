@@ -53,6 +53,20 @@ export function lineDrain(position: number): number {
  * two happy customers rather than three, so cooking well grows a small crowd past the daily fade.
  */
 export const EARLY_WORD = 40;
+
+/**
+ * A rush (after build #78, review P3-10): once a shift at a capital or on an event day, a short
+ * telegraphed burst: "A tour bus pulls in!", then RUSH.people extra people join the line over
+ * RUSH.over seconds (never past MAX_LINE; those who don't fit walk on). It lands somewhere in the
+ * middle of the shift, the same time for the same town and day.
+ */
+export const RUSH = { people: 3, over: 10, from: 0.4, span: 0.2 };
+/** When today's rush comes, in seconds into the shift, or null where there's none. */
+export function rushAt(capital: boolean, event: boolean, day: number, shiftLength: number): number | null {
+  if (!capital && !event) return null;
+  const k = ((day * 7919) % 101) / 101;
+  return shiftLength * (RUSH.from + RUSH.span * k);
+}
 export function wordOfMouth(stars: number[], walkedOut: number, leftLine: number, popularity = 100): number {
   const happy = stars.filter((s) => s >= 4).length;
   const gained = Math.min(6, Math.floor(happy / (popularity < EARLY_WORD ? 2 : 3)));

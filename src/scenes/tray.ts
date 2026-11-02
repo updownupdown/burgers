@@ -3,6 +3,8 @@ import type { Piece, Plate } from "../game/types";
 import { fryOf } from "../game/types";
 import { makeDish, stretchSauce, type DishObject } from "../render/dishes";
 import { dressCup } from "../render/cup";
+import { makeGarnish } from "../render/models/garnish";
+import { CUP_DIMS } from "../render/models/drinks";
 import { makeCup, makeFood, makeFries, stackBases, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
@@ -439,7 +441,7 @@ export class PlateView {
       }
       this.friesKey = fk;
     }
-    const ck = p.drink ? `${p.drink.flavor}${p.drink.fill.toFixed(2)}${p.drink.size}${+!!p.drink.ice}${+!!p.drink.lid}` : "";
+    const ck = p.drink ? `${p.drink.flavor}${p.drink.fill.toFixed(2)}${p.drink.size}${+!!p.drink.ice}${+!!p.drink.lid}${p.drink.garnish ?? ""}` : "";
     if (ck !== this.cupKey) {
       if (this.cup) {
         this.group.remove(this.cup);
@@ -450,6 +452,13 @@ export class PlateView {
         this.cup = makeCup(p.drink.flavor, !!p.drink.lid, p.drink.size);
         this.cup.userData.setFill(p.drink.fill);
         dressCup(this.cup, p.drink);
+        // The local drink's garnish (after build #78) hooked on the rim, toward the viewer.
+        if (p.drink.garnish) {
+          const gn = makeGarnish(p.drink.garnish);
+          gn.position.set(CUP_DIMS[p.drink.size].r * 0.75, CUP_DIMS[p.drink.size].h + 0.02, CUP_DIMS[p.drink.size].r * 0.5);
+          gn.scale.setScalar(1.4);
+          this.cup.add(gn);
+        }
         this.cup.scale.setScalar(relScale("cup") * TRAY_SIDES);
         this.group.add(this.cup);
       }

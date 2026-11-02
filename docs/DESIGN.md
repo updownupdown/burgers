@@ -699,3 +699,14 @@ Farmers' market (Cedar Falls), County fair (Summit City), Surf contest (Driftwoo
 - **Texts.** Hints, How to Play ("The oven and the peel"), the Applecross and Port Amber intros and the menu note speak of the peel: drag by the handle, swipe up to lift, swipe down to set down, nudge to turn.
 - **Playtest.** `tools/playtest/oven-peel.cjs` drives a Harvest Red, a Fig & Ham and a Calzone end to end with the peel only and serves each at three stars, and cuts a Port Amber flatbread in four (screenshots in `tools/playtest/shots-oven2/`).
 
+
+## 25. The kitchen seen from inside the truck (study pick)
+
+James picked **A · Painted cabin** from the kitchen view study (2026-11-02). The three bands are one room seen at three angles:
+
+- **Window.** The customers band is the truck's inside wall (warm cream paint) with the serving window cut into it, opening just under the HUD and closing at a steel sill where the order rail hangs. No sky shows above the HUD. Through the window you see the awning's underside sloping away, and its hem hangs *behind* the customers, so their heads come in front of it. Awning style and lights still follow the Garage look.
+- **One wall.** The same painted wall (unlit, its speckle sized in screen pixels) runs round the window, behind the receipts, behind the pass shelf and down to the counter, so the bands no longer look stitched.
+- **Pass shelf.** A steel shelf a little deeper than the trays, with a mid-steel front face and a bright rolled nose right at the bottom of the tray band. That edge is the seam into the counter; under it the shelf shades the strip of wall and the back of the counter.
+- **Counter.** The counter camera keeps its zoom and angle but no longer draws the wall above the counter (only about 0.65 units of it), which frees about 85 px on a 390 × 844 phone: about 60% goes to the window, the rest to the trays. The trash chute is the last thing on the counter; after it come the counter's bright rolled front edge and its darker steel front. The counter steel carries fewer brush streaks. The fountain and the fryers moved forward to clear the shorter wall.
+
+Code: `src/render/cabin.ts` (colours and sizes), `src/render/walls.ts`, `CustomersView.buildFrame`, `TrayView.fitRoom`, `Counter.cropFor`/`setCrop`. Screenshots: `tools/playtest/view-study.cjs`.

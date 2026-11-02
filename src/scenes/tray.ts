@@ -712,7 +712,7 @@ export class TrayView {
 
   /**
    * Float the ghost at a screen point (band NDC) instead of over its plate: Undo carries a thing
-   * back through the tray band this way (DESIGN §30). Null puts it back over its plate.
+   * back through the tray band this way (DESIGN §31). Null puts it back over its plate.
    */
   floatGhost(ndc: THREE.Vector2 | null): void {
     this.ghostFloat = ndc ? ndc.clone() : null;

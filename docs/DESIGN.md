@@ -813,7 +813,34 @@ bean, chibi townsfolk, storybook grown-ups, animal locals per region, and pencil
 - Code: `src/render/people.ts` (`buildPerson`, `Face`, `addHat`); `CustomerFigure` in
   `src/scenes/customers.ts` adds the bob, hop and glance.
 
-## 30. Undo, names, sauces and the knife
+## 30. The end of a shift: sundown to the map (study pick)
+
+The shift used to end with the last customer's face and walk-off, then a hard cut to the Closing
+screen, a tap to the evening map and a tap on Sleep. A study (2026-11-02) mocked five ways from
+the last customer to the night: sundown in the window, a roll-down shutter, the till printing a
+receipt, pulling back onto the map, and sundown then the map. **James picked E, sundown to the
+map.**
+
+- **Sundown** (about 1.75 s): when the last customer has gone, the kitchen holds. The lights warm
+  toward evening (counters part of the way, the window all the way), the sky in the window turns
+  to sunset, a Closed sign drops in and swings, the clock reads Closed and the bell goes. The
+  chime plays as the sign lands.
+- **Pull back** (about 1.35 s): the kitchen, as a picture with its HUD and sign, shrinks into the
+  truck on the evening map while the map eases out from 2.2× on the truck. The truck's hatch
+  glows as the view lands.
+- **Results sheet**: today's results rise over the evening map: the Closing hero (town, stars,
+  verdict), takings counting up, rating and served, then one row each for reviews, popularity and
+  the road. A newly opened road row goes to that town; a bonus unlocked shows as a row that opens
+  the Garage. **Sleep** is on the sheet, so it's one tap from closing to the night.
+  **Results** opens the full Closing screen, whose button is now "Back to the map" and returns to
+  the sheet. × hides the sheet (the dock comes back); the dashboard's Results still opens it.
+- Any tap skips the sundown and the pull-back straight to the sheet. Reduced motion skips the
+  pull-back and shortens the sundown. A pending update waits until after the results.
+- Code: `src/render/dusk.ts` (the light blend), `startSundown` / `finishSundown` in `main.ts`
+  (phase `"sundown"`), `playArrive` in `src/screens/home.ts`, `resultsSheetHtml` in
+  `src/screens/day.ts`. Playtest: `tools/playtest/sundown-shots.cjs` (`SKIP=1` for the tap).
+
+## 31. Undo, names, sauces and the knife
 
 James, after build #74: mistakes cost too much to fix, a tap that drops an ingredient by surprise is a mistake waiting to happen, sauce should work for people who don't find the drag, and the swipe that cut paninis and flatbreads was too easy to miss. Code: `src/game/undo.ts` (the rules), `src/game/knife.ts` (cut judging), `sauceGate` in `src/game/scoring.ts`, `src/scenes/cutzoom.ts`, and the Undo, Sauce and Knife sections of `src/main.ts`.
 

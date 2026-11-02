@@ -1,5 +1,5 @@
 /**
- * The knife on the cutting board (DESIGN §30): Harbor City cuts its paninis in half, Port Amber
+ * The knife on the cutting board (DESIGN §31): Harbor City cuts its paninis in half, Port Amber
  * cuts its flatbreads in four. In the cut view the player draws the slice; a cut counts once the
  * stroke has gone right across the food and out the other side, and it's judged, modestly, on how
  * straight it is and how near the middle it runs (and, for quarters, how square the two cuts are).

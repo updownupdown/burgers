@@ -3,7 +3,7 @@ import { box, rbox } from "./machines/kit";
 import { mesh } from "./materials";
 
 /**
- * The cutting board's knife (DESIGN §30): a broad steel chef's knife with a dark riveted handle,
+ * The cutting board's knife (DESIGN §31): a broad steel chef's knife with a dark riveted handle,
  * lying blade toward the back. It's its own object now (it used to be baked into the board), so it
  * can be lifted, carried and drawn in the cut view. Origin at the middle of its length, on the
  * board's surface; it runs along z, tip at -z.

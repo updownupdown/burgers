@@ -458,7 +458,7 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
         quality *= cuts ? 0.94 : 0.88;
         notes.push(cuts ? "only cut in half" : "wanted it cut in four");
       } else {
-        // The knife (DESIGN §30): a crooked cut costs a little.
+        // The knife (DESIGN §31): a crooked cut costs a little.
         quality *= cutFactor(base.cutQ);
         if ((base.cutQ ?? 1) < CROOKED) notes.push("cut a bit crooked");
       }

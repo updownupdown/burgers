@@ -40,7 +40,8 @@ import { makeKnife } from "./render/knife";
 import { makeEgg, type EggStage } from "./render/egg";
 import "./ui/components.css";
 import "./style.css";
-import { mountHome, refreshHome, type NightShow } from "./screens/home";
+import { mountHome, refreshHome, type Arrival, type NightShow } from "./screens/home";
+import { Dusk } from "./render/dusk";
 import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
@@ -145,7 +146,7 @@ interface Waiting {
 }
 
 const game = {
-  phase: "title" as "title" | "playing" | "paused" | "summary",
+  phase: "title" as "title" | "playing" | "paused" | "sundown" | "summary",
   time: 0,
   money: 0,
   tips: 0,
@@ -204,7 +205,7 @@ const game = {
 };
 
 /**
- * What a kitchen move carried (DESIGN §30), for Undo: food (pieces by reference, so whatever
+ * What a kitchen move carried (DESIGN §31), for Undo: food (pieces by reference, so whatever
  * cooked since stays cooked), a cup, a carton, loose fries, a dressing (ice, a lid, curds, gravy)
  * or a squeeze of sauce. See src/game/undo.ts for the rules and the "Undo" section below.
  */
@@ -1086,7 +1087,7 @@ function finishHold(pt: Pointer): void {
     return;
   }
 
-  // A tap (no drag) on a pan, a well, a bin or a stack only says what's in it (DESIGN §30): things
+  // A tap (no drag) on a pan, a well, a bin or a stack only says what's in it (DESIGN §31): things
   // are placed by dragging them, a drag from a well being one scoop. A cup standing on the counter
   // says what's in it too.
   if (!pt.moved && dur < 450 && (from.at === "supply" || payload.type === "drink")) {
@@ -1290,7 +1291,7 @@ function restorePayload(payload: Payload): void {
 }
 
 // ---------------------------------------------------------------------------
-// Undo (DESIGN §30). Every drop that lands is noted with where the thing came from and where it
+// Undo (DESIGN §31). Every drop that lands is noted with where the thing came from and where it
 // went; the header's Undo button carries the newest one back, animated, the way it came. Food is
 // kept by reference, so whatever cooked or burned since stays as it is. Serving forgets that tray's
 // moves; cooking, burning and the verbs on food in place (flip, fold, smash, crack, cut, press) are
@@ -1836,7 +1837,7 @@ ui.undo.addEventListener("click", () => undoLast());
 
 // ---------------------------------------------------------------------------
 // Names: a tap on a pan, bin, stack, bottle or the knife says what it is, in a small bubble by the
-// finger (DESIGN §30), so look-alikes (sourdough and ciabatta, the salsas) can be told apart.
+// finger (DESIGN §31), so look-alikes (sourdough and ciabatta, the salsas) can be told apart.
 
 const bubbleEl = document.createElement("div");
 bubbleEl.className = "name-bubble";
@@ -2270,7 +2271,7 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
 }
 
 /**
- * Sauce, two ways (DESIGN §30). The quick way, one gesture: press a bottle in the caddy (the plates
+ * Sauce, two ways (DESIGN §31). The quick way, one gesture: press a bottle in the caddy (the plates
  * that can take sauce light up), drag toward one and the camera eases in on it; once you're over it
  * the burger fills the screen and moving the finger squeezes a line; let go and the bottle goes back.
  * Sauce only starts once the nozzle has come in over the middle of the bun (`sauceGate`), so the
@@ -3054,7 +3055,7 @@ function openBay(i: number): void {
 }
 
 // ---------------------------------------------------------------------------
-// The knife (DESIGN §30): Harbor City cuts its paninis in half on the board, Port Amber its
+// The knife (DESIGN §31): Harbor City cuts its paninis in half on the board, Port Amber its
 // flatbreads in four. The same two ways as sauce: tap the knife (it lifts) and tap the food, or
 // drag the knife onto the food. Either opens the cut view, a close-up looking down on the board,
 // where a slice is drawn across the food: it cuts once it has gone right through and out the
@@ -4293,6 +4294,10 @@ ui.root.addEventListener("click", (e) => {
       startShift();
       break;
     case "evening":
+      // Closing is opened from the evening map (its results sheet or the Results tab): go back to it as it was.
+      if (game.phase === "title") closeOverlay();
+      else showTitle();
+      break;
     case "next":
       showTitle();
       break;
@@ -4435,6 +4440,7 @@ function shiftGuard(): void {
 function startShift(): void {
   cancelPointer();
   resetHands();
+  endSundownLeftovers();
   for (const k of ["prep", "overlay"]) dropBack(k);
   prepOpen = false;
   ui.summary.classList.remove("prep-host");
@@ -4632,7 +4638,7 @@ function sleepNow(): void {
  * The home screen: the road map with the truck's numbers, where the player drives, opens the
  * window or picks a pending upgrade. Lives in src/screens/home.ts; this only hands it what it needs.
  */
-function showTitle(night: NightShow | null = null): void {
+function showTitle(night: NightShow | null = null, arrive: Arrival | null = null): void {
   game.town = save.town;
   game.event = eventOn(save.town, save.day);
   applyStop();
@@ -4647,8 +4653,9 @@ function showTitle(night: NightShow | null = null): void {
   game.overlay = null;
   mountHome(ui.title, {
     save,
-    focus: game.mapSel,
+    focus: arrive ? null : game.mapSel,
     night,
+    arrive,
     startShift: () => {
       showPrep();
       screenShownAt = performance.now();
@@ -4669,10 +4676,103 @@ function showTitle(night: NightShow | null = null): void {
     sfx: { whoosh: () => sfx.whoosh(), coin: () => sfx.coin(), tap: () => sfx.unlock() },
   });
   game.mapSel = save.town;
-  if (game.pendingUpdate) reloadTo(game.pendingUpdate.build);
+  // Straight after a shift the update waits for the next screen, so the results aren't lost to a reload.
+  if (game.pendingUpdate && !arrive) reloadTo(game.pendingUpdate.build);
 }
 
-function endShift(): void {
+// ---------------------------------------------------------------------------
+// Sundown: the end of a shift (DESIGN.md §30)
+
+/**
+ * When the last customer has gone, the kitchen holds for a moment: the lights warm toward
+ * evening, the sky in the window turns to sunset, a Closed sign drops into the window and the
+ * clock reads Closed. Then the view pulls back out of the truck onto the evening map, where the
+ * results come up as a sheet (see playArrive in screens/home.ts). A tap skips to the sheet.
+ */
+const SUNDOWN = { light: 1.5, sign: 0.25, out: 1.75 };
+const dusk = new Dusk();
+let sundown: { t: number; sign: HTMLElement; dropped: boolean; reduce: boolean } | null = null;
+
+function startSundown(): void {
+  cancelPointer();
+  dropBack("shift");
+  game.phase = "sundown";
+  hintUntil = 0;
+  for (const s of game.slots) {
+    s.bubble?.remove();
+    s.bubble = null;
+  }
+  dusk.begin([counter.scene, trayView.scene], customersView.scene, clearColor);
+  const sign = document.createElement("div");
+  sign.className = "closed-sign";
+  sign.setAttribute("role", "status");
+  sign.innerHTML = `<span class="cord"></span><span class="board"><b>Closed</b><small>See you tomorrow</small></span>`;
+  const r = bands.customers;
+  sign.style.left = `${r.x + r.w / 2}px`;
+  // Hung from the top of the window, clear of the HUD that sits over it.
+  const hud = ui.root.querySelector<HTMLElement>(".hud")?.getBoundingClientRect().bottom ?? 0;
+  sign.style.top = `${Math.max(r.y + 26, hud + 22)}px`;
+  ui.root.appendChild(sign);
+  sundown = { t: 0, sign, dropped: false, reduce: matchMedia("(prefers-reduced-motion: reduce)").matches };
+}
+
+function stepSundown(dt: number): void {
+  const sd = sundown;
+  if (!sd) return;
+  sd.t += dt;
+  const k = Math.min(1, sd.t / (sd.reduce ? 0.3 : SUNDOWN.light));
+  dusk.set(k * k * (3 - 2 * k));
+  if (!sd.dropped && sd.t >= SUNDOWN.sign) {
+    sd.dropped = true;
+    sd.sign.classList.add("drop");
+    sfx.chime();
+  }
+  if (sd.t >= SUNDOWN.out) finishSundown(false);
+}
+
+/** Leave the kitchen for the evening map; `quick` (a tap, or reduced motion) skips the pull-back. */
+function finishSundown(quick: boolean): void {
+  const sd = sundown;
+  if (!sd) return;
+  if (!sd.dropped) sfx.chime();
+  let arrive: Arrival = { shot: null, layers: [], w: 0, h: 0 };
+  if (!quick && !sd.reduce) {
+    try {
+      // The kitchen as it stands, to shrink into the truck on the map: the 3D view plus the HUD,
+      // the rail, the counter buttons and the sign over it.
+      dusk.set(1);
+      render();
+      const shot = canvas.toDataURL("image/jpeg", 0.82);
+      const layers = [".hud", ".rail", ".cnav"].map((q) => ui.root.querySelector<HTMLElement>(q)?.cloneNode(true) as HTMLElement | undefined).filter((e): e is HTMLElement => !!e);
+      layers.push(sd.sign.cloneNode(true) as HTMLElement);
+      arrive = { shot, layers, w: canvas.clientWidth, h: canvas.clientHeight };
+    } catch {
+      // No picture of the kitchen (a lost context): the results simply come up.
+    }
+  }
+  sd.sign.remove();
+  sundown = null;
+  endShift(arrive);
+}
+
+/** A new shift starts in daylight, with no sign in the window. */
+function endSundownLeftovers(): void {
+  sundown?.sign.remove();
+  sundown = null;
+  dusk.reset();
+  ui.root.querySelectorAll(".closed-sign").forEach((e) => e.remove());
+}
+
+// A tap during the sundown skips straight to the results.
+window.addEventListener(
+  "pointerdown",
+  () => {
+    if (game.phase === "sundown" && sundown && sundown.t > 0.3) finishSundown(true);
+  },
+  true,
+);
+
+function endShift(arrive: Arrival): void {
   cancelPointer();
   resetHands();
   dropBack("shift");
@@ -4758,9 +4858,9 @@ function endShift(): void {
   save.tutorialDone = true;
   writeSave(save);
   ui.title.hidden = false;
-  showClosing();
-  sfx.chime();
-  if (unlocked) setTimeout(() => sfx.coin(), 400);
+  // The results land on the evening map, as a sheet, after the view pulls back out of the truck.
+  showTitle(null, arrive);
+  if (unlocked) setTimeout(() => sfx.coin(), arrive.shot ? 1900 : 400);
   // A pending update waits until the player leaves this screen (see showTitle).
   if (game.pendingUpdate) {
     ui.updateText.textContent = `Build #${game.pendingUpdate.build} will load when you continue.`;
@@ -4940,10 +5040,11 @@ function tick(dt: number): void {
     }
 
     const doneSpawning = game.time >= game.shiftLength || game.spawned >= game.customers;
-    if (doneSpawning && !game.line.length && game.slots.every((s) => !s.order && !s.fig)) endShift();
+    if (doneSpawning && !game.line.length && game.slots.every((s) => !s.order && !s.fig)) startSundown();
   }
+  if (game.phase === "sundown") stepSundown(dt);
 
-  if (game.phase === "playing" || game.phase === "title" || game.phase === "summary") {
+  if (game.phase === "playing" || game.phase === "sundown" || game.phase === "title" || game.phase === "summary") {
     counter.update(game.phase === "playing" ? dt : 0);
     trayView.update(dt);
     customersView.update(dt, game.active);
@@ -4990,11 +5091,11 @@ function updateUi(dt = 0): void {
   updateTrayActs();
   const len = game.shiftLength;
   const left = Math.max(0, len - game.time);
-  const tText = left > 0 ? clockLabel(clockAt(game.time, game.shift, len)) : "Closing";
+  const tText = game.phase === "sundown" ? "Closed" : left > 0 ? clockLabel(clockAt(game.time, game.shift, len)) : "Closing";
   if (tText !== lastTimerText) {
     ui.timer.textContent = tText;
-    ui.timer.classList.toggle("closing", left <= 0);
-    ui.timer.parentElement!.classList.toggle("closing", left <= 0);
+    ui.timer.classList.toggle("closing", left <= 0 && game.phase !== "sundown");
+    ui.timer.parentElement!.classList.toggle("closing", left <= 0 && game.phase !== "sundown");
     lastTimerText = tText;
   }
   const pct = `${(shiftProgress(game.time, len) * 100).toFixed(1)}%`;
@@ -5004,7 +5105,7 @@ function updateUi(dt = 0): void {
   if (ui.money.textContent !== money) ui.money.textContent = money;
 
   ui.rail.hidden = game.phase === "title";
-  ui.bell.hidden = game.phase === "title" || game.phase === "summary";
+  ui.bell.hidden = game.phase === "title" || game.phase === "summary" || game.phase === "sundown";
   const inLine = String(game.line.length);
   if (ui.bellCount.textContent !== inLine) ui.bellCount.textContent = inLine;
   const bellLabel = "Next";
@@ -5562,7 +5663,7 @@ window.addEventListener("blur", cancelPointer);
     return [colX + f.x + f.w / 2, f.y + f.h / 2, f.w];
   },
   ptr: () => ptr && { mode: ptr.mode, hit: ptr.hit?.type, band: ptr.band },
-  /** Undo (DESIGN §30): press the header button, whether it's on, how many moves are kept, and whether something is flying back. */
+  /** Undo (DESIGN §31): press the header button, whether it's on, how many moves are kept, and whether something is flying back. */
   undo: () => undoLast(),
   canUndo: () => canUndo(),
   history: () => history.size,

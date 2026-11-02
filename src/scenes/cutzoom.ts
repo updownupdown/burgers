@@ -13,7 +13,7 @@ const lerp = THREE.MathUtils.lerp;
 const PITCH = THREE.MathUtils.degToRad(78);
 
 /**
- * The knife's cut view (DESIGN §30): the counter scene through a second camera, looking down on
+ * The knife's cut view (DESIGN §31): the counter scene through a second camera, looking down on
  * what's on the cutting board, drawn in a square that grows out of the food's spot on the counter
  * (main.ts dims the truck round it, as for sauce). Screen points map onto the food's top through
  * `ray`.

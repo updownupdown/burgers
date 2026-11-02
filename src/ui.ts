@@ -28,7 +28,7 @@ export interface Ui {
   menuBtn: HTMLButtonElement;
   /** The service bell: a ring calls the next person in line. */
   bell: HTMLButtonElement;
-  /** Undo, at the left of the header: carries the last move back (DESIGN §30). */
+  /** Undo, at the left of the header: carries the last move back (DESIGN §31). */
   undo: HTMLButtonElement;
   bellCount: HTMLElement;
   bellLabel: HTMLElement;

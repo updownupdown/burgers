@@ -955,14 +955,14 @@ html, body {
 .tray-serve:active { transform-origin: center; filter: brightness(0.92); }
 #ui.saucing .tray-serve { opacity: 0; pointer-events: none; }
 
-/* Undo, at the left of the header (DESIGN §30): greyed out when there's nothing to take back. */
+/* Undo, at the left of the header (DESIGN §31): greyed out when there's nothing to take back. */
 #ui .undo-btn { flex: none; width: 34px; height: 34px; margin-left: -4px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 #ui .undo-btn svg { width: 18px; height: 18px; }
 #ui .undo-btn:disabled { border-color: var(--bv-rule, #d8d0c2); color: var(--bv-mute); opacity: 0.55; cursor: default; }
 #ui .undo-btn.pulse { animation: undo-pulse 0.35s ease-out; }
 @keyframes undo-pulse { 40% { transform: rotate(-28deg) scale(1.08); } }
 
-/* A tap on a pan, bin or bottle names it (DESIGN §30): a small bubble over the finger. */
+/* A tap on a pan, bin or bottle names it (DESIGN §31): a small bubble over the finger. */
 .name-bubble {
   position: absolute; z-index: 7; pointer-events: none; transform: translate(-50%, -100%);
   padding: 5px 11px 6px; border-radius: 999px; white-space: nowrap;
@@ -978,7 +978,7 @@ html, body {
 @keyframes name-pop { 0% { opacity: 0; transform: translate(-50%, -80%) scale(0.85); } 12% { opacity: 1; transform: translate(-50%, -100%) scale(1); } 78% { opacity: 1; } 100% { opacity: 0; } }
 .name-bubble.hold { animation: none; }
 
-/* The knife's cut view (DESIGN §30): the zoomed board with the slice drawn over it, like the sauce close-up. */
+/* The knife's cut view (DESIGN §31): the zoomed board with the slice drawn over it, like the sauce close-up. */
 .cut-ui { position: absolute; pointer-events: none; z-index: 6; box-shadow: 0 0 0 200vmax rgb(20 16 12 / var(--dim, 0)); }
 .cut-ui[hidden] { display: none; }
 .cut-ui > * { opacity: var(--ui, 0); }
@@ -989,3 +989,13 @@ html, body {
 #ui.cutting .ticket { opacity: 0; transition: opacity 0.15s; pointer-events: none; }
 #ui.cutting .tray-serve { opacity: 0; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .tray-serve { animation: none; } }
+
+/* ---- Sundown: the Closed sign that drops into the window at the end of a shift (DESIGN.md §30) ---- */
+.closed-sign { position: absolute; z-index: 4; width: 118px; margin-left: -59px; transform-origin: 50% -6px; transform: translateY(-140px); pointer-events: none; }
+.closed-sign .cord { position: absolute; left: 22px; right: 22px; top: -20px; height: 24px; border: 1.5px solid #6b5a44; border-bottom: 0; border-radius: 40px 40px 0 0; }
+.closed-sign .board { position: relative; display: block; padding: 7px 8px 6px; border-radius: 6px; background: var(--bv-paper); border: 2px solid #3d332a; box-shadow: 0 4px 0 rgb(61 51 42 / 0.2), 0 6px 14px rgb(0 0 0 / 0.25); text-align: center; }
+.closed-sign b { display: block; font: 400 21px/1 var(--bv-font-serif); color: var(--bv-paprika); letter-spacing: 0.02em; }
+.closed-sign small { display: block; margin-top: 3px; font: 700 8.5px/1 var(--bv-font-ui); letter-spacing: 0.16em; text-transform: uppercase; color: var(--bv-ink-2); }
+.closed-sign.drop { animation: sign-drop 1.5s cubic-bezier(0.3, 0.6, 0.3, 1) forwards; }
+@keyframes sign-drop { 0% { transform: translateY(-140px) rotate(0); } 30% { transform: translateY(0) rotate(9deg); } 50% { transform: rotate(-6deg); } 68% { transform: rotate(3.5deg); } 84% { transform: rotate(-1.5deg); } 100% { transform: rotate(0); } }
+@media (prefers-reduced-motion: reduce) { .closed-sign.drop { animation: none; transform: none; } }

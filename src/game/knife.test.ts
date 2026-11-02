@@ -4,7 +4,7 @@ import { sauceGate, SAUCE_GRACE, scorePlate } from "./scoring";
 import { newPiece, type Order, type Plate } from "./types";
 
 /*
- * The knife's cut view and the sauce's edge grace (DESIGN §30).
+ * The knife's cut view and the sauce's edge grace (DESIGN §31).
  */
 
 const line = (a: Pt, b: Pt, n = 20, wobble = 0): Pt[] =>

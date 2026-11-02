@@ -129,7 +129,7 @@ const OVEN_CADDY = { x: 3.02, z: 2.2 };
 /** The board at Port Amber, in the bench's place and a little smaller so it fits. */
 const OVEN_BOARD = { x: BENCH_AT.x, z: BENCH_AT.z, scale: 0.88 };
 /**
- * Where the board's knife lies (DESIGN §30), from the board's middle. At the press it lies along
+ * Where the board's knife lies (DESIGN §31), from the board's middle. At the press it lies along
  * the board's right edge; at the oven a flatbread fills the board and the peel stands right beside
  * it, so it lies on the counter at the front, past the peel's handle (narrower to tap there, so it
  * never takes a grab meant for the handle).
@@ -740,7 +740,7 @@ export class CounterView {
     P.add(board);
     this.board = { obj: board, x: PRESS_BOARD.x, z: PRESS_BOARD.z, layers: [], food: null, foodKey: "", on: false };
     this.boardProxy = this.proxy(new THREE.BoxGeometry(BOARD.w, 0.7, BOARD.d), at(PRESS_BOARD.x, 0.3, PRESS_BOARD.z), { type: "board" }, board);
-    // The knife: its own object, so it can be picked up (DESIGN §30). Its hit box stands taller than
+    // The knife: its own object, so it can be picked up (DESIGN §31). Its hit box stands taller than
     // the board's so a press on it is the knife's.
     const knife = makeKnife();
     knife.scale.setScalar(0.9);
@@ -749,7 +749,7 @@ export class CounterView {
     this.knifeProxy = this.proxy(new THREE.BoxGeometry(0.62, 1.0, 1.3), at(PRESS_BOARD.x, 0.4, PRESS_BOARD.z), { type: "knife" }, knife);
   }
 
-  /** The board's knife, and its hit box (DESIGN §30). */
+  /** The board's knife, and its hit box (DESIGN §31). */
   knifeObj: THREE.Group | null = null;
   private knifeProxy: THREE.Mesh | null = null;
   /** Where the knife rests, world space. */

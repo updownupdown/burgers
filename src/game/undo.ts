@@ -1,5 +1,5 @@
 /**
- * Undo (DESIGN §30): the kitchen keeps a short history of the moves the player made with their
+ * Undo (DESIGN §31): the kitchen keeps a short history of the moves the player made with their
  * hands, so the Undo button in the header can put the last one back. A move is something carried
  * from one place to another: an ingredient taken from its pan, a patty moved from the grill to a
  * tray, a sandwich lifted into the press, a pie on the peel, a cup put under a nozzle, a squeeze of

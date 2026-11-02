@@ -11,6 +11,7 @@ import { townBonus } from "../game/bonus";
 import { readyToBuy } from "../game/garage";
 import { truckSvg as truckArt } from "./truckart";
 import { dollars } from "./garage";
+import { resultsSheetHtml } from "./day";
 import { renderMap, roadPath, routePoints, SEA, townPoint, VIEW } from "./map";
 import { PanZoom } from "./panzoom";
 import "./home.css";
@@ -44,7 +45,21 @@ export interface HomeDeps {
   focus?: string | null;
   /** Just slept: play the night passing over the map before handing it over. */
   night?: NightShow | null;
+  /** Just closed: pull back out of the kitchen into the truck, then bring up today's results. */
+  arrive?: Arrival | null;
   sfx?: { whoosh(): void; coin(): void; tap(): void };
+}
+
+/**
+ * The end of a shift arriving on the evening map (DESIGN.md §30): a picture of the kitchen as it
+ * was (the 3D view as a JPEG, w × h CSS px, plus copies of the HUD, rail, counter buttons and the
+ * Closed sign) to shrink into the truck. No picture: the results sheet just comes up.
+ */
+export interface Arrival {
+  shot: string | null;
+  layers: HTMLElement[];
+  w: number;
+  h: number;
 }
 
 /** What the night transition shows: the day turning, and how today moved popularity and rating. */
@@ -70,6 +85,8 @@ interface Mounted {
   driving: boolean;
   /** The night is still drawn while the night transition plays. */
   night: boolean;
+  /** Ends the pull-back out of the kitchen early (a tap), while it plays. */
+  arriving: (() => void) | null;
   observer: MutationObserver;
   onResize: () => void;
 }
@@ -104,7 +121,7 @@ export function mountHome(root: HTMLElement, deps: HomeDeps): void {
     // Only the map itself pans; the dock, sheet, stats and buttons float over it.
     ignore: (target) => target !== map && !world.contains(target),
   });
-  const m: Mounted = { root, el, map, world, pz, base: 1, deps, selected: null, at: performance.now(), driving: false, night: !!deps.night, observer: null!, onResize: () => fitMap(true) };
+  const m: Mounted = { root, el, map, world, pz, base: 1, deps, selected: null, at: performance.now(), driving: false, night: !!deps.night, arriving: null, observer: null!, onResize: () => fitMap(true) };
   cur = m;
   // If something else takes over the root (the business plan card), let go of it.
   m.observer = new MutationObserver(() => {
@@ -118,6 +135,7 @@ export function mountHome(root: HTMLElement, deps: HomeDeps): void {
   fitMap(false);
   renderDock(m);
   if (deps.night) playNight(m, deps.night);
+  else if (deps.arrive) playArrive(m, deps.arrive);
   const focus = !deps.night && deps.focus && deps.focus !== deps.save.town && STOPS.some((t) => t.id === deps.focus) ? deps.focus : null;
   if (focus) select(m, focus, false);
   // Layout may not be final on the first frame (fonts, safe areas), so settle once more.
@@ -175,6 +193,7 @@ function shellHtml(save: Save): string {
       </div>
       <div class="home-dock bv-light"></div>
       <div class="home-sheet bv-light" hidden></div>
+      <div class="home-results bv-light" role="region" aria-label="Today's results" hidden></div>
     </div>
   </div>`;
 }
@@ -272,7 +291,7 @@ function fitMap(keepView: boolean, lookAt?: string): void {
   const home = Math.min(3, Math.max(1, DEFAULT_UNIT / m.base));
   // Some slack past the edges, so towns near the coast can still be brought to the middle.
   m.pz.resize(VIEW.w * m.base, VIEW.h * m.base, 0.6, 5, Math.round(Math.min(w * 0.55, h * 0.4)));
-  const dockH = m.el.querySelector<HTMLElement>(".home-sheet:not([hidden])")?.offsetHeight ?? m.el.querySelector<HTMLElement>(".home-dock")?.offsetHeight ?? 0;
+  const dockH = m.el.querySelector<HTMLElement>(".home-sheet:not([hidden]), .home-results:not([hidden])")?.offsetHeight ?? m.el.querySelector<HTMLElement>(".home-dock")?.offsetHeight ?? 0;
   const at = { x: w / 2, y: Math.max(h * 0.35, (h - dockH) / 2) };
   if (prev) m.pz.centerOn((prev.x / prevBase) * m.base, (prev.y / prevBase) * m.base, m.pz.scale, { x: w / 2, y: h / 2 });
   else {
@@ -284,6 +303,10 @@ function fitMap(keepView: boolean, lookAt?: string): void {
 function onMapTap(target: Element): void {
   const m = cur;
   if (!m || m.driving || m.night) return;
+  if (m.arriving) {
+    m.arriving();
+    return;
+  }
   const id = target.closest<HTMLElement>("[data-town]")?.dataset.town;
   if (id) {
     m.deps.sfx?.tap();
@@ -302,6 +325,7 @@ function select(m: Mounted, id: string, pan: boolean): void {
   route.setAttribute("d", trip ? trip.path.slice(1).map((b, i) => roadPath(trip.path[i], b)).join(" ") : "");
   renderSheet(m, id);
   m.el.querySelector<HTMLElement>(".home-dock")!.hidden = true;
+  m.el.querySelector<HTMLElement>(".home-results")!.hidden = true;
   if (pan) revealTown(m, id);
 }
 
@@ -476,6 +500,10 @@ function onClick(e: Event): void {
   const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-home]");
   if (!btn || btn.hasAttribute("disabled")) return;
   // A double tap on the screen before this one shouldn't press a button here.
+  if (m.arriving) {
+    m.arriving();
+    return;
+  }
   if (performance.now() - m.at < 450 || m.night) return;
   const act = btn.dataset.home!;
   const s = m.deps.save;
@@ -511,6 +539,13 @@ function onClick(e: Event): void {
       break;
     case "close":
       deselect(m);
+      break;
+    case "results-close":
+      hideResults(m);
+      break;
+    case "town":
+      m.deps.sfx?.tap();
+      select(m, btn.dataset.id!, true);
       break;
     case "zoom-in":
       m.pz.zoomBy(1.5, undefined, true);
@@ -591,6 +626,101 @@ function animateDrive(m: Mounted, trip: Trip): void {
     anim.cancel();
     finish();
   };
+}
+
+// ---------------------------------------------------------------------------
+// Arriving from the kitchen
+
+const ARRIVE_MS = { shrink: 1350, fade: 850, sheet: 1350 };
+
+/**
+ * The end of a shift, on the map: the kitchen (a picture of it) shrinks into the truck while the
+ * map pulls back from close in, the truck's hatch glows, and today's results rise as a sheet with
+ * Sleep on it. Any tap finishes it at once.
+ */
+function playArrive(m: Mounted, a: Arrival): void {
+  const s = m.deps.save;
+  const last = s.last && s.last.town === s.town ? s.last : null;
+  if (!last) return;
+  const sheet = m.el.querySelector<HTMLElement>(".home-results")!;
+  sheet.innerHTML = resultsSheetHtml(last, s);
+  sheet.hidden = false;
+  m.el.querySelector<HTMLElement>(".home-dock")!.hidden = true;
+  fitMap(false);
+  const truck = m.world.querySelector<SVGGElement>(".home-truck");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!a.shot || reduce) {
+    sheet.classList.add("in");
+    countUp(sheet);
+    return;
+  }
+  // Where the truck sits on screen, in the home element's own coordinates.
+  const [tx, ty] = px(m, townPoint(s.town));
+  const sp = m.pz.toScreen(tx, ty);
+  const mapBox = m.map.getBoundingClientRect();
+  const elBox = m.el.getBoundingClientRect();
+  const ox = sp.x + mapBox.left - elBox.left;
+  const oy = sp.y + mapBox.top - elBox.top - 4;
+  const over = document.createElement("div");
+  over.className = "home-arrive";
+  over.setAttribute("aria-hidden", "true");
+  const kitchen = document.createElement("div");
+  // Light tokens inside, as in the kitchen: the map around it is on the night ones.
+  kitchen.className = "kz bv-light";
+  kitchen.style.width = `${a.w}px`;
+  kitchen.style.height = `${a.h}px`;
+  kitchen.style.left = `${-elBox.left}px`;
+  kitchen.style.top = `${-elBox.top}px`;
+  kitchen.style.transformOrigin = `${ox + elBox.left}px ${oy + elBox.top}px`;
+  const img = new Image();
+  img.src = a.shot;
+  img.alt = "";
+  kitchen.append(img, ...a.layers);
+  over.appendChild(kitchen);
+  m.el.appendChild(over);
+  const ease = "cubic-bezier(0.6, 0, 0.25, 1)";
+  const anims: Animation[] = [];
+  const timers: number[] = [];
+  anims.push(kitchen.animate([{ transform: "none", borderRadius: "0px" }, { transform: "scale(0.035)", borderRadius: "40px" }], { duration: ARRIVE_MS.shrink, easing: ease, fill: "forwards" }));
+  anims.push(over.animate([{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: ARRIVE_MS.shrink, easing: "linear", fill: "forwards" }));
+  // The map pulls back from close in on the truck: the same view, zoomed 2.2× about the truck, easing out.
+  const view = m.world.style.transform;
+  anims.push(m.world.animate([{ transform: `translate(${sp.x}px, ${sp.y}px) scale(2.2) translate(${-sp.x}px, ${-sp.y}px) ${view}` }, { transform: view }], { duration: ARRIVE_MS.shrink + 150, easing: ease }));
+  const finish = () => {
+    if (!m.arriving) return;
+    m.arriving = null;
+    for (const t of timers) clearTimeout(t);
+    for (const an of anims) an.cancel();
+    over.remove();
+    sheet.classList.add("in");
+    countUp(sheet);
+    truck?.classList.add("lit");
+    timers.push(window.setTimeout(() => truck?.classList.remove("lit"), 2600));
+    m.at = performance.now();
+  };
+  m.arriving = finish;
+  timers.push(window.setTimeout(() => truck?.classList.add("lit"), ARRIVE_MS.fade));
+  timers.push(window.setTimeout(finish, ARRIVE_MS.sheet));
+}
+
+/** Today's takings on the results sheet count up as it arrives. */
+function countUp(root: HTMLElement): void {
+  for (const b of root.querySelectorAll<HTMLElement>("[data-count]")) {
+    const to = Number(b.dataset.count);
+    const t0 = performance.now();
+    const f = (now: number) => {
+      const k = Math.min(1, (now - t0) / 900);
+      b.textContent = `$${Math.round(to * (1 - (1 - k) ** 3))}`;
+      if (k < 1 && b.isConnected) requestAnimationFrame(f);
+    };
+    requestAnimationFrame(f);
+  }
+}
+
+/** Put today's results away; the dock (with Sleep) is back, and Results in the dashboard still opens them. */
+function hideResults(m: Mounted): void {
+  m.el.querySelector<HTMLElement>(".home-results")!.hidden = true;
+  if (!m.selected) m.el.querySelector<HTMLElement>(".home-dock")!.hidden = false;
 }
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { History, HISTORY_MAX, mentionsTray, samePlace, worthUndoing, type Move, type Place } from "./undo";
 
 /*
- * Undo (DESIGN §30): which moves the header's Undo button keeps, and how stale ones drop away.
+ * Undo (DESIGN §31): which moves the header's Undo button keeps, and how stale ones drop away.
  */
 
 const supply: Place = { at: "supply" };

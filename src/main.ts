@@ -11,7 +11,7 @@ import { eventOn, fountainFor, fryerOf, middleOf, townById, withEvent, type Town
 import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
 import { joinChance, lineDrain, linePatience, WINDOW, windowPatience, wordOfMouth } from "./game/line";
-import { HOLD_GRACE, HOLD_RUIN, LADLE_BAND, payout, SAUCE_BAND, sauceCoverage, sauceGate, sauceVerdict, scorePlate, TOUCH_TIP, touchTip, type SauceWord } from "./game/scoring";
+import { FRIES_HOLD, HOLD_GRACE, HOLD_RUIN, LADLE_BAND, payout, SAUCE_BAND, sauceCoverage, sauceGate, sauceVerdict, scorePlate, TOUCH_TIP, touchTip, type SauceWord } from "./game/scoring";
 import { History, samePlace, type Move, type Place } from "./game/undo";
 import { CUT_COVER, insideFood, judgeCut, quarterQuality, type Cut, type Pt as CutPt } from "./game/knife";
 import { CROWD, menuFor } from "./game/business";
@@ -899,8 +899,8 @@ function tutorialHint(): string | null {
 type Payload =
   | { type: "piece"; piece: Piece; fromGrill: { x: number; z: number } | null; fromPlate?: number; fromBasket?: number }
   | { type: "stack"; layers: Layer[]; grill?: { x: number; z: number }; fromPlate?: number; bay?: number; board?: boolean; peel?: boolean; spot?: number; rack?: boolean }
-  | { type: "fries"; cook: number; basket: number | null; amount: number; fry?: FryKind; fromBatter?: boolean }
-  | { type: "carton"; size: FriesSize; cook: number; fill: number; pack: number; salt: number; curds: boolean; gravy: boolean; fry?: FryKind; fromPlate?: number }
+  | { type: "fries"; cook: number; basket: number | null; amount: number; fry?: FryKind; fromBatter?: boolean; held?: number }
+  | { type: "carton"; size: FriesSize; cook: number; fill: number; pack: number; salt: number; curds: boolean; gravy: boolean; fry?: FryKind; fromPlate?: number; held?: number }
   | { type: "salt"; sugar?: boolean }
   | { type: "curds" }
   | { type: "gravy" }
@@ -1151,8 +1151,8 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
       showHint("This tray already has fries.", 2);
       return false;
     }
-    const { cook, size, fill, salt, curds, gravy } = payload;
-    s.plate.fries = { cook, size, fill, salt, curds, gravy, ...(payload.fry && payload.fry !== "fries" ? { fry: payload.fry } : {}) };
+    const { cook, size, fill, salt, curds, gravy, held } = payload;
+    s.plate.fries = { cook, size, fill, salt, curds, gravy, held: held ?? 0, ...(payload.fry && payload.fry !== "fries" ? { fry: payload.fry } : {}) };
     dropped = { place: { at: "tray", slot }, ref: s.plate.fries };
   } else {
     if (s.plate.drink) {
@@ -1389,12 +1389,13 @@ function restorePayload(payload: Payload): void {
   }
   if (payload.type === "carton") {
     const { size, cook, fill, salt, curds, gravy, fromPlate } = payload;
+    const held = payload.held ?? 0;
     const fry = payload.fry ?? "fries";
     if (fromPlate !== undefined) {
-      game.slots[fromPlate].plate.fries = { size, cook, fill, salt, curds, gravy, ...(fry !== "fries" ? { fry } : {}) };
+      game.slots[fromPlate].plate.fries = { size, cook, fill, salt, curds, gravy, held, ...(fry !== "fries" ? { fry } : {}) };
       syncTray(fromPlate, false);
     } else {
-      Object.assign(counter.packs[payload.pack], { size, cook, fill, salt, curds, gravy, fry });
+      Object.assign(counter.packs[payload.pack], { size, cook, fill, salt, curds, gravy, fry, held });
       counter.syncPack(payload.pack);
     }
   }
@@ -1487,7 +1488,7 @@ const restPlace = (): Place => (counter.rest === counter.board ? { at: "board" }
 
 /** The drink or carton a move left, as it is now. */
 type CupData = { flavor: DrinkId | null; fill: number; size: Size; ice: boolean; lid: boolean };
-type CartonData = { size: FriesSize; cook: number; fill: number; salt: number; curds: boolean; gravy: boolean; fry: FryKind };
+type CartonData = { size: FriesSize; cook: number; fill: number; salt: number; curds: boolean; gravy: boolean; fry: FryKind; held?: number };
 
 /** Is the moved thing still where the move put it? */
 function stillThere(m: Move<Moved>): boolean {
@@ -1665,18 +1666,18 @@ function takeBack(m: Move<Moved>): { show: Payload | THREE.Object3D; put: () => 
     const pp = w.p as Extract<Payload, { type: "carton" | "empty" }>;
     if (to.at === "tray") {
       const f = game.slots[to.slot].plate.fries!;
-      c = { size: f.size, cook: f.cook, fill: f.fill, salt: f.salt ?? 0, curds: !!f.curds, gravy: !!f.gravy, fry: fryOf(f) };
+      c = { size: f.size, cook: f.cook, fill: f.fill, salt: f.salt ?? 0, curds: !!f.curds, gravy: !!f.gravy, fry: fryOf(f), held: f.held ?? 0 };
       game.slots[to.slot].plate.fries = null;
       syncTray(to.slot, false);
     } else if (to.at === "pack") {
       const pk = counter.packs[to.i];
-      c = { size: pk.size!, cook: pk.cook, fill: pk.fill, salt: pk.salt, curds: pk.curds, gravy: pk.gravy, fry: pk.fry };
+      c = { size: pk.size!, cook: pk.cook, fill: pk.fill, salt: pk.salt, curds: pk.curds, gravy: pk.gravy, fry: pk.fry, held: pk.held };
       Object.assign(pk, EMPTY_PACK);
       counter.syncPack(to.i);
-    } else c = pp.type === "carton" ? { size: pp.size, cook: pp.cook, fill: pp.fill, salt: pp.salt, curds: pp.curds, gravy: pp.gravy, fry: pp.fry ?? "fries" } : { size: pp.size as FriesSize, cook: 0, fill: 0, salt: 0, curds: false, gravy: false, fry: "fries" };
+    } else c = pp.type === "carton" ? { size: pp.size, cook: pp.cook, fill: pp.fill, salt: pp.salt, curds: pp.curds, gravy: pp.gravy, fry: pp.fry ?? "fries", held: pp.held ?? 0 } : { size: pp.size as FriesSize, cook: 0, fill: 0, salt: 0, curds: false, gravy: false, fry: "fries" };
     const put = () => {
       if (from.at === "tray") {
-        game.slots[from.slot].plate.fries = { size: c.size, cook: c.cook, fill: c.fill, salt: c.salt, curds: c.curds, gravy: c.gravy, ...(c.fry !== "fries" ? { fry: c.fry } : {}) };
+        game.slots[from.slot].plate.fries = { size: c.size, cook: c.cook, fill: c.fill, salt: c.salt, curds: c.curds, gravy: c.gravy, held: c.held ?? 0, ...(c.fry !== "fries" ? { fry: c.fry } : {}) };
         syncTray(from.slot, true);
       } else if (from.at === "pack") {
         Object.assign(counter.packs[from.i], c);
@@ -2338,7 +2339,7 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
       showHint("There's already a carton there.", 1.5);
       return false;
     }
-    Object.assign(p, { size: payload.size as FriesSize, cook: 0, fill: 0 });
+    Object.assign(p, { size: payload.size as FriesSize, cook: 0, fill: 0, held: 0 });
     counter.syncPack(pi);
     dropped = { place: { at: "pack", i: pi } };
     sfx.plop();
@@ -2368,12 +2369,14 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
     const moved = Math.min(room, payload.amount);
     dropped = { place: { at: "pack", i: pi }, moved, pack: { fill: p.fill, cook: p.cook, fry: p.fill > 0 ? p.fry : fry } };
     p.cook = (p.cook * p.fill * portion + payload.cook * moved) / (p.fill * portion + moved);
+    // A carton is as soggy as the oldest fries in it.
+    p.held = p.fill > 0 ? Math.max(p.held, payload.held ?? 0) : (payload.held ?? 0);
     p.fill = Math.min(1, p.fill + moved / portion);
     counter.syncPack(pi);
     sfx.plop();
     // Whatever didn't fit stays in the basket for the next carton.
     const left = payload.amount - moved;
-    if (left > 0.02) Object.assign(counter.baskets[payload.basket], { loaded: true, cook: payload.cook, amount: left, down: false, fry });
+    if (left > 0.02) Object.assign(counter.baskets[payload.basket], { loaded: true, cook: payload.cook, amount: left, down: false, fry, held: payload.held ?? 0 });
     if (p.fill < 0.95) hintOnce("skimpy", "Not quite full. Top it up with another batch, or customers call it skimpy.", 3);
     return true;
   }
@@ -2816,7 +2819,7 @@ canvas.addEventListener("pointerdown", (e) => {
     else if (hit.type === "pack") {
       const p = counter.packs[hit.idx];
       if (p.size && p.fill > 0) {
-        startHold(pt, { type: "carton", size: p.size, cook: p.cook, fill: p.fill, pack: hit.idx, salt: p.salt, curds: p.curds, gravy: p.gravy, fry: p.fry });
+        startHold(pt, { type: "carton", size: p.size, cook: p.cook, fill: p.fill, pack: hit.idx, salt: p.salt, curds: p.curds, gravy: p.gravy, fry: p.fry, held: p.held });
         Object.assign(p, EMPTY_PACK);
         counter.syncPack(hit.idx);
       } else showHint(p.size ? "Drag fries from the basket into the carton." : "Grab a carton from the stacks, front left.", 2);
@@ -2977,7 +2980,7 @@ canvas.addEventListener("pointermove", (e) => {
       } else if (s.plate.fries) {
         const f = s.plate.fries;
         s.plate.fries = null;
-        startHold(pt, { type: "carton", size: f.size, cook: f.cook, fill: f.fill, pack: -1, salt: f.salt ?? 0, curds: !!f.curds, gravy: !!f.gravy, fry: fryOf(f), fromPlate: pt.plate });
+        startHold(pt, { type: "carton", size: f.size, cook: f.cook, fill: f.fill, pack: -1, salt: f.salt ?? 0, curds: !!f.curds, gravy: !!f.gravy, fry: fryOf(f), fromPlate: pt.plate, held: f.held ?? 0 });
       } else break;
       syncTray(pt.plate, false);
       break;
@@ -2995,7 +2998,7 @@ canvas.addEventListener("pointermove", (e) => {
         } else if (b.loaded) {
           b.loaded = false;
           b.down = false;
-          startHold(pt, { type: "fries", cook: b.cook, basket: pt.hit.idx, amount: b.amount, fry: b.fry });
+          startHold(pt, { type: "fries", cook: b.cook, basket: pt.hit.idx, amount: b.amount, fry: b.fry, held: b.held });
         }
       }
       break;
@@ -4617,6 +4620,8 @@ function startShift(): void {
   counter.fryBoost = has("turbo") ? 1.35 : 1;
   // Hot plate (the old Searing plate): the main counter cooks faster, whatever it is.
   counter.grillBoost = has("sear") ? 1.25 : 1;
+  // Heat lamp: warm holding everywhere (the warm end, the rack, fries, the trays) ages at half the pace.
+  counter.holdRate = has("lamp") ? 0.5 : 1;
   // Chill pours to the line by itself and nothing on the grill or in the fryer burns.
   counter.autoStopPour = has("autostop") || game.pacing === "chill";
   counter.noBurn = game.pacing === "chill";
@@ -5097,9 +5102,12 @@ function tick(dt: number): void {
       }
     });
 
-    // Cooked food waiting on a tray slowly goes cold and dry (the warm grill zone is the place to hold it).
-    for (const s of game.slots)
-      ageLayers(s.plate.layers, dt, has("lamp") ? 0.5 : 1);
+    // Cooked food waiting on a tray slowly goes cold and dry (the warm grill zone holds it at half
+    // the pace); fries on a tray go soggy. The heat lamp halves all of it (counter.holdRate).
+    for (const s of game.slots) {
+      ageLayers(s.plate.layers, dt, counter.holdRate);
+      if (s.plate.fries && s.plate.fries.cook > 0.15) s.plate.fries.held = (s.plate.fries.held ?? 0) + dt * counter.holdRate;
+    }
 
     if (counter.middle === "oven") {
       const o = game.slots[game.active]?.order;
@@ -5414,7 +5422,9 @@ function itemTag(it: GrillItem): string {
   const n = counter.stackSize(it);
   // A quesadilla's cheese: melting, then melted.
   const melt = jack ? `<b class="mlt${isMelted(jack) ? " on" : ""}">${isMelted(jack) ? "Melted" : "Melting"}</b>` : "";
-  return `${meter}${melt}${n > 1 ? `<b class="sc">×${n}</b>` : ""}`;
+  // Off the heat, cooked food ages (warm holding): the bar shows how long it keeps.
+  const hold = counter.heatOf(it) !== "hot" ? holdBar(it.piece.held) : "";
+  return `${meter}${melt}${hold}${n > 1 ? `<b class="sc">×${n}</b>` : ""}`;
 }
 /**
  * Staleness bars beside the trays: a slim vertical bar that drains as the cooked food on the tray
@@ -5440,6 +5450,8 @@ const stationTag = (cls: string): HTMLElement => {
   return el;
 };
 const puddleTags = counter.taps.map(() => stationTag("hot"));
+/** The taco rack's warm-holding bar, in front of the rack while tacos wait in it. */
+const rackTag = stationTag("rackhold");
 function placeTag(el: HTMLElement, world: THREE.Vector3, text: string, cls?: [string, boolean]): void {
   el.hidden = false;
   if (el.textContent !== text) el.textContent = text;
@@ -5458,13 +5470,22 @@ function updateStationUi(): void {
     if (t.cup) return void (puddleTags[i].hidden = true);
     placeTag(puddleTags[i], t.puddleObj.position.clone().setZ(t.puddleObj.position.z + 0.7), "Scrub to wipe");
   });
+  const rackHeld = Math.max(0, ...counter.rack.layers.map((l) => l.piece.held ?? 0));
+  const rackHtml = counter.middle === "comal" && on(HOME_PAGE) ? holdBar(rackHeld) : "";
+  rackTag.hidden = !rackHtml;
+  if (rackHtml) {
+    if (rackTag.innerHTML !== rackHtml) rackTag.innerHTML = rackHtml;
+    const v = counter.rackPoint().add(new THREE.Vector3(0, 0, 0.75)).project(counter.camera);
+    rackTag.style.left = `${((v.x + 1) / 2) * bands.counter.w}px`;
+    rackTag.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
+  }
 }
 
 function updateStaleUi(): void {
   const playing = game.phase === "playing";
   game.slots.forEach((s, i) => {
     const el = holdTags[i];
-    const held = Math.max(0, ...s.plate.layers.map((l) => l.piece.held ?? 0));
+    const held = Math.max(0, ...s.plate.layers.map((l) => l.piece.held ?? 0), s.plate.fries ? friesOnTrayScale(s.plate.fries.held ?? 0) : 0);
     el.hidden = !playing || !s.order || held <= 0;
     if (el.hidden) return;
     const left = Math.max(0, 1 - held / HOLD_RUIN);
@@ -5479,6 +5500,21 @@ function updateStaleUi(): void {
     el.style.top = `${bands.tray.y + ((1 - v.y) / 2) * bands.tray.h}px`;
   });
 }
+
+/**
+ * Warm holding's bar (after build #78): the tray's staleness bar in small, under a meter on the
+ * warm end, in the taco rack, on a lifted basket or a carton. Green while it keeps, amber once it
+ * starts drying, red near the end. `grace` and `ruin` are that food's seconds.
+ */
+function holdBar(held: number | undefined, grace = HOLD_GRACE, ruin = HOLD_RUIN): string {
+  const h = held ?? 0;
+  if (h < 0.5) return "";
+  const left = Math.round(Math.max(0, 1 - h / ruin) * 20) * 5;
+  const state = h < grace ? "fresh" : h < (grace + ruin) / 2 ? "drying" : "dry";
+  return `<span class="hbar ${state}" role="img" aria-label="${state === "fresh" ? "Keeping" : state === "drying" ? "Drying" : "Gone cold"}"><i style="width:${left}%"></i></span>`;
+}
+/** Fries' soggy seconds as the tray bar's seconds, so one bar reads for both. */
+const friesOnTrayScale = (h: number): number => (h <= FRIES_HOLD.grace ? (h * HOLD_GRACE) / FRIES_HOLD.grace : HOLD_GRACE + ((h - FRIES_HOLD.grace) * (HOLD_RUIN - HOLD_GRACE)) / (FRIES_HOLD.ruin - FRIES_HOLD.grace));
 
 /** Fries read on the same meter as everything else. */
 const friesMeter = (cook: number, fry: FryKind = "fries"): string => cookMeter(fry, cook);
@@ -5539,13 +5575,14 @@ function updateFryTags(): void {
       if (!b.loaded) continue;
       const scoops = Math.round(b.amount / FRIES_SCOOP);
       const pips = [0, 1, 2].map((k) => `<b class="${k < scoops ? "on" : ""}"></b>`).join("");
-      spots.push({ at: counter.fryTagPoint(i), html: `${friesMeter(b.cook, b.fry)}<span class="scoops" aria-label="${scoops} of 3 scoops">${pips}</span>` });
+      const hb = b.down ? "" : holdBar(b.held, FRIES_HOLD.grace, FRIES_HOLD.ruin);
+      spots.push({ at: counter.fryTagPoint(i), html: `${friesMeter(b.cook, b.fry)}${hb}<span class="scoops" aria-label="${scoops} of 3 scoops">${pips}</span>` });
     }
     for (const p of counter.packs) {
       if (!p.size || p.fill <= 0) continue;
       const red = counter.redRock;
       const tops = [p.salt && (SUGARED.has(p.fry) ? "Sugar" : "Salt"), p.curds && (red ? "Jalapeños" : "Curds"), p.gravy && (red ? "Queso" : "Gravy")].filter(Boolean).map((t) => `<em>${t}</em>`).join("");
-      spots.push({ at: new THREE.Vector3(p.x, 0.2, p.z + 0.5), html: `${friesMeter(p.cook, p.fry)}${tops ? `<span class="tops">${tops}</span>` : ""}` });
+      spots.push({ at: new THREE.Vector3(p.x, 0.2, p.z + 0.5), html: `${friesMeter(p.cook, p.fry)}${holdBar(p.held, FRIES_HOLD.grace, FRIES_HOLD.ruin)}${tops ? `<span class="tops">${tops}</span>` : ""}` });
     }
   }
   while (fryTags.length < spots.length) {

@@ -351,7 +351,7 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
 
 /**
  * Cooked food waiting on a tray keeps well for about 40 seconds, then goes cold and dry over the
- * next minute. (`Piece.held` counts the seconds; the warm grill zone is where to park food instead.)
+ * next minute. (`Piece.held` counts the seconds; the warm grill zone holds food at half the pace, WARM_AGE.)
  */
 export const HOLD_GRACE = 40;
 export const HOLD_RUIN = 100;

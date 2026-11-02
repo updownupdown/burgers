@@ -12,7 +12,7 @@ import { INNER_RX, INNER_RZ, makeFlatbread, PIE, pieYaw, type FlatbreadObject } 
 import { QUESO } from "../render/sides";
 import { tickTacos } from "../render/tacos";
 import { makeTacoRack } from "../render/dishes";
-import { RACK_SLOTS } from "../game/hold";
+import { ageLayers, goesStale, RACK_SLOTS, WARM_AGE } from "../game/hold";
 import { brushedSteel, counterTop } from "../render/wear";
 import { CUP_DIMS, cupSurfaceY, makeCarton, makeCartonStack, makeCup, makeFood, makeBasketFries, makeFries, stackBases, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { dressCup } from "../render/cup";
@@ -207,7 +207,7 @@ const SHAKER_SCALE = 1.6;
 /** One packing pad (the cream square inside its orange outline). */
 const PAD = { w: 1.47, d: 1.07 };
 /** A packing pad with nothing on it. */
-export const EMPTY_PACK = { size: null, cook: 0, fill: 0, salt: 0, curds: false, gravy: false, fry: "fries" as FryKind } as const;
+export const EMPTY_PACK = { size: null, cook: 0, fill: 0, salt: 0, curds: false, gravy: false, fry: "fries" as FryKind, held: 0 } as const;
 /** Cartons on the pads and in their stacks, against carton units. */
 const PACK_SCALE = SCALE.fries;
 const CARTON_STACK_SCALE = SCALE.fries;
@@ -289,6 +289,8 @@ export interface Basket {
   t: number;
   /** Share of a full batch still in the basket. */
   amount: number;
+  /** Seconds the fries have hung out of the oil (they go soggy; FRIES_HOLD in scoring.ts). Back in the oil resets it. */
+  held: number;
   /** Where the basket hangs on the rail (tilted to drain), and where it sits in the oil. */
   up: THREE.Vector3;
   downAt: THREE.Vector3;
@@ -313,6 +315,8 @@ export interface Pack {
   fill: number;
   /** Salt shaken on so far (SALT in cooking.ts). */
   salt: number;
+  /** Seconds the fries in it have been out of the oil. */
+  held: number;
   curds: boolean;
   gravy: boolean;
   obj: THREE.Object3D | null;
@@ -509,6 +513,8 @@ export class CounterView {
   fryBoost = 1;
   /** The searing plate bonus: everything on the grill cooks faster. */
   grillBoost = 1;
+  /** Warm holding's pace (0.5 with the heat lamp): the warm end, the taco rack, lifted fries and cartons. */
+  holdRate = 1;
   autoStopPour = false;
   /** Chill: food on the grill holds at well done and fries at dark golden instead of burning. */
   noBurn = false;
@@ -1584,7 +1590,7 @@ export class CounterView {
       const hang = sp.hang[i];
       const up = fryer.position.clone().add(new THREE.Vector3(hang.x, hang.y, hang.z));
       const down = fryer.position.clone().add(new THREE.Vector3(w.x, sp.down.y, w.z));
-      this.baskets.push({ loaded: false, fry: "fries", shell: null, shellObj: null, cook: 0, down: false, goldenRung: false, beepT: 0, obj: basket, fries, t: 0, amount: 0, up, downAt: down, tilt: hang.tilt });
+      this.baskets.push({ loaded: false, fry: "fries", shell: null, shellObj: null, cook: 0, down: false, goldenRung: false, beepT: 0, obj: basket, fries, t: 0, amount: 0, held: 0, up, downAt: down, tilt: hang.tilt });
       this.proxy(new THREE.BoxGeometry(1.5 * k, 1.4, 2.6 * k), fryer.position.clone().add(new THREE.Vector3(w.x, 0.8, w.z + 0.5 * k)), { type: "basket", idx: i });
     });
   }
@@ -2404,6 +2410,9 @@ export class CounterView {
         // Only the bottom of a stack touches the grill.
         const zi = this.zoneAt(it.x);
         const zone = this.zones[zi];
+        // Warm holding (after build #78): cooked food parked on the warm end ages at half the tray's
+        // pace (WARM_AGE), food left on a cold zone at the tray's; the heat lamp halves both.
+        if (zone !== "hot" && goesStale(it.piece)) it.piece.held = (it.piece.held ?? 0) + dt * (zone === "warm" ? WARM_AGE : 1) * this.holdRate;
         const touching = !it.below;
         const heat = touching ? ZONE_RATE[zone] * (COOK_SPEED[it.piece.kind] ?? 1) * (it.piece.smashed ? 1.6 : 1) * this.grillBoost : 0;
         const before = cookLevel(it.piece);
@@ -2578,6 +2587,10 @@ export class CounterView {
       mat.opacity = (burnt ? 0.55 : it.light ? 0.12 : 0.28) * Math.sin(Math.PI * t) * Math.min(1, it.cook * 4);
     });
 
+    // Warm holding: tacos in the rack age at half the tray's pace; fries in a carton go soggy.
+    if (this.middle === "comal") ageLayers(this.rack.layers, dt, WARM_AGE * this.holdRate);
+    for (const pk of this.packs) if (pk.size && pk.fill > 0) pk.held += dt * this.holdRate;
+
     // Fryer
     for (let i = 0; i < this.baskets.length; i++) {
       const b = this.baskets[i];
@@ -2616,6 +2629,9 @@ export class CounterView {
         if (b.shellObj) b.shellObj.userData.update(sh);
         continue;
       }
+      // Fries hanging out of the oil go soggy (warm holding); back in the oil they crisp up again.
+      if (inOil) b.held = 0;
+      else if (b.loaded && b.cook > 0.15) b.held += dt * this.holdRate;
       if (inOil) {
         const before = b.cook;
         const zone = FRY_ZONE[b.fry];

@@ -255,7 +255,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
       </div>
       <div class="hw-lamp">
         <span class="lampic">${icon("clock")}</span>
-        <div><b>Waiting on the tray</b><span>Cooked food keeps about ${HOLD_GRACE} s on a tray, then goes cold. The bar along the tray shows it.</span><i class="q" aria-hidden="true"></i></div>
+        <div><b>Waiting on the tray</b><span>Cooked food keeps about ${HOLD_GRACE} s on a tray, then goes cold; fries go soggy a little sooner. The bar along the tray shows it. The warm end of the grill or comal keeps food twice as long.</span><i class="q" aria-hidden="true"></i></div>
       </div>`,
       points: [
         "To fix a tray, drag a wrong layer to the trash. Held food lights the trash red when a drop would bin it.",
@@ -573,7 +573,7 @@ function counterSec(k: MiddleCounter): Sec {
       lede: "Three zones: the ridged grille, the flat and the warm end. Patties cook slowly, so start them early.",
       fig: `${grillArt()}<p class="hw-cap">Each zone's button on the front goes off, warm, hot. Two red lamps are hot, one orange is warm.</p>`,
       points: [
-        "A shift starts <b>hot, hot, warm</b>. Warm holds food without cooking it, and nothing goes stale there. Park finished food on it.",
+        "A shift starts <b>hot, hot, warm</b>. Warm holds food without cooking it, and it keeps there twice as long as on a tray (a small bar under the meter shows it). Park finished food on it, but not all shift.",
         "<b>Tap or flick up</b> to flip. Flip a patty once, about halfway, or its face down chars. Buns don't flip: they toast cut side down.",
         "Four seconds face down on the hot grille leaves <b>grill marks</b>, a small bonus.",
         "<b>Melt</b>: drop a cheese slice on a patty on the grill. They come off together.",
@@ -618,7 +618,7 @@ function counterSec(k: MiddleCounter): Sec {
         "Drag a warm tortilla by its middle into the <b>taco rack</b>: four slots. A tortilla that's still cold is refused.",
         "In the rack, one drag from the pork or bean well is one scoop into one taco. Other toppings go in once and land on every taco.",
         "Salsa and crema go on at the tray, not in the rack. <b>Drag the rack up to a tray</b>.",
-        "Nothing in the rack cooks on or goes stale. On a tray, tacos are as fresh as the last one placed.",
+        "Nothing in the rack cooks on, and tacos keep there twice as long as on a tray. On a tray, tacos are as fresh as the last one placed.",
         "<b>Pineapple</b> chars on the comal: flick it to flip. <b>Eggs</b> crack on the hot side.",
         `<b>Tortilla press</b> (${tpress}): hold it to flatten a ball of masa, then drag the tortilla to the comal. Hand-pressed tortillas add ${price(2)} to the tip.`,
       ],
@@ -665,7 +665,7 @@ function kitchenWalks(k: MiddleCounter): Walk[] {
           "On the tray: a toasted bun, lettuce, the patty once its meter is in the band, the egg, the top bun.",
           "<b>Serve</b>.",
         ],
-        tip: "Done early? Park it on the <b>warm</b> zone. It won't cook on or go stale there.",
+        tip: "Done early? Park it on the <b>warm</b> zone. It won't cook on, and it keeps twice as long as on a tray.",
       },
       {
         id: "lumberjack",

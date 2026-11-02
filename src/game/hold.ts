@@ -3,10 +3,17 @@ import { BREADS, GRILLABLE, isSauce, PROTEINS, SCOOPED, TORTILLAS, type Kind, ty
 /*
  * Food waiting on a tray (DESIGN §24, after build #73). Cooked food on a tray slowly goes cold and
  * dry (`Piece.held` counts the seconds, scoring.heldPenalty turns them into a mark-down); the warm
- * end of the grill or comal is the place to hold it instead. Red Rock's tacos are built in the
- * taco rack on the comal's warm end, where nothing ages; on a tray, a run of tacos is as fresh as
+ * end of the grill or comal is the place to hold it instead, where it ages at half the pace
+ * (WARM_AGE). Red Rock's tacos are built in the taco rack on the comal's warm end, which ages them
+ * at the same half pace; on a tray, a run of tacos is as fresh as
  * the last taco that joined it, so the first taco isn't marked down for the time the fourth took.
  */
+
+/**
+ * Warm holding (after build #78): the warm end of the grill or comal and the taco rack keep cooked
+ * food, but not for free: it ages at this fraction of the tray's pace, and shows the same bar.
+ */
+export const WARM_AGE = 0.5;
 
 /** Does this piece go cold and dry while it waits on a tray? Only cooked food does. */
 export function goesStale(p: Piece): boolean {

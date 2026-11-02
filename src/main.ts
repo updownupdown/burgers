@@ -52,13 +52,12 @@ import { Dusk } from "./render/dusk";
 import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
-import { closingHtml, prepHtml, reviewsHtml, syncRange, toggleBox, toggleIngredients } from "./screens/day";
+import { closingHtml, renderPrep, reviewsHtml, syncRange, toggleBox, toggleIngredients } from "./screens/day";
 import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, setTabArt, ticketHtml, tortillaMeter } from "./ui";
 import { icon } from "./ui/icons";
 import { esc } from "./screens/modal";
 import { DRINK_TINT } from "./render/machines";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
-import { scrollShadows } from "./screens/modal";
 import { closeAll, initMenu, openHowTo, openMenu, openMenuRef, openSettings } from "./screens/menu";
 import { dropBack, pushBack } from "./screens/nav";
 import { devOn, simulate, type SimLevel } from "./game/devmode";
@@ -4743,18 +4742,10 @@ function showPrep(): void {
   // From the pause menu (Restart) the map isn't up yet: put it under the card.
   if (game.phase !== "title") showTitle();
   if (!prepOpen) pushBack("prep", () => closePrep(true));
-  // Redrawing Prep (a dish switched, the window moved) keeps the page where it was.
-  const keep = prepOpen ? (ui.summary.querySelector<HTMLElement>(".prep .day-scroll")?.scrollTop ?? 0) : 0;
+  // Redrawing Prep (a dish switched, the window moved) updates the card in place (day.ts).
+  renderPrep(ui.summary, { save, stop: stop(), pacing: difficulty }, prepOpen);
   prepOpen = true;
-  ui.summary.innerHTML = prepHtml({ save, stop: stop(), pacing: difficulty });
   ui.summary.classList.add("prep-host");
-  const sc = ui.summary.querySelector<HTMLElement>(".prep .day-scroll");
-  const card = ui.summary.querySelector<HTMLElement>(".prep");
-  if (sc && card) {
-    sc.scrollTop = keep;
-    scrollShadows(card, sc);
-    sc.addEventListener("scroll", () => scrollShadows(card, sc), { passive: true });
-  }
   ui.summary.hidden = false;
 }
 

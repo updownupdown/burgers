@@ -1,8 +1,8 @@
 /**
  * The in-game menus, as three cards:
  *
- *   openMenu()        the pause menu, in a shift: Resume, Restart, Quit, then this shift's
- *                     menu, Pacing, and doors to Settings and How to Play.
+ *   openMenu()        the pause menu, in a shift: Resume, Restart, Quit, how the shift is going,
+ *                     today's menu (ingredients, tips, sides, drinks), Settings and How to Play.
  *                     Closing it resumes.
  *   openSettings()    Settings on their own: sound, graphics, the app.
  *                     From the map's Settings button, and from the pause menu.
@@ -19,7 +19,9 @@ import { opinionFace, opinionLabel } from "../ui/faces";
 import { openHowTo } from "./howto";
 import { openMenuRef } from "./menuref";
 import { closeAllModals, esc, getDeps, modalDepth, modalHead, modalOpen, popModal, price, pushModal, setDeps, type GfxLevel, type MenuDeps, type ShiftSummary } from "./modal";
-import { buildLine, methodTags, sidesLine, stackArt } from "./menuref";
+import { cartonArt, cupArt, methodTags, stackArt } from "./menuref";
+import { dishTips, drinksInfo, ingredients, sidesInfo } from "./dishtext";
+import { DRINK_COLOR, DRINK_LABEL, KIND_COLOR } from "../game/types";
 import { clockLabel } from "../game/shift";
 import { middleOf, type MiddleCounter, type Stop } from "../game/stops";
 
@@ -232,23 +234,54 @@ function shiftHtml(sh: ShiftSummary): string {
   </section>`;
 }
 
-/** Today's menu in brief: only what's served today, each burger as a little stack and its build. */
+/**
+ * Today's menu: only what's served today. Each dish as a little drawing, every ingredient bottom
+ * to top (buns and counts included), how it's made, and a tip or two for the fussier ones. Then
+ * the town's sides and drinks, one drawing each.
+ */
 function todayMenuHtml(town: Stop, mult: number): string {
   const items = town.menu
     .map((r) => {
       const notes = methodTags(r);
+      const tips = dishTips(r, town);
+      const flow = ingredients(r)
+        .map((g) => `<li><i class="swc" style="--c:${KIND_COLOR[g.kind]}"></i>${esc(g.label)}${g.count > 1 ? `<b class="bv-mono">×${g.count}</b>` : ""}</li>`)
+        .join("");
       return `<li class="pause-dish">
         ${stackArt(r)}
-        <div class="pd-main"><b>${esc(r.name)}</b><small>${esc(buildLine(r))}</small>${notes.length ? `<span class="tags">${notes.map((n) => `<span class="bv-chip pill">${esc(n)}</span>`).join("")}</span>` : ""}</div>
-        <span class="bv-mono pr">${price(Math.round(r.price * mult))}</span>
+        <div class="pd-main">
+          <div class="pd-top"><b>${esc(r.name)}</b><span class="bv-mono pr">${price(Math.round(r.price * mult))}</span></div>
+          <ol class="pd-flow" aria-label="Bottom to top">${flow}</ol>
+          ${notes.length ? `<span class="tags">${notes.map((n) => `<span class="bv-chip pill">${esc(n)}</span>`).join("")}</span>` : ""}
+          ${tips.length ? `<ul class="pd-tips">${tips.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
+        </div>
       </li>`;
     })
     .join("");
+  const sides = sidesInfo(town);
+  const drinks = drinksInfo(town);
   return `<section class="pause-menu" aria-label="Today's menu">
     <h3 class="menu-h">${icon("food-menu")}Today's menu <span>${town.menu.length}</span></h3>
+    <p class="pause-note mute pd-caption">Ingredients bottom to top.</p>
     <ul class="pause-dishes">${items}</ul>
-    <p class="pause-note mute">${esc(sidesLine(town))}</p>
-    <button class="bv-btn sm ghost" data-m="menuref">${icon("food-menu")}Full menu and prices</button>
+  </section>
+  <section class="pause-extras" aria-label="Sides and drinks">
+    <div class="pause-extra">
+      ${cartonArt(sides.kind)}
+      <div class="pe-main">
+        <h3 class="menu-h">${icon("fries")}Sides</h3>
+        <p class="pe-list">${sides.names.map(esc).join(" · ")}</p>
+        <small>${esc(sides.note)}</small>
+      </div>
+    </div>
+    <div class="pause-extra">
+      ${cupArt(DRINK_COLOR[drinks.drinks[0]])}
+      <div class="pe-main">
+        <h3 class="menu-h">${icon("drink")}Drinks</h3>
+        <ul class="pe-flavours">${drinks.drinks.map((dr) => `<li><i class="swc" style="--c:${DRINK_COLOR[dr]}"></i>${esc(DRINK_LABEL[dr])}</li>`).join("")}</ul>
+        <small>${esc(drinks.note)}</small>
+      </div>
+    </div>
   </section>`;
 }
 

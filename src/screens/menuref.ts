@@ -7,7 +7,7 @@ import * as gameMenu from "../game/menu";
 import { ADD_PRICE, DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "../game/menu";
 import { fountainFor, fryerOf, recipeCount, STOPS, townById, type Recipe, type Stop } from "../game/stops";
 import { openedBy, SHIFTS_TO_UNLOCK, unlockProgress } from "../game/travel";
-import { AFTER_OVEN, BREADS, COUNTED, DRINK_COLOR, PRESS_CHEESE, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, SIZE_LABEL, TORTILLAS, type Kind, type Size } from "../game/types";
+import { AFTER_OVEN, BREADS, COUNTED, DRINK_COLOR, PRESS_CHEESE, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, SIZE_LABEL, TORTILLAS, type FryKind, type Kind, type Size } from "../game/types";
 import { icon } from "../ui/icons";
 import { openHowTo } from "./howto";
 export { buildLine, methodTags, sidesLine } from "./dishtext";
@@ -85,6 +85,34 @@ export function dishArt(r: Recipe): string {
     return `${bits}<path d="M${x} 20a${w / 2} ${w / 2 + 2} 0 0 0 ${w} 0z" fill="${shell}" ${ink}/>`;
   }).join("");
   return wrap(`<path d="M4 36h56" stroke="#9aa0a0" stroke-width="3" stroke-linecap="round"/>${tacos}`);
+}
+
+const INK = `stroke="#2a2622" stroke-width="1.6" stroke-linejoin="round"`;
+
+/** One fountain cup, lidded with a straw, the liquid in today's first drink's colour (the pause card's Drinks). */
+export function cupArt(liquid: string): string {
+  return `<div class="mref-side" aria-hidden="true"><svg viewBox="0 0 48 56" width="100%">
+    <path d="M30 4l-4 14" stroke="#d8573a" stroke-width="3" stroke-linecap="round"/>
+    <path d="M12.6 26h22.8l-2 24H14.6z" fill="${liquid}"/>
+    <rect x="17" y="30" width="6" height="6" rx="1.2" fill="#eef7fa" stroke="#9cc7d6" stroke-width=".8"/><rect x="24" y="33" width="6" height="6" rx="1.2" fill="#eef7fa" stroke="#9cc7d6" stroke-width=".8"/>
+    <path d="M11 18h26l-3 33H14z" fill="rgb(255 255 255 / .25)" ${INK}/>
+    <path d="M9 18h30v-2.6c-5-4-25-4-30 0z" fill="#f6f2ea" ${INK}/>
+  </svg></div>`;
+}
+
+/** One fryer carton of the town's usual side: sticks for fries, triangles for chips, rounds for fritters. */
+export function cartonArt(kind: FryKind): string {
+  const fill = { fries: "#f0c95a", sweet: "#e8893a", chips: "#f0cf6a", churros: "#c98a3e", zucchini: "#d9c46a", fritters: "#d79a48" }[kind];
+  const ink = `stroke="#2a2622" stroke-width="1.1" stroke-linejoin="round"`;
+  const top =
+    kind === "chips"
+      ? [10, 18, 26, 34].map((x, i) => `<path d="M${x} ${20 - (i % 2) * 3}l6 -10 6 10z" fill="${fill}" ${ink}/>`).join("")
+      : kind === "fritters" || kind === "zucchini"
+        ? [14, 24, 34, 19, 29].map((x, i) => `<circle cx="${x}" cy="${i < 3 ? 17 : 11}" r="5" fill="${fill}" ${ink}/>`).join("")
+        : [12, 17, 22, 27, 32].map((x, i) => `<rect x="${x}" y="${4 + (i % 2) * 4}" width="4" height="18" rx="1.2" fill="${fill}" ${ink}/>`).join("");
+  return `<div class="mref-side" aria-hidden="true"><svg viewBox="0 0 48 56" width="100%">${top}
+    <path d="M8 18h32l-4 33H12z" fill="#d8573a" ${INK}/><path d="M15 26c3 3 15 3 18 0" fill="none" stroke="#f6f2ea" stroke-width="1.6" stroke-linecap="round"/>
+  </svg></div>`;
 }
 
 /** The burger drawn as a little stack, top bun first, so a recipe reads at a glance. */

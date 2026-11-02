@@ -3,6 +3,8 @@ import type { Piece, Plate } from "../game/types";
 import { fryOf } from "../game/types";
 import { makeDish, stretchSauce, type DishObject } from "../render/dishes";
 import { dressCup } from "../render/cup";
+import { makeGarnish } from "../render/models/garnish";
+import { CUP_DIMS } from "../render/models/drinks";
 import { makeCup, makeFood, makeFries, stackBases, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -241,6 +243,12 @@ export class PlateView {
   headroom = Infinity;
   /** A soft puff that breathes out from under a piece as it lands on the stack (review #78, P3-5). */
   private puffs: THREE.Sprite[] = [];
+  /**
+   * How much bigger the dish may draw while the receipt over this tray is folded (after build #78):
+   * the wall it frees goes to the food, so a finished build is the hero. Eased in `update`.
+   */
+  boost = 1;
+  private boostNow = 1;
 
   constructor() {
     const trayBody = makeTrayBody(trayStyle());
@@ -374,7 +382,7 @@ export class PlateView {
   private fitScale(): number {
     const top = this.stackTop() + 0.15;
     const room = this.headroom - this.burger.position.y;
-    return Math.max(this.full * MIN_FIT, Math.min(this.full, room / top));
+    return Math.max(this.full * MIN_FIT, Math.min(this.full * this.boostNow, room / top));
   }
 
   /**
@@ -463,7 +471,7 @@ export class PlateView {
       }
       this.friesKey = fk;
     }
-    const ck = p.drink ? `${p.drink.flavor}${p.drink.fill.toFixed(2)}${p.drink.size}${+!!p.drink.ice}${+!!p.drink.lid}` : "";
+    const ck = p.drink ? `${p.drink.flavor}${p.drink.fill.toFixed(2)}${p.drink.size}${+!!p.drink.ice}${+!!p.drink.lid}${p.drink.garnish ?? ""}` : "";
     if (ck !== this.cupKey) {
       if (this.cup) {
         this.group.remove(this.cup);
@@ -474,6 +482,13 @@ export class PlateView {
         this.cup = makeCup(p.drink.flavor, !!p.drink.lid, p.drink.size);
         this.cup.userData.setFill(p.drink.fill);
         dressCup(this.cup, p.drink);
+        // The local drink's garnish (after build #78) hooked on the rim, toward the viewer.
+        if (p.drink.garnish) {
+          const gn = makeGarnish(p.drink.garnish);
+          gn.position.set(CUP_DIMS[p.drink.size].r * 0.75, CUP_DIMS[p.drink.size].h + 0.02, CUP_DIMS[p.drink.size].r * 0.5);
+          gn.scale.setScalar(1.4);
+          this.cup.add(gn);
+        }
         this.cup.scale.setScalar(relScale("cup") * TRAY_SIDES);
         this.group.add(this.cup);
       }
@@ -487,7 +502,9 @@ export class PlateView {
   }
 
   update(dt: number): void {
-    // A tall burger shrinks a little, all at once, so its top stays clear of the receipts.
+    // A tall burger shrinks a little, all at once, so its top stays clear of the receipts; with the
+    // receipt folded it grows into the freed wall (boost).
+    this.boostNow += (this.boost - this.boostNow) * Math.min(1, dt * 6);
     this.s += (this.fitScale() - this.s) * Math.min(1, dt * 8);
     for (const e of this.entries) {
       if (e.piece.kind === "cheese") e.obj.userData.update(e.piece);

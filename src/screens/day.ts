@@ -7,7 +7,8 @@ import { PASS_STARS, type Closing, type Save } from "../game/progress";
 import { addReviews, noReviews, ratingPull, reviewAverage, reviewTotal, REVIEW_CHANCE } from "../game/reviews";
 import { opinionFace, opinionLabel } from "../ui/faces";
 import { clockLabel, FIRST_HOUR, hourRate, LAST_HOUR, MIN_SHIFT, shiftHours, type ShiftWindow } from "../game/shift";
-import { eventOn, townById, type Stop } from "../game/stops";
+import { eventOn, townById, type Recipe, type Stop } from "../game/stops";
+import { askFor } from "../game/asks";
 import { SHIFTS_TO_UNLOCK } from "../game/travel";
 import { icon } from "../ui/icons";
 import { buildLine, methodTags, stackArt } from "./menuref";
@@ -248,6 +249,8 @@ export function prepHtml(p: PrepInput): string {
         <div class="prep-rows">${rows}</div>
       </section>
 
+      ${askHtml(stop, menu, save.day, expect)}
+
       <section class="prep-sec prep-card">
         <h3 class="prep-h">${icon("sparkle")}Bonus</h3>
         ${bonusBody}
@@ -259,6 +262,16 @@ export function prepHtml(p: PrepInput): string {
       <button class="bv-btn primary lg" data-act="open">${icon("bell")}Open</button>
     </footer>
   </div>`;
+}
+
+/** Today's local ask (game/asks.ts): optional, a little extra money, and the shift counts as two. */
+function askHtml(stop: Stop, menu: readonly Recipe[], day: number, expect: number): string {
+  const a = askFor(stop, menu, day, expect);
+  return `<section class="prep-sec prep-card prep-ask">
+        <h3 class="prep-h">${icon("flag")}Local ask <span class="prep-shift-label bv-mono">+${money(a.reward)}</span></h3>
+        <p class="ask-text">${esc(a.text)}.</p>
+        <span class="day-hint">Optional. Met, it pays ${money(a.reward)} and this shift counts as two toward opening the roads.</span>
+      </section>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -432,7 +445,7 @@ export function closingHtml(c: Closing, save: Save): string {
   const tb = townBonus(town.id);
   const goal =
     !earned && tb && !save.found.includes(tb.id) && c.outcome !== "failed"
-      ? `<p class="day-goal">${icon("lock")}<span>A great shift here unlocks <b>${esc(tb.name)}</b>: ${GREAT.stars}★ average opinion, ${Math.round(GREAT.served * 100)}% of orders served, at least ${GREAT.min}.</span></p>`
+      ? `<p class="day-goal">${icon("lock")}<span>A great shift here unlocks <b>${esc(tb.name)}</b>: ${GREAT.stars}★ average opinion, ${Math.round(GREAT.served * 100)}% of orders served, at least ${GREAT.min} (or 80% of a smaller crowd).</span></p>`
       : "";
 
   return `<div class="day-screen bv closing">

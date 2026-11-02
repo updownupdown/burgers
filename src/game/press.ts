@@ -1,5 +1,5 @@
 import type { CrowdId } from "./business";
-import type { Stop, TownEvent } from "./stops";
+import { middleOf, type MiddleCounter, type Stop, type TownEvent } from "./stops";
 
 /**
  * Food critics and the press. Now and then a critic orders; how they rate the burger becomes
@@ -42,22 +42,39 @@ export function popularityChange(stars: number, outlet: Outlet): number {
   return Math.round(base * REACH[outlet]);
 }
 
-/** Headlines by the critic's stars, 1★ first. */
+/** What the press calls the food, by the middle counter the town cooks on: one, many. */
+export const DISH_WORD: Record<MiddleCounter, [string, string]> = { grill: ["burger", "burgers"], press: ["panini", "paninis"], comal: ["taco", "tacos"], oven: ["flatbread", "flatbreads"] };
+
+/** Headlines by the critic's stars, 1★ first; {dish} and {Dishes} are the region's food. */
 const HEADLINES: string[][] = [
-  ["Skip the burger truck in {town}", "Bun Voyage runs out of road"],
-  ["Bun Voyage stalls in {town}", "Burger truck needs a tune-up"],
+  ["Skip the {dish} truck in {town}", "Bun Voyage runs out of road"],
+  ["Bun Voyage stalls in {town}", "{Dish} truck needs a tune-up"],
   ["Bun Voyage: fine, if you're passing", "A so-so stop in {town}"],
   ["A solid stop in {town}", "Bun Voyage: good, not great"],
-  ["Burgers worth a road trip", "Don't miss Bun Voyage while it's in {town}", "The best thing on wheels in {town}"],
+  ["{Dishes} worth a road trip", "Don't miss Bun Voyage while it's in {town}", "The best thing on wheels in {town}"],
 ];
-const PRAISE = ["Every layer exactly right.", "I went back for seconds.", "Toasted, melted, perfect.", "This is what a burger should be."];
+/** Praise by region; the first two fit anywhere. */
+const PRAISE_ANY = ["Every layer exactly right.", "I went back for seconds."];
+const PRAISE: Record<MiddleCounter, string[]> = {
+  grill: ["Toasted, melted, perfect.", "This is what a burger should be."],
+  press: ["Pressed crisp, melted through.", "This is what a panini should be."],
+  comal: ["Warm tortillas, generous filling.", "These are what tacos should be."],
+  oven: ["A crust with real char.", "This is what a flatbread should be."],
+};
 
 export function pieceFor(stars: number, notes: string[], town: Stop, event: TownEvent | null, rng: () => number): PressPiece {
   const { outlet, source } = outletFor(town, event, rng);
   const pick = (xs: string[]) => xs[Math.floor(rng() * xs.length)];
-  const headline = pick(HEADLINES[Math.max(1, Math.min(5, stars)) - 1]).replace("{town}", town.name);
+  const mid = middleOf(town);
+  const [one, many] = DISH_WORD[mid];
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const headline = pick(HEADLINES[Math.max(1, Math.min(5, stars)) - 1])
+    .replace("{town}", town.name)
+    .replace("{dish}", one)
+    .replace("{Dish}", cap(one))
+    .replace("{Dishes}", cap(many));
   const note = notes[0] ? notes[0].charAt(0).toUpperCase() + notes[0].slice(1) + "." : "";
-  const quote = stars === 5 ? pick(PRAISE) : stars === 1 && !note ? "I waited and waited, then gave up." : note || "Fine. Just fine.";
+  const quote = stars === 5 ? pick([...PRAISE_ANY, ...PRAISE[mid]]) : stars === 1 && !note ? "I waited and waited, then gave up." : note || "Fine. Just fine.";
   return { outlet, source, headline, quote, stars, pop: popularityChange(stars, outlet) };
 }
 

@@ -41,11 +41,11 @@ export interface Bonus {
 /** In road order: the town that unlocks each, and its price. */
 export const BONUSES: Bonus[] = [
   { id: "bench", town: "pinecrest", price: 40, name: "Comfy bench", text: "Customers wait 30% longer, in line and at the window.", best: "Learning the ropes", icon: "people" },
-  { id: "autostop", town: "elkpass", price: 70, name: "Smart fountain", text: "Drinks stop pouring at the line by themselves.", best: "Thirsty crowds", icon: "drink" },
+  { id: "autostop", town: "elkpass", price: 70, name: "Smart fountain", text: "Drinks stop pouring at the line and get their lid by themselves.", best: "Thirsty crowds", icon: "drink" },
   { id: "steady", town: "cedarfalls", price: 90, name: "Steady hands", text: "Tossed toppings land neatly.", best: "Tall burgers", icon: "burger" },
-  { id: "lamp", town: "summit", price: 140, name: "Heat lamp", text: "Food on a tray stays fresh twice as long.", best: "Cooking ahead", icon: "flame" },
+  { id: "lamp", town: "summit", price: 140, name: "Heat lamp", text: "Warm holding: the warm end, the taco rack, lifted fries and the trays keep food fresh twice as long.", best: "Cooking ahead", icon: "flame" },
   { id: "cookies", town: "saltwater", price: 180, name: "Apology cookies", text: "Walk-outs don't cost popularity today.", best: "Busy, stressful days", icon: "heart" },
-  { id: "timer", town: "gullpoint", price: 210, name: "Kitchen timer", text: "A soft tick when anything cooking reaches done.", best: "A full grill and fryer", icon: "timer" },
+  { id: "timer", town: "gullpoint", price: 210, name: "Kitchen timer", text: "A soft tick when anything reaches done, and a countdown ring on the counter buttons.", best: "A full grill and fryer", icon: "timer" },
   { id: "turbo", town: "driftwood", price: 240, name: "Turbo fryer", text: "Fries cook 35% faster.", best: "Fries and poutine", icon: "fries" },
   { id: "guestbook", town: "harbor", price: 290, name: "Guest book", text: "Happy customers spread twice the word.", best: "Building popularity", icon: "review" },
   { id: "board", town: "redmesa", price: 340, name: "Sandwich board", text: "15% more people stop by today.", best: "Growing popular", icon: "flag" },
@@ -67,13 +67,22 @@ export function townBonus(town: string): Bonus | undefined {
 
 /**
  * What a great shift asks: a 4.4★ average opinion (the old 2.4 of three, now that a good order is
- * 4★ and a great one 5★), 85% of the people who ordered served, and at least six of them.
+ * 4★ and a great one 5★), 85% of the people who ordered served, and at least six of them, or 80%
+ * of the crowd expected when fewer are coming (a new truck in a small town sees four or five).
  */
-export const GREAT = { stars: 4.4, served: 0.85, min: 6 };
+export const GREAT = { stars: 4.4, served: 0.85, min: 6, share: 0.8 };
 
-/** A great shift unlocks the town's bonus. `ordered` is everyone who placed an order (served or not). */
-export function greatShift(stars: readonly number[], served: number, ordered: number): boolean {
-  if (served < GREAT.min || !stars.length) return false;
+/** Served orders a great shift needs, given the crowd expected today. */
+export function greatMin(expected: number): number {
+  return Math.max(1, Math.min(GREAT.min, Math.ceil(GREAT.share * expected)));
+}
+
+/**
+ * A great shift unlocks the town's bonus. `ordered` is everyone who placed an order (served or not);
+ * `expected` the crowd expected today (left out, the minimum is GREAT.min).
+ */
+export function greatShift(stars: readonly number[], served: number, ordered: number, expected = Infinity): boolean {
+  if (served < greatMin(expected) || !stars.length) return false;
   const avg = stars.reduce((a, b) => a + b, 0) / stars.length;
   return avg >= GREAT.stars && served >= Math.ceil(ordered * GREAT.served);
 }

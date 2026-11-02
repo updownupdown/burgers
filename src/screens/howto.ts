@@ -203,7 +203,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
       <p class="hw-cap">The round buttons at the edges take you to the next counter. A glowing ring means it needs you. With empty hands you can also swipe along the trash chute.</p>`,
       points: [
         "Three counters: <b>Drinks</b>, the kitchen in the middle, and the <b>Fryer</b>. Customers and trays stay put while you switch.",
-        "People wait in a <b>line</b> outside. When the window is empty the first one steps up alone. Otherwise tap the bell, marked <b>Next</b>, to call one. More at the window earns more, if you can keep up.",
+        "People wait in a <b>line</b> outside. When the window is empty the first one steps up alone. Otherwise ring the <b>bell</b> that stands on an empty tray to call one (twice for two); the number at the top is how many wait. More at the window earns more, if you can keep up.",
         "An order's patience only starts once they've ordered. In the line, the back drifts off first.",
       ],
     },

@@ -27,7 +27,7 @@ export interface Ui {
   tabs: HTMLButtonElement[];
   menuBtn: HTMLButtonElement;
   /** The service bell: a ring calls the next person in line. */
-  bell: HTMLButtonElement;
+  bell: HTMLElement;
   /** Undo, at the left of the header: carries the last move back (DESIGN §31). */
   undo: HTMLButtonElement;
   bellCount: HTMLElement;
@@ -113,9 +113,9 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     </div>
     <span class="chip money" data-r="money">$0</span>
     <span class="spacer"></span>
-    <button class="bell-btn" data-r="bell" hidden aria-label="Ring the bell for the next customer">
-      <span class="bell-count" data-r="bellCount">0</span>${icon("bell")}<span class="bell-label" data-r="bellLabel">Next</span>
-    </button>
+    <span class="bell-btn line-chip" data-r="bell" hidden role="status" aria-label="People waiting in line">
+      ${icon("people")}<span class="bell-count" data-r="bellCount">0</span><span class="bell-label" data-r="bellLabel">in line</span>
+    </span>
     <button class="icon-btn" data-r="menuBtn" aria-label="Menu">${icon("menu")}</button>
   </div>
   <div class="rail" data-r="rail"></div>
@@ -153,7 +153,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     hintClose: q("hintClose") as HTMLButtonElement,
     tabs,
     menuBtn: q("menuBtn") as HTMLButtonElement,
-    bell: q("bell") as HTMLButtonElement,
+    bell: q("bell"),
     undo: q("undo") as HTMLButtonElement,
     bellCount: q("bellCount"),
     bellLabel: q("bellLabel"),

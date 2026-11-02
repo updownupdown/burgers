@@ -522,7 +522,7 @@ function ringBell(): void {
     hintOnce("bell-called", "Next! More people at the window means more money, if you can keep up.", 3.5);
   }
 }
-ui.bell.addEventListener("click", ringBell);
+// The header shows only how many wait in line (after build #82): people are called with the bell on an empty tray.
 
 function setActive(i: number): void {
   game.active = i;
@@ -763,16 +763,6 @@ function coinPop(i: number, amount: number, touches: readonly string[] = []): vo
   setTimeout(() => c.remove(), 1500);
 }
 
-/** Where a tray's food sits on screen (its burger spot). */
-function plateScreen(i: number): { x: number; y: number } {
-  const b = trayView.plates[i].burger;
-  b.updateWorldMatrix(true, false);
-  const e = b.matrixWorld.elements;
-  const v = new THREE.Vector3(e[12], 0.3, e[14]).project(trayView.camera);
-  const r = bands.tray;
-  return { x: r.x + ((v.x + 1) / 2) * r.w, y: r.y + ((1 - v.y) / 2) * r.h };
-}
-
 /** Everything the ticket asks for is on the tray (right or not): it can be handed over with a tap. */
 function trayReady(i: number): boolean {
   const s = game.slots[i];
@@ -788,19 +778,74 @@ const trayActs = game.slots.map((_, i) => {
   const serveBtn = document.createElement("button");
   serveBtn.className = "tray-serve";
   serveBtn.hidden = true;
-  serveBtn.innerHTML = `<span aria-hidden="true">↑</span>Serve`;
+  // A swipe up on the pill hands it over too (after build #82: it's more fun), and the chevrons
+  // keep rising out of it to say so. A plain tap still serves.
+  serveBtn.innerHTML = `<span class="chev" aria-hidden="true"><i></i><i></i></span>Serve`;
+  serveBtn.setAttribute("aria-label", "Serve: tap, or swipe up");
+  let swipe: { id: number; y0: number; dy: number } | null = null;
+  serveBtn.addEventListener("pointerdown", (e) => {
+    swipe = { id: e.pointerId, y0: e.clientY, dy: 0 };
+    try {
+      serveBtn.setPointerCapture(e.pointerId);
+    } catch {
+      // Synthetic pointers can't be captured; moves still arrive.
+    }
+  });
+  serveBtn.addEventListener("pointermove", (e) => {
+    if (!swipe || e.pointerId !== swipe.id) return;
+    swipe.dy = Math.min(0, e.clientY - swipe.y0);
+    serveBtn.style.translate = `0 ${swipe.dy.toFixed(0)}px`;
+  });
+  const letGo = (cancel: boolean) => {
+    const sw = swipe;
+    swipe = null;
+    serveBtn.style.translate = "";
+    if (!sw || cancel || game.phase !== "playing" || !trayReady(i)) return;
+    if (sw.dy < -24) serve(i);
+  };
+  serveBtn.addEventListener("pointerup", () => letGo(false));
+  serveBtn.addEventListener("pointercancel", () => letGo(true));
   serveBtn.addEventListener("click", () => {
     if (game.phase === "playing" && trayReady(i)) serve(i);
   });
   ui.root.append(serveBtn);
-  // On an empty tray while people wait: how many are in line; a tap calls the next one to this tray.
+  // On an empty tray while people wait, a desk bell (after build #82, drawn in the tray scene): a tap
+  // rings it and calls the next one to this tray. It stays a moment (BELL_LINGER_MS) after the first
+  // ring, so a second tap calls one more. This button is its touch area.
   const callBtn = document.createElement("button");
   callBtn.className = "tray-call";
   callBtn.hidden = true;
-  callBtn.addEventListener("click", () => callToTray(i));
+  callBtn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    trayBellTap(i);
+  });
   ui.root.append(callBtn);
   return { serveBtn, callBtn };
 });
+
+/** The tray bell stays this long after its first ring, for a second ring (after build #82). */
+const BELL_LINGER_MS = 400;
+/** Until when each tray's bell lingers after a ring (performance.now ms), and how many rings it took. */
+const bellLinger = [0, 0, 0];
+const bellRings = [0, 0, 0];
+function trayBellTap(i: number): void {
+  if (game.phase !== "playing") return;
+  const now = performance.now();
+  const lingering = now < bellLinger[i];
+  if (lingering && bellRings[i] >= 2) return;
+  // The first ring calls the next one to this tray; a second, to the next free tray.
+  const ok = lingering ? callNext() : (callToTray(i), true);
+  trayView.plates[i].ringBell();
+  if (lingering) {
+    sfx.bell();
+    if (ok) coachCounts.bell++;
+    bellRings[i] = 2;
+  } else {
+    bellRings[i] = 1;
+    bellLinger[i] = now + BELL_LINGER_MS;
+  }
+  buzz(10);
+}
 
 /** The local ask's chip, pinned at the top of the window while the shift runs (game/asks.ts). */
 const askChip = (() => {
@@ -843,17 +888,19 @@ function updateTrayActs(): void {
   const room = game.slots.filter((s) => s.order || s.fig).length < WINDOW[game.pacing];
   game.slots.forEach((s, i) => {
     const { serveBtn, callBtn } = trayActs[i];
-    // The call chip: an empty tray, someone in line and room at the window (not while guided).
-    const call = on && room && !s.order && !s.fig && game.line.length > 0 && !(game.tutorial && game.served < 2);
+    // The desk bell: an empty tray, someone in line and room at the window (not while guided), or
+    // a moment after a ring, for a second one.
+    const lingering = now < bellLinger[i] && bellRings[i] < 2;
+    const call = (on && room && !s.order && !s.fig && game.line.length > 0 && !(game.tutorial && game.served < 2)) || (on && lingering);
     callBtn.hidden = !call;
+    trayView.plates[i].showBell(call);
     if (call) {
-      const label = `Call next · ${game.line.length}`;
-      if (callBtn.textContent !== label) {
-        callBtn.textContent = label;
-        callBtn.setAttribute("aria-label", `Call the next customer to this tray, ${game.line.length} waiting`);
-      }
-      const p = plateScreen(i);
-      callBtn.style.transform = `translate(${(i * (bands.tray.w / 3) + bands.tray.w / 6 - 50).toFixed(0)}px, ${(p.y - 22).toFixed(0)}px)`;
+      const label = `Ring for the next customer, ${game.line.length} waiting`;
+      if (callBtn.getAttribute("aria-label") !== label) callBtn.setAttribute("aria-label", label);
+      const v = trayView.plates[i].bellPoint().project(trayView.camera);
+      const x = ((v.x + 1) / 2) * bands.tray.w;
+      const y = bands.tray.y + ((1 - v.y) / 2) * bands.tray.h;
+      callBtn.style.transform = `translate(${(x - 32).toFixed(0)}px, ${(y - 32).toFixed(0)}px)`;
     }
     const ready = on && trayReady(i);
     if (!ready) readySince[i] = null;
@@ -5504,7 +5551,7 @@ function updateUi(dt = 0): void {
   ui.bell.hidden = game.phase === "title" || game.phase === "summary" || game.phase === "sundown";
   const inLine = String(game.line.length);
   if (ui.bellCount.textContent !== inLine) ui.bellCount.textContent = inLine;
-  const bellLabel = "Next";
+  const bellLabel = "in line";
   if (ui.bellLabel.textContent !== bellLabel) ui.bellLabel.textContent = bellLabel;
   ui.bell.classList.toggle("empty", !game.line.length);
   ui.bell.classList.toggle("full", game.line.length > 0 && game.slots.filter((s) => s.order || s.fig).length >= WINDOW[game.pacing]);
@@ -6146,7 +6193,7 @@ startCoach(
       counterBand: () => ({ x: bands.counter.x, y: bands.counter.y, w: bands.counter.w, h: bands.counter.h }),
       ticketOpen: () => ticketOpen,
       tickets: ui.tickets,
-      bell: ui.bell,
+      bell: () => trayActs.find((a) => !a.callBtn.hidden)?.callBtn ?? null,
       tabs: ui.tabs,
       sauce: () => (sauceDrag ? { locked: sauceDrag.locked, armed: true } : sauceArm ? { locked: false, armed: true } : null),
       undoTray: () => {

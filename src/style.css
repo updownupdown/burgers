@@ -1007,7 +1007,13 @@ html, body {
 }
 #ui .tray-serve::before { content: ""; position: absolute; left: -4px; right: -4px; top: -8px; bottom: -8px; }
 @keyframes serve-in { from { opacity: 0; transform-origin: center; scale: 0.8; } }
-.tray-serve span { font-size: 16px; }
+/* Two chevrons rising out of the pill (after build #82): it can be swiped up to serve. */
+.tray-serve .chev { position: relative; width: 12px; height: 16px; flex: none; }
+.tray-serve .chev i { position: absolute; left: 1px; width: 8px; height: 8px; border: solid #fff7f2; border-width: 2.5px 0 0 2.5px; transform: rotate(45deg); animation: serve-rise 1.1s ease-in infinite; }
+.tray-serve .chev i:nth-child(2) { animation-delay: 0.55s; }
+@keyframes serve-rise { 0% { top: 10px; opacity: 0; } 30% { opacity: 1; } 100% { top: -6px; opacity: 0; } }
+#ui .tray-serve { touch-action: none; transition: translate 0.15s ease-out; }
+@media (prefers-reduced-motion: reduce) { .tray-serve .chev i { animation: none; top: 4px; } .tray-serve .chev i:nth-child(2) { display: none; } }
 @keyframes serve-glow { 50% { box-shadow: 0 0 0 2px #fff7f2, 0 0 0 6px rgb(216 87 58 / 0.35), 0 4px 10px rgb(42 38 34 / 0.3); } }
 .tray-serve:active { transform-origin: center; filter: brightness(0.92); }
 #ui.saucing .tray-serve { opacity: 0; pointer-events: none; }
@@ -1068,3 +1074,11 @@ html, body {
 .closed-sign.drop { animation: sign-drop 1.5s cubic-bezier(0.3, 0.6, 0.3, 1) forwards; }
 @keyframes sign-drop { 0% { transform: translateY(-140px) rotate(0); } 30% { transform: translateY(0) rotate(9deg); } 50% { transform: rotate(-6deg); } 68% { transform: rotate(3.5deg); } 84% { transform: rotate(-1.5deg); } 100% { transform: rotate(0); } }
 @media (prefers-reduced-motion: reduce) { .closed-sign.drop { animation: none; transform: none; } }
+
+/* After build #82 the header shows only the line (no bell to ring): people, count, "in line". */
+.bell-btn.line-chip { pointer-events: none; border-color: transparent; background: transparent; padding: 0 4px; gap: 5px; }
+.bell-btn.line-chip .bell-count { background: transparent; color: var(--bv-ink); min-width: 0; padding: 0; font-size: 13px; }
+.bell-btn.line-chip.empty .bell-count { background: transparent; }
+.bell-btn.line-chip .bell-label { color: var(--bv-mute); }
+/* The tray's desk bell's touch area (drawn in 3D under it). */
+#ui .tray-call { width: 64px; height: 64px; border: 0; background: transparent; animation: none; padding: 0; }

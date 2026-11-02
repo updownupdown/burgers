@@ -744,6 +744,13 @@ html, body {
 @media (prefers-reduced-motion: reduce) { .gtag, .ftag { animation: none; } }
 .gtag.stack.low { background: var(--bv-amber); color: var(--bv-night); }
 .gtag.supply { background: var(--bv-olive); }
+/* Busy surfaces (after build #78): crowded tags shrink to the item's width, a meter that's done and
+   well short of over-done steps back, and the most urgent sits on top. */
+.gtag.pt.tight { padding: 2px 4px; }
+.gtag.pt.tight .cmeter { width: 44px; }
+.gtag.pt.calm { opacity: 0.55; }
+.gtag.pt.calm .cmeter { height: 6px; }
+.gtag.pt.urgent { z-index: 2; }
 
 /* Fries meter over baskets and cartons: underdone | done | overdone, a line at perfect, a marker for now. */
 .ftag { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; z-index: 1; }

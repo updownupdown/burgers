@@ -5321,7 +5321,7 @@ function updateUi(dt = 0): void {
   if (ui.undo.disabled === undoOn) ui.undo.disabled = !undoOn;
 
   placeNav();
-  updateGrillTags();
+  updateGrillTags(dt);
   updateFryTags();
   updateStaleUi();
   updateStationUi();
@@ -5720,11 +5720,41 @@ function updateOvenTags(): void {
   for (let i = counter.ovenSpots.length; i < turnCues.length; i++) turnCues[i].hidden = true;
 }
 
-function updateGrillTags(): void {
+/**
+ * Busy surfaces (after build #78): each grill item's cook rate, measured from its meter between
+ * frames and smoothed, so a tag can tell how far it is from over-done.
+ */
+const cookRates = new WeakMap<GrillItem, { lv: number; rate: number }>();
+/** A meter this many seconds or more from over-done, in its done band, steps back (slim and faint). */
+const METER_CALM_S = 5;
+/** Neighbouring tags closer than this (px, centre to centre) shrink to the item's width. */
+const METER_TIGHT_PX = 86;
+
+/** Seconds until a grill item reaches over-done at its current pace (Infinity when it isn't cooking). */
+function secsToOver(it: GrillItem, dt: number): number {
+  const k = it.piece.kind as Cookable;
+  if (!(k in COOK_SCALE)) return Infinity;
+  const lv = cookLevel(it.piece);
+  const was = cookRates.get(it);
+  const now = was && dt > 0 ? Math.max(0, (lv - was.lv) / dt) : 0;
+  const rate = was ? (dt > 0 ? was.rate * 0.85 + now * 0.15 : was.rate) : 0;
+  cookRates.set(it, { lv, rate });
+  return rate > 1e-4 ? (COOK_SCALE[k].over - lv) / rate : Infinity;
+}
+
+function updateGrillTags(dt = 0): void {
   updatePressTags();
   updateOvenTags();
   // One tag per stack, under its top item.
   const items = game.phase === "playing" ? counter.grillItems.filter((g) => !counter.above(g)) : [];
+  // Where each tag goes, first, so crowded ones can shrink and the most urgent can sit on top.
+  const spots = items.map((it) => {
+    const v = it.obj.position.clone().setY(GRILL_TOP).add(new THREE.Vector3(0, 0.2, Math.min(0.36, counter.grillTagZ - it.z))).project(counter.camera);
+    const k = it.piece.kind;
+    const zone = k in COOK_SCALE ? cookZone(k as Cookable, cookLevel(it.piece)) : "under";
+    return { x: ((v.x + 1) / 2) * bands.counter.w, y: bands.counter.y + ((1 - v.y) / 2) * bands.counter.h, left: secsToOver(it, dt), zone };
+  });
+  const urgent = spots.reduce((u, s, i) => (s.zone === "done" && s.left < (spots[u]?.left ?? Infinity) ? i : u), -1);
   while (grillTags.length < items.length) {
     const el = document.createElement("div");
     el.className = "gtag pt";
@@ -5738,8 +5768,7 @@ function updateGrillTags(): void {
       return;
     }
     // Under the item, or over its front edge on the front row, clear of the zone buttons.
-    const v = it.obj.position.clone().setY(GRILL_TOP).add(new THREE.Vector3(0, 0.2, Math.min(0.36, counter.grillTagZ - it.z))).project(counter.camera);
-    const x = ((v.x + 1) / 2) * bands.counter.w;
+    const { x, y, left, zone } = spots[i];
     el.hidden = x < 0 || x > bands.counter.w || it.flipT >= 0;
     if (el.hidden) return;
     const html = itemTag(it);
@@ -5747,8 +5776,14 @@ function updateGrillTags(): void {
     const heat = counter.heatOf(it);
     el.classList.toggle("warm", heat === "warm");
     el.classList.toggle("off", heat === "off");
+    // Crowded: a neighbour's tag within a meter's width shrinks both to the item's width. Settled:
+    // done and still METER_CALM_S or more from over-done, the meter goes slim and faint. The done
+    // item closest to over-done draws on top.
+    el.classList.toggle("tight", spots.some((s, j) => j !== i && Math.abs(s.x - x) < METER_TIGHT_PX && Math.abs(s.y - y) < 30));
+    el.classList.toggle("calm", zone === "done" && left >= METER_CALM_S);
+    el.classList.toggle("urgent", i === urgent);
     el.style.left = `${x}px`;
-    el.style.top = `${bands.counter.y + ((1 - v.y) / 2) * bands.counter.h}px`;
+    el.style.top = `${y}px`;
   });
 }
 

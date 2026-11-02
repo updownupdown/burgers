@@ -31,7 +31,8 @@ async function start(town, extra, prep) {
   await step(p, 1.5);
   return { b, p };
 }
-const shot = (p, name) => p.screenshot({ path: `${out}${name}.png` });
+// With the clock driven by hand the page draws no frames, so fade-ins sit at their first frame: finish them.
+const shot = async (p, name) => { await p.evaluate(() => document.getAnimations().forEach((a) => { try { a.finish(); } catch {} })); return p.screenshot({ path: `${out}${name}.png` }); };
 const pc = `(() => { let uid = 9000; return (kind, cook = 0.55, extra = {}) => ({ piece: { uid: uid++, kind, cook: [cook, cook], ...extra }, offX: 0, offZ: 0 }); })()`;
 
 (async () => {
@@ -167,6 +168,26 @@ const pc = `(() => { let uid = 9000; return (kind, cook = 0.55, extra = {}) => (
     await step(p, 0.4);
     await p.waitForTimeout(300);
     await shot(p, 'grill-timer-rings');
+    await b.close();
+  }
+  if (want('busy')) {
+    // A full grill: crowded meters shrink, done ones well short of over-done go faint, the most
+    // urgent sits on top.
+    const { b, p } = await start('elkpass');
+    await p.evaluate(() => window.__bv.goToPage(1));
+    await step(p, 0.8);
+    await p.evaluate(() => {
+      const c = window.__bv.counter;
+      let uid = 8200;
+      const add = (kind, cook, i, k, dx = 0) => { const s = c.zoneSpots(i)[k]; c.addGrillItem({ uid: uid++, kind, cook: [cook, cook] }, s.x + dx, s.z); };
+      add('patty', 0.2, 0, 0, -0.35); add('patty', 0.45, 0, 0, 0.35);
+      add('patty', 0.5, 0, 1, -0.35); add('bacon', 0.3, 0, 1, 0.35);
+      add('egg', 0.4, 1, 0, -0.3); add('egg', 0.2, 1, 0, 0.3);
+      add('patty', 0.48, 1, 1); add('patty', 0.5, 2, 1);
+    });
+    await step(p, 2.5);
+    await p.waitForTimeout(300);
+    await shot(p, 'grill-busy-meters');
     await b.close();
   }
   console.log('done');

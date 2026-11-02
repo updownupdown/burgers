@@ -75,14 +75,15 @@ export interface FriesObject extends THREE.Group {
 }
 
 /** Boat length factor per size. */
-const BOAT_K: Record<FriesSize, number> = { S: 0.78, M: 0.89, L: 1 };
+// After build #78: 0.8 / 1 / 1.25, and the sizes differ in width and height too (they read the same at the fryer camera).
+const BOAT_K: Record<FriesSize, number> = { S: 0.8, M: 1, L: 1.25 };
 /** Boat half-length (x), half-width (z), height and wall, in carton units, for a size. */
 export function boatSize(size: FriesSize): { w: number; d: number; h: number } {
   const k = BOAT_K[size];
-  return { w: 0.38 * k, d: 0.24 * (0.85 + k * 0.15), h: 0.17 };
+  return { w: 0.33 * k, d: 0.24 * (0.55 + k * 0.45), h: 0.17 * (0.65 + k * 0.35) };
 }
 /** Width and height of each size against the large boat (kept for older callers). */
-export const CARTON_SIZE: Record<FriesSize, [number, number]> = { S: [BOAT_K.S, 1], M: [BOAT_K.M, 1], L: [1, 1] };
+export const CARTON_SIZE: Record<FriesSize, [number, number]> = { S: [BOAT_K.S / BOAT_K.L, 1], M: [BOAT_K.M / BOAT_K.L, 1], L: [1, 1] };
 /** Height each nested boat adds to a stack, in carton units. */
 export const CARTON_NEST = 0.04;
 const WALL = 0.018;

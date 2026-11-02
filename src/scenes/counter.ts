@@ -1955,11 +1955,10 @@ export class CounterView {
       }
     };
     if (!oven) fill(makeColdRail({ cols: Math.max(press || comal ? 2 : 3, hot.length), rows: 1, kinds: hot }), GRILL_PANS);
-    if (press || comal) {
-      // Down from the same back edge as the grill's side rail, as many rows as it takes.
-      const rows = Math.max(3, Math.ceil(cold.length / 2));
-      fill(makeColdRail({ cols: 2, rows, kinds: cold }), { x: SIDE_PANS.x, z: SIDE_BACK_Z + (rows * 1.27 + 0.4) / 2 });
-    } else fill(makeColdRail({ cols: 2, rows: 3, kinds: cold }), SIDE_PANS);
+    // Down from the same back edge, as many rows as it takes. At the grill (after build #78) only
+    // as many as the pantry fills, so a small first menu no longer shows a row of empty pans.
+    const rows = Math.max(press || comal ? 3 : 1, Math.ceil(cold.length / 2));
+    fill(makeColdRail({ cols: 2, rows, kinds: cold }), { x: SIDE_PANS.x, z: SIDE_BACK_Z + (rows * 1.27 + 0.4) / 2 });
     this.pantry = group;
     this.scene.add(group);
   }

@@ -227,7 +227,7 @@ const SHOWS: Record<string, () => void> = {
     counterPatch(14, 7);
     const rows = (params.get("kinds") ?? "ciabatta,sourdough,mozzarella,blue|basil,rocket,cilantro,lettuce|pork,ham,beans,tuna|mushroom,onion,redonion,pineapple").split("|").map((r) => r.split(",") as Kind[]);
     rows.forEach((kinds, j) => {
-      const z = -2.6 + j * 1.9;
+      const z = (j - (rows.length - 1) / 2) * 1.75 - 0.3;
       kinds.forEach((k, i) => {
         const x = (i - (kinds.length - 1) / 2) * 2.2;
         const bin = makeBin(k);

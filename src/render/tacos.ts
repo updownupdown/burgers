@@ -150,7 +150,24 @@ function spots(kind: "corn" | "flour", which: 0 | 1, half: boolean): Baked {
 const PORK = ["#a9532b", "#9a4826", "#b9622f"];
 const chunkGeo = shareGeometry(faceted(new THREE.BoxGeometry(0.16, 0.11, 0.13)));
 const crumbGeo = shareGeometry(faceted(new THREE.IcosahedronGeometry(0.07, 0)));
-const leafGeo = shareGeometry(faceted(new THREE.CircleGeometry(0.07, 5).rotateX(-Math.PI / 2)));
+/**
+ * A cilantro leaflet: small, flat and frilly, three rounded lobes with a scalloped edge (after
+ * build #76: the old five-sided dots read as peas).
+ */
+const leafGeo = shareGeometry(
+  faceted(
+    new THREE.ShapeGeometry(
+      new THREE.Shape(
+        Array.from({ length: 36 }, (_, i) => {
+          const a = (i / 36) * Math.PI * 2;
+          const r = 0.085 * (0.62 + 0.38 * Math.abs(Math.cos(1.5 * a))) + 0.008 * Math.sin(12 * a);
+          return new THREE.Vector2(Math.cos(a) * r, Math.sin(a) * r);
+        }),
+      ),
+    ).rotateX(-Math.PI / 2),
+  ),
+);
+const stemGeo = shareGeometry(faceted(new THREE.BoxGeometry(0.32, 0.014, 0.018)));
 const shredGeo = shareGeometry(faceted(new THREE.BoxGeometry(0.34, 0.035, 0.05)));
 /** A strand of shredded cheese: long, thin and a little bent, so it never reads as a chunk of pork. */
 const strandGeo = shareGeometry(
@@ -160,12 +177,24 @@ const CHEESE = ["#f9de6e", "#f4cb4c", "#fbe896", "#efbb3e"];
 const beanGeo = shareGeometry(faceted(new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2)));
 const ringGeo = shareGeometry(faceted(new THREE.TorusGeometry(0.11, 0.035, 4, 10).rotateX(Math.PI / 2)));
 
+/** A third of a pineapple ring (the ring on the grill, scaled to a taco), its middle at the origin. */
+const PINE_ARC = shareGeometry(
+  faceted(
+    new THREE.LatheGeometry(
+      ([[0.3, 0], [0.88, 0], [0.92, 0.06], [0.88, 0.12], [0.3, 0.12], [0.28, 0.06], [0.3, 0]] as const).map(([x, y]) => new THREE.Vector2(x * 0.24, y * 0.28)),
+      6,
+      0,
+      (Math.PI * 2) / 3,
+    ).translate(-Math.sin(Math.PI / 3) * 0.14, 0, -Math.cos(Math.PI / 3) * 0.14),
+  ),
+);
+const charGeo = shareGeometry(faceted(new THREE.BoxGeometry(0.03, 0.006, 0.09)));
 /**
  * A filling spread over an ellipse (half-sizes rx, rz) with its bottom at y = 0, in ingredient
  * units: chunks of pork, a mound of refried beans, cilantro leaves, onion bits, shredded cheese,
  * jalapeño rings, shredded lettuce or charred pineapple. `n` scales how much there is.
  */
-export function fillParts(kind: Kind, rx: number, rz: number, seed = 1, n = 1, ink = 0.022): Parts {
+export function fillParts(kind: Kind | "cilantroSprigs", rx: number, rz: number, seed = 1, n = 1, ink = 0.022): Parts {
   const p = new Parts();
   const r = rng(seed * 31 + kind.length);
   const spread = (count: number, put: (x: number, z: number, i: number, h: number) => void) => {
@@ -188,6 +217,19 @@ export function fillParts(kind: Kind, rx: number, rz: number, seed = 1, n = 1, i
     case "cilantro":
       spread(Math.round(12 * n), (x, z, i) => p.add(leafGeo, i % 3 ? "#3f9a3a" : "#5fb24a", { p: [x, 0.02 + r() * 0.03, z], r: [r() * 0.5, r() * 6, r() * 0.5], s: 0.8 + r() * 0.5, ink: ink * 0.6 }));
       break;
+    case "cilantroSprigs":
+      // A few whole sprigs on top of the chopped heap in the pan: thin stems ending in leaflets.
+      spread(Math.round(5 * n), (x, z, i) => {
+        const yaw = r() * 6.3;
+        const c = Math.cos(yaw);
+        const sn = Math.sin(yaw);
+        p.add(stemGeo, "#7cb85a", { p: [x, 0.05, z], r: [0, yaw, 0], ink: false });
+        for (const [d, k] of [[0.17, 1.15], [0.08, 0.85], [0.12, 0.8]] as const) {
+          const side = d === 0.17 ? 0 : d === 0.08 ? 0.09 : -0.09;
+          p.add(leafGeo, i % 2 ? "#4fae45" : "#62bd52", { p: [x + c * d - sn * side, 0.06, z - sn * d - c * side], r: [0, r() * 6, 0], s: k, ink: ink * 0.6 });
+        }
+      });
+      break;
     case "onion":
       spread(Math.round(12 * n), (x, z, i) => p.add(crumbGeo, i % 4 ? "#f6eff4" : "#e3cde6", { p: [x, 0.03 + r() * 0.02, z], s: [0.75, 0.55, 0.75], r: [r(), r(), r()], ink: ink * 0.6 }));
       break;
@@ -203,9 +245,16 @@ export function fillParts(kind: Kind, rx: number, rz: number, seed = 1, n = 1, i
       spread(Math.round(4 * n), (x, z) => p.add(ringGeo, "#3f8f3a", { p: [x, 0.04, z], r: [r() * 0.4, 0, r() * 0.4], ink }));
       break;
     case "pineapple":
-      spread(Math.round(6 * n), (x, z, i) => {
-        p.add(chunkGeo, i % 2 ? "#f5d33f" : "#efc22f", { p: [x, 0.06, z], r: [r() * 0.4, r() * 3, r() * 0.4], s: [0.8, 0.8, 0.8], ink });
-        if (i % 2 === 0) p.add(crumbGeo, "#b9722a", { p: [x, 0.11, z], s: [0.7, 0.3, 0.7], ink: false });
+      // Pieces of the charred ring off the comal (after build #76: the same ring, cut in thirds,
+      // grill stripes on top, never cubes).
+      spread(Math.max(1, Math.round(3 * n)), (x, z, i) => {
+        const yaw = r() * 6.3 + i;
+        p.add(PINE_ARC, i % 2 ? "#f5c83a" : "#efbd2f", { p: [x, 0.03, z], r: [0, yaw, 0], ink });
+        // Two char stripes across the arc, either side of its middle.
+        for (const d of [-0.055, 0.055]) {
+          const [vx, vz] = [0.5 * d, -0.866 * d];
+          p.add(charGeo, "#9a5a1e", { p: [x + vx * Math.cos(yaw) + vz * Math.sin(yaw), 0.064, z - vx * Math.sin(yaw) + vz * Math.cos(yaw)], r: [0, yaw + Math.PI / 3, 0], ink: false });
+        }
       });
       break;
   }

@@ -410,7 +410,11 @@ function draw(show: Show, now: number): void {
   } else trailPath.setAttribute("d", "");
   const land = g && (g.kind === "drag" || g.kind === "dragCircle") ? g.to : null;
   target.hidden = !land;
-  if (land) target.style.transform = `translate(${land.x - 26}px, ${land.y - 26}px)`;
+  // left/top, not transform: the breathing scale would scale a translate too and push the ring off.
+  if (land) {
+    target.style.left = `${(land.x - 26).toFixed(1)}px`;
+    target.style.top = `${(land.y - 26).toFixed(1)}px`;
+  }
 
   ringEl.hidden = !show.ring;
   if (show.ring) {

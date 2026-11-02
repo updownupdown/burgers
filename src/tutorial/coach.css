@@ -20,7 +20,7 @@
 
 /* Where a drag goes: a dashed ring that breathes. */
 .coach-target {
-  position: absolute; left: 0; top: 0; width: 52px; height: 52px; border-radius: 50%;
+  position: absolute; left: 0; top: 0; width: 52px; height: 52px; box-sizing: border-box; border-radius: 50%;
   border: 2.5px dashed rgb(255 255 255 / 0.95);
   box-shadow: 0 0 0 2px rgb(18 14 10 / 0.35), inset 0 0 0 2px rgb(18 14 10 / 0.25);
   animation: coach-breathe 1.4s ease-in-out infinite;

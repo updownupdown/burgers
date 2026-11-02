@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import type { Kind } from "../game/types";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
-import { vegParts } from "./food";
-import { basilSprig, loafParts, paniniParts, rawParts, rocketLeaf } from "./panini";
+import { TOMATO_VARIANTS, vegParts } from "./food";
+import { basilSprig, loafParts, paniniParts, rawParts, ROCKET_GREENS, rocketLeaf } from "./panini";
 import { fillParts, limeParts, tortillaStackParts } from "./tacos";
 import { blueParts, figParts, hamParts, mushroomParts, pearHalfParts, wholeMushroomParts } from "./flatbread";
 import { faceted } from "./materials";
@@ -216,16 +216,17 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
     }
   },
   tomato: (parts, r) => {
-    // Shingled rows of slices leaning on each other.
+    // Shingled rows of slices leaning on each other, every one a little different and out of line.
     const s = VEG_S / 0.92;
+    let n = 0;
     for (let row = 0; row < 3; row++) {
       for (let i = 0; i < 4; i++) {
-        const x = -0.3 + i * 0.2 + (row % 2) * 0.04;
-        const z = -0.24 + row * 0.24;
-        const tilt = -0.6;
+        const x = -0.3 + i * 0.2 + (row % 2) * 0.04 + jitter(r, 0.025);
+        const z = -0.24 + row * 0.24 + jitter(r, 0.02);
+        const tilt = -0.6 + jitter(r, 0.12);
         const p: [number, number, number] = [x, PAN.floor + 0.12, z];
-        const rot: [number, number, number] = [jitter(r, 0.08), jitter(r, 0.12), tilt];
-        parts.addParts(vegParts("tomato", false, 0.012), { p, r: rot, s: s * 0.92 });
+        const rot: [number, number, number] = [jitter(r, 0.1), jitter(r, 0.25), tilt];
+        parts.addParts(vegParts("tomato", false, 0.012, n++ % TOMATO_VARIANTS), { p, r: rot, s: s * (0.86 + r() * 0.12) });
       }
     }
   },
@@ -331,11 +332,15 @@ const HEAPS: Partial<Record<Kind, Builder>> = {
     }
   },
   rocket: (parts, r) => {
-    // A loose tangle of long, lobed leaves.
-    for (let i = 0; i < 15; i++) {
-      const a = i * 2.399;
-      const rr = Math.sqrt((i + 0.5) / 15);
-      parts.addParts(rocketLeaf(0.62 + r() * 0.16, ["#3c7a2c", "#4a8a34", "#2f6a25", "#447f30"][i % 4], 0.016), { p: [Math.cos(a) * rr * 0.3 - 0.12, PAN.floor + 0.04 + (1 - rr) * 0.12 + r() * 0.03, Math.sin(a) * rr * 0.24], r: [jitter(r, 0.25), r() * 6, jitter(r, 0.25)], s: 0.62 });
+    // A loose tangle of lobed leaves, dropped at random (no spiral), the middle piled higher.
+    for (let i = 0; i < 18; i++) {
+      const x = jitter(r, 0.3);
+      const z = jitter(r, 0.22);
+      const yaw = r() * Math.PI * 2;
+      const len = 0.62 + r() * 0.2;
+      const c = 1 - Math.min(1, Math.hypot(x / 0.3, z / 0.22));
+      const at: [number, number, number] = [x - Math.cos(yaw) * len * 0.31, PAN.floor + 0.04 + c * 0.12 + r() * 0.04, z + Math.sin(yaw) * len * 0.31];
+      parts.addParts(rocketLeaf(len, ROCKET_GREENS[i % 4], 0.016, i), { p: at, r: [jitter(r, 0.35), yaw, jitter(r, 0.25)], s: 0.62 });
     }
   },
   cheddar: (parts, r) => {

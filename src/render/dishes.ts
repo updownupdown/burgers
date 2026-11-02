@@ -41,7 +41,8 @@ const FLATBREAD_ON_TRAY = 0.8;
 /** Orchard Isle's flatbread or calzone on the tray (render/flatbread.ts), honey and all. */
 export function makeFlatbreadDish(pieces: Piece[]): DishObject {
   const g = new THREE.Group();
-  const fb = makeFlatbread(pieces);
+  // Toppings half as big again on the tray, so a Fig & Ham and a Mushroom pie tell apart.
+  const fb = makeFlatbread(pieces, { topScale: 1.5 });
   fb.scale.setScalar(FLATBREAD_ON_TRAY);
   g.add(fb);
   const k = FLATBREAD_ON_TRAY;

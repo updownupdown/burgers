@@ -29,7 +29,10 @@ import { ageLayers, freshen, isTacoRun, joinTacos, RACK_FILL, RACK_SLOTS } from 
 import { makeFlatbread } from "./render/flatbread";
 import { makePeel, makeSauceLadle, PEEL } from "./render/machines/oven";
 import { flickOf, slideArmed, slidUnder, type Flick } from "./game/peel";
-import { disposeObject } from "./render/materials";
+import { cullSmallHulls, disposeObject, OUTLINE_PX, setOutlinePx, setOutlineViewport } from "./render/materials";
+import { perfReadout } from "./render/perfreadout";
+import { BlobShadows } from "./render/blobs";
+import { playShiftReveal } from "./screens/reveal";
 import { CounterView, CUP_IN_HAND, RACK_SCALE, EMPTY_PACK, STOPS, pageX, type DrinkCup, GRILL_SCALE, GRILLE_ZONE, FLAT_ZONE, HEARTH_Y, HOME_PAGE, PAGES, PEEL_Y, GRILL_TOP, ZONE_START, type GrillItem, type Hit, type PeelTarget, type PieHolder, type PiePlace } from "./scenes/counter";
 import { PLATE } from "./render/machines/press";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
@@ -78,6 +81,8 @@ const counter = new CounterView();
  */
 type Gfx = "high" | "standard" | "low";
 let gfx: Gfx = "high";
+/** Frames drawn since the game paused (see frame()). */
+let pausedDraws = 0;
 try {
   const saved = localStorage.getItem("bv-gfx");
   if (saved === "high" || saved === "standard" || saved === "low") gfx = saved;
@@ -102,11 +107,13 @@ try {
 function applyGfx(level: Gfx): void {
   gfx = level;
   renderer.shadowMap.enabled = level !== "low";
+  setOutlinePx(OUTLINE_PX[level]);
   for (const sun of [counter.sun, trayView.sun]) {
     sun.castShadow = level !== "low";
     sun.shadow.radius = level === "high" ? 5 : 1;
   }
   renderer.shadowMap.needsUpdate = true;
+  redrawPaused();
 }
 const ui = buildUi(document.getElementById("ui")!, PAGES);
 
@@ -342,7 +349,10 @@ function layout(): void {
     openMenu();
   }
 }
-window.addEventListener("resize", layout);
+window.addEventListener("resize", () => {
+  layout();
+  redrawPaused();
+});
 layout();
 
 function bandAt(y: number): "customers" | "tray" | "counter" | "tabs" {
@@ -4515,6 +4525,7 @@ function startShift(): void {
   counter.autoStopPour = has("autostop") || game.pacing === "chill";
   counter.noBurn = game.pacing === "chill";
   counter.setPage(HOME_PAGE);
+  playShiftReveal();
   const intro = game.event
     ? `${game.event.name} today! ${game.event.blurb}${game.event.special ? ` Special: ${game.event.special.name}.` : ""}`
     : stop().newThing;
@@ -5524,8 +5535,23 @@ function updateGrillTags(): void {
 }
 
 const clearColor = new THREE.Color("#2a3340");
+// Count draw calls over the whole frame (every band), for dev mode's readout.
+renderer.info.autoReset = false;
+let frameNo = 0;
+// Low quality has no shadow map: soft blobs keep food, cups and cartons grounded instead.
+const counterBlobs = new BlobShadows(counter.scene);
+const trayBlobs = new BlobShadows(trayView.scene);
 function render(): void {
   const H = viewH;
+  renderer.info.reset();
+  const low = gfx === "low";
+  counterBlobs.update(low, low ? [...counter.grillItems.filter((g) => !g.held).map((g) => g.obj), ...counter.cups.map((c) => c.obj), ...counter.packs.map((p) => p.obj), ...counter.stacks.map((s) => s.obj)] : []);
+  trayBlobs.update(low, low ? trayView.plates.flatMap((p) => [p.entries.length ? p.burger : null, p.fries, p.cup]) : []);
+  // Low quality: every so often, drop the outlines of things too small for a line to read.
+  if (frameNo++ % 15 === 0) {
+    cullSmallHulls(counter.scene, counter.camera, bands.counter.h, gfx === "low");
+    cullSmallHulls(customersView.scene, customersView.camera, bands.customers.h, gfx === "low");
+  }
   renderer.setScissorTest(false);
   renderer.setClearColor(clearColor);
   renderer.clear();
@@ -5534,6 +5560,7 @@ function render(): void {
     const y = H - r.y - r.h;
     renderer.setViewport(r.x, y, r.w, r.h);
     renderer.setScissor(r.x, y, r.w, r.h);
+    setOutlineViewport(r.w, r.h);
     renderer.render(scene, cam);
   };
   draw(bands.customers, customersView.scene, customersView.camera);
@@ -5547,6 +5574,11 @@ function render(): void {
     const r = cutZoom.rect;
     draw({ x: colX + r.x, y: r.y, w: r.w, h: r.h }, counter.scene, cutZoom.camera);
   }
+  perfReadout(renderer);
+}
+/** Nothing moves under the pause menu: draw a couple of frames, then stop until something changes. */
+function redrawPaused(): void {
+  pausedDraws = 0;
 }
 
 let last = performance.now();
@@ -5557,8 +5589,14 @@ function frame(now: number): void {
   last = now;
   if (!manualClock) {
     tick(dt);
-    // The home screen covers the truck completely, so skip drawing it there and save battery.
-    if (game.phase !== "title") render();
+    // The home screen covers the truck completely, so skip drawing it there and save battery;
+    // paused, the picture under the menu is still, so it's drawn twice and then left.
+    if (game.phase === "paused") {
+      if (pausedDraws++ < 2) render();
+    } else {
+      pausedDraws = 0;
+      if (game.phase !== "title") render();
+    }
   }
   requestAnimationFrame(frame);
 }

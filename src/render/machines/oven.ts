@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "../bake";
 import { faceted } from "../materials";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { COUNTER_FOOD } from "../units";
 import { box, canvasTex, cyl, tor } from "./kit";
 
@@ -26,6 +27,8 @@ const BRICK = "#c46e4e";
 const BRICK_D = "#b05e40";
 const MORTAR = "#e7c9a8";
 const STONE = "#dcc8a4";
+/** The baking deck: a warmer, darker stone than the caps, sooted toward the back and corners. */
+const DECK_STONE = "#c9ad86";
 
 /** Mortar joints over a brick face, in a plane: `at(u, v)` maps face coordinates (u along, v up) to a point. */
 function brickFace(p: Parts, w: number, h: number, at: (u: number, v: number) => [number, number, number], rot: [number, number, number], course = 0.22, brick = 0.52): void {
@@ -51,10 +54,10 @@ const base = (() => {
     p.add(box(w, y - 0.08, d), BRICK, { p: [cx, (y - 0.08) / 2, cz], ink: 0.02 });
     brickFace(p, w, y - 0.08, (u, v) => [x0 + u, v, z1 + 0.004], [0, 0, 0], 0.16, 0.6);
     // The stone deck, a lip proud of the bricks, its slabs' joints.
-    p.add(box(w + 0.1, 0.1, d + 0.08), STONE, { p: [cx, y - 0.05, cz + 0.02], ink: 0.02 });
-    for (let i = 1; i < 6; i++) p.add(box(0.02, 0.005, DECK.z1 - DECK.z0), "#c7b18a", { p: [DECK.x0 + (i * (DECK.x1 - DECK.x0)) / 6, y + 0.002, (DECK.z0 + DECK.z1) / 2], ink: false });
-    // A darker, well-used band along the back where the heat is.
-    p.add(box(DECK.x1 - DECK.x0, 0.004, 0.55), "#cdb48c", { p: [cx, y + 0.003, DECK.z0 + 0.28], ink: false });
+    p.add(box(w + 0.1, 0.1, d + 0.08), DECK_STONE, { p: [cx, y - 0.05, cz + 0.02], ink: 0.02 });
+    // Square stone slabs (three across, two deep), so the deck reads as stone, not planks.
+    for (let i = 1; i < 3; i++) p.add(box(0.02, 0.005, DECK.z1 - DECK.z0), "#b39672", { p: [DECK.x0 + (i * (DECK.x1 - DECK.x0)) / 3, y + 0.002, (DECK.z0 + DECK.z1) / 2], ink: false });
+    p.add(box(DECK.x1 - DECK.x0, 0.005, 0.02), "#b39672", { p: [cx, y + 0.002, (DECK.z0 + DECK.z1) / 2], ink: false });
     const H = WALLS.h;
     const T = WALLS.t;
     // The back wall, its inner face toward the camera in brick.
@@ -78,6 +81,53 @@ const base = (() => {
     p.add(box(0.025, 0.12, 0.02), "#ffffff", { p: [x1 - T / 2 + 0.03, y + 0.45, z1 + 0.06], r: [0, 0, -0.6], ink: false });
     b = bakeShared(p);
     return b;
+  };
+})();
+
+/** Soot over the deck: clear in the front middle, darkening toward the back wall and the corners. */
+const sootTex = (() => {
+  let t: THREE.CanvasTexture | null = null;
+  return () =>
+    (t ??= canvasTex(64, 32, (c, w, h) => {
+      // Texture v runs front (bottom) to back (top) once laid on the deck.
+      const g = c.createRadialGradient(w / 2, h * 1.05, h * 0.25, w / 2, h * 0.9, w * 0.62);
+      g.addColorStop(0, "rgba(138,106,76,0)");
+      g.addColorStop(0.55, "rgba(138,106,76,0.18)");
+      g.addColorStop(1, "rgba(118,88,62,0.6)");
+      c.fillStyle = g;
+      c.fillRect(0, 0, w, h);
+      const b = c.createLinearGradient(0, 0, 0, h);
+      b.addColorStop(0, "rgba(110,80,56,0.45)");
+      b.addColorStop(0.35, "rgba(110,80,56,0)");
+      c.fillStyle = b;
+      c.fillRect(0, 0, w, h);
+    }));
+})();
+
+/** Wavy vertical strands, fading at both ends, for the heat shimmer (repeats upward). */
+const shimmerTex = (() => {
+  let t: THREE.CanvasTexture | null = null;
+  return () => {
+    if (t) return t;
+    t = canvasTex(32, 64, (c, w, h) => {
+      c.lineWidth = 1.6;
+      for (let k = 0; k < 3; k++) {
+        c.beginPath();
+        for (let y = 0; y <= h; y += 2) {
+          const x = w * (0.2 + 0.3 * k) + Math.sin((y / h) * Math.PI * 4 + k) * 3;
+          if (y === 0) c.moveTo(x, y);
+          else c.lineTo(x, y);
+        }
+        const g = c.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, "rgba(255,255,255,0)");
+        g.addColorStop(0.5, "rgba(255,255,255,0.9)");
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        c.strokeStyle = g;
+        c.stroke();
+      }
+    });
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
   };
 })();
 
@@ -138,11 +188,43 @@ export function makeHearthOven(): HearthOvenObject {
     m.castShadow = false;
     g.add(m);
   }
+  // Soot: the deck darkens toward the back wall and the corners, where years of heat have been.
+  const soot = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, DECK.z1 - DECK.z0).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: sootTex(), transparent: true, depthWrite: false }),
+  );
+  soot.position.set(cx, HEARTH.y + 0.005, (DECK.z0 + DECK.z1) / 2);
+  soot.renderOrder = 0;
+  // Embers: specks along the element that flicker.
+  const r = rng(17);
+  const specks: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 14; i++) specks.push(new THREE.SphereGeometry(0.022 + r() * 0.02, 5, 4).translate(DECK.x0 + 0.25 + r() * (w - 0.5), HEARTH.y + 0.03 + r() * 0.05, DECK.z0 + 0.22 + r() * 0.12));
+  const embers = new THREE.Mesh(mergeGeometries(specks), new THREE.MeshBasicMaterial({ color: "#ffb14a", transparent: true, opacity: 0.9, depthWrite: false }));
+  for (const x of specks) x.dispose();
+  // Heat shimmer: faint wavy strips rising over the back half, drifting up.
+  const shimmerMat = new THREE.MeshBasicMaterial({ map: shimmerTex(), color: "#fff2dc", transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide });
+  const shimmer = new THREE.Group();
+  for (let i = 0; i < 4; i++) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.22, 0.9), shimmerMat);
+    m.position.set(DECK.x0 + (i + 0.5) * (w / 4) + (r() - 0.5) * 0.3, HEARTH.y + 0.55, DECK.z0 + 0.35 + r() * 0.5);
+    shimmer.add(m);
+  }
+  for (const m of [soot, embers, ...shimmer.children]) {
+    m.raycast = () => {};
+    m.castShadow = false;
+  }
+  embers.renderOrder = 3;
+  shimmer.children.forEach((m) => (m.renderOrder = 3));
+  g.add(soot, embers, shimmer);
   const base0 = mats.map((m) => m.opacity);
+  const shimmerMap = shimmerMat.map!;
   g.userData.tick = (t) => {
     const k = 0.9 + 0.1 * Math.sin(t * 1.7);
     mats.forEach((m, i) => (m.opacity = base0[i] * k));
     (bar.material as THREE.MeshBasicMaterial).color.setRGB(1, 0.5 + 0.06 * Math.sin(t * 1.7), 0.2);
+    (embers.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.35 * Math.abs(Math.sin(t * 7.3) * Math.sin(t * 3.1));
+    shimmerMap.offset.y = -t * 0.35;
+    shimmerMap.offset.x = Math.sin(t * 0.9) * 0.05;
   };
   return g;
 }
@@ -181,7 +263,8 @@ export const makePeel = (() => {
       for (let i = 0; i < 4; i++) p.add(box(0.012, 0.004, PEEL.rz * 1.9), "#c8995e", { p: [-PEEL.rx * 0.6 + i * PEEL.rx * 0.4, PEEL.y + 0.003, 0], ink: false });
       // A dusting of flour on the blade.
       const fr = rng(9);
-      for (let i = 0; i < 14; i++) p.add(faceted(new THREE.CircleGeometry(0.06 + fr() * 0.08, 6).rotateX(-Math.PI / 2)), "#f3ead8", { p: [(fr() - 0.5) * PEEL.rx * 1.7, PEEL.y + 0.004, (fr() - 0.5) * PEEL.rz * 1.7], ink: false });
+      // Many small irregular specks, toned toward the wood, so it reads as dusting rather than holes.
+      for (let i = 0; i < 16; i++) p.add(faceted(new THREE.CircleGeometry(0.025 + fr() * 0.045, 10).rotateX(-Math.PI / 2)), i % 3 ? "#ecd3a6" : "#f1e2c4", { p: [(fr() - 0.5) * PEEL.rx * 1.6, PEEL.y + 0.004, (fr() - 0.5) * PEEL.rz * 1.6], s: [1, 1, 0.55 + fr() * 0.45], r: [0, fr() * 3, 0], ink: false });
       // The handle: thick enough to read as the thing to hold, with a dark grip at the end.
       p.add(cyl(0.09, 0.09, PEEL.handle, 8), "#b98a54", { p: [0, PEEL.y + 0.03, PEEL.rz + 0.12 + PEEL.handle / 2], r: [Math.PI / 2, 0, 0], ink: 0.016 });
       p.add(cyl(0.105, 0.105, 0.34, 8), "#7a5232", { p: [0, PEEL.y + 0.03, PEEL_REACH - 0.17], r: [Math.PI / 2, 0, 0], ink: 0.014 });
@@ -207,7 +290,7 @@ export const makeDoughStack = (() => {
       for (let i = 0; i < n; i++) p.add(oval, i % 2 ? "#f1dfb6" : "#f4e6c4", { p: [(r() - 0.5) * 0.06, 0.105 + i * 0.052, (r() - 0.5) * 0.05], s: [BASE.rx * 0.97, 1, BASE.rz * 0.97], r: [0, (r() - 0.5) * 0.2, 0], ink: 0.014 });
       // The top base's raised edge, as on the peel.
       p.add(faceted(new THREE.TorusGeometry(1, 0.06, 5, 26).rotateX(Math.PI / 2)), "#f4e8ce", { p: [0, 0.105 + (n - 1) * 0.052 + 0.035, 0], s: [BASE.rx * 0.92, 0.8, BASE.rz * 0.9], ink: 0.012 });
-      for (let i = 0; i < 9; i++) p.add(faceted(new THREE.CircleGeometry(0.05 + r() * 0.05, 6).rotateX(-Math.PI / 2)), "#f7f0e2", { p: [(r() - 0.5) * DOUGH.w * 0.9, 0.084, (r() > 0.5 ? 1 : -1) * DOUGH.d * (0.4 + r() * 0.05)], ink: false });
+      for (let i = 0; i < 12; i++) p.add(faceted(new THREE.CircleGeometry(0.025 + r() * 0.035, 10).rotateX(-Math.PI / 2)), "#e7c79c", { p: [(r() - 0.5) * DOUGH.w * 0.9, 0.084, (r() > 0.5 ? 1 : -1) * DOUGH.d * (0.4 + r() * 0.05)], s: [1, 1, 0.55 + r() * 0.45], ink: false });
       b = bakeShared(p);
     }
     return bakedMesh(b);
@@ -225,7 +308,7 @@ export const makeBench = (() => {
       // Grey veins and a dusting of flour.
       const r = rng(21);
       for (let i = 0; i < 5; i++) p.add(box(0.5 + r() * 0.6, 0.004, 0.018), "#bdb8b0", { p: [(r() - 0.5) * BENCH.w * 0.7, BENCH.h + 0.002, (r() - 0.5) * BENCH.d * 0.8], r: [0, (r() - 0.5) * 1.4, 0], ink: false });
-      for (let i = 0; i < 10; i++) p.add(faceted(new THREE.CircleGeometry(0.05 + r() * 0.07, 6).rotateX(-Math.PI / 2)), "#fbf8f2", { p: [(r() - 0.5) * BENCH.w * 0.85, BENCH.h + 0.004, (r() - 0.5) * BENCH.d * 0.85], ink: false });
+      for (let i = 0; i < 14; i++) p.add(faceted(new THREE.CircleGeometry(0.025 + r() * 0.04, 10).rotateX(-Math.PI / 2)), "#f6f3ed", { p: [(r() - 0.5) * BENCH.w * 0.85, BENCH.h + 0.004, (r() - 0.5) * BENCH.d * 0.85], s: [1, 1, 0.55 + r() * 0.45], ink: false });
       b = bakeShared(p);
     }
     return bakedMesh(b);

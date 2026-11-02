@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { softDot, starTex } from "../render/sprites";
 import { bakeStep, bakeTopping, CHAR_FACE, COMAL_SPEED, cookLevel, COOK_SCALE, DRINK_FILL, flipFaces, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, grillStep, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, type Cookable } from "../game/cooking";
 import type { DrinkId, FriesSize, FryKind, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
 import { BREADS, CUP_SPEED, GRILLABLE, isSauce, OVEN_CHEESE, PRESS_CHEESE, PROTEINS, SCOOPED, TORTILLAS } from "../game/types";
@@ -594,7 +595,13 @@ export class CounterView {
   orchard = false;
   private curdTray!: THREE.Object3D;
   private gravyWell!: THREE.Object3D;
-  private puffs: THREE.Mesh[] = [];
+  private puffs: THREE.Sprite[] = [];
+  /** Grease spits: tiny bright dots that pop off meat on a hot zone (the sizzle you can see). */
+  private spits: THREE.Sprite[] = [];
+  /** A four-point star that pops over food the moment it reaches perfect (review #78, P3-5). */
+  private sparkles: THREE.Sprite[] = [];
+  /** Little rings that open and fade on idle fryer oil, so the oil looks hot before a basket goes in. */
+  private oilRings: THREE.Mesh[] = [];
   private held: THREE.Object3D | null = null;
   private time = 0;
   events: CounterEvents = { golden: () => {}, beep: () => {}, spill: () => {}, burning: () => {}, done: () => {}, nudge: () => {} };
@@ -702,14 +709,41 @@ export class CounterView {
       this.proxy(bottleBox(caddy), caddy.position.clone().add(new THREE.Vector3(b.x, 0.8, b.z)), { type: "bottle", sauce: k }, G);
     }
 
-    const puffMat = new THREE.MeshBasicMaterial({ color: "#f2f2f2", transparent: true, opacity: 0.3, depthWrite: false });
+    // Smoke and steam: soft camera-facing puffs (a flat core with a soft edge), and grease spits.
+    const puffTex = softDot();
     for (let i = 0; i < 24; i++) {
-      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 0), puffMat.clone());
+      const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, color: "#fff6e8", transparent: true, opacity: 0, depthWrite: false }));
       m.visible = false;
       m.userData = { t: Math.random(), item: -1 };
       this.scene.add(m);
       this.puffs.push(m);
     }
+    for (let i = 0; i < 10; i++) {
+      const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, color: "#fff1c4", transparent: true, depthWrite: false }));
+      m.visible = false;
+      m.userData = { life: 0, v: new THREE.Vector3() };
+      m.scale.setScalar(0.07);
+      this.scene.add(m);
+      this.spits.push(m);
+    }
+    const star = starTex();
+    for (let i = 0; i < 4; i++) {
+      const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: star, color: "#fff6d0", transparent: true, depthWrite: false, depthTest: false }));
+      m.visible = false;
+      m.renderOrder = 6;
+      m.userData = { life: 0 };
+      this.scene.add(m);
+      this.sparkles.push(m);
+    }
+  }
+
+  /** Pop the perfect-star over a point (scene coordinates). */
+  private sparkle(at: THREE.Vector3): void {
+    const m = this.sparkles.find((s) => s.userData.life <= 0) ?? this.sparkles[0];
+    m.userData.life = 0.3;
+    m.position.copy(at);
+    m.position.y += 0.45;
+    m.visible = true;
   }
 
   /** The panini press page (the Sunny Coast): see PRESS. Built once, shown in place of the grill. */
@@ -1564,6 +1598,17 @@ export class CounterView {
     fryer.position.copy(at(F.fryer.x, 0, F.fryer.z));
     this.scene.add(fryer);
     this.fryer = fryer;
+    const ringGeo = new THREE.RingGeometry(0.05, 0.075, 12).rotateX(-Math.PI / 2);
+    for (let i = 0; i < 8; i++) {
+      const w = fryer.userData.spots.wells[i % 2];
+      const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: "#fff1c4", transparent: true, opacity: 0, depthWrite: false }));
+      m.position.set(w.x, w.oilY + 0.035, w.z);
+      m.renderOrder = 3;
+      m.visible = false;
+      m.userData = { life: 0, well: i % 2 };
+      fryer.add(m);
+      this.oilRings.push(m);
+    }
     const k = FRYER_SCALE;
     const raw = fryer.userData.spots;
     const sp = {
@@ -2429,6 +2474,7 @@ export class CounterView {
         const k = it.piece.kind as Cookable;
         if (COOK_SCALE[k] && cookLevel(it.piece) > COOK_SCALE[k].burnt - 0.05 && before <= COOK_SCALE[k].burnt - 0.05) anyBurning = true;
         if (COOK_SCALE[k] && cookLevel(it.piece) >= COOK_SCALE[k].done && before < COOK_SCALE[k].done) anyDone = true;
+        if (COOK_SCALE[k] && cookLevel(it.piece) >= COOK_SCALE[k].perfect - 0.04 && before < COOK_SCALE[k].perfect - 0.04) this.sparkle(it.obj.getWorldPosition(new THREE.Vector3()));
       }
       it.squashV += (-160 * it.squash - 12 * it.squashV) * dt;
       it.squash += it.squashV * dt;
@@ -2571,12 +2617,61 @@ export class CounterView {
       const t = m.userData.t;
       const burnt = it.cook > 0.95;
       m.visible = true;
-      m.position.set(it.x + (m.userData.ox ?? 0) + Math.sin(t * 5 + i) * 0.08, it.y + t * 1.6, it.z + (m.userData.oz ?? 0));
-      m.scale.setScalar(0.6 + t * 1.5);
-      const mat = m.material as THREE.MeshBasicMaterial;
-      mat.color.set(burnt ? "#3a3532" : "#f2f2f2");
-      mat.opacity = (burnt ? 0.55 : it.light ? 0.12 : 0.28) * Math.sin(Math.PI * t) * Math.min(1, it.cook * 4);
+      // Rise about 2.2 units, growing 0.6 -> 2.4 times, drifting side to side as it goes.
+      m.position.set(it.x + (m.userData.ox ?? 0) + Math.sin(t * 5 + i) * 0.12 * (0.3 + t), it.y + t * 2.2, it.z + (m.userData.oz ?? 0));
+      m.scale.setScalar(0.24 * (0.6 + t * 1.8));
+      const mat = m.material;
+      mat.color.set(burnt ? "#6b5d55" : "#fff6e8");
+      mat.opacity = (burnt ? 0.4 : it.light ? 0.1 : 0.22) * Math.sin(Math.PI * t) * Math.min(1, it.cook * 4);
     });
+    // Grease spits off meat on a hot zone: a dot pops out and fades within a quarter second.
+    const sizzling = active.filter((g) => (g.piece.kind === "patty" || g.piece.kind === "bacon") && g.piece.cook[0] < 0.95).map((g) => ({ x: gx + g.x, z: g.z, y: GRILL_TOP + 0.3 }));
+    for (const m of this.spits) {
+      const u = m.userData as { life: number; v: THREE.Vector3 };
+      if (u.life > 0) {
+        u.life -= dt;
+        m.position.addScaledVector(u.v, dt);
+        u.v.y -= 9 * dt;
+        m.material.opacity = Math.max(0, u.life / 0.25);
+        m.visible = u.life > 0;
+      } else if (sizzling.length && Math.random() < dt * 2.2) {
+        const it = sizzling[Math.floor(Math.random() * sizzling.length)];
+        const a = Math.random() * Math.PI * 2;
+        u.life = 0.25;
+        u.v.set(Math.cos(a) * 1.4, 2.2 + Math.random() * 1.2, Math.sin(a) * 1.0);
+        m.position.set(it.x + Math.cos(a) * 0.35, it.y - 0.15, it.z + Math.sin(a) * 0.3);
+        m.visible = true;
+      } else m.visible = false;
+    }
+
+    // The perfect-star: pops up to full size and back in 0.3 s, turning a little.
+    for (const m of this.sparkles) {
+      if (m.userData.life <= 0) continue;
+      m.userData.life -= dt;
+      const k = 1 - Math.max(0, m.userData.life) / 0.3;
+      m.scale.setScalar(0.55 * Math.sin(Math.PI * Math.min(1, k)));
+      m.material.rotation = k * 0.9;
+      m.visible = m.userData.life > 0;
+    }
+    // Idle oil: little rings open and fade on a well with no basket down.
+    for (const m of this.oilRings) {
+      const mat = m.material as THREE.MeshBasicMaterial;
+      const b = this.baskets[m.userData.well];
+      const idle = !!b && !(b.down && b.loaded);
+      if (m.userData.life > 0) {
+        m.userData.life -= dt;
+        const k = 1 - Math.max(0, m.userData.life) / 0.7;
+        m.scale.setScalar(0.6 + k * 1.4);
+        mat.opacity = 0.55 * (1 - k);
+        m.visible = m.userData.life > 0;
+      } else if (idle && this.fryer.visible && Math.random() < dt * 1.2) {
+        const w = this.fryer.userData.spots.wells[m.userData.well];
+        m.userData.life = 0.7;
+        m.position.x = w.x + (Math.random() - 0.5) * 1.0;
+        m.position.z = w.z + (Math.random() - 0.5) * 1.2;
+        m.visible = true;
+      } else m.visible = false;
+    }
 
     // Fryer
     for (let i = 0; i < this.baskets.length; i++) {
@@ -2604,7 +2699,10 @@ export class CounterView {
           sh.cook[1] += r;
           const sc = COOK_SCALE.tostada;
           if (before < sc.done && cookLevel(sh) >= sc.done) this.events.done();
-          if (before < sc.perfect - 0.04 && cookLevel(sh) >= sc.perfect - 0.04) this.events.golden();
+          if (before < sc.perfect - 0.04 && cookLevel(sh) >= sc.perfect - 0.04) {
+            this.events.golden();
+            this.sparkle(b.obj.getWorldPosition(new THREE.Vector3()));
+          }
           if (cookLevel(sh) >= sc.perfect - 0.04) {
             b.beepT -= dt;
             if (b.beepT <= 0) {
@@ -2626,6 +2724,7 @@ export class CounterView {
         if (!b.goldenRung && b.cook >= perfect - 0.04) {
           b.goldenRung = true;
           this.events.golden();
+          this.sparkle(b.obj.getWorldPosition(new THREE.Vector3()));
         }
         // Beep from perfect on, quicker once they're overdone, until the basket comes up.
         if (b.cook >= perfect - 0.04) {

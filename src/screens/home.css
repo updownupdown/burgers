@@ -127,7 +127,13 @@
 .home-town { cursor: pointer; }
 .home-town .hit { fill: transparent; }
 .home-town .node { fill: #faf3e6; stroke: var(--home-ink); stroke-width: 0.55; transition: stroke-width 120ms; }
-.home-town .core { fill: var(--home-ink); }
+/* What the town cooks on, in thin ink in the node, tinted like its area's name. */
+.home-town .kind { fill: none; stroke: var(--home-ink); stroke-width: 0.26; stroke-linecap: round; stroke-linejoin: round; }
+.home-town .kind[data-region="mountains"] { stroke: #4e6b45; }
+.home-town .kind[data-region="coast"] { stroke: #8c6a2c; }
+.home-town .kind[data-region="desert"] { stroke: #97503a; }
+.home-town .kind[data-region="orchard"] { stroke: #7a5470; }
+.home-town.capital .kind { transform-box: fill-box; transform-origin: center; transform: scale(1.2); }
 .home-town .ring { fill: none; stroke: var(--home-ink); stroke-width: 0.4; }
 .home-town .halo { fill: none; stroke: #c8472e; stroke-width: 0.55; opacity: 0; transform-box: fill-box; transform-origin: center; }
 .home-town.here .halo { opacity: 1; animation: home-halo 2s ease-out infinite; }
@@ -138,9 +144,12 @@
 /* Markers keep a readable size as the map zooms: --mk is set by home.ts from the zoom level. */
 .home-svg .mk { transform: scale(var(--mk, 1)); transition: transform 160ms var(--bv-ease); }
 .home-town.capital .tname { font-size: 2.55px; letter-spacing: 0.22px; font-weight: 800; }
+/* Zoomed far out: only the capitals (and where you are, or what you picked) keep a name, larger. */
+.home-world.far .home-town:not(.capital):not(.here):not(.sel) .tname { display: none; }
+.home-world.far .home-town.capital .tname { font-size: 3.55px; }
 .home-town.locked .node { fill: #e4dfd5; stroke: var(--home-locked-line); stroke-dasharray: 0.9 0.7; }
 .home-town.locked .ring { stroke: var(--home-locked-line); stroke-dasharray: 0.9 0.7; }
-.home-town.locked .core { fill: var(--home-locked-line); }
+.home-town.locked .kind { stroke: var(--home-locked-line); opacity: 0.8; }
 .home-town.locked .tname { fill: var(--home-locked); }
 .home-town.locked.sel .node, .home-town.locked.sel .ring { stroke: #c8472e; stroke-dasharray: none; }
 .home-town .pip { fill: #faf3e6; stroke: var(--home-ink); stroke-width: 0.3; }
@@ -158,8 +167,9 @@
 .home.evening .home-map { background: #16192a; }
 .home-svg .road.reach { stroke: #a9ba88; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 1.2px rgb(169 186 136 / 0.9)); }
 .home.evening .home-town.lit .node { fill: #ffe6a8; stroke: #e1b55c; stroke-width: 0.8; }
-.home.evening .home-town.lit .tname { fill: #fff3d6; stroke: #2a2622; }
-.home.evening .home-town:not(.lit):not(.here) .tname { fill: #e9e1d2; stroke: #1f1c19; }
+/* At night every name sits in the night wash rather than a paper halo, so none looks pasted on. */
+.home.evening .home-town .tname { fill: #f3e9d6; stroke: #2b3448; }
+.home.evening .home-town.lit .tname { fill: #fff3d6; stroke: #2b3448; }
 .home.evening .home-town.locked .tname { fill: #a59d91; }
 .home.evening .home-svg .scale, .home.evening .home-svg .compass { fill: #c9d2e6; }
 .home.evening .home-truck .shadow { opacity: 0.5; }

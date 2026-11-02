@@ -3,7 +3,7 @@ import { newPiece, type Kind, type Piece } from "../../game/types";
 import { makeFood, stackBases } from "../food";
 import { makeBin } from "../heaps";
 import { applyKitchenLight, KITCHEN_BG } from "../lighting";
-import { toon } from "../materials";
+import { setOutlineViewport, toon } from "../materials";
 import { makeColdRail, makeFountain, makeIceWell, makeFryBasket, makeFryer, makeGriddle, makeLidStrawCaddy, makePackPad, makePrepUnit, makeSauceBottle, makeSauceCaddy, makeTrashChute, makeWarmShelf, makeSupplyShelf, FRY_BASKET } from "../machines";
 import { makeCup, makeFries, makeFryPile, makeCartonStack } from "../food";
 import { SCALE } from "../units";
@@ -252,6 +252,7 @@ function resize(): void {
   const w = window.innerWidth;
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
+  setOutlineViewport(w, h);
   camera.aspect = w / h;
   const dist = Math.hypot(12.6, 5.3);
   camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(Math.atan(across / 2 / dist)) / camera.aspect));

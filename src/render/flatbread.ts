@@ -176,7 +176,11 @@ export function blueParts(melted: boolean, seed: number): Parts {
 export function mozzParts(melted: boolean, baked: number): Parts {
   const p = new Parts();
   if (melted) {
-    p.add(GEO.blob, "#fbf6e6", { p: [0, 0.02, 0], s: [0.34, 0.05, 0.28], ink: 0.014 });
+    // Irregular puddles of melted cheese with a golden edge, so a white pie reads at a glance.
+    p.add(GEO.blob, "#e8c98a", { p: [0, 0.012, 0], s: [0.4, 0.04, 0.33], ink: 0.014 });
+    p.add(GEO.blob, "#e8c98a", { p: [0.2, 0.012, 0.1], s: [0.2, 0.04, 0.16], ink: false });
+    p.add(GEO.blob, "#fbf3df", { p: [0, 0.02, 0], s: [0.36, 0.05, 0.29], ink: false });
+    p.add(GEO.blob, "#fbf3df", { p: [0.19, 0.02, 0.1], s: [0.17, 0.05, 0.13], ink: false });
     if (baked > 0.4) for (const [x, z] of [[0.08, 0.04], [-0.1, -0.05]] as const) p.add(GEO.disc, "#e2b25a", { p: [x, 0.072, z], s: [0.05, 1, 0.04], ink: false });
     return p;
   }
@@ -275,7 +279,9 @@ export interface FlatbreadObject extends THREE.Group {
  * A flatbread (or a calzone), dough first then everything on it. The base's half A (crust
  * segments 0..3) is the back half (facing the hot wall) until it's turned; `rotation.y` is left to the caller (the oven turns it).
  */
-export function makeFlatbread(pieces: Piece[]): FlatbreadObject {
+export function makeFlatbread(pieces: Piece[], o: { topScale?: number } = {}): FlatbreadObject {
+  /** Toppings drawn bigger than life on the tray, where the pie is small (review of build #78, P2-7). */
+  const ts = o.topScale ?? 1;
   const g = new THREE.Group() as FlatbreadObject;
   const dough = pieces[0];
   const folded = !!dough?.folded;
@@ -352,7 +358,7 @@ export function makeFlatbread(pieces: Piece[]): FlatbreadObject {
       const y0 = BASE_H + 0.005;
       if (p.kind === "redsauce") {
         if (p.stroke?.length) {
-          const m = bakedMesh(sauceParts(p.stroke, "#c8402a", LADLE_RADIUS).bake(), { shadow: false });
+          const m = bakedMesh(sauceParts(p.stroke, "#cf3620", LADLE_RADIUS).bake(), { shadow: false });
           m.position.y = y0 + 0.004 * idx;
           tops.add(m);
         }
@@ -368,7 +374,7 @@ export function makeFlatbread(pieces: Piece[]): FlatbreadObject {
         for (let i = 0; i < 3; i++) {
           const a = 0.8 + i * 2.1 + after;
           const m = part(p.kind, () => paniniParts(p.kind, 0.02));
-          m.scale.setScalar(p.kind === "basil" ? 0.55 : 0.5);
+          m.scale.setScalar((p.kind === "basil" ? 0.55 : 0.5) * ts);
           m.position.set(Math.cos(a) * PIE.rx * 0.38, y0 + 0.06, Math.sin(a) * PIE.rz * 0.38);
           m.rotation.y = a;
           tops.add(m);
@@ -388,6 +394,7 @@ export function makeFlatbread(pieces: Piece[]): FlatbreadObject {
       if (!m) return;
       m.position.set(ux * PIE.rx * INNER, y0 + (p.kind === "mozzarella" || p.kind === "blue" ? 0.01 : 0.03), uz * PIE.rz * INNER);
       m.rotation.y = k * 1.7 + idx;
+      m.scale.multiplyScalar(ts);
       tops.add(m);
     });
   };

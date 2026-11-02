@@ -1,0 +1,293 @@
+/*
+ * How to Play (howto.ts): three tabs along the bottom of the card (Basics, Kitchen, The trip), a
+ * kitchen picker over the Kitchen tab, and the looping drawings (howto-art.ts). Built on the Dusk
+ * kit and the hw- classes in menu.css.
+ */
+
+/* ---- the card ------------------------------------------------------------ */
+.menu-card.howto .hw-body { padding: 10px 16px 24px; gap: 0; }
+.menu-card.howto .hw-body .menu-chips { margin: -10px -16px 0; padding: 10px 16px 8px; }
+.menu-card.howto .menu-chips .bv-chip { min-height: 40px; padding: 0 13px; font-size: 13px; }
+
+/* Kitchens: the four middle counters, the one you're at marked. */
+.hw-kpick { flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 2px 16px 10px; }
+.hw-kpick[hidden] { display: none; }
+.hw-kpick button {
+  position: relative; display: grid; justify-items: center; align-content: center; gap: 1px;
+  min-height: 60px; padding: 4px 2px 5px; border-radius: 10px; border: 1px solid transparent;
+  background: var(--bv-paper-2); color: var(--bv-ink-2); font: 700 13px/1.1 var(--bv-font-ui);
+  transition: background var(--bv-fast), box-shadow var(--bv-fast);
+}
+.hw-kpick button .tab-art { width: 34px; height: 25px; }
+.hw-kpick button small { font-size: 11px; font-weight: 600; color: #5c626b; white-space: nowrap; }
+.hw-kpick button[aria-pressed="true"] { background: var(--bv-paper); box-shadow: inset 0 0 0 1.5px var(--bv-ink), var(--bv-shadow-1); color: var(--bv-ink); }
+.hw-kpick button.here small { color: var(--bv-paprika-2); font-weight: 800; }
+.hw-kpick button.here small::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: var(--bv-paprika); vertical-align: 1px; }
+
+/* The three tabs, at the bottom where the thumb is. */
+.hw-tabs { flex: none; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--bv-rule); background: var(--bv-paper); padding: 0 6px 2px; }
+.hw-tabs button {
+  position: relative; display: grid; justify-items: center; align-content: center; gap: 3px;
+  min-height: 56px; color: var(--bv-mute); font: 700 13px/1 var(--bv-font-ui);
+}
+.hw-tabs button .bv-icon { font-size: 21px; }
+.hw-tabs button::before { content: ""; position: absolute; top: -1px; left: 22%; right: 22%; height: 3px; border-radius: 0 0 3px 3px; background: transparent; transition: background var(--bv-fast); }
+.hw-tabs button[aria-selected="true"] { color: var(--bv-ink); }
+.hw-tabs button[aria-selected="true"]::before { background: var(--bv-paprika); }
+.hw-tabs button[aria-selected="true"] .bv-icon { color: var(--bv-paprika); }
+
+/* ---- sections ------------------------------------------------------------ */
+.howto .hw-sec { gap: 12px; }
+.howto .hw-ic.art { background: var(--bv-paper-2); }
+.howto .hw-ic.art .tab-art { width: 34px; height: 26px; }
+.howto .hw-pts li { font-size: 14.5px; }
+/* Captions read as one line of text, an icon in it if there is one (menu.css made them flex rows). */
+.howto .hw-cap { display: block; color: #5c626b; }
+.howto .hw-cap .bv-icon { vertical-align: -0.2em; margin-right: 4px; }
+.howto .hw-sub { color: #5c626b; }
+.hw-sec .hw-sub { margin: 4px 0 -4px; }
+.hw-pair { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hw-pair > div { display: grid; gap: 4px; justify-items: center; min-width: 0; }
+.hw-pair .hwa { max-width: 170px; }
+.hw-fig .hwa { max-width: 320px; }
+.hw-fig .hwa.wide { max-width: 340px; }
+.hw-fig > .hw-cap { max-width: 320px; }
+.hw-cap b { color: var(--bv-ink); font-weight: 800; }
+.hw-end { font-size: 18px; text-align: center; flex-wrap: wrap; line-height: 1.3; }
+.hw-end small { display: block; width: 100%; font: 600 13px/1.4 var(--bv-font-ui); color: #5c626b; }
+.hw-step { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.hw-step li { display: grid; justify-items: center; gap: 3px; text-align: center; padding: 8px 2px 7px; border-radius: var(--bv-r-md); background: var(--bv-paper); font-size: 12px; font-weight: 800; line-height: 1.15; }
+.hw-step .bv-icon { font-size: 20px; color: var(--bv-paprika); }
+
+/* The real ticket, at rest in the guide. */
+.hw-tk .ticket { position: relative; width: 100%; z-index: auto; pointer-events: none; }
+.hw-tk.ex { width: 244px; max-width: 100%; }
+.hw-key .kbar { display: block; width: 46px; height: 6px; border-radius: 3px; background: var(--bv-rule); overflow: hidden; }
+.hw-key .kbar i { display: block; width: 70%; height: 100%; border-radius: 3px; background: #6f9a4f; }
+.hw-pair-t { align-content: center; gap: 8px !important; }
+.hw-pair-t .hw-cap { text-align: left; }
+.hw-key.lite { display: grid; gap: 6px; font-size: 13.5px; }
+/* The ticket key: a chip or a line as on the ticket, then what it means. */
+.hw-key.ticket { position: static; z-index: auto; background: none; filter: none; padding: 0; overflow: visible; pointer-events: auto; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px 10px; align-items: center; font: 500 13.5px/1.3 var(--bv-font-ui); color: var(--bv-ink-2); width: 100%; }
+.hw-key.ticket::after { display: none; }
+.hw-key > dt { justify-self: start; display: flex; align-items: center; gap: 3px; font-weight: 700; color: var(--bv-ink); white-space: nowrap; }
+.hw-key > dd { margin: 0; }
+.hw-key .kw { font-size: 11px; }
+.hw-key .ln { font-weight: 700; }
+.hw-key .ln.mod { color: var(--t-mod); font-weight: 800; }
+.hw-key .ln.nx { background: color-mix(in srgb, #e9b25c 30%, #fffdf7); border-radius: 4px; padding: 0 4px; }
+.hw-key .ln.dn { color: var(--t-done); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.hw-key .ln.wr { color: var(--t-wrong); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.hw-key .face { width: 18px; height: 18px; }
+.hw-key .how { display: inline-flex; align-items: center; gap: 3px; }
+.hw-key .how i { font-style: normal; font-weight: 800; color: var(--bv-ink-2); }
+.hw-key .mb { font-size: 12px; padding: 1px 5px 2px; }
+.hw-key.lite { background: var(--bv-paper); border-radius: var(--bv-r-md); padding: 10px 12px; }
+
+/* A recipe, step by step. */
+.hw-walk { display: grid; gap: 12px; padding: 14px 12px; border-radius: var(--bv-r-lg); background: var(--bv-paper-2); }
+.hw-walk-h { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.hw-walk-h h4 { margin: 0; font: 400 21px/1.05 var(--bv-font-serif); color: var(--bv-ink); }
+.hw-walk-h .pr { font: 500 14px var(--bv-font-mono); color: var(--bv-ink-2); }
+.hw-walk-h .wh { flex-basis: 100%; font-size: 13px; font-weight: 600; color: #5c626b; line-height: 1.3; }
+.hw-walk-top { display: grid; grid-template-columns: minmax(0, 158px) minmax(0, 1fr); gap: 12px; align-items: start; }
+.hw-walk-top .hw-tk .ticket { font-size: 12.5px; }
+.hw-walk-art { display: grid; justify-items: center; align-content: start; gap: 6px; min-width: 0; }
+.hw-walk-art .mref-stack { width: 92px; }
+.hw-walk-art .hwa { max-width: 160px; }
+.hw-walk-art .hw-cap { font-size: 12px; }
+.hw-do { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; counter-reset: d; }
+.hw-do li { counter-increment: d; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 8px; align-items: start; font-size: 14.5px; font-weight: 500; line-height: 1.42; color: var(--bv-ink-2); }
+.hw-do li::before { content: counter(d); display: grid; place-items: center; width: 22px; height: 22px; margin-top: 0; border-radius: 50%; background: var(--bv-paper); box-shadow: inset 0 0 0 1.5px var(--bv-ink); font: 500 12px/1 var(--bv-font-mono); color: var(--bv-ink); }
+.hw-do li b { color: var(--bv-ink); font-weight: 800; }
+.hw-do li.at::before { content: ""; background: var(--bv-ink); box-shadow: none; -webkit-mask: none; }
+.hw-do li.at { color: var(--bv-ink); }
+.hw-walk .hw-tip { margin: 0; padding: 9px 11px; border-radius: var(--bv-r-md); background: var(--bv-paper); font-size: 13.5px; font-weight: 500; line-height: 1.4; color: var(--bv-ink-2); }
+.hw-walk .hw-tip b { color: var(--bv-ink); }
+
+/* The tostada in four frames. */
+.hw-flow { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.hw-flow li { position: relative; display: grid; justify-items: center; gap: 2px; text-align: center; font-size: 12px; font-weight: 700; color: var(--bv-ink-2); line-height: 1.15; }
+.hw-flow svg { width: 100%; max-width: 64px; height: auto; }
+.hw-flow li:not(:last-child)::after { content: ""; position: absolute; right: -5px; top: 18px; width: 5px; height: 5px; border-top: 2px solid var(--bv-rule-2); border-right: 2px solid var(--bv-rule-2); transform: rotate(45deg); }
+
+/* Dishes of a kitchen, and where each first comes on. */
+.hw-dishes { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.hw-dishes li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: baseline; padding: 8px 2px; border-bottom: 1px dotted var(--bv-rule-2); font-size: 14px; }
+.hw-dishes li:last-child { border-bottom: 0; }
+.hw-dishes .nm { font: 400 16px/1.1 var(--bv-font-serif); color: var(--bv-ink); }
+.hw-dishes .fr { font-size: 12.5px; font-weight: 600; color: #5c626b; text-align: right; }
+.hw-dishes .pr { font: 500 13px var(--bv-font-mono); color: var(--bv-ink-2); min-width: 30px; text-align: right; }
+.hw-dishes li.on .nm::after { content: "Today"; margin-left: 6px; font: 800 10.5px/1 var(--bv-font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--bv-olive); vertical-align: 2px; }
+
+/* The map key. */
+.hw-mapkey { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.hw-mapkey li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; align-items: center; font-size: 13px; font-weight: 600; line-height: 1.25; color: var(--bv-ink-2); }
+.hw-mapkey svg { width: 28px; height: 22px; }
+
+/* Pacing, one row each. */
+.hw-pace { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; gap: 6px; }
+.hw-pace li { display: grid; gap: 2px; padding: 9px 11px; border-radius: var(--bv-r-md); background: var(--bv-paper); font-size: 13.5px; line-height: 1.38; color: var(--bv-ink-2); }
+.hw-pace b { font: 400 16px/1.1 var(--bv-font-serif); color: var(--bv-ink); }
+
+.howto .hw-drink { grid-template-columns: repeat(4, 1fr); }
+.howto .hw-biz .bv-mono { font-size: 22px !important; }
+.hw-fig .hwa-sauce { max-width: 250px; }
+.hwa-grill .hwa-txt, .hwa-comal .hwa-txt { font-size: 8.5px; }
+.hwa-quesa .hwa-guide { stroke: #cfc8bc; }
+
+/* ---- the drawings -------------------------------------------------------- */
+.hwa { display: block; width: 100%; height: auto; overflow: visible; }
+.hwa .tch-o { fill: none; stroke: rgb(255 255 255 / 0.92); stroke-width: 2; }
+.hwa .tch-i { fill: rgb(35 42 51 / 0.36); stroke: rgb(35 42 51 / 0.82); stroke-width: 1.4; }
+.hwa-guide { fill: none; stroke: #6b727c; stroke-width: 1.5; stroke-dasharray: 2.5 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.75; }
+.hwa-guide.head { stroke-dasharray: none; }
+.hwa-txt { font: 700 10px var(--bv-font-ui); fill: #434b55; }
+.hwa-txt.light { fill: #fff; font-size: 11px; }
+.hwa-txt.hot { fill: #8a3a10; font-size: 7px; letter-spacing: 0.08em; }
+
+/* Tap: a name pops up. */
+.hwa-tap { --hd: 3s; }
+.hwa-tap .tap-f { animation: hwa-tapf var(--hd) var(--bv-ease) infinite; }
+.hwa-tap .tap-bub { transform-box: fill-box; transform-origin: 50% 100%; animation: hwa-bub var(--hd) ease-out infinite; }
+@keyframes hwa-tapf { 0% { opacity: 0; transform: translateY(-20px); } 14% { opacity: 1; transform: translateY(-3px); } 22% { transform: scale(0.84); } 30% { transform: scale(1); } 78% { opacity: 1; transform: none; } 90%, 100% { opacity: 0; transform: translateY(-10px); } }
+@keyframes hwa-bub { 0%, 24% { opacity: 0; transform: scale(0.6) translateY(6px); } 32% { opacity: 1; transform: scale(1.07); } 38%, 80% { opacity: 1; transform: scale(1); } 90%, 100% { opacity: 0; transform: scale(0.92); } }
+
+/* Drag: the slice rides along with the thumb. */
+.hwa-drag { --hd: 3.4s; }
+.hwa-drag .drag-mv { animation: hwa-drag var(--hd) linear infinite; }
+.hwa-drag .drag-f { animation: hwa-dragf var(--hd) ease infinite; }
+.hwa-drag .drag-pc { animation: hwa-dragpc var(--hd) linear infinite; }
+@keyframes hwa-dragf { 0% { opacity: 0; transform: translateY(-14px); } 10% { opacity: 1; transform: none; } 16%, 62% { opacity: 1; transform: scale(0.88); } 72%, 100% { opacity: 0; transform: translateY(-12px); } }
+@keyframes hwa-dragpc { 0%, 12% { opacity: 0; } 17%, 86% { opacity: 1; } 93%, 100% { opacity: 0; } }
+
+/* Flick up to flip. */
+.hwa-flip { --hd: 3s; }
+.hwa-flip .flip-p { animation: hwa-flipp var(--hd) var(--bv-ease) infinite; }
+.hwa-flip .flip-b { opacity: 0; }
+.hwa-flip .flip-a { animation: hwa-flipa var(--hd) step-end infinite; }
+.hwa-flip .flip-b { animation: hwa-flipb var(--hd) step-end infinite; }
+.hwa-flip .flip-f { animation: hwa-flipf var(--hd) ease-out infinite; }
+.hwa-flip .flip-streak { animation: hwa-streak var(--hd) linear infinite; }
+@keyframes hwa-flipp { 0%, 34% { transform: none; opacity: 1; } 44% { transform: translateY(-24px) scaleY(0.06); } 54% { transform: translateY(-7px) scaleY(1); } 60% { transform: none; } 86% { opacity: 1; } 93% { opacity: 0; transform: none; } 97% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes hwa-flipa { 0% { opacity: 1; } 44% { opacity: 0; } 95% { opacity: 1; } }
+@keyframes hwa-flipb { 0% { opacity: 0; } 44% { opacity: 1; } 95% { opacity: 0; } }
+@keyframes hwa-flipf { 0% { opacity: 0; transform: translateY(14px); } 12% { opacity: 1; transform: none; } 24% { transform: scale(0.88); } 30% { opacity: 1; transform: scale(0.88); } 38% { opacity: 0.9; transform: translateY(-34px); } 44%, 100% { opacity: 0; transform: translateY(-42px); } }
+@keyframes hwa-streak { 0%, 32% { opacity: 0; } 36%, 42% { opacity: 0.7; } 48%, 100% { opacity: 0; } }
+
+/* Sauce: the bottle follows its own line. */
+.hwa-sauce { --hd: 4.2s; }
+.hwa-sauce .sauce-line { stroke-dasharray: 1 1; stroke-dashoffset: 0; animation: hwa-sline var(--hd) linear infinite; }
+.hwa-sauce .sauce-b { animation: hwa-sauce var(--hd) linear infinite; }
+.hwa-sauce .sauce-bo { animation: hwa-sbo var(--hd) linear infinite; }
+.hwa-sauce .sauce-lvl { transform-box: view-box; transform-origin: 15px 96px; transform: scaleY(0.52); animation: hwa-slvl var(--hd) linear infinite; }
+@keyframes hwa-sline { 0%, 16% { stroke-dashoffset: 1; opacity: 1; } 74% { stroke-dashoffset: 0; } 86% { opacity: 1; } 92%, 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes hwa-sbo { 0% { opacity: 0; } 8%, 80% { opacity: 1; } 88%, 100% { opacity: 0; } }
+@keyframes hwa-slvl { 0%, 16% { transform: scaleY(0); } 74%, 88% { transform: scaleY(0.52); } 94%, 100% { transform: scaleY(0); } }
+
+/* The knife: one slice, or two crossing for four. */
+.hwa-knife { --hd: 3.6s; }
+.hwa-knife .cut-line { fill: none; stroke: #2a2622; stroke-width: 1.8; stroke-linecap: round; stroke-dasharray: 1 1; stroke-dashoffset: 0; animation: hwa-cut var(--hd) linear infinite; }
+.hwa-knife .knife-mv { animation: hwa-knife var(--hd) linear infinite; }
+.hwa-knife .kn-l { transform: translateX(-4px); animation: hwa-knl var(--hd) var(--bv-ease) infinite; }
+.hwa-knife .kn-r { transform: translateX(4px); animation: hwa-knr var(--hd) var(--bv-ease) infinite; }
+@keyframes hwa-knife { 0% { opacity: 0; transform: translateY(-8px); } 10% { opacity: 1; transform: none; } 50% { opacity: 1; transform: translateY(64px); } 60%, 100% { opacity: 0; transform: translateY(70px); } }
+@keyframes hwa-cut { 0%, 12% { stroke-dashoffset: 1; opacity: 1; } 48% { stroke-dashoffset: 0; } 84% { opacity: 1; } 92%, 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes hwa-knl { 0%, 50% { transform: none; } 60%, 86% { transform: translateX(-4px); } 96%, 100% { transform: none; } }
+@keyframes hwa-knr { 0%, 50% { transform: none; } 60%, 86% { transform: translateX(4px); } 96%, 100% { transform: none; } }
+.hwa-knife.four { --hd: 5.2s; }
+.hwa-knife.four .knife-mv.one { animation-name: hwa-knife1; }
+.hwa-knife.four .knife-mv.two { animation-name: hwa-knife2; }
+.hwa-knife.four .cut-line.one { animation-name: hwa-cut1; }
+.hwa-knife.four .cut-line.two { animation-name: hwa-cut2; }
+.hwa-knife.four .knq { animation: hwa-knq var(--hd) var(--bv-ease) infinite; }
+.hwa-knife.four .knq.a { --qx: -3px; --qy: -3px; }
+.hwa-knife.four .knq.b { --qx: 3px; --qy: -3px; }
+.hwa-knife.four .knq.c { --qx: -3px; --qy: 3px; }
+.hwa-knife.four .knq.d { --qx: 3px; --qy: 3px; }
+.hwa-knife.four .knq { transform: translate(var(--qx), var(--qy)); }
+@keyframes hwa-knife1 { 0% { opacity: 0; transform: translateY(-6px); } 6% { opacity: 1; transform: none; } 34% { opacity: 1; transform: translateY(80px); } 40%, 100% { opacity: 0; transform: translateY(84px); } }
+@keyframes hwa-knife2 { 0%, 38% { opacity: 0; transform: translateX(-6px); } 44% { opacity: 1; transform: none; } 70% { opacity: 1; transform: translateX(80px); } 76%, 100% { opacity: 0; transform: translateX(84px); } }
+@keyframes hwa-cut1 { 0%, 8% { stroke-dashoffset: 1; opacity: 1; } 33% { stroke-dashoffset: 0; } 88% { opacity: 1; } 94%, 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes hwa-cut2 { 0%, 45% { stroke-dashoffset: 1; opacity: 1; } 69% { stroke-dashoffset: 0; } 88% { opacity: 1; } 94%, 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes hwa-knq { 0%, 72% { transform: none; } 80%, 88% { transform: translate(var(--qx), var(--qy)); } 96%, 100% { transform: none; } }
+
+/* The peel: push in under, carry out, swipe down over the tray. At rest: over the tray. */
+.hwa-peel { --hd: 6s; }
+.hwa-peel .peel-p { transform: translate(72px, -8px); animation: hwa-peelp var(--hd) var(--bv-ease) infinite; }
+.hwa-peel .peel-pie { transform: translate(128px, -10px); animation: hwa-peelpie var(--hd) var(--bv-ease) infinite; }
+.hwa-peel .peel-f { animation: hwa-peelf var(--hd) linear infinite; }
+@keyframes hwa-peelp { 0%, 8% { transform: none; } 30%, 34% { transform: translate(-56px, 0); } 56% { transform: translate(72px, -8px); } 60% { transform: translate(72px, 15px); } 64% { transform: translate(72px, 13px); } 82%, 100% { transform: none; } }
+@keyframes hwa-peelpie { 0% { transform: none; opacity: 0; } 6% { opacity: 1; } 26% { transform: none; } 30%, 34% { transform: translate(0, -2px); } 56% { transform: translate(128px, -10px); } 60%, 92% { transform: translate(128px, 16px); opacity: 1; } 98%, 100% { transform: translate(128px, 16px); opacity: 0; } }
+@keyframes hwa-peelf { 0% { opacity: 0; } 6%, 64% { opacity: 1; } 72%, 100% { opacity: 0; } }
+
+/* The press: pull down, golden, swipe up. At rest: open on a golden panini. */
+.hwa-press { --hd: 6s; }
+.hwa-press .press-lid { transform-box: view-box; transform-origin: 24px 62px; transform: rotate(-30deg); animation: hwa-lid var(--hd) var(--bv-ease) infinite; }
+.hwa-press .press-bread { fill: #e3a24a; animation: hwa-bread var(--hd) linear infinite; }
+.hwa-press .press-lines { animation: hwa-plines var(--hd) linear infinite; }
+.hwa-press .press-steam { opacity: 0; animation: hwa-steam var(--hd) linear infinite; }
+.hwa-press .press-f { animation: hwa-pressf var(--hd) linear infinite; }
+@keyframes hwa-lid { 0%, 10% { transform: rotate(-30deg); } 26%, 58% { transform: rotate(0deg); } 72%, 100% { transform: rotate(-30deg); } }
+@keyframes hwa-bread { 0%, 30% { fill: #f3e2b8; } 54%, 92% { fill: #e3a24a; } 100% { fill: #f3e2b8; } }
+@keyframes hwa-plines { 0%, 30% { opacity: 0; } 54%, 92% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes hwa-steam { 0%, 30% { opacity: 0; } 36%, 54% { opacity: 0.85; } 60%, 100% { opacity: 0; } }
+@keyframes hwa-pressf { 0%, 3% { opacity: 0; } 9%, 27% { opacity: 1; } 34%, 50% { opacity: 0; } 56%, 74% { opacity: 1; } 82%, 100% { opacity: 0; } }
+
+/* The quesadilla: drag across to fold, hold to open. At rest: folded, the hold ring full. */
+.hwa-quesa { --hd: 7s; }
+.hwa-quesa .q-flap { transform-box: view-box; transform-origin: 80px 50px; transform: scaleY(0); animation: hwa-qflap var(--hd) linear infinite; }
+.hwa-quesa .q-over { transform-box: view-box; transform-origin: 80px 50px; transform: scaleY(1); animation: hwa-qover var(--hd) linear infinite; }
+.hwa-quesa .q-fold { opacity: 0; animation: hwa-qfold var(--hd) var(--bv-ease) infinite; }
+.hwa-quesa .q-hold { animation: hwa-qhold var(--hd) linear infinite; }
+.hwa-quesa .q-ring-bg { fill: none; stroke: rgb(255 255 255 / 0.25); stroke-width: 3; }
+.hwa-quesa .q-ring { fill: none; stroke: #e8694a; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 1 1; stroke-dashoffset: 0; animation: hwa-qring var(--hd) linear infinite; }
+.hwa-quesa .q-g1 { animation: hwa-qg var(--hd) linear infinite; }
+@keyframes hwa-qflap { 0%, 14% { transform: scaleY(1); } 22% { transform: scaleY(0); } 64% { transform: scaleY(0); } 72%, 100% { transform: scaleY(1); } }
+@keyframes hwa-qover { 0%, 22% { transform: scaleY(0); } 30% { transform: scaleY(1); } 56% { transform: scaleY(1); } 64%, 100% { transform: scaleY(0); } }
+@keyframes hwa-qfold { 0% { opacity: 0; transform: none; } 7% { opacity: 1; transform: none; } 12% { transform: scale(0.88); } 30% { opacity: 1; transform: translateY(50px) scale(0.88); } 36%, 100% { opacity: 0; transform: translateY(56px); } }
+@keyframes hwa-qhold { 0%, 38% { opacity: 0; transform: none; } 42% { opacity: 1; transform: none; } 45%, 66% { opacity: 1; transform: scale(0.9); } 70% { transform: none; } 76%, 100% { opacity: 0; } }
+@keyframes hwa-qring { 0%, 44% { stroke-dashoffset: 1; } 56% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 0; } }
+@keyframes hwa-qg { 0%, 8% { opacity: 0.75; } 32%, 100% { opacity: 0.2; } }
+
+/* Undo: tap, and the last move flies back. */
+.hwa-undo { --hd: 3.6s; }
+.hwa-undo .undo-btn-bg { fill: #fbe3da; stroke: #d8573a; stroke-width: 2; animation: hwa-ubtn var(--hd) linear infinite; }
+.hwa-undo .undo-mv { animation: hwa-undo var(--hd) cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.hwa-undo .undo-pc { animation: hwa-upc var(--hd) linear infinite; }
+.hwa-undo .undo-f { animation: hwa-uf var(--hd) ease infinite; }
+@keyframes hwa-ubtn { 0%, 16% { fill: #f6f2ea; stroke: #f6f2ea; } 20%, 32% { fill: #fbe3da; stroke: #d8573a; } 40%, 100% { fill: #f6f2ea; stroke: #f6f2ea; } }
+@keyframes hwa-upc { 0% { opacity: 0; } 6%, 84% { opacity: 1; } 90%, 100% { opacity: 0; } }
+@keyframes hwa-uf { 0% { opacity: 0; transform: translate(8px, 12px); } 10% { opacity: 1; transform: none; } 18% { transform: scale(0.84); } 24% { transform: none; } 34% { opacity: 1; } 44%, 100% { opacity: 0; } }
+
+/* The doneness meter: the real one, filling through its three regions. At rest: done. */
+.hwm { --hd: 7s; width: 100%; max-width: 280px; display: grid; justify-items: center; gap: 4px; }
+.hwm-patty { width: 92px; height: auto; }
+.hwm-top { fill: #a8643a; animation: hwm-top var(--hd) linear infinite; }
+.hwm .cmeter { width: 100%; height: 16px; margin-top: 2px; }
+.hwm .cmeter b { animation: hwm-fill var(--hd) linear infinite; }
+.hwm-lbl { width: 100%; display: grid; grid-template-columns: var(--mu) calc(var(--md) - var(--mu)) 1fr; font-size: 12px; font-weight: 700; color: #5c626b; text-align: center; }
+.hwm-lbl span:nth-child(2) { color: var(--bv-olive); font-weight: 800; }
+@keyframes hwm-fill {
+  0% { width: 0%; background-color: #ff8197; }
+  31.3% { background-color: #ff8197; } 31.5% { background-color: #c0713f; }
+  60.9% { background-color: #c0713f; } 61.1% { background-color: #8f4a28; }
+  79.9% { width: 99.9%; background-color: #8f4a28; }
+  80%, 82.9% { width: 100%; background-color: #2a1410; } 83%, 85.9% { background-color: #ff3b2a; } 86%, 88.9% { background-color: #2a1410; } 89%, 91.9% { background-color: #ff3b2a; }
+  92%, 99.9% { width: 100%; background-color: #2a1410; }
+  100% { width: 0%; background-color: #ff8197; }
+}
+@keyframes hwm-top {
+  0%, 31.3% { fill: #ea8f9a; } 31.5%, 60.9% { fill: #a8643a; } 61.1%, 79.9% { fill: #7a3f22; } 80%, 99.9% { fill: #2a1a14; } 100% { fill: #ea8f9a; }
+}
+
+/* Still frames for anyone who asked for less motion: the resting state of each drawing. */
+@media (prefers-reduced-motion: reduce) {
+  .hwa *, .hwm * { animation: none !important; }
+}
+
+@media (max-width: 370px) {
+  .hw-kpick { gap: 4px; padding-left: 12px; padding-right: 12px; }
+  .hw-kpick button { font-size: 12px; }
+  .hw-walk-top { grid-template-columns: minmax(0, 140px) minmax(0, 1fr); }
+}

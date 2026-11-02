@@ -24,6 +24,8 @@ export interface MenuDeps {
   inShift(): boolean;
   /** The town whose menu "Today's menu" shows: the one being played (event and hidden recipes applied), else the current or selected one. */
   town(): Stop;
+  /** The counter on screen in a shift, so How to Play can open on it. */
+  counter?(): "drinks" | "middle" | "fryer";
   /** Poutine's price if it's on today's menu, else null. */
   poutine?(): number | null;
   /** Small line under the menu title, e.g. "Day 4 · Pinecrest". */

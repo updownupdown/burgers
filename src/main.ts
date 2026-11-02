@@ -4334,6 +4334,7 @@ initMenu({
   inShift,
   town: () => (inShift() ? shopStop() : withEvent(townById(game.mapSel), eventOn(game.mapSel, save.day))),
   subtitle: () => `Day ${save.day}`,
+  counter: () => (counter.page === 0 ? "drinks" : counter.page === 2 ? "fryer" : "middle"),
   sound: () => !sfx.muted,
   setSound: (on) => {
     sfx.unlock();

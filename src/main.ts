@@ -20,9 +20,10 @@ import { dressCup } from "./render/cup";
 import { makeCarton, makeCup, makeFood, makeFries, sliceSpot, stackBases } from "./render/food";
 import { TORTILLA_R } from "./render/tacos";
 import { makeFlatbread } from "./render/flatbread";
-import { makeSauceLadle } from "./render/machines/oven";
+import { makePeel, makeSauceLadle, PEEL } from "./render/machines/oven";
+import { flickOf, type Flick } from "./game/peel";
 import { disposeObject } from "./render/materials";
-import { CounterView, CUP_IN_HAND, EMPTY_PACK, STOPS, GRILL_SCALE, GRILLE_ZONE, FLAT_ZONE, HEARTH_Y, HOME_PAGE, PAGES, PEEL_Y, GRILL_TOP, ZONE_START, type GrillItem, type Hit, type PieHolder } from "./scenes/counter";
+import { CounterView, CUP_IN_HAND, EMPTY_PACK, STOPS, GRILL_SCALE, GRILLE_ZONE, FLAT_ZONE, HEARTH_Y, HOME_PAGE, PAGES, PEEL_Y, GRILL_TOP, ZONE_START, type GrillItem, type Hit, type PeelTarget, type PieHolder } from "./scenes/counter";
 import { PLATE } from "./render/machines/press";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
@@ -677,11 +678,13 @@ interface Pointer {
   x: number;
   y: number;
   band: ReturnType<typeof bandAt>;
-  mode: "none" | "swipe" | "held" | "grill" | "basket" | "pour" | "sauce" | "plate" | "wipe" | "rub" | "egg" | "bay" | "handle" | "board" | "tpress" | "ladle" | "peel" | "spot";
-  /** The sauce or oil being spread on the pie on the peel (the oven page). */
+  mode: "none" | "swipe" | "held" | "grill" | "basket" | "pour" | "sauce" | "plate" | "wipe" | "rub" | "egg" | "bay" | "handle" | "board" | "tpress" | "ladle" | "peel" | "fold" | "spot" | "bench";
+  /** The sauce or oil being spread on a pie being built (the oven page). */
   ladle?: SauceKind;
-  /** A press near the side of an unbaked pie on the peel (pie-local): dragging it across the middle folds it into a calzone. */
-  peelFold?: { x: number; z: number };
+  /** A press near the side of an unbaked pie on the peel or the bench (pie-local): dragging it across the middle folds it into a calzone. */
+  peelFold?: { holder: PieHolder; x: number; z: number };
+  /** The peel in hand: when its last swipe was (ms), so one swipe is only counted once. */
+  flickT?: number;
   /** A press on the edge of a tortilla on the comal (page-local grill point): dragging it across the middle folds it. */
   foldFrom?: { x: number; z: number };
   /** The press started on the trash chute with nothing in hand (a swipe there changes counter). */
@@ -1732,7 +1735,9 @@ canvas.addEventListener("pointerdown", (e) => {
     else if (hit.type === "dough") startHold(pt, { type: "piece", piece: newPiece("dough"), fromGrill: null });
     else if (hit.type === "pot") startLadle(pt, "redsauce");
     else if (hit.type === "peel") startPeel(pt);
-    else if (hit.type === "spot") pt.mode = "spot";
+    else if (hit.type === "bench") {
+      if (!startFold(pt, counter.bench)) pt.mode = "bench";
+    } else if (hit.type === "spot") pt.mode = "spot";
     else if (hit.type === "batter") {
       // Battered zucchini sits in the bowl until it's picked up again for the basket.
       if (counter.batter > 0) {
@@ -1753,8 +1758,10 @@ canvas.addEventListener("pointerdown", (e) => {
     }
     else if (hit.type === "bay") pt.mode = "bay";
     else if (hit.type === "handle") pt.mode = "handle";
-    else if (hit.type === "board") pt.mode = "board";
-    else if (hit.type === "stack") {
+    else if (hit.type === "board") {
+      // At the oven the board is where a pie is set down: an unbaked one can be folded there too.
+      if (!(counter.middle === "oven" && startFold(pt, counter.board!))) pt.mode = "board";
+    } else if (hit.type === "stack") {
       const s = counter.stacks[hit.idx];
       startHold(pt, { type: "empty", kind: s.kind, size: s.size, stack: hit.idx });
     } else if (hit.type === "ice") startHold(pt, { type: "ice" });
@@ -1901,8 +1908,10 @@ canvas.addEventListener("pointermove", (e) => {
       if (!s || bandAt(pt.y) !== "counter") break;
       const ls = s.plate.layers;
       if (ls.length && ls[0].piece.kind === "dough" && (ls.length === 1 || !(AFTER_OVEN.has(ls[ls.length - 1].piece.kind)))) {
-        // A flatbread comes off whole (back in the oven, on the board or another tray); what went on after the oven peels off first.
-        startHold(pt, { type: "stack", layers: ls.splice(0), fromPlate: pt.plate });
+        // A flatbread only moves on the peel (what went on after the oven still peels off by hand).
+        showHint("Flatbreads move on the peel: carry it up here, slide it under, and swipe up.", 2.5);
+        pt.mode = "none";
+        break;
       } else if (ls.length && ls[0].piece.folded) {
         // A quesadilla comes off whole, to go back on the comal or another tray.
         startHold(pt, { type: "stack", layers: ls.splice(0), fromPlate: pt.plate });
@@ -1976,39 +1985,24 @@ canvas.addEventListener("pointermove", (e) => {
     case "ladle":
       paintLadle(pt);
       break;
-    case "peel": {
-      const ls = counter.peel.layers;
-      if (!ls.length) break;
+    case "fold":
       if (pt.peelFold) {
-        const q = counter.peelPoint(counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), PEEL_Y), Infinity)!;
-        if (Math.sign(q.x) !== Math.sign(pt.peelFold.x) && Math.abs(q.x) > 0.25) {
-          foldPie();
+        const f = pt.peelFold;
+        const q = counter.buildPoint(counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), f.holder === counter.peel ? PEEL_Y : 0.1), Infinity, f.holder);
+        if (q && Math.sign(q.x) !== Math.sign(f.x) && Math.abs(q.x) > 0.25) {
+          foldPie(f.holder);
           pt.mode = "none";
           break;
         }
-        // Up or down the screen, it's a carry after all.
-        if (Math.abs(dy) > 30 && Math.abs(dy) > Math.abs(dx) * 1.2) pt.peelFold = undefined;
-        else break;
-      }
-      if (pt.moved) {
-        counter.setPeel([]);
-        startHold(pt, { type: "stack", layers: ls, peel: true });
+        // Up or down the screen from the peel, it's the peel being picked up after all.
+        if (f.holder === counter.peel && Math.abs(dy) > 30 && Math.abs(dy) > Math.abs(dx) * 1.2) {
+          pt.peelFold = undefined;
+          grabPeel(pt);
+        }
       }
       break;
-    }
-    case "spot":
-      if (pt.moved && pt.hit?.type === "spot") {
-        const i = pt.hit.idx;
-        const s = counter.ovenSpots[i];
-        if (!s.layers.length || s.turnT >= 0) {
-          pt.mode = "none";
-          break;
-        }
-        const layers = s.layers;
-        counter.setSpot(i, []);
-        startHold(pt, { type: "stack", layers, spot: i });
-        hintOnce("oven-out", counter.board?.on && !layers[0].piece.folded ? "Out it comes. Put it on the board to cut it in four, then up to the tray." : "Out it comes: drag it up to the tray. Basil, rocket and honey go on there.", 3);
-      }
+    case "peel":
+      movePeel(pt);
       break;
     case "board": {
       const bd = counter.board!;
@@ -2016,6 +2010,9 @@ canvas.addEventListener("pointermove", (e) => {
       if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.3) {
         // A swipe across the board cuts the sandwich in half.
         cutOnBoard();
+        pt.mode = "none";
+      } else if (counter.middle === "oven" && (Math.abs(dy) > 24 || bandAt(pt.y) !== "counter")) {
+        showHint("Lift it with the peel: slide the blade under it and swipe up.", 2);
         pt.mode = "none";
       } else if (Math.abs(dy) > 24 || bandAt(pt.y) !== "counter") {
         const layers = bd.layers;
@@ -2178,8 +2175,11 @@ function pressDrop(pt: Pointer, payload: Extract<Payload, { type: "stack" | "pie
 }
 
 // ---------------------------------------------------------------------------
-// The hearth oven (Orchard Isle): flatbreads are built on the peel, slid into the oven, turned
-// with a tap, and come out to the board (Port Amber) or the tray.
+// The oven (Orchard Isle; DESIGN §24, after build #69). Flatbreads are built on the peel as it
+// lies at home (or on the bench), and only the peel moves them: drag it by its handle, slide the
+// blade under a pie and swipe up to lift it, swipe down to set it down where the blade is (in
+// the oven, on the bench or board, on a tray), and nudge a pie in the oven with the blade's edge
+// to spin its pale side round to the hot back wall.
 
 /** The order a pie on the counter is being built for: the one it was started for, else the active one. */
 function pieOrder(d: Piece | undefined): Order | null {
@@ -2188,11 +2188,28 @@ function pieOrder(d: Piece | undefined): Order | null {
   return s?.order ?? game.slots[game.active]?.order ?? null;
 }
 
-/** A tap at the oven: a base from the dough stack onto the peel, or one piece from a pan onto the pie there. */
+/** An unbaked pie being built: on the peel at home first, else on the bench or board. */
+function buildHolder(): PieHolder | null {
+  const open = (h: PieHolder) => {
+    const d = h.layers[0]?.piece;
+    return !!d && !d.folded && paleSide(d) <= 0.2;
+  };
+  if (counter.peelHome && open(counter.peel)) return counter.peel;
+  if (open(counter.rest)) return counter.rest;
+  return null;
+}
+/** Redraw a holder after its layers changed. */
+function syncHolder(h: PieHolder): void {
+  if (h === counter.peel) counter.setPeel(h.layers);
+  else counter.setRest(h.layers);
+}
+
+/** A tap at the oven: a base from the dough stack onto the peel (or the bench), or one piece from a pan onto the pie being built. */
 function ovenTap(piece: Piece): void {
   if (piece.kind === "dough") {
-    if (counter.peel.layers.length) return void showHint("The peel's taken: slide that pie into the oven first.", 2);
-    putBaseOnPeel([{ piece, offX: 0, offZ: 0 }]);
+    if (counter.peelHome && !counter.peel.layers.length) putBase(counter.peel, [{ piece, offX: 0, offZ: 0 }]);
+    else if (!counter.rest.layers.length) putBase(counter.rest, [{ piece, offX: 0, offZ: 0 }]);
+    else showHint("The peel and the bench are both taken: get a pie into the oven first.", 2.5);
     return;
   }
   const plate = game.slots[game.active].plate;
@@ -2201,18 +2218,21 @@ function ovenTap(piece: Piece): void {
     sfx.plop();
     return;
   }
-  if (counter.peel.layers.length) {
-    addToPeel(piece);
+  const h = buildHolder();
+  if (h) {
+    addToPie(h, piece);
     return;
   }
-  showHint(AFTER_OVEN.has(piece.kind) ? `${KIND_LABEL[piece.kind]} goes on after the oven, with the flatbread on the tray.` : "Lay a dough base on the peel first: tap the dough.", 2.5);
+  const any = counter.peel.layers.length || counter.rest.layers.length;
+  showHint(AFTER_OVEN.has(piece.kind) ? `${KIND_LABEL[piece.kind]} goes on after the oven, with the flatbread on the tray.` : any ? "Toppings go on before the oven, on a base that's still raw." : "Lay a dough base on the peel first: tap the dough.", 2.5);
 }
 
-/** A fresh base (or a pie brought back) onto the empty peel. */
-function putBaseOnPeel(layers: Layer[]): void {
+/** A fresh base onto the empty peel or bench. */
+function putBase(h: PieHolder, layers: Layer[]): void {
   const d = layers[0].piece;
   if (d.forOrder === undefined) d.forOrder = game.slots[game.active]?.order?.id;
-  counter.setPeel(layers);
+  h.layers = layers;
+  syncHolder(h);
   sfx.plop();
   if (layers.length === 1 && paleSide(d) < 0.05) {
     const o = pieOrder(d);
@@ -2221,15 +2241,15 @@ function putBaseOnPeel(layers: Layer[]): void {
   }
 }
 
-/** One piece from a pan onto the pie on the peel. */
-function addToPeel(piece: Piece): boolean {
-  const ls = counter.peel.layers;
+/** One piece from a pan onto a pie being built. */
+function addToPie(h: PieHolder, piece: Piece): boolean {
+  const ls = h.layers;
   const d = ls[0]?.piece;
   if (!d) return showHint("Lay a dough base on the peel first.", 2), false;
   if (d.folded) return showHint("It's folded already: the filling goes in before the fold.", 2), false;
   if (paleSide(d) > 0.2) return showHint("It's been baked. Toppings go on before the oven; basil, rocket and honey on the tray.", 2.5), false;
   ls.push({ piece, offX: 0, offZ: 0 });
-  counter.setPeel(ls);
+  syncHolder(h);
   sfx.plop();
   const o = pieOrder(d);
   if (COUNTED.has(piece.kind)) {
@@ -2239,80 +2259,234 @@ function addToPeel(piece: Piece): boolean {
   }
   if (AFTER_OVEN.has(piece.kind) && o?.layers.find((e) => e.kind === piece.kind)?.after) hintOnce("after-oven", `${KIND_LABEL[piece.kind]} goes on after the oven, at the tray, or it wilts.`, 3);
   else if (o?.layers[0]?.folded && !d.folded) hintOnce("calzone-fold", "A calzone: once it's filled, press near the side of the dough and drag across the middle to fold it.", 4);
+  else if (h === counter.peel) hintOnce("peel-carry", "When it's built, drag the peel by its handle into the oven and swipe down to slide the pie off.", 4);
   return true;
 }
 
-/** Fold the pie on the peel over into a calzone. */
-function foldPie(): void {
-  const ls = counter.peel.layers;
+/** Fold a pie being built over into a calzone. */
+function foldPie(h: PieHolder): void {
+  const ls = h.layers;
   const d = ls[0]?.piece;
   if (!d) return;
   d.folded = true;
-  counter.setPeel([...ls]);
+  h.layers = [...ls];
+  syncHolder(h);
   sfx.flip();
   buzz(15);
-  hintOnce("calzone-in", "Folded! Into the oven with it. A calzone is thick: turn it twice.", 3.5);
+  hintOnce("calzone-in", "Folded! Into the oven with it on the peel. A calzone is thick: nudge it round twice.", 3.5);
 }
 
-/** A press on the peel: a carry, or (near the side of an unbaked pie) the start of a fold. */
+/** A press near the side of an unbaked pie on the peel (at home) or the bench: the start of a fold. False if it isn't one. */
+function startFold(pt: Pointer, h: PieHolder): boolean {
+  const d = h.layers[0]?.piece;
+  if (!d || d.folded || paleSide(d) > 0.1) return false;
+  if (h === counter.peel && !counter.peelHome) return false;
+  const q = counter.buildPoint(counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), h === counter.peel ? PEEL_Y : 0.1), 1.3, h);
+  if (!q || Math.abs(q.x) < 0.4 || Math.abs(q.z) > 0.9) return false;
+  pt.mode = "fold";
+  pt.peelFold = { holder: h, x: q.x, z: q.z };
+  return true;
+}
+
+/** A press on the peel: the start of a fold (near the side of the raw pie on it), or the peel taken in hand. */
 function startPeel(pt: Pointer): void {
+  if (startFold(pt, counter.peel)) return;
+  grabPeel(pt);
+}
+function grabPeel(pt: Pointer): void {
   pt.mode = "peel";
-  const d = counter.peel.layers[0]?.piece;
-  if (!d || d.folded || paleSide(d) > 0.1) return;
-  const q = counter.peelPoint(counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), PEEL_Y), Infinity)!;
-  if (Math.abs(q.x) > 0.4 && Math.abs(q.z) < 0.9) pt.peelFold = q;
+  peelJust = null;
+  pt.flickT = -Infinity;
+  counter.grabPeel(ndcIn(bands.counter, pt.x, pt.y));
+  sfx.pop();
+  const full = counter.peel.layers.length > 0;
+  hintOnce(full ? "peel-launch" : "peel-scoop", full ? "Over a free spot in the oven, swipe down to slide the pie off." : "Slide the blade right under a pie and swipe up to lift it onto the peel.", 3.5);
 }
 
-/** Drop a pie or a piece on the oven counter: in the oven, on the peel or on the board. True if it was taken. */
-function ovenDrop(pt: Pointer, payload: Extract<Payload, { type: "stack" | "piece" }>): boolean {
-  const ndc = ndcIn(bands.counter, pt.x, pt.y);
-  const layers: Layer[] = payload.type === "stack" ? payload.layers : [{ piece: payload.piece, offX: 0, offZ: 0 }];
+/** The peel follows the finger; over the trays it shows over the tray it would serve to. A quick swipe up or down scoops or drops. */
+function movePeel(pt: Pointer): void {
+  const band = bandAt(pt.y);
+  counter.movePeel(band === "counter" ? ndcIn(bands.counter, pt.x, pt.y) : null);
+  const slot = band === "tray" ? trayView.pick(ndcIn(bands.tray, pt.x, pt.y)) : band === "customers" ? game.active : -1;
+  showPeelGhost(slot);
+  // Once the blade has left where it last scooped or set down, a swipe there counts again.
+  const here = band === "counter" ? targetKey(counter.peelTarget()) : slot >= 0 ? `slot${slot}` : null;
+  if (peelJust && here !== peelJust) peelJust = null;
+  const f = flickOf(pt.samples, pt.flickT);
+  if (f) {
+    pt.flickT = pt.samples[pt.samples.length - 1].t + 1;
+    peelFlick(pt, f);
+  }
+}
+
+/** The peel (and its pie) drawn hovering over a tray while it's carried up there. */
+let peelGhost: { key: string; obj: THREE.Object3D } | null = null;
+function showPeelGhost(slot: number): void {
+  if (slot < 0) {
+    trayView.showGhost(-1, null);
+    return;
+  }
+  const key = counter.peel.layers.map((l) => l.piece.uid).join(",");
+  if (!peelGhost || peelGhost.key !== key) {
+    if (peelGhost) disposeObject(peelGhost.obj);
+    const g = new THREE.Group();
+    const peel = makePeel();
+    peel.scale.setScalar(1 / GRILL_SCALE);
+    g.add(peel);
+    if (counter.peel.layers.length) {
+      const fb = makeFlatbread(counter.peel.layers.map((l) => l.piece));
+      fb.position.y = PEEL.y / GRILL_SCALE + 0.01;
+      g.add(fb);
+    }
+    peelGhost = { key, obj: g };
+  }
+  trayView.showGhost(slot, peelGhost.obj);
+}
+
+/** Where the peel last scooped a pie from, or set one down, until the blade leaves it: the swipe back the other way there is just the carry. */
+let peelJust: string | null = null;
+const targetKey = (t: PeelTarget | null): string | null => (t ? (t.kind === "spot" ? `spot${t.idx}` : t.kind) : null);
+
+/** A swipe with the peel in hand: up to scoop the pie the blade is under, down to set its pie down there. */
+function peelFlick(pt: Pointer, f: Flick): void {
+  const fromBand = bandAt(f.from.y);
+  const full = counter.peel.layers.length > 0;
+  if (fromBand === "tray" || fromBand === "customers") {
+    const slot = fromBand === "tray" ? trayView.pick(ndcIn(bands.tray, f.from.x, f.from.y)) : game.active;
+    if (slot < 0) return;
+    const plate = game.slots[slot].plate;
+    if (peelJust === `slot${slot}`) return;
+    if (f.dir === "down" && full) {
+      const layers = counter.peel.layers;
+      if (plate.layers.length) return void showHint("That tray already has food on it.", 1.8);
+      if (paleSide(layers[0].piece) < 0.12) hintOnce("raw-pie", "That one hasn't been in the oven yet!", 2);
+      if (!addToPlate(slot, { type: "stack", layers }, 0)) return;
+      counter.setPeel([]);
+      peelJust = `slot${slot}`;
+      setActive(slot);
+      sfx.plop();
+      buzz(12);
+      showPeelGhost(slot);
+      const after = pieOrder(layers[0].piece)?.layers.some((l) => l.after);
+      hintOnce("pie-served", after ? "On the tray. Basil, rocket and honey go on now, then swipe the tray up." : "On the tray. Swipe the tray up to hand it over.", 3);
+    } else if (f.dir === "up" && !full && plate.layers[0]?.piece.kind === "dough") {
+      counter.setPeel(plate.layers.splice(0));
+      peelJust = `slot${slot}`;
+      syncTray(slot, false);
+      sfx.whoosh();
+      showPeelGhost(slot);
+    }
+    return;
+  }
+  if (fromBand !== "counter") return;
+  // The swipe acts where the peel was when it began.
+  const from = ndcIn(bands.counter, f.from.x, f.from.y);
+  const b = counter.bladeAt(from);
+  const t = counter.peelTarget(b);
+  if (targetKey(t) && targetKey(t) === peelJust) return;
+  const act = (key: string | null) => {
+    // The swipe doesn't carry the peel along: it stays where the swipe began.
+    counter.anchorPeel(from, ndcIn(bands.counter, pt.x, pt.y));
+    peelJust = key;
+  };
+  if (f.dir === "up") {
+    if (full) return;
+    if (t?.kind === "spot" && counter.ovenSpots[t.idx].layers.length) {
+      const layers = counter.ovenSpots[t.idx].layers;
+      act(targetKey(t));
+      counter.setSpot(t.idx, []);
+      counter.setPeel(layers);
+      sfx.whoosh();
+      buzz(12);
+      hintOnce("oven-out", counter.board?.on && !layers[0].piece.folded ? "Out it comes. Set it on the board to cut it in four (swipe down over it), then up to a tray." : "Out it comes. Carry it up to a tray and swipe down. Basil, rocket and honey go on there.", 3.5);
+    } else if (t?.kind === "rest" && counter.rest.layers.length) {
+      act("rest");
+      counter.setPeel(counter.rest.layers);
+      counter.setRest([]);
+      sfx.whoosh();
+      buzz(12);
+    } else if (b.z < 0.2) hintOnce("scoop-under", "Slide the blade right under a pie, then swipe up to lift it.", 2.5);
+    return;
+  }
+  if (!full) return;
+  const layers = counter.peel.layers;
   const d = layers[0].piece;
-  const pie = d.kind === "dough";
-  if (pie && counter.overBoard(counter.groundPoint(ndc, 0.12))) {
-    if (counter.board!.layers.length) return showHint("The board's taken.", 1.5), false;
-    counter.setBoard(layers);
+  if (t?.kind === "trash") {
+    act("trash");
+    counter.setPeel([]);
+    sfx.thud();
+    buzz(20);
+    return;
+  }
+  if (t?.kind === "rest") {
+    if (counter.rest.layers.length) return void showHint(counter.rest === counter.board ? "The board's taken." : "The bench is taken.", 1.5);
+    act("rest");
+    counter.setRest(layers);
+    counter.setPeel([]);
     sfx.plop();
-    if (!d.folded) hintOnce("cut-four", "Swipe across the flatbread to cut it, and again the other way for four.", 3.5);
+    if (counter.rest === counter.board && !d.folded && paleSide(d) > 0.2) hintOnce("cut-four", "Swipe across the flatbread to cut it, and again the other way for four.", 3.5);
+    return;
+  }
+  let si = t?.kind === "spot" ? t.idx : -1;
+  if (si >= 0 && counter.ovenSpots[si].layers.length) {
+    const near = counter.nearFreeSpot(b);
+    if (near < 0) return void showHint(counter.ovenSpots.slice(0, counter.ovenCount).every((s) => s.layers.length) ? "The oven's full." : "That spot's taken.", 1.5);
+    si = near;
+  }
+  if (si < 0) si = counter.nearFreeSpot(b);
+  if (si < 0) {
+    if (b.z < 0.4) showHint("Swipe down over a free spot in the oven, the bench or a tray.", 2);
+    return;
+  }
+  act(`spot${si}`);
+  counter.setSpot(si, layers);
+  counter.setPeel([]);
+  sfx.sizzleHit();
+  buzz(10);
+  if (d.folded) hintOnce("oven-calzone", "A calzone bakes slower and catches quicker: nudge it round about a third of the way, and again later.", 4);
+  else hintOnce("oven-turn", "In it goes. The half facing the hot back wall bakes twice as fast: about halfway, set the peel's tip against the front of the pie and slide it sideways to spin it round.", 4.5);
+}
+
+function endPeel(pt: Pointer, cancelled: boolean): void {
+  if (!cancelled) {
+    const f = flickOf(pt.samples, pt.flickT);
+    if (f) peelFlick(pt, f);
+    else if (!pt.moved) peelTapHint();
+  }
+  counter.releasePeel();
+  trayView.showGhost(-1, null);
+}
+function peelTapHint(): void {
+  const ls = counter.peel.layers;
+  const raw = ls.length && paleSide(ls[0].piece) <= 0.2;
+  showHint(!ls.length ? "Drag the peel by its handle. Slide it under a pie and swipe up to lift it; tap the dough for a new base." : raw && !ls[0].piece.folded ? "Sauce it and add the toppings, then drag the peel into the oven and swipe down." : "Drag the peel by its handle and swipe down where the pie should go.", 2.6);
+}
+
+/** A piece dropped on the oven counter: onto a pie being built (on the peel at home, the bench or board). True if it was taken. */
+function ovenDrop(pt: Pointer, payload: Extract<Payload, { type: "stack" | "piece" }>): boolean {
+  if (payload.type !== "piece") return false;
+  const ndc = ndcIn(bands.counter, pt.x, pt.y);
+  if (payload.piece.kind === "dough") {
+    const h = counter.overBuild(counter.groundPoint(ndc, 0.1));
+    if (!h) return false;
+    if (h.layers.length) return showHint(h === counter.peel ? "The peel's taken." : "That's taken.", 1.5), false;
+    putBase(h, [{ piece: payload.piece, offX: 0, offZ: 0 }]);
     return true;
   }
-  let si = counter.overSpot(counter.groundPoint(ndc, HEARTH_Y));
-  if (si >= 0) {
-    if (!pie) return showHint("Toppings go on at the peel, before the oven.", 2), false;
-    if (counter.ovenSpots[si].layers.length) {
-      si = counter.ovenSpots.findIndex((s, i) => i < counter.ovenCount && !s.layers.length);
-      if (si < 0) return showHint("The oven's full.", 1.5), false;
-    }
-    counter.setSpot(si, layers);
-    sfx.sizzleHit();
-    buzz(10);
-    if (d.folded) hintOnce("oven-calzone", "A calzone bakes slower and catches quicker: tap it to turn it about a third of the way, and again later.", 4);
-    else hintOnce("oven-turn", "In it goes. The side facing the fire bakes twice as fast: tap the pie once, about halfway, to turn it.", 4);
-    return true;
-  }
-  if (counter.overPeel(counter.groundPoint(ndc, PEEL_Y))) {
-    if (pie) {
-      if (counter.peel.layers.length) return showHint("The peel's taken.", 1.5), false;
-      putBaseOnPeel(layers);
-      return true;
-    }
-    if (payload.type !== "piece") return false;
-    return addToPeel(payload.piece);
-  }
+  const q = counter.buildPoint(counter.groundPoint(ndc, 0.1), 1.4);
+  if (q) return addToPie(q.holder, payload.piece);
+  if (counter.ovenSpots.some((s, i) => i < counter.ovenCount && s.layers.length && counter.groundPoint(ndc, HEARTH_Y).distanceTo(counter.spotPoint(i)) < 0.9)) return showHint("Toppings go on before the oven.", 2), false;
   return false;
 }
 
-/** Tomato sauce from the pot, or olive oil from its bottle, spread straight onto the pie on the peel. */
-let ladle: { kind: SauceKind; obj: THREE.Object3D; last: number } | null = null;
+/** Tomato sauce from the pot, or olive oil from its bottle, spread straight onto a pie being built. */
+let ladle: { kind: SauceKind; obj: THREE.Object3D; last: number; holder: PieHolder | null } | null = null;
 function startLadle(pt: Pointer, kind: SauceKind): void {
-  const d = counter.peel.layers[0]?.piece;
-  if (!d) {
-    showHint("Lay a dough base on the peel first: tap the dough.", 2);
+  const h = buildHolder();
+  if (!h) {
+    const any = counter.peel.layers.length || counter.rest.layers.length;
+    showHint(any ? "Sauce goes on a raw base, before the oven." : "Lay a dough base on the peel first: tap the dough.", 2);
     buzz(10);
-    return;
-  }
-  if (d.folded || paleSide(d) > 0.2) {
-    showHint(d.folded ? "It's folded already." : "It's been baked.", 1.5);
     return;
   }
   pt.mode = "ladle";
@@ -2320,7 +2494,7 @@ function startLadle(pt: Pointer, kind: SauceKind): void {
   if (kind === "oil") counter.liftSauce("oil");
   const obj = kind === "redsauce" ? makeSauceLadle() : counter.sauceBottle(kind);
   counter.setHeld(obj);
-  ladle = { kind, obj, last: 0 };
+  ladle = { kind, obj, last: 0, holder: null };
   paintLadle(pt);
   sfx.pop();
   if (kind === "redsauce") hintOnce("ladle", "Spread it in a spiral from the middle out, to just inside the crust. Watch the bar on the left.", 3.5);
@@ -2333,19 +2507,22 @@ function paintLadle(pt: Pointer): void {
   l.obj.visible = bandAt(pt.y) === "counter";
   l.obj.position.copy(g).add(new THREE.Vector3(0, l.kind === "redsauce" ? 0.0 : 0.25, 0));
   if (bandAt(pt.y) !== "counter") return;
-  const q0 = counter.peelPoint(g);
-  if (!q0) return;
-  const r = Math.hypot(q0.x, q0.z);
-  const q = r > 1 ? { x: q0.x / r, z: q0.z / r } : q0;
-  const ls = counter.peel.layers;
-  if (!ls.length) return;
+  const hit = counter.buildPoint(g, 1.15, l.holder ?? undefined);
+  if (!hit) return;
+  const h = hit.holder;
+  const d = h.layers[0]?.piece;
+  if (!d || d.folded || paleSide(d) > 0.2) return;
+  l.holder = h;
+  const r = Math.hypot(hit.x, hit.z);
+  const q = r > 1 ? { x: hit.x / r, z: hit.z / r } : { x: hit.x, z: hit.z };
+  const ls = h.layers;
   let top = ls[ls.length - 1];
   // Carrying on with the same sauce keeps spreading the same layer.
   if (top.piece.kind !== l.kind || !top.piece.stroke) {
     const p = newPiece(l.kind);
     p.stroke = [];
     ls.push({ piece: p, offX: 0, offZ: 0 });
-    counter.setPeel(ls);
+    syncHolder(h);
     top = ls[ls.length - 1];
   }
   const st = top.piece.stroke!;
@@ -2359,22 +2536,24 @@ function paintLadle(pt: Pointer): void {
     }
   }
 }
+function ladleStroke(l: { kind: SauceKind; holder: PieHolder | null }) {
+  return (l.holder ?? buildHolder())?.layers.find((x) => x.piece.kind === l.kind)?.piece.stroke;
+}
 function endLadle(pt: Pointer, cancelled: boolean): void {
   const l = ladle;
   ladle = null;
   if (!l) return;
   counter.setHeld(null);
   if (l.kind === "oil") counter.liftSauce(null);
-  const st = counter.peel.layers.find((x) => x.piece.kind === l.kind)?.piece.stroke;
-  if (!cancelled && !pt.moved) showHint(l.kind === "redsauce" ? "Hold the ladle and spread the sauce over the base on the peel." : "Hold the bottle and drizzle it over the base on the peel.", 2.5);
+  const st = ladleStroke(l);
+  if (!cancelled && !pt.moved) showHint(l.kind === "redsauce" ? "Hold the ladle and spread the sauce over the base." : "Hold the bottle and drizzle it over the base.", 2.5);
   else if (st && l.kind === "redsauce" && sauceCoverage(st, sauceRadius("redsauce")) < LADLE_BAND.lo) hintOnce("ladle-more", "A bit more sauce: right out to the crust.", 2);
   sfx.pop();
 }
 /** How much of the base the sauce being spread covers, for the level bar. */
 function ladleLevel(): null | { v: number; kind: SauceKind } {
   if (!ladle) return null;
-  const st = counter.peel.layers.find((x) => x.piece.kind === ladle!.kind)?.piece.stroke;
-  return { v: sauceCoverage(st, sauceRadius(ladle.kind)), kind: ladle.kind };
+  return { v: sauceCoverage(ladleStroke(ladle), sauceRadius(ladle.kind)), kind: ladle.kind };
 }
 
 function endPointer(e: PointerEvent, cancelled: boolean): void {
@@ -2459,23 +2638,16 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       endLadle(pt, cancelled);
       break;
     case "peel":
-      if (!cancelled && !pt.moved) {
-        const ls = counter.peel.layers;
-        showHint(!ls.length ? "Drag a dough base from the stack onto the peel." : ls[0].piece.folded ? "Drag it into the oven." : "Sauce it and add the toppings, then drag it into the oven.", 2.2);
-      }
+      endPeel(pt, cancelled);
       break;
+    case "fold":
+      if (!cancelled && !pt.moved) peelTapHint();
+      break;
+    case "bench":
     case "spot":
-      if (!cancelled && pt.hit?.type === "spot" && !pt.moved) {
-        const i = pt.hit.idx;
-        const s = counter.ovenSpots[i];
-        if (!s.layers.length) showHint("Slide a pie in from the peel.", 1.8);
-        else if (counter.turnPie(i)) {
-          sfx.flip();
-          buzz(15);
-          const d = s.layers[0].piece;
-          if (d.folded) hintOnce("turn-calzone", "Turned. A calzone is thick: turn it again later so the far side catches up.", 3);
-          else hintOnce("turn-done", "Turned! Now the other side faces the fire. Once is right for a flatbread.", 3);
-        }
+      if (!cancelled && !pt.moved) {
+        const s = pt.mode === "spot" && pt.hit?.type === "spot" ? counter.ovenSpots[pt.hit.idx] : counter.bench;
+        showHint(s.layers.length ? "Pies move on the peel: drag it by the handle, slide the blade under, and swipe up to lift." : pt.mode === "spot" ? "Carry a pie in on the peel and swipe down to slide it off." : "Set a pie down here off the peel: swipe down over the bench.", 2.6);
       }
       break;
     case "sauce":
@@ -3353,8 +3525,8 @@ function tick(dt: number): void {
 
     if (counter.middle === "oven") {
       const o = game.slots[game.active]?.order;
-      if (o?.layers[0]?.folded) hintOnce("calzone-order", "A calzone: build it on the peel, then drag the dough's edge across the middle to fold it. Turn it twice in the oven.", 4.5);
-      else if (o?.slice) hintOnce("slice-pie", "Port Amber cuts its flatbreads in four: after the oven, put it on the board and swipe across it twice.", 4.5);
+      if (o?.layers[0]?.folded) hintOnce("calzone-order", "A calzone: build it on the peel, then drag the dough's edge across the middle to fold it. Nudge it round twice in the oven.", 4.5);
+      else if (o?.slice) hintOnce("slice-pie", "Port Amber cuts its flatbreads in four: after the oven, set it on the board with the peel and swipe across it twice.", 4.5);
       else if (o?.layers.some((l) => l.after)) hintOnce("after-order", "Basil, rocket and honey go on after the oven, once the flatbread is on the tray.", 4);
     } else if (counter.middle === "press") {
       const o = game.slots[game.active]?.order;
@@ -3431,15 +3603,25 @@ counter.events.done = () => {
   if (game.phase === "playing" && has("timer")) sfx.tick();
 };
 counter.events.burning = () => {
-  const where = counter.middle === "press" ? "in the press" : "on the grill";
+  const where = counter.middle === "press" ? "in the press" : counter.middle === "oven" ? "in the oven" : "on the grill";
   if (counter.page !== HOME_PAGE) showHint(`Something's burning ${where}! ←`, 2.5);
+  else if (counter.middle === "oven") hintOnce("burning-oven", "That pie's catching on the hot side! Nudge it round with the peel, or lift it out.", 3);
   else hintOnce("burning", counter.middle === "press" ? "Smoke means burning! Lift the lid and get it out." : "Smoke means burning! Drag it to the trash can.", 2.5);
+};
+// The peel nudging a pie in the oven round: a soft scrape as it goes, a flip sound once the other half faces the heat.
+counter.events.nudge = () => sfx.whoosh();
+counter.events.turned = (i) => {
+  sfx.flip();
+  buzz(12);
+  const d = counter.ovenSpots[i]?.layers[0]?.piece;
+  if (d?.folded) hintOnce("turn-calzone", (d.turns ?? 0) >= 2 ? "Turned twice: that calzone will bake through." : "Turned. A calzone is thick: nudge it round again later so the far side catches up.", 3);
+  else hintOnce("turn-done", "Turned! The other half faces the hot wall now. Once is right for a flatbread.", 3);
 };
 
 /** Soda lost to overflows this shift, in whole dollars. */
-/** The pie being made for an order, wherever it is on the oven counter (peel, oven or board), or null. */
+/** The pie being made for an order, wherever it is on the oven counter (peel, oven, bench or board), or null. */
 function piesFor(id: number): Layer[] | null {
-  const holders: PieHolder[] = [counter.peel, ...counter.ovenSpots.slice(0, counter.ovenCount), ...(counter.board?.on ? [counter.board] : [])];
+  const holders: PieHolder[] = [counter.peel, ...counter.ovenSpots.slice(0, counter.ovenCount), counter.rest];
   return holders.find((h) => h.layers[0]?.piece.kind === "dough" && h.layers[0].piece.forOrder === id)?.layers ?? null;
 }
 
@@ -3808,7 +3990,7 @@ function updatePressTags(): void {
   });
 }
 
-/** A meter in front of each pie in the oven: its paler side's bake, and when to turn it. */
+/** A meter in front of each pie in the oven: its paler side's bake, and when to nudge it round. */
 const ovenTags: HTMLElement[] = [];
 function updateOvenTags(): void {
   const on = game.phase === "playing" && counter.middle === "oven" && counter.page === HOME_PAGE && counter.settled;
@@ -3820,13 +4002,12 @@ function updateOvenTags(): void {
       ui.root.appendChild(el);
     }
     const d = on && i < counter.ovenCount ? s.layers[0]?.piece : undefined;
-    el.hidden = !d || d.kind !== "dough" || s.turnT >= 0;
+    el.hidden = !d || d.kind !== "dough";
     if (el.hidden || !d) return;
     const lead = fireLead(d) / ovenLead(d);
-    const want = d.folded ? 2 : 1;
     const turns = d.turns ?? 0;
-    // The chip says when to turn: soon, now (the fire side is running away), or that it's been turned.
-    const chip = lead > 1 ? `<em class="turn hot">Turn!</em>` : lead > 0.6 ? `<em class="turn">Turn</em>` : turns ? `<em class="turn on">Turned${turns > 1 ? ` ×${turns}` : ""}</em>` : want > 1 && turns === 0 ? "" : "";
+    // The chip says when to nudge it round: soon, now (the hot side is running away), or that it's been turned.
+    const chip = lead > 1 ? `<em class="turn hot">↻ Nudge!</em>` : lead > 0.6 ? `<em class="turn">↻ Nudge</em>` : turns ? `<em class="turn on">Turned${turns > 1 ? ` ×${turns}` : ""}</em>` : "";
     const html = `${cookMeter("dough", paleSide(d))}${chip}`;
     if (el.innerHTML !== html) el.innerHTML = html;
     const v = counter.spotTagPoint(i).project(counter.camera);
@@ -3967,8 +4148,9 @@ window.addEventListener("blur", cancelPointer);
     const pie = (ls: Layer[]) => ls.map((l) => ({ kind: l.piece.kind, cook: [...l.piece.cook], melt: l.piece.melt ?? 0, turns: l.piece.turns ?? 0, scorch: l.piece.scorch ?? 0, folded: !!l.piece.folded, cuts: l.piece.cuts ?? 0, stroke: l.piece.stroke?.length ?? 0 }));
     return {
       middle: counter.middle,
-      peel: { at: counter.peelPointWorld().toArray(), layers: pie(counter.peel.layers) },
-      spots: counter.ovenSpots.slice(0, counter.ovenCount).map((s, i) => ({ at: counter.spotPoint(i).toArray(), turning: s.turnT >= 0, layers: pie(s.layers) })),
+      peel: { at: counter.peelPointWorld().toArray(), handle: counter.peelHandleWorld().toArray(), held: counter.peelHeld, home: counter.peelHome, layers: pie(counter.peel.layers), target: counter.peelTarget() },
+      spots: counter.ovenSpots.slice(0, counter.ovenCount).map((s, i) => ({ at: counter.spotPoint(i).toArray(), spin: s.spin, yaw: s.layers[0]?.piece.yaw ?? 0, layers: pie(s.layers) })),
+      rest: { at: counter.restPoint().toArray(), board: counter.rest === counter.board, layers: pie(counter.rest.layers) },
       board: counter.board?.on ? { at: counter.boardPoint().toArray(), layers: pie(counter.board.layers) } : null,
       dough: counter.doughPoint().toArray(),
       pot: counter.potPoint().toArray(),

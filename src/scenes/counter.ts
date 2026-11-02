@@ -1,12 +1,13 @@
 import * as THREE from "three";
-import { bakeStep, bakeTopping, COMAL_SPEED, cookLevel, COOK_SCALE, DRINK_FILL, fireHalf, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, GRILL_RATE, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, type Cookable } from "../game/cooking";
+import { bakeStep, bakeTopping, COMAL_SPEED, cookLevel, COOK_SCALE, DRINK_FILL, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, GRILL_RATE, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, type Cookable } from "../game/cooking";
 import type { DrinkId, FriesSize, FryKind, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
 import { BREADS, CUP_SPEED, GRILLABLE, isSauce, OVEN_CHEESE, PRESS_CHEESE, PROTEINS, SCOOPED, TORTILLAS } from "../game/types";
 import { fountainFor, type MiddleCounter } from "../game/stops";
 import { BAY, BOARD, CLOSED_GAP, makeCuttingBoard, makePressBay, PLATE, type PressBayObject } from "../render/machines/press";
 import { makeFryTray, makeJalapenoHandful, makeJalapenoTray, makeSugarShaker, SWEET_TRAY } from "../render/fryer";
 import { makeComal, makeTortillaPress, type TortillaPressObject } from "../render/machines/comal";
-import { BATTER, DOUGH, HEARTH, makeBatterBowl, makeDoughStack, makeHearthOven, makePeel, makeSaucePot, PEEL, POT, type HearthOvenObject } from "../render/machines/oven";
+import { BATTER, BENCH, DECK, DOUGH, HEARTH, makeBatterBowl, makeBench, makeDoughStack, makeHearthOven, makePeel, makeSaucePot, PEEL, PEEL_REACH, POT, type HearthOvenObject } from "../render/machines/oven";
+import { nudgeSpin, pieYawOf, spinPie, underPie, type XZ } from "../game/peel";
 import { INNER_RX, INNER_RZ, makeFlatbread, PIE, pieYaw, type FlatbreadObject } from "../render/flatbread";
 import { QUESO } from "../render/sides";
 import { tickTacos } from "../render/tacos";
@@ -96,23 +97,27 @@ export const MAX_BAYS = 3;
 /** Kinds that go in the row of pans behind the press. */
 const PRESS_BACK = (k: Kind) => BREADS.has(k) || PROTEINS.has(k) || k === "tuna";
 /**
- * The oven page (Orchard Isle), in the grill page's place: the hearth oven across the back (its
- * dome, the fire at the back left), the pies on the hearth in front of the dome's mouth with a
- * meter under each, the cold rail down the left as at the press, and the front strip: dough
- * bases and the tomato pot on the left, the peel in the middle, the oil and honey caddy front
- * right and, at Port Amber, the board below it.
+ * The oven page (Orchard Isle), in the grill page's place (DESIGN §24, after build #69): the deck
+ * oven across the back, its pies in a row on the deck with a meter under each, the cold rail down
+ * the left as at the press, and the front strip in three columns: the dough bases over the marble
+ * bench (Port Amber's cutting board in its place) on the left, the peel lying in the middle with
+ * its handle toward the front, and the sauce pot over the oil and honey caddy on the right.
  */
-const OVEN_Z = -1.12;
-const OVEN_XS: Record<number, number[]> = { 1: [1.4], 2: [0.45, 2.6], 3: [-0.55, 1.45, 3.45] };
+const OVEN_Z = -1.6;
+const OVEN_XS: Record<number, number[]> = { 1: [1.35], 2: [0.4, 2.5], 3: [-0.4, 1.45, 3.3] };
 export const MAX_OVEN = 3;
-const PEEL_AT = { x: 1.25, z: 0.98 };
-const DOUGH_AT = { x: -0.72, z: 0.5 };
-const POT_AT = { x: -0.72, z: 2.05 };
-const OVEN_CADDY = { x: 3.2, z: 0.52 };
-/** The board at Port Amber, a little smaller so it sits clear of the peel and fully on screen. */
-const OVEN_BOARD = { x: 3.2, z: 1.95, scale: 0.88 };
-/** Seconds a pie takes to turn round in the oven. */
-const TURN_TIME = 0.4;
+/** Where the peel lies when it's put down (its blade's centre): the spot a pie is built on. */
+const PEEL_HOME = { x: 1.3, z: 1.0 };
+const DOUGH_AT = { x: -0.8, z: 0.55 };
+const BENCH_AT = { x: -0.8, z: 2.15 };
+const POT_AT = { x: 3.3, z: 0.62 };
+const OVEN_CADDY = { x: 3.02, z: 2.2 };
+/** The board at Port Amber, in the bench's place and a little smaller so it fits. */
+const OVEN_BOARD = { x: BENCH_AT.x, z: BENCH_AT.z, scale: 0.88 };
+/** A pie's reach for the peel's nudges (game units: its half width and a little more, so touching the rim counts). */
+const PIE_R = 0.95;
+/** How high the peel rides over the front of the counter while it's carried. */
+const PEEL_HOVER = 0.28;
 /** The fryer's batter bowl (Orchard Isle), at the gravy well's spot. */
 const BATTER_AT = { x: 3.42, z: -2.05 };
 
@@ -349,20 +354,28 @@ export type Hit =
   | { type: "dough" }
   | { type: "pot" }
   | { type: "peel" }
+  | { type: "bench" }
   | { type: "spot"; idx: number }
   | { type: "batter" };
 
-/** Something a pie sits on: the peel, a spot in the oven or the board. */
+/** Something a pie sits on: the peel, a spot in the oven, the bench or the board. */
 export interface PieHolder {
   layers: Layer[];
   food: THREE.Group | null;
   foodKey: string;
 }
-/** One spot on the hearth: page-local centre, and the turn in progress (0..1, or -1). */
-export interface OvenSpot extends PieHolder {
+/** A pie holder with a fixed place on the counter (page-local centre). */
+export interface PiePlace extends PieHolder {
   x: number;
   z: number;
-  turnT: number;
+}
+/** Where the peel can put a pie down, or take one from. */
+export type PeelTarget = { kind: "spot"; idx: number } | { kind: "rest" } | { kind: "trash" };
+/** One spot on the oven's deck: page-local centre, and how fast a nudged pie is still spinning (rad/s). */
+export interface OvenSpot extends PiePlace {
+  spin: number;
+  /** How far the pie is lifted (riding up on the peel's blade, 0..1). */
+  lift: number;
   marker: THREE.Object3D;
   /** The fire side has run too far ahead (so the warning only sounds once per run). */
   warned?: boolean;
@@ -399,6 +412,10 @@ export interface CounterEvents {
   burning: () => void;
   /** Something cooking just reached its done zone (the Kitchen timer bonus ticks). */
   done: () => void;
+  /** The peel nudged a pie in the oven round so its other half faces the hot wall. */
+  turned: (spot: number) => void;
+  /** The peel is nudging a pie round (for a soft scrape, at most every so often). */
+  nudge: () => void;
 }
 
 /**
@@ -493,10 +510,22 @@ export class CounterView {
   private ovenGroup = new THREE.Group();
   private oven!: HearthOvenObject;
   private ovenCaddy: SauceCaddyObject | null = null;
-  /** The pie on the peel, and the hearth's spots (MAX_OVEN built; `ovenCount` of them out). */
+  /** The pie on the peel, and the deck's spots (MAX_OVEN built; `ovenCount` of them out). */
   peel: PieHolder = { layers: [], food: null, foodKey: "" };
   ovenSpots: OvenSpot[] = [];
   ovenCount = 2;
+  /** The marble bench, where a pie can be set down (Port Amber's board stands in for it). */
+  bench: PiePlace = { x: BENCH_AT.x, z: BENCH_AT.z, layers: [], food: null, foodKey: "" };
+  private benchObj!: THREE.Object3D;
+  /** The peel's blade centre (page-local) and height; whether it's in hand, and where the finger holds it. */
+  peelAt = { x: PEEL_HOME.x, z: PEEL_HOME.z, y: 0 };
+  peelHeld = false;
+  private peelObj!: THREE.Object3D;
+  private peelProxy!: THREE.Mesh;
+  private peelGrab = { dx: 0, dz: 0 };
+  private peelNdc: THREE.Vector2 | null = null;
+  private peelLast: XZ | null = null;
+  private nudgeSound = 0;
   private boardProxy: THREE.Mesh | null = null;
   batterBowl!: THREE.Object3D;
   /** Zucchini sitting battered in the bowl (a share of a basket, 0 when empty), and its drawing. */
@@ -509,7 +538,7 @@ export class CounterView {
   private puffs: THREE.Mesh[] = [];
   private held: THREE.Object3D | null = null;
   private time = 0;
-  events: CounterEvents = { golden: () => {}, beep: () => {}, spill: () => {}, burning: () => {}, done: () => {} };
+  events: CounterEvents = { golden: () => {}, beep: () => {}, spill: () => {}, burning: () => {}, done: () => {}, turned: () => {}, nudge: () => {} };
   /** The shadow-casting light, so the graphics setting can soften or disable it. */
   sun: THREE.DirectionalLight;
 
@@ -628,7 +657,7 @@ export class CounterView {
     for (let i = 0; i < MAX_OVEN; i++) {
       const marker = new THREE.Object3D();
       O.add(marker);
-      const s: OvenSpot = { x: 0, z: OVEN_Z, turnT: -1, marker, layers: [], food: null, foodKey: "" };
+      const s: OvenSpot = { x: 0, z: OVEN_Z, spin: 0, lift: 0, marker, layers: [], food: null, foodKey: "" };
       this.proxy(new THREE.BoxGeometry(PIE.rx * 2 * GRILL_SCALE + 0.1, 0.8, PIE.rz * 2 * GRILL_SCALE + 0.3), new THREE.Vector3(), { type: "spot", idx: i }, marker);
       this.ovenSpots.push(s);
     }
@@ -636,18 +665,39 @@ export class CounterView {
     const dough = makeDoughStack();
     dough.position.copy(at(DOUGH_AT.x, 0, DOUGH_AT.z));
     O.add(dough);
-    this.proxy(new THREE.BoxGeometry(DOUGH.w, 0.8, DOUGH.d + 0.2), at(DOUGH_AT.x, 0.3, DOUGH_AT.z), { type: "dough" }, O);
+    this.proxy(new THREE.BoxGeometry(DOUGH.w, 0.8, DOUGH.d), at(DOUGH_AT.x, 0.3, DOUGH_AT.z), { type: "dough" }, O);
+    const bench = makeBench();
+    bench.position.copy(at(BENCH_AT.x, 0, BENCH_AT.z));
+    O.add(bench);
+    this.benchObj = bench;
+    this.proxy(new THREE.BoxGeometry(BENCH.w, 0.7, BENCH.d), at(BENCH_AT.x, 0.3, BENCH_AT.z), { type: "bench" }, bench);
     const pot = makeSaucePot();
     pot.position.copy(at(POT_AT.x, 0, POT_AT.z));
     O.add(pot);
     this.proxy(new THREE.BoxGeometry(POT.r * 2 + 0.4, 1.2, POT.r * 2 + 0.4), at(POT_AT.x, 0.5, POT_AT.z), { type: "pot" }, pot);
     const peel = makePeel();
-    peel.position.copy(at(PEEL_AT.x, 0, PEEL_AT.z));
     O.add(peel);
-    this.proxy(new THREE.BoxGeometry(PEEL.rx * 2 + 0.1, 0.7, PEEL.rz * 2 + 0.25), at(PEEL_AT.x, 0.25, PEEL_AT.z), { type: "peel" }, O);
+    this.peelObj = peel;
+    // The whole peel takes a press, the handle most generously: it's what the finger holds.
+    const len = PEEL.rz * 2 + PEEL_REACH - PEEL.rz + 0.5;
+    this.peelProxy = this.proxy(new THREE.BoxGeometry(PEEL.rx * 2 + 0.1, 0.7, len), new THREE.Vector3(), { type: "peel" }, O);
+    this.placePeel();
   }
 
-  /** Spread the oven spots that are out across the hearth, and hide the rest. */
+  /** Draw the peel (and the pie on it) where it is now. */
+  private placePeel(): void {
+    const { x, y, z } = this.peelAt;
+    this.peelObj.position.copy(this.world(1, x, y, z));
+    const len = PEEL.rz * 2 + PEEL_REACH - PEEL.rz + 0.5;
+    this.peelProxy.position.copy(this.world(1, x, y + 0.25, z - PEEL.rz + len / 2));
+    const f = this.peel.food;
+    if (f) {
+      f.position.copy(this.world(1, x, y + PEEL.y + 0.005, z));
+      f.visible = this.peelObj.visible;
+    }
+  }
+
+  /** Spread the oven spots that are out across the deck, and hide the rest. */
   private layoutOven(): void {
     const xs = OVEN_XS[this.ovenCount] ?? OVEN_XS[2];
     this.ovenSpots.forEach((s, i) => {
@@ -687,50 +737,231 @@ export class CounterView {
   /** Put a pie on the peel (or clear it). */
   setPeel(layers: Layer[]): void {
     this.peel.layers = layers;
-    this.syncFood(this.peel, this.world(1, PEEL_AT.x, PEEL.y + 0.01, PEEL_AT.z));
+    const { x, y, z } = this.peelAt;
+    this.syncFood(this.peel, this.world(1, x, y + PEEL.y + 0.005, z));
+    this.placePeel();
   }
   /** Put a pie in an oven spot (or empty it). */
   setSpot(i: number, layers: Layer[]): void {
     const s = this.ovenSpots[i];
     s.layers = layers;
-    s.turnT = -1;
+    s.spin = 0;
     s.warned = false;
     this.syncFood(s, this.world(1, s.x, HEARTH.y, s.z));
   }
-  /** Start turning the pie in an oven spot round; false if there's nothing to turn or it's mid-turn. */
-  turnPie(i: number): boolean {
-    const s = this.ovenSpots[i];
-    if (!s || i >= this.ovenCount || !s.layers.length || s.turnT >= 0) return false;
-    s.turnT = 0;
-    return true;
+  /** Where a pie can be set down on the counter: the bench, or Port Amber's board in its place. */
+  get rest(): PiePlace {
+    return this.board?.on && this.middle === "oven" ? this.board : this.bench;
   }
-  /** The free oven spot nearest a world point (at hearth height), or -1 if it isn't over the hearth. */
-  overSpot(world: THREE.Vector3): number {
-    const x = world.x - pageX(1);
-    if (world.z < HEARTH.z0 || world.z > HEARTH.z1 + 0.5 || x < HEARTH.x0 - 0.2 || x > HEARTH.x1 + 0.2) return -1;
+  /** Put a pie on the bench or board (or clear it). */
+  setRest(layers: Layer[]): void {
+    if (this.rest === this.board) return this.setBoard(layers);
+    this.bench.layers = layers;
+    this.syncFood(this.bench, this.world(1, this.bench.x, BENCH.h, this.bench.z));
+  }
+  /** Top of the bench or board (page-local height). */
+  private get restTop(): number {
+    return this.rest === this.board ? BOARD.h : BENCH.h;
+  }
+
+  /* ---- the peel ---- */
+
+  /** The peel lies at home (or is sliding back there), not in hand: a pie on it is on the build spot. */
+  get peelHome(): boolean {
+    return !this.peelHeld;
+  }
+  /** Take the peel in hand at the finger (grabbing wherever it was pressed; the handle, usually). */
+  grabPeel(ndc: THREE.Vector2): void {
+    const g = this.groundPoint(ndc, this.peelAt.y + PEEL.y);
+    this.peelGrab = { dx: this.peelAt.x - (g.x - pageX(1)), dz: this.peelAt.z - g.z };
+    this.peelHeld = true;
+    this.peelNdc = ndc.clone();
+    this.peelLast = null;
+    this.peelGrabHome = null;
+  }
+  /** Move the peel with the finger (null: the finger is up over the trays, so it's out of view). */
+  movePeel(ndc: THREE.Vector2 | null): void {
+    this.peelNdc = ndc ? ndc.clone() : null;
+    if (ndc) this.followFinger();
+  }
+  /**
+   * A swipe up or down scoops or drops right where the peel was when the swipe began, so the
+   * swipe itself doesn't carry it along: the blade goes back there, and the finger's hold on it
+   * eases back to where it grabbed over the next moment.
+   */
+  anchorPeel(from: THREE.Vector2, now: THREE.Vector2): void {
+    const a = this.groundPoint(from, this.peelAt.y + PEEL.y);
+    const b = this.groundPoint(now, this.peelAt.y + PEEL.y);
+    this.peelGrabHome ??= { ...this.peelGrab };
+    this.peelGrab.dx += a.x - b.x;
+    this.peelGrab.dz += a.z - b.z;
+    this.followFinger();
+    this.peelLast = null;
+  }
+  private peelGrabHome: { dx: number; dz: number } | null = null;
+  /** Let go of the peel: it goes back to lie at home with whatever is on it. */
+  releasePeel(): void {
+    this.peelHeld = false;
+    this.peelNdc = null;
+    this.peelLast = null;
+  }
+  /** The peel's blade, page-local, while it's held over the counter (null when it's away over the trays). */
+  peelBlade(): XZ | null {
+    return this.peelHeld && !this.peelNdc ? null : { x: this.peelAt.x, z: this.peelAt.z };
+  }
+  /** Height of whatever is under the blade's centre: the deck, the bench, or a hover over the counter. */
+  private surfaceUnder(x: number, z: number): number {
+    // Once the blade's far half is over the deck, it rides on the deck (the tip reaches in to nudge).
+    if (z - PEEL.rz * 0.5 < HEARTH.z1 && x > HEARTH.x0 - 0.3 && x < HEARTH.x1 + 0.3) return HEARTH.y + 0.004;
+    const r = this.rest;
+    if (Math.abs(x - r.x) < BENCH.w / 2 + 0.3 && Math.abs(z - r.z) < BENCH.d / 2 + 0.3) return this.restTop + 0.004;
+    return PEEL_HOVER;
+  }
+  /** Where the blade would be with the finger at `ndc`, at the height it's riding at, kept out of the oven's walls. */
+  bladeAt(ndc: THREE.Vector2): XZ {
+    const g = this.groundPoint(ndc, this.peelAt.y + PEEL.y);
+    let x = g.x - pageX(1) + this.peelGrab.dx;
+    let z = g.z + this.peelGrab.dz;
+    // Inside the mouth, the walls keep the blade on the deck.
+    if (z - PEEL.rz < DECK.z1 - 0.1 && x > HEARTH.x0 - PEEL.rx && x < HEARTH.x1 + PEEL.rx) {
+      x = THREE.MathUtils.clamp(x, DECK.x0 + PEEL.rx - 0.05, DECK.x1 - PEEL.rx + 0.05);
+      z = Math.max(z, DECK.z0 + 0.24 + PEEL.rz);
+    }
+    return { x, z };
+  }
+  /** Put the blade under the finger. */
+  private followFinger(): void {
+    if (!this.peelNdc) return;
+    const b = this.bladeAt(this.peelNdc);
+    this.peelAt.x = b.x;
+    this.peelAt.z = b.z;
+  }
+  /** What the blade (where it is, or at `b`) is over: an oven spot, the bench/board, the trash chute, or nothing. */
+  peelTarget(b: XZ | null = this.peelBlade()): PeelTarget | null {
+    if (!b || this.middle !== "oven") return null;
+    for (let i = 0; i < this.ovenCount; i++) if (underPie(b, this.ovenSpots[i], PEEL)) return { kind: "spot", idx: i };
+    if (underPie(b, this.rest, { rx: PEEL.rx + 0.15, rz: PEEL.rz + 0.15 })) return { kind: "rest" };
+    // The handle end over the chute (the blade itself never reaches it).
+    if (this.overTrash(this.world(1, b.x, 0, b.z + PEEL_REACH - 0.3))) return { kind: "trash" };
+    return null;
+  }
+  /** The free oven spot nearest the blade (where it is, or at `b`), if it's over the deck at all (forgiving drops). */
+  nearFreeSpot(b: XZ | null = this.peelBlade()): number {
+    if (!b || b.z - PEEL.rz > DECK.z1 + 0.3) return -1;
     let best = -1;
-    let bestD = Infinity;
+    let bestD = PEEL.rx + 0.4;
     for (let i = 0; i < this.ovenCount; i++) {
-      const d = Math.abs(this.ovenSpots[i].x - x);
-      if (d < bestD) [best, bestD] = [i, d];
+      const s = this.ovenSpots[i];
+      const d = Math.abs(s.x - b.x);
+      if (!s.layers.length && d < bestD) [best, bestD] = [i, d];
     }
     return best;
   }
-  /** True when a world point is over the peel. */
-  overPeel(world: THREE.Vector3): boolean {
-    return this.middle === "oven" && Math.abs(world.x - pageX(1) - PEEL_AT.x) < PEEL.rx + 0.15 && Math.abs(world.z - PEEL_AT.z) < PEEL.rz + 0.3;
+  /** The peel's blade riding over a pie that sits on the deck or the bench lifts it (the blade slides under). */
+  private peelOver(p: PiePlace): number {
+    if (!this.peelBlade() || !this.peelObj.visible) return 0;
+    const dx = Math.abs(p.x - this.peelAt.x);
+    const dz = Math.abs(p.z - this.peelAt.z);
+    return dx < PEEL.rx - 0.25 && dz < PEEL.rz - 0.1 ? 1 : 0;
   }
-  /** A world point over the pie on the peel, in the pie's unit oval (where its sauce is painted), or null if it's off the pie. */
-  peelPoint(world: THREE.Vector3, reach = 1.15): { x: number; z: number } | null {
-    const d = this.peel.layers[0]?.piece;
-    const flip = d && fireHalf(d) ? -1 : 1;
-    const x = ((world.x - pageX(1) - PEEL_AT.x) / (INNER_RX * GRILL_SCALE)) * flip;
-    const z = ((world.z - PEEL_AT.z) / (INNER_RZ * GRILL_SCALE)) * flip;
-    return Math.hypot(x, z) > reach ? null : { x, z };
+  /** The peel's frame: it follows the finger or slides home, eases to the height under it, and nudges pies it touches round. */
+  private updatePeel(dt: number): void {
+    const home = !this.peelHeld;
+    if (home) {
+      const k = 1 - Math.exp(-dt * 12);
+      this.peelAt.x += (PEEL_HOME.x - this.peelAt.x) * k;
+      this.peelAt.z += (PEEL_HOME.z - this.peelAt.z) * k;
+      this.peelAt.y += (0 - this.peelAt.y) * k;
+      if (Math.hypot(this.peelAt.x - PEEL_HOME.x, this.peelAt.z - PEEL_HOME.z) < 0.04) Object.assign(this.peelAt, { x: PEEL_HOME.x, z: PEEL_HOME.z });
+      if (this.peelAt.y < 0.004) this.peelAt.y = 0;
+    } else if (this.peelNdc) {
+      const g0 = this.peelGrabHome;
+      if (g0) {
+        const k = 1 - Math.exp(-dt * 6);
+        this.peelGrab.dx += (g0.dx - this.peelGrab.dx) * k;
+        this.peelGrab.dz += (g0.dz - this.peelGrab.dz) * k;
+        if (Math.hypot(g0.dx - this.peelGrab.dx, g0.dz - this.peelGrab.dz) < 0.02) this.peelGrabHome = null;
+      }
+      const want = this.surfaceUnder(this.peelAt.x, this.peelAt.z);
+      this.peelAt.y += (want - this.peelAt.y) * (1 - Math.exp(-dt * 16));
+      this.followFinger();
+    }
+    this.peelObj.visible = home || !!this.peelNdc;
+    // Nudges: the blade's edge or corner moving against a pie on the deck spins it round.
+    const b = this.peelBlade();
+    const onDeck = this.peelHeld && b && this.peelAt.y > HEARTH.y - 0.2;
+    const last = this.peelLast;
+    for (let i = 0; i < this.ovenCount; i++) {
+      const s = this.ovenSpots[i];
+      const d = s.layers[0]?.piece;
+      if (!d) continue;
+      let dYaw = 0;
+      if (onDeck && b && last && dt > 0) dYaw = nudgeSpin(b, { x: b.x - last.x, z: b.z - last.z }, s, PIE_R, PEEL);
+      if (dYaw) {
+        // In contact: the pie turns with the blade, and keeps a little of its speed when it's let go.
+        s.spin = s.spin * 0.6 + (dYaw / Math.max(dt, 1 / 120)) * 0.4;
+        s.spin = THREE.MathUtils.clamp(s.spin, -6, 6);
+        this.nudgeSound += Math.abs(dYaw);
+      } else {
+        dYaw = s.spin * dt;
+        s.spin *= Math.exp(-dt * 5);
+        if (Math.abs(s.spin) < 0.05) s.spin = 0;
+      }
+      if (dYaw && spinPie(d, dYaw)) {
+        s.warned = false;
+        this.events.turned(i);
+      }
+    }
+    if (this.nudgeSound > 0.35) {
+      this.nudgeSound = 0;
+      this.events.nudge();
+    }
+    this.peelLast = b && this.peelHeld ? { ...b } : null;
+    this.placePeel();
+  }
+
+  /** A world point over a pie being built (on the peel at home, or on the bench or board), in the pie's unit oval, or null if it's off the pie. */
+  buildPoint(world: THREE.Vector3, reach = 1.15, only?: PieHolder): { holder: PieHolder; x: number; z: number } | null {
+    let places: [PieHolder, XZ][] = [];
+    if (this.peelHome) places.push([this.peel, PEEL_HOME]);
+    places.push([this.rest, this.rest]);
+    if (only) places = places.filter(([h]) => h === only);
+    let best: { holder: PieHolder; x: number; z: number } | null = null;
+    let bestR = reach;
+    for (const [h, c] of places) {
+      const d = h.layers[0]?.piece;
+      if (!d) continue;
+      // Into the pie's own frame, however it's been turned.
+      const yaw = pieYawOf(d);
+      const wx = world.x - pageX(1) - c.x;
+      const wz = world.z - c.z;
+      const lx = wx * Math.cos(yaw) - wz * Math.sin(yaw);
+      const lz = wx * Math.sin(yaw) + wz * Math.cos(yaw);
+      const x = lx / (INNER_RX * GRILL_SCALE);
+      const z = lz / (INNER_RZ * GRILL_SCALE);
+      const r = Math.hypot(x, z);
+      if (r < bestR) [best, bestR] = [{ holder: h, x, z }, r];
+    }
+    return best;
+  }
+  /** The peel at home or the bench/board under a world point (empty or not), for a base dropped there. */
+  overBuild(world: THREE.Vector3): PieHolder | null {
+    const x = world.x - pageX(1);
+    if (this.peelHome && Math.abs(x - PEEL_HOME.x) < PEEL.rx + 0.1 && Math.abs(world.z - PEEL_HOME.z) < PEEL.rz + 0.2) return this.peel;
+    const r = this.rest;
+    if (Math.abs(x - r.x) < BENCH.w / 2 + 0.1 && Math.abs(world.z - r.z) < BENCH.d / 2 + 0.1) return r;
+    return null;
   }
   /** World points, for hints, tags and the playtest bot. */
   peelPointWorld(): THREE.Vector3 {
-    return this.world(1, PEEL_AT.x, PEEL.y, PEEL_AT.z);
+    return this.world(1, this.peelAt.x, this.peelAt.y + PEEL.y, this.peelAt.z);
+  }
+  /** Where the middle of the peel's handle grip is (world), for the bot and hints. */
+  peelHandleWorld(): THREE.Vector3 {
+    return this.world(1, this.peelAt.x, this.peelAt.y + PEEL.y, this.peelAt.z + PEEL_REACH - 0.3);
+  }
+  restPoint(): THREE.Vector3 {
+    return this.world(1, this.rest.x, this.restTop, this.rest.z);
   }
   spotPoint(i: number): THREE.Vector3 {
     const s = this.ovenSpots[i];
@@ -850,8 +1081,12 @@ export class CounterView {
     this.ovenGroup.visible = mode === "oven";
     this.ovenCount = Math.max(1, Math.min(MAX_OVEN, oven));
     this.layoutOven();
+    this.releasePeel();
+    Object.assign(this.peelAt, { x: PEEL_HOME.x, z: PEEL_HOME.z, y: 0 });
     this.setPeel([]);
     for (let i = 0; i < MAX_OVEN; i++) this.setSpot(i, []);
+    this.bench.layers = [];
+    this.syncFood(this.bench, this.world(1, BENCH_AT.x, BENCH.h, BENCH_AT.z));
     // The comal has no buttons: hot under the left two thirds, warm at the right end.
     if (mode === "comal") this.zones = ["hot", "hot", "warm"];
     this.tpressOn = mode === "comal" && tpress;
@@ -878,6 +1113,8 @@ export class CounterView {
       bd.obj.visible = board;
       this.setBoard([]);
     }
+    // Port Amber's board stands where the bench is.
+    this.benchObj.visible = !(mode === "oven" && board);
   }
 
   /**
@@ -2014,26 +2251,20 @@ export class CounterView {
         }
       }
     }
-    // Oven: each pie bakes, the half facing the fire at twice the pace; a tap turns it round.
+    // Oven: each pie bakes, the half facing the hot back wall at twice the pace; the peel nudges it round.
     if (this.middle === "oven") {
       this.oven.userData.tick(this.time);
+      this.updatePeel(dt);
       for (let i = 0; i < this.ovenCount; i++) {
         const s = this.ovenSpots[i];
         const d = s.layers[0]?.piece;
         if (!d) continue;
-        if (s.turnT >= 0) {
-          s.turnT += dt / TURN_TIME;
-          if (s.turnT >= 1) {
-            s.turnT = -1;
-            d.turns = (d.turns ?? 0) + 1;
-            s.warned = false;
-          }
-        }
         if (d.kind === "dough") {
           const before = cookLevel(d);
           const top = Math.max(...d.cook);
-          // The fire side running too far ahead of the other scorches it (warned once per run).
-          if (bakeStep(d, dt, this.grillBoost) && !s.warned) {
+          // The hot side running too far ahead of the other scorches it (warned once per run).
+          const scorching = bakeStep(d, dt, this.grillBoost);
+          if (scorching && !s.warned) {
             s.warned = true;
             anyBurning = true;
           }
@@ -2041,21 +2272,32 @@ export class CounterView {
           const sc = COOK_SCALE.dough;
           if (before < sc.done && cookLevel(d) >= sc.done) anyDone = true;
           if (top <= sc.burnt - 0.05 && Math.max(...d.cook) > sc.burnt - 0.05) anyBurning = true;
-          smokes.push({ x: pageX(1) + s.x, z: s.z, y: HEARTH.y + 0.4, cook: Math.max(...d.cook), light: Math.max(...d.cook) < 0.9 });
+          // No fire, no smoke: only a pie that's scorching or going too far gives off a wisp.
+          if (scorching || Math.max(...d.cook) > sc.over) smokes.push({ x: pageX(1) + s.x, z: s.z, y: HEARTH.y + 0.25, cook: Math.max(...d.cook), light: Math.max(...d.cook) < sc.burnt });
         }
         this.syncFood(s, this.world(1, s.x, HEARTH.y, s.z));
         if (s.food) {
           this.updatePie(s);
           const fb = s.food.userData.pie as FlatbreadObject | undefined;
-          // Turning: the peel lifts it a little and spins it round half a turn.
-          const t = s.turnT >= 0 ? s.turnT : 0;
-          const e = t * t * (3 - 2 * t);
-          if (fb) fb.rotation.y = pieYaw(d) + Math.PI * e;
-          s.food.position.y = HEARTH.y + Math.sin(Math.PI * t) * 0.25;
+          if (fb) fb.rotation.y = pieYaw(d);
+          s.lift += (this.peelOver(s) - s.lift) * (1 - Math.exp(-dt * 20));
+          s.food.position.y = HEARTH.y + s.lift * (PEEL.y + 0.01);
         }
       }
+      const r = this.rest;
+      if (r.food) {
+        const fb = r.food.userData.pie as FlatbreadObject | undefined;
+        const d = r.layers[0]?.piece;
+        if (fb && d) fb.rotation.y = pieYaw(d);
+        r.food.position.y = this.restTop + this.peelOver(r) * (PEEL.y + 0.01);
+      }
+      if (this.peel.food) {
+        const fb = this.peel.food.userData.pie as FlatbreadObject | undefined;
+        const d = this.peel.layers[0]?.piece;
+        if (fb && d) fb.rotation.y = pieYaw(d);
+      }
       this.updatePie(this.peel);
-      if (this.board?.on) this.updatePie(this.board);
+      this.updatePie(r);
     }
     if (anyBurning) this.events.burning();
     if (anyDone) this.events.done();

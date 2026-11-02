@@ -141,42 +141,50 @@ function foldSvg(): string {
 
 const FLATBREAD: Recipe = { name: "Harvest Red", price: 10, layers: ["dough", "redsauce", "mozzarella", "basil"], toasted: true, pie: "flatbread", melt: true, counts: { mozzarella: 4 } };
 
-/** The hearth oven from above: the fire at the back left, a pie in front of it turned half round. */
+/** The deck oven from above: brick back and side walls, the element glowing along the back, a pie nudged round by the peel's corner. */
 function ovenSvg(): string {
   const INK = `stroke="#2a2622" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"`;
   return `<svg class="hw-svg" viewBox="0 0 160 90" aria-hidden="true">
-    <path d="M8 52a72 46 0 0 1 144 0z" fill="#d99a6c" ${INK}/>
-    <path d="M18 52a62 36 0 0 1 124 0z" fill="#4a3326"/>
-    <rect x="6" y="52" width="148" height="10" rx="2" fill="#dcc8a4" ${INK}/>
-    <g><path d="M30 50c-4-6 2-10 2-16 4 6 6 8 4 16z" fill="#ff8a2a"/><path d="M38 50c-2-5 2-8 2-12 3 4 4 7 2 12z" fill="#ffd15a"/><path d="M26 51h18" stroke="#5c3d26" stroke-width="3" stroke-linecap="round"/></g>
-    <ellipse cx="98" cy="50" rx="26" ry="9" fill="#f1dcaa" ${INK}/>
-    <path d="M74 50a24 8 0 0 1 48 0" fill="#d99a48"/>
-    <ellipse cx="98" cy="50" rx="19" ry="6" fill="#c8402a"/>
-    <g fill="#fbf6e6"><circle cx="90" cy="49" r="2.6"/><circle cx="101" cy="52" r="2.6"/><circle cx="106" cy="47" r="2.4"/></g>
-    <path d="M128 30a22 22 0 0 1 0 30" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round"/>
-    <path d="M124 59l4 2 2-5" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-    <rect x="70" y="70" width="56" height="8" rx="4" fill="#2c2f33" stroke="#0f1012" stroke-width="1.2"/>
-    <rect x="70" y="70" width="36" height="8" rx="4" fill="#e3ad5a"/>
-    <rect x="132" y="68" width="22" height="12" rx="4" fill="#ffd99a" ${INK}/><text x="143" y="77" text-anchor="middle" font-size="7" font-weight="800" fill="#6b3a00">Turn</text>
+    <rect x="10" y="6" width="140" height="56" rx="2" fill="#dcc8a4" ${INK}/>
+    <rect x="10" y="6" width="140" height="10" fill="#c8664a" ${INK}/>
+    <rect x="10" y="6" width="10" height="56" fill="#b05e40" ${INK}/>
+    <rect x="140" y="6" width="10" height="56" fill="#b05e40" ${INK}/>
+    <path d="M20 11h120M45 6v5M70 6v5M95 6v5M120 6v5" stroke="#e7c9a8" stroke-width="1"/>
+    <rect x="20" y="16" width="120" height="14" fill="#ffa860" opacity=".35"/>
+    <rect x="22" y="16.5" width="116" height="3" rx="1.5" fill="#ff8a2a"/>
+    <text x="80" y="27" text-anchor="middle" font-size="6.5" font-weight="800" fill="#8a3a10">HOT WALL</text>
+    <ellipse cx="72" cy="42" rx="24" ry="13" fill="#f1dcaa" ${INK}/>
+    <path d="M48 42a24 13 0 0 1 48 0z" fill="#d99a48"/>
+    <ellipse cx="72" cy="42" rx="18" ry="9" fill="#c8402a"/>
+    <g fill="#fbf6e6"><circle cx="65" cy="41" r="2.4"/><circle cx="75" cy="45" r="2.4"/><circle cx="79" cy="38" r="2.2"/></g>
+    <path d="M76 54h26v8H76z" fill="#d9ad74" ${INK}/>
+    <path d="M89 62v24" stroke="#b98a54" stroke-width="4" stroke-linecap="round"/>
+    <path d="M106 58h16M118 54l4 4-4 4" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M100 31a28 16 0 0 1 0 20" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M97 28l3 3-4 2" fill="none" stroke="#3f7fd0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="14" y="70" width="52" height="8" rx="4" fill="#2c2f33" stroke="#0f1012" stroke-width="1.2"/>
+    <rect x="14" y="70" width="34" height="8" rx="4" fill="#e3ad5a"/>
+    <rect x="120" y="68" width="36" height="12" rx="4" fill="#ffd99a" ${INK}/><text x="138" y="77" text-anchor="middle" font-size="7" font-weight="800" fill="#6b3a00">↻ Nudge</text>
   </svg>`;
 }
 
-/** The hearth oven, for Orchard Isle (DESIGN §24, phase 4). */
+/** The deck oven, for Orchard Isle (DESIGN §24, phase 4; the peel after build #69). */
 function ovenSec(board: boolean, fritters: boolean): Sec {
   return {
     id: "oven",
     chip: "Oven",
     icon: "flame",
-    title: "The hearth oven",
-    lede: "On Orchard Isle the grill makes way for a wood-fired oven. Flatbreads are built on the peel, baked, and turned once so both halves go golden.",
+    title: "The oven and the peel",
+    lede: "On Orchard Isle the grill makes way for a deck oven, its back wall glowing hot. Flatbreads are built on the peel, and only the peel moves them.",
     fig: `${ovenSvg()}
       <div class="hw-stack">${stackArt(FLATBREAD)}<p class="hw-cap">Harvest Red: dough, tomato sauce, mozzarella ×4, then basil after the oven.</p></div>`,
     points: [
       "<b>Tap the dough</b> to lay a base on the peel. <b>Hold the ladle</b> in the pot and spread the sauce in a spiral out to the crust (white bases get a drizzle of olive oil instead). Then the toppings: tap a pan for one piece, or drag them on.",
-      "<b>Drag the pie into the oven.</b> The fire is at the back left: the side facing it bakes <b>twice as fast</b>. The meter under the pie shows its <b>paler side</b>; when it says <b>Turn</b>, tap the pie to spin it round. Once, about halfway, is right.",
-      "Left unturned, the fire side <b>scorches</b>. Turned just right, both halves come out even, with <b>leopard spots</b> on the crust: a small bonus.",
-      "<b>Mushrooms</b> want the longer bake. <b>Basil, rocket and honey go on after</b>: drag the flatbread up to the tray first, then add them there (honey squeezes like any sauce).",
-      ...(board ? ["In <b>Port Amber</b>: a third spot in the oven, the <b>Calzone</b> (fold it on the peel by dragging the dough's edge across the middle, then <b>turn it twice</b>), and the board: <b>swipe across a flatbread twice</b> to cut it in four."] : []),
+      "<b>Drag the peel by its handle</b> into the oven and <b>swipe down</b> to slide the pie off onto the deck. To lift a pie, slide the blade right under it and <b>swipe up</b>. Swipe down over the <b>bench</b> to set one aside, or let go and the peel goes back where it lies.",
+      "The half facing the <b>hot back wall</b> bakes <b>twice as fast</b>. The meter under the pie shows its <b>paler half</b>; when it says <b>Nudge</b>, set the peel's tip against the front of the pie and slide it sideways to <b>spin it round</b>. Once, about halfway, is right.",
+      "Left as it is, the hot side <b>scorches</b>. Turned just right, both halves come out even, with <b>leopard spots</b> on the crust: a small bonus.",
+      "To serve, lift it out on the peel, carry it up to a tray and <b>swipe down</b>. <b>Mushrooms</b> want the longer bake. <b>Basil, rocket and honey go on after</b>, at the tray (honey squeezes like any sauce).",
+      ...(board ? ["In <b>Port Amber</b>: a third spot in the oven, the <b>Calzone</b> (fold it on the peel by dragging the dough's edge across the middle, then <b>nudge it round twice</b>), and the board in the bench's place: set a flatbread on it and <b>swipe across it twice</b> to cut it in four."] : []),
       `At the fryer, drop the <b>zucchini</b> in the <b>batter bowl</b>, then pick it up again for the basket; salt the fritti in the carton.${fritters ? " <b>Apple fritters</b> fry like fries and get cinnamon sugar from the sugar shaker." : ""}`,
     ],
   };

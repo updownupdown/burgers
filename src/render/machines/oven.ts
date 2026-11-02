@@ -1,32 +1,41 @@
 import * as THREE from "three";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "../bake";
-import { faceted, toon } from "../materials";
-import { box, cyl, glow, sph, tor } from "./kit";
+import { faceted } from "../materials";
+import { COUNTER_FOOD } from "../units";
+import { box, canvasTex, cyl, tor } from "./kit";
 
 /*
- * Orchard Isle's hearth oven page (DESIGN §24, phase 4), modelled straight in game units
- * (page-local, like the counter's layout numbers) since it's one of a kind. A brick base with a
- * stone hearth across the back of the counter, the back half of a clay dome over it (the front is
- * left open so the pies show from the camera), a wood fire at the back left, and a short
- * chimney. In front: a wooden peel to build on, a stack of dough bases, a pot of tomato sauce
- * with its ladle and, on the fryer, a bowl of batter for the zucchini.
+ * Orchard Isle's oven page (DESIGN §24, phase 4; after build #69), modelled straight in game units
+ * (page-local, like the counter's layout numbers) since it's one of a kind. A deck oven that fits
+ * a food truck: a stone deck on a brick base across the back of the counter, a brick back wall and
+ * two brick side walls, open at the front so the pies show from the camera. No fire and no smoke:
+ * the heat is an electric element glowing along the foot of the back wall, so the half of a pie
+ * facing the back bakes first. In front: the wooden peel (the only thing that moves a pie), a
+ * stack of dough bases at the same size as a base on the peel, a marble bench to set a pie down,
+ * a big pot of tomato sauce with its ladle and, on the fryer, a bowl of batter for the zucchini.
  */
 
-/** Hearth top height and footprint (page-local). */
-export const HEARTH = { x0: -1.8, x1: 4.45, z0: -3.35, z1: -0.3, y: 0.62 };
-/** The dome: back half of an ellipsoid, its open front along z = DOME.z. */
-/**
- * The dome: back half of an ellipsoid, its open front along z = DOME.z. It's drawn taller than
- * life: the camera looks down so steeply that a true-height dome would read as a flat band.
- */
-export const DOME = { x: (HEARTH.x0 + HEARTH.x1) / 2, z: -1.75, rx: 3.0, ry: 3.0, rz: 1.55 };
-/** Where the fire burns, page-local, on the hearth. */
-export const FIRE = { x: DOME.x - 1.75, z: -2.6 };
+/** The oven's footprint and deck height (page-local). */
+export const HEARTH = { x0: -1.85, x1: 4.55, z0: -3.35, z1: -0.3, y: 0.4 };
+/** Brick walls: thickness and height above the deck. */
+export const WALLS = { t: 0.3, h: 1.35 };
+/** The deck inside the walls, where pies bake and the peel can reach. */
+export const DECK = { x0: HEARTH.x0 + WALLS.t, x1: HEARTH.x1 - WALLS.t, z0: HEARTH.z0 + WALLS.t, z1: HEARTH.z1 };
 
 const BRICK = "#c46e4e";
+const BRICK_D = "#b05e40";
 const MORTAR = "#e7c9a8";
 const STONE = "#dcc8a4";
-const CLAY = "#d99a6c";
+
+/** Mortar joints over a brick face, in a plane: `at(u, v)` maps face coordinates (u along, v up) to a point. */
+function brickFace(p: Parts, w: number, h: number, at: (u: number, v: number) => [number, number, number], rot: [number, number, number], course = 0.22, brick = 0.52): void {
+  const rows = Math.round(h / course);
+  for (let r = 1; r < rows; r++) p.add(box(w, 0.022, 0.012), MORTAR, { p: at(w / 2, (r * h) / rows), r: rot, ink: false });
+  for (let r = 0; r < rows; r++) {
+    const off = r % 2 ? brick / 2 : 0;
+    for (let u = off + brick; u < w - 0.08; u += brick) p.add(box(0.022, h / rows - 0.02, 0.012), MORTAR, { p: at(u, ((r + 0.5) * h) / rows), r: rot, ink: false });
+  }
+}
 
 const base = (() => {
   let b: Baked | null = null;
@@ -38,115 +47,112 @@ const base = (() => {
     const d = z1 - z0;
     const cx = (x0 + x1) / 2;
     const cz = (z0 + z1) / 2;
-    // Brick base with mortar courses along the front.
+    // Brick base under the deck, mortar along its front.
     p.add(box(w, y - 0.08, d), BRICK, { p: [cx, (y - 0.08) / 2, cz], ink: 0.02 });
-    for (let i = 1; i < 3; i++) p.add(box(w + 0.01, 0.025, 0.01), MORTAR, { p: [cx, (i * (y - 0.08)) / 3, z1 + 0.003], ink: false });
-    for (let r = 0; r < 3; r++)
-      for (let i = 0; i < 11; i++) {
-        const x = x0 + ((i + (r % 2 ? 0.5 : 0)) * w) / 10.5;
-        if (x > x1 - 0.05) continue;
-        p.add(box(0.025, (y - 0.08) / 3 - 0.02, 0.01), MORTAR, { p: [x, ((r + 0.5) * (y - 0.08)) / 3, z1 + 0.003], ink: false });
-      }
-    // The stone hearth slab, a lip proud of the bricks, and soot round the fire.
-    p.add(box(w + 0.12, 0.1, d + 0.08), STONE, { p: [cx, y - 0.05, cz + 0.02], ink: 0.02 });
-    for (let i = 1; i < 5; i++) p.add(box(0.02, 0.005, d), "#c7b18a", { p: [x0 + (i * w) / 5, y + 0.002, cz], ink: false });
-    p.add(faceted(new THREE.CircleGeometry(1, 16).rotateX(-Math.PI / 2)), "#9c8160", { p: [FIRE.x, y + 0.004, FIRE.z], s: [0.85, 1, 0.6], ink: false });
-    // Two split logs and a few smaller ones, the fire on them.
-    const r = rng(5);
-    const log = cyl(0.09, 0.1, 0.9, 7);
-    for (let i = 0; i < 4; i++) {
-      p.add(log, i % 2 ? "#6e4a2e" : "#5c3d26", { p: [FIRE.x + (i - 1.5) * 0.16, y + 0.1 + (i % 2) * 0.08, FIRE.z + (r() - 0.5) * 0.1], r: [Math.PI / 2, 0, 0.5 - i * 0.33], ink: 0.014 });
+    brickFace(p, w, y - 0.08, (u, v) => [x0 + u, v, z1 + 0.004], [0, 0, 0], 0.16, 0.6);
+    // The stone deck, a lip proud of the bricks, its slabs' joints.
+    p.add(box(w + 0.1, 0.1, d + 0.08), STONE, { p: [cx, y - 0.05, cz + 0.02], ink: 0.02 });
+    for (let i = 1; i < 6; i++) p.add(box(0.02, 0.005, DECK.z1 - DECK.z0), "#c7b18a", { p: [DECK.x0 + (i * (DECK.x1 - DECK.x0)) / 6, y + 0.002, (DECK.z0 + DECK.z1) / 2], ink: false });
+    // A darker, well-used band along the back where the heat is.
+    p.add(box(DECK.x1 - DECK.x0, 0.004, 0.55), "#cdb48c", { p: [cx, y + 0.003, DECK.z0 + 0.28], ink: false });
+    const H = WALLS.h;
+    const T = WALLS.t;
+    // The back wall, its inner face toward the camera in brick.
+    p.add(box(w, H, T), BRICK, { p: [cx, y + H / 2, z0 + T / 2], ink: 0.022 });
+    brickFace(p, DECK.x1 - DECK.x0, H, (u, v) => [DECK.x0 + u, y + v, DECK.z0 + 0.004], [0, 0, 0]);
+    // Two side walls, the full depth of the deck, bricks on their inner faces and front ends.
+    for (const sx of [x0 + T / 2, x1 - T / 2]) {
+      p.add(box(T, H, d), BRICK_D, { p: [sx, y + H / 2, cz], ink: 0.022 });
+      const inner = sx < cx ? sx + T / 2 + 0.004 : sx - T / 2 - 0.004;
+      brickFace(p, d - T, H, (u, v) => [inner, y + v, DECK.z0 + u], [0, Math.PI / 2, 0]);
+      brickFace(p, T, H, (u, v) => [sx - T / 2 + u, y + v, z1 + 0.004], [0, 0, 0], 0.22, 0.4);
     }
-    p.add(cyl(0.11, 0.12, 0.8, 7), "#7a5232", { p: [FIRE.x + 0.55, y + 0.11, FIRE.z + 0.15], r: [Math.PI / 2, 0, 1.3], ink: 0.014 });
-    // A little stack of spare logs at the right end, against the dome.
-    for (let i = 0; i < 3; i++) p.add(cyl(0.1, 0.1, 0.75, 7), i === 1 ? "#8a6040" : "#74512f", { p: [HEARTH.x1 - 0.35, y + 0.11 + (i === 2 ? 0.17 : 0), -3.05 + (i === 2 ? 0.1 : i * 0.2)], r: [0, 0, Math.PI / 2], ink: 0.014 });
-    // The dome: clay outside, soot-dark inside, a brick arch round its mouth.
-    const shell = faceted(new THREE.SphereGeometry(1, 28, 10, Math.PI, Math.PI, 0, Math.PI / 2));
-    p.add(shell, CLAY, { p: [DOME.x, y, DOME.z], s: [DOME.rx, DOME.ry, DOME.rz], ink: 0.022 });
-    const arch = new THREE.EllipseCurve(0, 0, DOME.rx + 0.02, DOME.ry + 0.02, 0, Math.PI, false);
-    const pts = arch.getPoints(24).map((q) => new THREE.Vector3(q.x, q.y, 0));
-    p.add(faceted(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 30, 0.11, 6, false)), BRICK, { p: [DOME.x, y, DOME.z], s: [1, 1, 1.3], ink: 0.02 });
-    // Brick joints round the arch.
-    for (let i = 1; i < 12; i++) {
-      const a = (i / 12) * Math.PI;
-      p.add(box(0.03, 0.24, 0.3), MORTAR, { p: [DOME.x + Math.cos(a) * (DOME.rx + 0.02), y + Math.sin(a) * (DOME.ry + 0.02), DOME.z], r: [0, 0, a - Math.PI / 2], ink: false });
-    }
-    // Patches of whitewash on the clay.
-    for (let i = 0; i < 6; i++) {
-      const a = Math.PI * (0.15 + 0.7 * r());
-      const e = 0.3 + 0.5 * r();
-      const v = new THREE.Vector3(-Math.cos(a) * Math.sin(e + 0.4), Math.cos(e + 0.4), -Math.sin(a) * Math.sin(e + 0.4));
-      p.add(sph(0.2, 8, 5), "#e7b48a", { p: [DOME.x + v.x * DOME.rx * 0.99, y + v.y * DOME.ry * 0.99, DOME.z + v.z * DOME.rz * 0.99], s: [1.6, 0.25, 1.2], ink: false });
-    }
-    // A short chimney on the dome's back slope.
-    p.add(cyl(0.26, 0.3, 0.7, 10), BRICK, { p: [DOME.x + 1.2, y + DOME.ry * 0.82, DOME.z - DOME.rz * 0.6], ink: 0.018 });
-    p.add(cyl(0.32, 0.32, 0.1, 10), MORTAR, { p: [DOME.x + 1.2, y + DOME.ry * 0.82 + 0.38, DOME.z - DOME.rz * 0.6], ink: 0.014 });
+    // Stone caps along the tops of the walls.
+    p.add(box(w + 0.08, 0.08, T + 0.1), STONE, { p: [cx, y + H + 0.04, z0 + T / 2], ink: 0.018 });
+    for (const sx of [x0 + T / 2, x1 - T / 2]) p.add(box(T + 0.1, 0.08, d + 0.04), STONE, { p: [sx, y + H + 0.04, cz], ink: 0.018 });
+    // The heating element: a steel rail along the foot of the back wall with a coiled bar in it.
+    p.add(box(DECK.x1 - DECK.x0 - 0.1, 0.16, 0.2), "#4a4f52", { p: [cx, y + 0.08, DECK.z0 + 0.1], ink: 0.016 });
+    for (let i = 0; i < 9; i++) p.add(box(0.05, 0.2, 0.22), "#3a3f42", { p: [DECK.x0 + 0.2 + (i * (DECK.x1 - DECK.x0 - 0.4)) / 8, y + 0.1, DECK.z0 + 0.11], ink: false });
+    // A little dial on the right wall's front.
+    p.add(cyl(0.11, 0.11, 0.05, 14), "#2d3336", { p: [x1 - T / 2, y + 0.42, z1 + 0.03], r: [Math.PI / 2, 0, 0], ink: 0.014 });
+    p.add(box(0.025, 0.12, 0.02), "#ffffff", { p: [x1 - T / 2 + 0.03, y + 0.45, z1 + 0.06], r: [0, 0, -0.6], ink: false });
     b = bakeShared(p);
     return b;
   };
 })();
 
+/** A soft vertical fade (opaque at the bottom of the texture), for the heat's glow. */
+const fadeTex = (() => {
+  let t: THREE.CanvasTexture | null = null;
+  return () =>
+    (t ??= canvasTex(4, 64, (c, w, h) => {
+      const g = c.createLinearGradient(0, h, 0, 0);
+      g.addColorStop(0, "rgba(255,255,255,1)");
+      g.addColorStop(0.45, "rgba(255,255,255,0.35)");
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      c.fillStyle = g;
+      c.fillRect(0, 0, w, h);
+    }));
+})();
+
 export interface HearthOvenObject extends THREE.Group {
   userData: {
-    /** Animate the fire (seconds). */
+    /** Let the element's glow breathe (seconds). */
     tick: (t: number) => void;
   };
 }
 
-/** The hearth oven, origin at the page centre (page-local coordinates throughout). */
+/** The deck oven, origin at the page centre (page-local coordinates throughout). */
 export function makeHearthOven(): HearthOvenObject {
   const g = new THREE.Group() as HearthOvenObject;
   g.add(bakedMesh(base()));
-  // The inside of the dome: a dark shell drawn from inside, so the open front shows a sooty vault.
-  const inner = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 10, Math.PI, Math.PI, 0, Math.PI / 2), toon("#4a3326", { side: THREE.BackSide }));
-  inner.scale.set(DOME.rx * 0.96, DOME.ry * 0.95, DOME.rz * 0.95);
-  inner.position.set(DOME.x, HEARTH.y + 0.002, DOME.z);
-  inner.receiveShadow = true;
-  g.add(inner);
-  // A warm glow on the hearth round the fire, and the flames: a few cones that flicker.
-  const ember = glow(new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2), "#ff8a3a", 0.35);
-  ember.scale.set(1.25, 1, 0.85);
-  ember.position.set(FIRE.x + 0.15, HEARTH.y + 0.012, FIRE.z + 0.1);
-  ember.renderOrder = 1;
-  const wash = glow(new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2), "#ffb35a", 0.12);
-  wash.scale.set(2.8, 1, 1.4);
-  wash.position.set(FIRE.x + 0.9, HEARTH.y + 0.01, FIRE.z + 0.55);
-  wash.renderOrder = 1;
-  g.add(ember, wash);
-  const cone = new THREE.ConeGeometry(0.16, 0.6, 6);
-  cone.translate(0, 0.3, 0);
-  const flames: { m: THREE.Mesh; ph: number; h: number }[] = [];
-  const spots: [number, number, string, number, number][] = [
-    [-0.25, 0, "#ff7a1a", 1.0, 1.0],
-    [0.05, -0.05, "#ffa52a", 1.25, 1.1],
-    [0.32, 0.05, "#ff7a1a", 0.9, 0.95],
-    [0.12, 0.12, "#ffd15a", 0.7, 0.75],
-    [-0.08, 0.1, "#ffe08a", 0.5, 0.6],
-    [0.55, 0.1, "#ffa52a", 0.6, 0.7],
-  ];
-  for (const [dx, dz, col, h, w] of spots) {
-    const m = glow(cone, col, col === "#ffe08a" ? 1 : 0.92);
-    m.position.set(FIRE.x + dx, HEARTH.y + 0.15, FIRE.z + dz);
-    m.scale.set(w, h, w);
-    m.renderOrder = 2;
+  const w = DECK.x1 - DECK.x0;
+  const cx = (DECK.x0 + DECK.x1) / 2;
+  // The element's bar, glowing orange in its rail.
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, w - 0.3, 8).rotateZ(Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#ff8a3a" }));
+  bar.position.set(cx, HEARTH.y + 0.18, DECK.z0 + 0.1);
+  const halo = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, w - 0.24, 10).rotateZ(Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#ffb36a", transparent: true, opacity: 0.35, depthWrite: false }));
+  halo.position.copy(bar.position);
+  halo.renderOrder = 2;
+  for (const m of [bar, halo]) {
+    m.castShadow = false;
+    m.raycast = () => {};
     g.add(m);
-    flames.push({ m, ph: dx * 7 + dz * 13, h });
   }
+  // Heat washing up the back wall's bricks and forward over the deck: the hot side.
+  const mats: THREE.MeshBasicMaterial[] = [];
+  const fade = (color: string, opacity: number) => {
+    const m = new THREE.MeshBasicMaterial({ color, map: fadeTex(), transparent: true, opacity, depthWrite: false });
+    mats.push(m);
+    return m;
+  };
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(w, WALLS.h), fade("#ff7a2a", 0.72));
+  wall.position.set(cx, HEARTH.y + WALLS.h / 2, DECK.z0 + 0.012);
+  const deck = new THREE.Mesh(new THREE.PlaneGeometry(w, 1.5).rotateX(-Math.PI / 2), fade("#ff8f3f", 0.55));
+  // The texture's opaque edge lies along the back wall.
+  deck.geometry.rotateY(Math.PI);
+  deck.position.set(cx, HEARTH.y + 0.008, DECK.z0 + 0.75);
+  for (const m of [wall, deck]) {
+    m.renderOrder = 1;
+    m.raycast = () => {};
+    m.castShadow = false;
+    g.add(m);
+  }
+  const base0 = mats.map((m) => m.opacity);
   g.userData.tick = (t) => {
-    for (const f of flames) {
-      const k = 0.82 + 0.18 * Math.sin(t * 9 + f.ph) + 0.08 * Math.sin(t * 23 + f.ph * 2);
-      f.m.scale.y = f.h * k;
-      f.m.rotation.z = 0.08 * Math.sin(t * 5 + f.ph);
-    }
-    (ember.material as THREE.MeshBasicMaterial).opacity = 0.3 + 0.07 * Math.sin(t * 6.3);
+    const k = 0.9 + 0.1 * Math.sin(t * 1.7);
+    mats.forEach((m, i) => (m.opacity = base0[i] * k));
+    (bar.material as THREE.MeshBasicMaterial).color.setRGB(1, 0.5 + 0.06 * Math.sin(t * 1.7), 0.2);
   };
   return g;
 }
 
 /* ---- the front strip --------------------------------------------------------------- */
 
-/** The peel's blade (half sizes) and how far its handle runs toward the front. */
-export const PEEL = { rx: 1.12, rz: 0.84, handle: 1.25, y: 0.07 };
+/** The peel's blade (half sizes), how far its handle runs toward the front, and the blade's thickness. */
+export const PEEL = { rx: 1.12, rz: 0.84, handle: 0.95, y: 0.06 };
+/** From the blade's centre to the end of the handle (toward the front). */
+export const PEEL_REACH = PEEL.rz + 0.12 + PEEL.handle;
 
 /** The wooden peel, blade centre at the origin, its handle toward the front. */
 export const makePeel = (() => {
@@ -176,26 +182,50 @@ export const makePeel = (() => {
       // A dusting of flour on the blade.
       const fr = rng(9);
       for (let i = 0; i < 14; i++) p.add(faceted(new THREE.CircleGeometry(0.06 + fr() * 0.08, 6).rotateX(-Math.PI / 2)), "#f3ead8", { p: [(fr() - 0.5) * PEEL.rx * 1.7, PEEL.y + 0.004, (fr() - 0.5) * PEEL.rz * 1.7], ink: false });
-      p.add(cyl(0.07, 0.07, PEEL.handle, 8), "#b98a54", { p: [0, PEEL.y + 0.02, PEEL.rz + 0.12 + PEEL.handle / 2], r: [Math.PI / 2, 0, 0], ink: 0.016 });
-      p.add(cyl(0.085, 0.085, 0.08, 8), "#8a6238", { p: [0, PEEL.y + 0.02, PEEL.rz + 0.12 + PEEL.handle], r: [Math.PI / 2, 0, 0], ink: 0.014 });
+      // The handle: thick enough to read as the thing to hold, with a dark grip at the end.
+      p.add(cyl(0.09, 0.09, PEEL.handle, 8), "#b98a54", { p: [0, PEEL.y + 0.03, PEEL.rz + 0.12 + PEEL.handle / 2], r: [Math.PI / 2, 0, 0], ink: 0.016 });
+      p.add(cyl(0.105, 0.105, 0.34, 8), "#7a5232", { p: [0, PEEL.y + 0.03, PEEL_REACH - 0.17], r: [Math.PI / 2, 0, 0], ink: 0.014 });
       b = bakeShared(p);
     }
     return bakedMesh(b);
   };
 })();
 
-/** The dough bases: a floured board with a stack of hand-shaped ovals. Origin at the board's centre. */
-export const DOUGH = { w: 1.5, d: 1.15 };
+/** Half sizes of a raw base, game units (a flatbread's oval at the counter food scale). */
+const BASE = { rx: 2.0 * COUNTER_FOOD, rz: 1.5 * COUNTER_FOOD };
+/** The dough bases: a floured board with a stack of hand-shaped bases the size of one on the peel. Origin at the board's centre. */
+export const DOUGH = { w: BASE.rx * 2 + 0.16, d: BASE.rz * 2 + 0.2 };
 export const makeDoughStack = (() => {
   let b: Baked | null = null;
   return (): THREE.Mesh => {
     if (!b) {
       const p = new Parts();
-      p.add(box(DOUGH.w, 0.1, DOUGH.d), "#c98a52", { p: [0, 0.05, 0], ink: 0.018 });
-      const oval = faceted(new THREE.CylinderGeometry(1, 1, 0.07, 18));
+      p.add(box(DOUGH.w, 0.08, DOUGH.d), "#c98a52", { p: [0, 0.04, 0], ink: 0.018 });
+      const oval = faceted(new THREE.CylinderGeometry(1, 1, 0.05, 22));
       const r = rng(3);
-      for (let i = 0; i < 4; i++) p.add(oval, i % 2 ? "#f1dfb6" : "#f4e6c4", { p: [(r() - 0.5) * 0.06, 0.135 + i * 0.075, (r() - 0.5) * 0.05], s: [0.6, 1, 0.45], r: [0, (r() - 0.5) * 0.3, 0], ink: 0.014 });
-      for (let i = 0; i < 9; i++) p.add(faceted(new THREE.CircleGeometry(0.05 + r() * 0.05, 6).rotateX(-Math.PI / 2)), "#f7f0e2", { p: [(r() - 0.5) * DOUGH.w * 0.85, 0.104, (r() - 0.5) * DOUGH.d * 0.85], ink: false });
+      const n = 5;
+      for (let i = 0; i < n; i++) p.add(oval, i % 2 ? "#f1dfb6" : "#f4e6c4", { p: [(r() - 0.5) * 0.06, 0.105 + i * 0.052, (r() - 0.5) * 0.05], s: [BASE.rx * 0.97, 1, BASE.rz * 0.97], r: [0, (r() - 0.5) * 0.2, 0], ink: 0.014 });
+      // The top base's raised edge, as on the peel.
+      p.add(faceted(new THREE.TorusGeometry(1, 0.06, 5, 26).rotateX(Math.PI / 2)), "#f4e8ce", { p: [0, 0.105 + (n - 1) * 0.052 + 0.035, 0], s: [BASE.rx * 0.92, 0.8, BASE.rz * 0.9], ink: 0.012 });
+      for (let i = 0; i < 9; i++) p.add(faceted(new THREE.CircleGeometry(0.05 + r() * 0.05, 6).rotateX(-Math.PI / 2)), "#f7f0e2", { p: [(r() - 0.5) * DOUGH.w * 0.9, 0.084, (r() > 0.5 ? 1 : -1) * DOUGH.d * (0.4 + r() * 0.05)], ink: false });
+      b = bakeShared(p);
+    }
+    return bakedMesh(b);
+  };
+})();
+
+/** The marble bench where a pie can be set down (Applecross and Larkvale; Port Amber's board takes its place). */
+export const BENCH = { w: DOUGH.w + 0.1, d: DOUGH.d + 0.1, h: 0.1 };
+export const makeBench = (() => {
+  let b: Baked | null = null;
+  return (): THREE.Mesh => {
+    if (!b) {
+      const p = new Parts();
+      p.add(box(BENCH.w, BENCH.h, BENCH.d), "#ece9e3", { p: [0, BENCH.h / 2, 0], ink: 0.018 });
+      // Grey veins and a dusting of flour.
+      const r = rng(21);
+      for (let i = 0; i < 5; i++) p.add(box(0.5 + r() * 0.6, 0.004, 0.018), "#bdb8b0", { p: [(r() - 0.5) * BENCH.w * 0.7, BENCH.h + 0.002, (r() - 0.5) * BENCH.d * 0.8], r: [0, (r() - 0.5) * 1.4, 0], ink: false });
+      for (let i = 0; i < 10; i++) p.add(faceted(new THREE.CircleGeometry(0.05 + r() * 0.07, 6).rotateX(-Math.PI / 2)), "#fbf8f2", { p: [(r() - 0.5) * BENCH.w * 0.85, BENCH.h + 0.004, (r() - 0.5) * BENCH.d * 0.85], ink: false });
       b = bakeShared(p);
     }
     return bakedMesh(b);
@@ -203,20 +233,20 @@ export const makeDoughStack = (() => {
 })();
 
 /** The pot of tomato sauce with its ladle standing in it. Origin at the pot's base. */
-export const POT = { r: 0.5, h: 0.5 };
+export const POT = { r: 0.66, h: 0.58 };
 export const makeSaucePot = (() => {
   let b: Baked | null = null;
   return (): THREE.Mesh => {
     if (!b) {
       const p = new Parts();
       // Open at the top, so the sauce shows from above.
-      p.add(cyl(POT.r, POT.r * 0.92, POT.h, 18, true), "#c9d1cf", { p: [0, POT.h / 2, 0], ink: 0.02 });
-      p.add(tor(POT.r, 0.035, 5, 20), "#e2e7e6", { p: [0, POT.h, 0], r: [Math.PI / 2, 0, 0], ink: 0.012 });
-      p.add(cyl(POT.r - 0.01, POT.r - 0.03, 0.04, 18), "#c8402a", { p: [0, POT.h - 0.06, 0], ink: false });
-      p.add(cyl(POT.r * 0.4, POT.r * 0.4, 0.022, 10), "#d65a3a", { p: [-0.12, POT.h - 0.035, 0.08], ink: false });
-      for (const s of [-1, 1]) p.add(box(0.16, 0.06, 0.1), "#9aa3a6", { p: [s * (POT.r + 0.06), POT.h - 0.1, 0], ink: 0.012 });
+      p.add(cyl(POT.r, POT.r * 0.92, POT.h, 20, true), "#c9d1cf", { p: [0, POT.h / 2, 0], ink: 0.02 });
+      p.add(tor(POT.r, 0.04, 5, 22), "#e2e7e6", { p: [0, POT.h, 0], r: [Math.PI / 2, 0, 0], ink: 0.012 });
+      p.add(cyl(POT.r - 0.01, POT.r - 0.03, 0.04, 20), "#c8402a", { p: [0, POT.h - 0.06, 0], ink: false });
+      p.add(cyl(POT.r * 0.4, POT.r * 0.4, 0.022, 10), "#d65a3a", { p: [-0.16, POT.h - 0.035, 0.1], ink: false });
+      for (const s of [-1, 1]) p.add(box(0.18, 0.07, 0.12), "#9aa3a6", { p: [s * (POT.r + 0.07), POT.h - 0.1, 0], ink: 0.012 });
       // The ladle, its bowl in the sauce, the handle leaning out over the front.
-      p.add(cyl(0.03, 0.03, 0.85, 6), "#9aa3a6", { p: [0.12, POT.h + 0.22, 0.24], r: [0.75, 0, -0.25], ink: 0.012 });
+      p.add(cyl(0.035, 0.035, 0.95, 6), "#9aa3a6", { p: [0.14, POT.h + 0.24, 0.28], r: [0.75, 0, -0.25], ink: 0.012 });
       b = bakeShared(p);
     }
     return bakedMesh(b);

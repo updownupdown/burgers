@@ -100,6 +100,8 @@ export interface Piece {
    * half that started facing the fire, `cook[1]` the other; an even count has half 0 to the fire.
    */
   turns?: number;
+  /** A flatbread's heading on the counter (radians about y), as the peel has nudged it round: half A faces the oven's back wall while cos(yaw) > 0. */
+  yaw?: number;
   /** Seconds the side facing the fire spent running too far ahead of the pale side (it scorches). */
   scorch?: number;
   /** Cuts across a flatbread on the board (Port Amber cuts in four: two cuts). */

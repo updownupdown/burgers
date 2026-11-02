@@ -4,7 +4,7 @@ import { pieceFor, popularityChange } from "./press";
 import { applyMods, makeOrder, orderFromRecipe, seededRng, sidesOrder } from "./menu";
 import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent } from "./stops";
 import { passed } from "./progress";
-import { alignLayers, layerQuality, payout, quickSauceStroke, SAUCE_BAND, sauceCoverage, sauceVerdict, scorePlate } from "./scoring";
+import { alignLayers, BENCH_SAUCE, layerQuality, payout, quickSauceStroke, SAUCE_BAND, sauceCoverage, sauceVerdict, scorePlate } from "./scoring";
 import { FRIES_PERFECT, FRIES_ZONE, FRY_RATE } from "./cooking";
 import type { Kind, Layer, Order, Piece, Plate } from "./types";
 import { BREADS, DONENESS_TARGET, isSauce, newPiece, PROTEINS } from "./types";
@@ -582,5 +582,14 @@ describe("quick squeeze", () => {
     expect(cov).toBeGreaterThanOrEqual(SAUCE_BAND.stingy);
     expect(cov).toBeLessThan(SAUCE_BAND.lo);
     expect(sauceVerdict(cov).word).toBe("light");
+  });
+});
+
+describe("sauce on the board or in a press bay (after build #82)", () => {
+  it("is an even squeeze in the Perfect band", () => {
+    const cov = sauceCoverage(quickSauceStroke(BENCH_SAUCE));
+    expect(cov).toBeGreaterThanOrEqual(SAUCE_BAND.lo);
+    expect(cov).toBeLessThan(SAUCE_BAND.hi);
+    expect(sauceVerdict(cov).word).toBe("perfect");
   });
 });

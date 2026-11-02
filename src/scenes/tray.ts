@@ -737,6 +737,30 @@ export class TrayView {
     return bestD < spacing * 0.6 ? best : -1;
   }
 
+  /**
+   * Which part of a plate a pointer is over (after build #82): the cup, the fries or the main dish,
+   * whichever is nearest of those on it, so a press on a tray lifts the thing under the finger.
+   */
+  partAt(ndc: THREE.Vector2, slot: number): "cup" | "fries" | "main" {
+    const pv = this.plates[slot];
+    pv.group.updateWorldMatrix(true, false);
+    const p = pv.group.worldToLocal(this.groundAt(ndc, 0.3));
+    const cands: { part: "cup" | "fries" | "main"; x: number; z: number }[] = [];
+    if (pv.cup) cands.push({ part: "cup", x: pv.cup.position.x, z: pv.cup.position.z });
+    if (pv.fries) cands.push({ part: "fries", x: pv.fries.position.x, z: pv.fries.position.z });
+    cands.push({ part: "main", x: pv.burger.position.x, z: pv.burger.position.z });
+    let best = cands[cands.length - 1];
+    let bestD = Infinity;
+    for (const c of cands) {
+      const d = Math.hypot(p.x - c.x, p.z - c.z);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    return best.part;
+  }
+
   /** Pointer position in a plate's burger-local coordinates, on top of the current stack. */
   drawPoint(ndc: THREE.Vector2, slot: number): { x: number; z: number } {
     this.raycaster.setFromCamera(ndc, this.camera);

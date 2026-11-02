@@ -195,6 +195,29 @@ export function grillStep(p: Piece, heat: number, dt: number): void {
   p.cook[1] += GRILL_RATE * heat * (UP_HEAT[p.kind] ?? 0) * dt;
 }
 
+/**
+ * Slow the part of this frame's cooking that went past over-done to `pace` of its speed (Chill:
+ * burning takes twice as long, after build #82). `was` is the faces before the frame.
+ */
+export function slowPastOver(p: Piece, was: readonly [number, number], pace: number): void {
+  const z = COOK_SCALE[p.kind as Cookable];
+  if (!z || pace >= 1) return;
+  const now = cookLevel(p);
+  if (now <= z.over) return;
+  const before = cookLevel({ ...p, cook: [was[0], was[1]] });
+  if (now <= before) return;
+  const past = (now - Math.max(before, z.over)) / (now - before);
+  const k = 1 - past * (1 - pace);
+  p.cook[0] = was[0] + (p.cook[0] - was[0]) * k;
+  p.cook[1] = was[1] + (p.cook[1] - was[1]) * k;
+}
+/** The same for a single cook value on a zone (fries in the basket). */
+export function slowPastOverValue(before: number, now: number, over: number, pace: number): number {
+  if (pace >= 1 || now <= over || now <= before) return now;
+  const from = Math.max(before, over);
+  return from + (now - from) * pace;
+}
+
 /** Turn a piece over: the face that was up goes down. The reading on its meter doesn't change. */
 export function flipFaces(p: Piece): void {
   p.cook = [p.cook[1], p.cook[0]];

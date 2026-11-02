@@ -480,7 +480,7 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
     }
     if (cup.fill < DRINK_FILL.full) {
       const btn = ti >= 0 ? k.project("counter", c.drinkButtonPoint(ti)) : null;
-      return { title: "Pour", text: k.game.pacing === "chill" ? `Hold the ${name} button to pour. On Chill it stops at the line by itself.` : `Hold the ${name} button to pour. Watch the bar on the left and let go at the line.`, gesture: btn ? { kind: "hold", at: btn } : null, whileDown: true };
+      return { title: "Pour", text: `Hold the ${name} button to pour. Watch the bar on the left and let go at the line.`, gesture: btn ? { kind: "hold", at: btn } : null, whileDown: true };
     }
     const from = proxy((h) => h.type === "lids" && h.size === cup.size, 0.3);
     return { title: "Lid on", text: `Drag a ${SIZE_LABEL[cup.size].toLowerCase()} lid onto the cup.`, gesture: from ? { kind: "drag", from, to: cupAt } : null };

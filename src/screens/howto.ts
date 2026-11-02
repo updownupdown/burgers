@@ -363,7 +363,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
       points: [
         `Take a cup of the right size: <b>S, M or L</b> (${price(DRINK_PRICE.S)} to ${price(DRINK_PRICE.L)}). Stand it under a nozzle. You can move a cup any time.`,
         "Add ice from the ice bin unless the ticket says <b>No ice</b>.",
-        "<b>Hold</b> the drink's button to pour. The bar on the left shows the level: let go at <b>Perfect</b>. On Chill it stops at the line by itself.",
+        "<b>Hold</b> the drink's button to pour. The bar on the left shows the level: let go at <b>Perfect</b>.",
         "An overflow leaves a spill. <b>Wipe it</b> before that nozzle takes another cup.",
         "Snap on a <b>lid of the cup's size</b>, then drag the drink up to the tray.",
       ],

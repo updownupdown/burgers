@@ -164,7 +164,7 @@ const PRESS_LINES = (() => {
   for (let i = 0; i < 5; i++) p.add(faceted(new THREE.BoxGeometry(1.75, 0.006, 0.075)), "#ffffff", { p: [0, 0, -0.52 + i * 0.26], ink: false });
   return bakeShared(p);
 })();
-const CUT_GEO = shareGeometry(faceted(new THREE.BoxGeometry(0.16, 0.014, 1.9)));
+const CUT_GEO = shareGeometry(faceted(new THREE.BoxGeometry(0.055, 0.01, 1.9)));
 
 function makeBread(kind: "ciabatta" | "sourdough", body: THREE.Group): (p: Piece) => void {
   const { body: bg, face: fg } = breadShapes(kind);
@@ -178,10 +178,10 @@ function makeBread(kind: "ciabatta" | "sourdough", body: THREE.Group): (p: Piece
   const lines = new THREE.Mesh(PRESS_LINES.geo, lineMat);
   lines.position.y = b.h + 0.009;
   lines.castShadow = false;
-  // The cut: corner to corner, the crumb and filling showing in the gap between the two halves
-  // (light, edged in the crust's shade) rather than a black stroke.
-  const cut = mesh(CUT_GEO, "#f0d9a6", { ink: true, shadow: false });
-  cut.position.y = b.h + 0.012;
+  // The cut (after build #82): corner to corner, a narrow dark slit sunk into the face, so it
+  // reads as bread taken away (the shadow down into the gap), not a strip laid on top.
+  const cut = mesh(CUT_GEO, "#4a2c16", { ink: false, shadow: false });
+  cut.position.y = b.h + 0.001;
   cut.rotation.y = 0.62;
   body.add(crust, face, detail, lines, cut);
   let key = "";

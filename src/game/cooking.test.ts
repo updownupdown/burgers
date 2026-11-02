@@ -76,3 +76,19 @@ describe("one progress per piece", () => {
     expect(scorePlate(order, plateOf(flipped)).notes).not.toContain("pineapple not grilled");
   });
 });
+
+describe("Chill burns at half pace past over-done (after build #82)", () => {
+  it("leaves cooking up to over-done alone and halves the rest", async () => {
+    const { newPiece } = await import("./types");
+    const { slowPastOver, slowPastOverValue, COOK_SCALE, cookLevel } = await import("./cooking");
+    const p = newPiece("ciabatta");
+    const over = COOK_SCALE.ciabatta.over;
+    p.cook = [over - 0.1, over - 0.1];
+    const was: [number, number] = [p.cook[0], p.cook[1]];
+    p.cook = [over + 0.1, over + 0.1];
+    slowPastOver(p, was, 0.5);
+    expect(cookLevel(p)).toBeCloseTo(over + 0.05, 5);
+    expect(slowPastOverValue(0.2, 0.3, 0.5, 0.5)).toBe(0.3);
+    expect(slowPastOverValue(0.6, 0.8, 0.5, 0.5)).toBeCloseTo(0.7, 5);
+  });
+});

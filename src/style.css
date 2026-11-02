@@ -747,12 +747,9 @@ html, body {
 @media (prefers-reduced-motion: reduce) { .gtag, .ftag { animation: none; } }
 .gtag.stack.low { background: var(--bv-amber); color: var(--bv-night); }
 .gtag.supply { background: var(--bv-olive); }
-/* Busy surfaces (after build #78): crowded tags shrink to the item's width, a meter that's done and
-   well short of over-done steps back, and the most urgent sits on top. */
-.gtag.pt.tight { padding: 2px 4px; }
-.gtag.pt.tight .cmeter { width: 44px; }
+/* Busy surfaces (after build #78): a meter that's done and well short of over-done steps back, and
+   the most urgent sits on top. Every meter is the same size (after build #82: no shrinking when crowded). */
 .gtag.pt.calm { opacity: 0.55; }
-.gtag.pt.calm .cmeter { height: 6px; }
 .gtag.pt.urgent { z-index: 2; }
 
 /* Fries meter over baskets and cartons: underdone | done | overdone, a line at perfect, a marker for now. */
@@ -788,7 +785,8 @@ html, body {
   --f0: #ff8197; --f1: #c0713f; --f2: #8f4a28; --f: var(--f0);
   position: relative;
   display: block;
-  width: 80px;
+  /* 85% of the study's 80 px (after build #82), the same everywhere. */
+  width: 68px;
   height: 12px;
   margin-top: 6px;
   border-radius: 999px;
@@ -840,7 +838,7 @@ html, body {
 /* A press bay's meter, in front of the bay: a melt mark beside it once there's cheese inside. */
 .gtag.pt.bay { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .gtag.pt.bay[hidden] { display: none; }
-.gtag.pt.bay .cmeter { width: 60px; margin-top: 0; }
+.gtag.pt.bay .cmeter { margin-top: 0; }
 .gtag.pt.bay .melt { font: 800 9.5px/1.2 var(--bv-font-ui); font-style: normal; color: #6b5200; background: #fbeec0; border-radius: 4px; padding: 0 4px; box-shadow: 0 0 0 1px rgb(42 38 34 / 0.6); opacity: 0.7; }
 .gtag.pt.bay .melt.on { background: #f9d95b; opacity: 1; }
 /* A stack on the grill: how many are in it, beside its meter. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DIFFICULTY, verdict } from "./difficulty";
+import { CHILL_PATIENCE, DIFFICULTY, verdict } from "./difficulty";
 
 describe("difficulty", () => {
   it("gets calmer from stressful to chill", () => {
@@ -7,6 +7,10 @@ describe("difficulty", () => {
     expect(DIFFICULTY.balanced.patience).toBeGreaterThan(DIFFICULTY.stressful.patience);
     expect(DIFFICULTY.chill.spawnGap).toBeGreaterThan(DIFFICULTY.stressful.spawnGap);
     expect(DIFFICULTY.chill.sendBack).toBeLessThan(DIFFICULTY.stressful.sendBack);
+  });
+
+  it("Chill customers are half again as patient as Balanced ones (after build #82)", () => {
+    expect(DIFFICULTY.chill.patience).toBeCloseTo(DIFFICULTY.balanced.patience * CHILL_PATIENCE, 5);
   });
 
   it("sends back once, then accepts unless it's still really wrong", () => {

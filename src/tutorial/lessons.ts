@@ -27,7 +27,7 @@ import { okDone, type Box, type Gesture, type Pt, type Show, type Step } from ".
 /** What the lessons read from the game. main.ts hands this over once. */
 export interface CoachWorld {
   save: Save;
-  phase(): "title" | "playing" | "paused" | "summary";
+  phase(): "title" | "playing" | "paused" | "sundown" | "summary";
   /** Prep is up over the map. */
   prepOpen(): boolean;
   /** The screen over the map, if any: closing, reviews, garage. */
@@ -100,7 +100,7 @@ const totalShifts = (s: Save) => Object.values(s.shiftsIn ?? {}).reduce((a, b) =
 
 /** Nothing covers the map: no screen over it, no night playing, no menu. */
 function mapClear(w: CoachWorld): boolean {
-  return w.phase() === "title" && !w.prepOpen() && !w.overlay() && !document.querySelector("div.home-night") && !document.querySelector(".home.driving");
+  return w.phase() === "title" && !w.prepOpen() && !w.overlay() && !document.querySelector("div.home-night") && !document.querySelector(".home.driving") && !document.querySelector(".home-arrive");
 }
 
 /** The first new town the road has opened that the truck hasn't worked yet. */
@@ -140,17 +140,15 @@ function mapSteps(w: CoachWorld): Step[] {
     {
       id: "closing",
       once: true,
-      when: () => w.overlay() === "closing" && totalShifts(s) <= 1,
-      done: () => totalShifts(s) > 1 || s.day > 1,
-      show: () => {
-        const btn = q("[data-act=evening]");
-        return {
-          title: "Shift done!",
-          text: btn ? "Your stars, takings and reviews are all here. Tap Evening map to carry on." : "Your stars, takings and reviews are all here. Scroll down for the way back to the map.",
-          gesture: tapOn(btn),
-          place: "top",
-        };
-      },
+      when: () => mapClear(w) && !!q(".home-results.in:not([hidden])") && totalShifts(s) <= 1,
+      done: () => okDone("closing") || totalShifts(s) > 1 || s.day > 1,
+      show: () => ({
+        title: "Shift done!",
+        text: "Here's how the day went: takings, stars and what people thought. Results has the full breakdown.",
+        ring: rectOf(q(".home-results .day-kpis")),
+        ok: "Got it",
+        place: "top",
+      }),
     },
     {
       id: "evening-sleep",
@@ -160,7 +158,7 @@ function mapSteps(w: CoachWorld): Step[] {
       show: () => ({
         title: "Evening",
         text: "The day's work is done. In the evening you can make a short drive, or sleep. For now, tap Sleep to start tomorrow.",
-        gesture: tapOn(q(".home-sheet:not([hidden]) [data-home=sleep]") ?? q(".home-dock [data-home=sleep]")),
+        gesture: tapOn(q(".home-results:not([hidden]) [data-home=sleep]") ?? q(".home-sheet:not([hidden]) [data-home=sleep]") ?? q(".home-dock [data-home=sleep]")),
       }),
     },
     {

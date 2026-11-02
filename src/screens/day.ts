@@ -277,11 +277,11 @@ export function prepHtml(p: PrepInput): string {
 // ---------------------------------------------------------------------------
 // Closing
 
-export function closingHtml(c: Closing, save: Save): string {
+/** The one line under the town's name that says how the shift went. */
+function verdictLine(c: Closing): string {
   const town = townById(c.town);
   const avg = c.stars.length ? c.stars.reduce((a, b) => a + b, 0) / c.stars.length : 0;
-  const verdict =
-    c.served === 0
+  return c.served === 0
       ? "The truck stayed quiet today."
       : c.outcome === "failed"
         ? `${town.name} wasn't impressed. Serve at least half the customers with a ${PASS_STARS}★ average to count the day.`
@@ -290,6 +290,71 @@ export function closingHtml(c: Closing, save: Save): string {
           : avg >= 3.5
             ? "Solid shift. Everyone left full."
             : "A rough day at the grill, but you made it.";
+}
+
+/**
+ * The shift's results as a sheet on the evening map (DESIGN.md §30): the Closing hero, its three
+ * numbers and one line each for reviews, popularity and the road, with Sleep right there.
+ * Results opens the full Closing screen. Buttons use the map's data-home actions.
+ */
+export function resultsSheetHtml(c: Closing, save: Save): string {
+  const town = townById(c.town);
+  const avg = c.stars.length ? c.stars.reduce((a, b) => a + b, 0) / c.stars.length : 0;
+  const newBest = c.takings > 0 && (c.bestBefore === null || c.takings > c.bestBefore);
+  const earned = c.unlocked ? bonusById(c.unlocked) : null;
+  const opened = c.opened.map(townById);
+  const left = SHIFTS_TO_UNLOCK - c.shiftsHere;
+  const pop = c.pop[1] - c.pop[0];
+  const road =
+    c.outcome === "trip"
+      ? "End of the road: the trip is done"
+      : opened.length
+        ? `<b>${opened.map((t) => esc(t.name)).join(" and ")}</b> ${opened.length > 1 ? "are" : "is"} open`
+        : c.outcome === "failed"
+          ? "Not counted toward the road"
+          : left > 0 && town.roads.length
+            ? `${Math.min(c.shiftsHere, SHIFTS_TO_UNLOCK)} of ${SHIFTS_TO_UNLOCK} good shifts · ${left} more`
+            : town.roads.length
+              ? "The roads out of here are open"
+              : "A side road";
+  const row = (ic: string, label: string, value: string, cls = "") => `<div class="home-res-row ${cls}">${icon(ic)}<span>${label}</span><em>${value}</em></div>`;
+  return `<div class="home-res-head">
+      <div class="t">
+        <span class="bv-eyebrow">Closed · Day ${c.day} · ${hourLabel(c.shift.start)} to ${hourLabel(c.shift.end)}</span>
+        <div class="nm"><h2 class="bv-title">${esc(town.name)}</h2><span class="home-res-stars" aria-label="${avg.toFixed(1)} stars average">${stars(Math.round(avg))}<span class="bv-mono">${avg.toFixed(1)}</span></span></div>
+      </div>
+      <button class="bv-btn icon" data-home="results-close" aria-label="Hide today's results">${icon("close")}</button>
+    </div>
+    <p class="home-res-verdict">${verdictLine(c)}</p>
+    ${
+      earned
+        ? `<button class="home-res-reward" data-home="garage">${icon(earned.icon)}<span><small class="bv-eyebrow">Great shift · bonus unlocked</small><b>${esc(earned.name)}</b></span><em>${save.bonuses.includes(earned.id) ? "Yours" : "Garage"}</em></button>`
+        : ""
+    }
+    <div class="day-kpis">
+      <div class="day-kpi"><span class="bv-eyebrow">Takings</span><b class="${newBest ? "up" : ""}" data-count="${c.takings}">${money(c.takings)}</b><small>${newBest ? (c.bestBefore === null ? "first here" : "town best") : `best ${money(c.bestBefore ?? 0)}`}</small></div>
+      <div class="day-kpi"><span class="bv-eyebrow">Rating</span><b>${c.rating === null ? "–" : c.rating.toFixed(1)}</b><small>${ratingDelta(c)}</small></div>
+      <div class="day-kpi"><span class="bv-eyebrow">Served</span><b>${c.served}</b><small>${c.lost + c.leftLine ? `${c.lost + c.leftLine} left` : "nobody left"}</small></div>
+    </div>
+    <div class="home-res-rows">
+      ${row("star", "Reviews today", c.reviews.length ? `${c.reviews.length} of ${c.served + c.lost} left one` : "none")}
+      ${row("people", c.press ? "Popularity · a critic came" : "Popularity", pop === 0 ? `${c.pop[1]}, no change` : `${pop > 0 ? "+" : "−"}${Math.abs(pop)} · ${c.pop[0]} → ${c.pop[1]}`, pop > 0 ? "up" : pop < 0 ? "dn" : "")}
+      ${
+        opened.length
+          ? `<button class="home-res-row go" data-home="town" data-id="${opened[0].id}">${icon("road")}<span>The road</span><em>${road}</em>${icon("forward")}</button>`
+          : row("road", "The road", road)
+      }
+    </div>
+    <div class="home-res-foot">
+      <button class="bv-btn lg" data-home="results">${icon("receipt")}Results</button>
+      <button class="bv-btn primary lg" data-home="sleep">${icon("moon")}Sleep</button>
+    </div>`;
+}
+
+export function closingHtml(c: Closing, save: Save): string {
+  const town = townById(c.town);
+  const avg = c.stars.length ? c.stars.reduce((a, b) => a + b, 0) / c.stars.length : 0;
+  const verdict = verdictLine(c);
   const row = (dt: string, dd: string, cls = "", sub = "") => `<dt class="${cls}">${dt}${sub ? `<small>${sub}</small>` : ""}</dt><dd class="${cls}">${dd}</dd>`;
   const newBest = c.takings > 0 && (c.bestBefore === null || c.takings > c.bestBefore);
   const earned = c.unlocked ? bonusById(c.unlocked) : null;
@@ -399,7 +464,7 @@ export function closingHtml(c: Closing, save: Save): string {
       <p class="day-build">${esc(buildLabel())}</p>
     </div>
     <footer class="day-foot">
-      <button class="bv-btn primary lg block" data-act="evening">${icon("moon")}Evening map</button>
+      <button class="bv-btn primary lg block" data-act="evening">${icon("map")}Back to the map</button>
     </footer>
   </div>`;
 }

@@ -16,11 +16,15 @@ export const INK_COLOR = new THREE.Color("#3b2a3a");
 const WHITE = new THREE.Color("#ffffff");
 const _hsl = { h: 0, s: 0, l: 0 };
 
-/** Palette grade applied to every toon colour: 92% saturation, 8% toward white. */
+/**
+ * Palette grade applied to every toon colour: 92% saturation, 8% toward white. Done in sRGB (the
+ * space the colours are picked in): in linear space the 8% white lifted every dark to a mid grey,
+ * so cooked meat, char and dark steel all went ash-grey (review of build #78, P1-1).
+ */
 export function grade(color: THREE.ColorRepresentation, out = new THREE.Color()): THREE.Color {
-  out.set(color).getHSL(_hsl);
-  out.setHSL(_hsl.h, _hsl.s * 0.92, _hsl.l);
-  return out.lerp(WHITE, 0.08);
+  out.set(color).getHSL(_hsl, THREE.SRGBColorSpace);
+  out.setHSL(_hsl.h, _hsl.s * 0.92, _hsl.l, THREE.SRGBColorSpace);
+  return out.convertLinearToSRGB().lerp(WHITE, 0.08).convertSRGBToLinear();
 }
 
 /**
@@ -29,9 +33,9 @@ export function grade(color: THREE.ColorRepresentation, out = new THREE.Color())
  * dark get plain ink so their edge still shows.
  */
 export function lineColor(color: THREE.ColorRepresentation, out = new THREE.Color()): THREE.Color {
-  out.set(color).getHSL(_hsl);
+  out.set(color).getHSL(_hsl, THREE.SRGBColorSpace);
   if (_hsl.l < 0.22) return out.copy(INK_COLOR);
-  out.setHSL((_hsl.h - 0.025 + 1) % 1, Math.min(1, _hsl.s * 1.1 + 0.1), Math.max(0.12, _hsl.l * 0.38));
+  out.setHSL((_hsl.h - 0.025 + 1) % 1, Math.min(1, _hsl.s * 1.1 + 0.1), Math.max(0.12, _hsl.l * 0.38), THREE.SRGBColorSpace);
   return out.lerp(INK_COLOR, 0.55);
 }
 

@@ -9,6 +9,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { bakeStatic } from "../render/bake";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { relScale } from "../render/units";
+import { softDot } from "../render/sprites";
 import { CABIN } from "../render/cabin";
 import { wallColor, wallMaterial } from "../render/walls";
 
@@ -238,6 +239,8 @@ export class PlateView {
   full = 0.6;
   /** Tallest stack (tray-local units above the tray) that stays clear of the receipts. */
   headroom = Infinity;
+  /** A soft puff that breathes out from under a piece as it lands on the stack (review #78, P3-5). */
+  private puffs: THREE.Sprite[] = [];
 
   constructor() {
     const trayBody = makeTrayBody(trayStyle());
@@ -255,6 +258,27 @@ export class PlateView {
     this.ring.position.y = 0.02;
     this.burger.position.set(DISH_AT.x, 0.13, DISH_AT.z);
     this.group.add(trayBody, this.dish, this.ring, this.burger, this.friesMark, this.cupMark);
+    for (let i = 0; i < 4; i++) {
+      const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDot(), color: "#fff6e8", transparent: true, opacity: 0, depthWrite: false }));
+      m.visible = false;
+      m.renderOrder = 4;
+      m.userData = { life: 0, dx: 0 };
+      this.burger.add(m);
+      this.puffs.push(m);
+    }
+  }
+
+  /** Two small puffs out either side of a piece that just landed. */
+  private landPuff(e: StackEntry): void {
+    let side = -1;
+    for (const m of this.puffs) {
+      if (m.userData.life > 0) continue;
+      m.userData.life = 0.35;
+      m.userData.dx = side * 1.2;
+      m.position.set(e.offX + side * 1.1, e.baseY + 0.1, e.offZ - e.back + 0.35);
+      m.visible = true;
+      if ((side += 2) > 1) break;
+    }
   }
 
   /** A burger was ordered: mark its spot (until it's started) and keep the sides beside it. */
@@ -476,12 +500,23 @@ export class PlateView {
           e.vy = 0;
           e.landed = true;
           this.kick(0.3);
+          this.landPuff(e);
           if (e.piece.kind === "bun" && e.role === "top" && this.entries.length > 2) this.squishV += 3.2;
           e.onLand?.();
         }
       }
       e.squashV += (-150 * e.squash - 12 * e.squashV) * dt;
       e.squash += e.squashV * dt;
+    }
+    for (const m of this.puffs) {
+      if (m.userData.life <= 0) continue;
+      m.userData.life -= dt;
+      const k = 1 - Math.max(0, m.userData.life) / 0.35;
+      m.position.x += m.userData.dx * dt;
+      m.position.y += 0.6 * dt;
+      m.scale.setScalar(0.5 + k * 0.6);
+      m.material.opacity = 0.55 * (1 - k);
+      m.visible = m.userData.life > 0;
     }
     this.wobbleV += (-60 * this.wobble - 5 * this.wobbleV) * dt;
     this.wobble += this.wobbleV * dt;

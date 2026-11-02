@@ -145,9 +145,37 @@ export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"):
   top.visible = lid;
   g.add(top);
 
+  // Fizz (review of build #78, P3-5): in an open cup of a soda, a thin column of bubbles rises
+  // to the surface. One instanced draw, moved each frame just before it's drawn.
+  const fizz = flavor && FIZZY.has(flavor) ? new THREE.InstancedMesh(FIZZ_GEO, fizzMat(flavor), FIZZ_N) : null;
   let fill = 0;
   let iceOn = false;
+  if (fizz) {
+    fizz.castShadow = false;
+    fizz.frustumCulled = false;
+    fizz.visible = false;
+    const m = new THREE.Matrix4();
+    fizz.onBeforeRender = () => {
+      const now = performance.now() / 1000;
+      // The liquid is opaque, so the bubbles are seen as they reach the top: each swells on the
+      // surface and pops, somewhere new each time.
+      const y = cupSurfaceY(size, fill);
+      const r = lerp(rB, rT, y / H) * 0.7;
+      for (let i = 0; i < FIZZ_N; i++) {
+        const c = now * (1.1 + (i % 3) * 0.25) + i / FIZZ_N;
+        const k = c % 1;
+        const a = Math.floor(c) * 2.39996 + i * 1.7;
+        const q = r * Math.sqrt(((Math.floor(c) * 0.618 + i * 0.37) % 1) * 0.9 + 0.1);
+        const s = Math.sin(Math.PI * k);
+        m.makeScale(s, s * 0.7, s).setPosition(Math.cos(a) * q, y + 0.004, Math.sin(a) * q);
+        fizz.setMatrixAt(i, m);
+      }
+      fizz.instanceMatrix.needsUpdate = true;
+    };
+    g.add(fizz);
+  }
   const place = () => {
+    if (fizz) fizz.visible = fill > 0.15 && !top.visible;
     liquid.visible = fill > 0.01;
     if (liquid.visible) liquid.geometry = liquidGeo(size, fill);
     // Ice floats at the surface, or sits on the floor of an empty cup.
@@ -171,11 +199,25 @@ export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"):
     },
     setLid: (on) => {
       top.visible = on;
+      if (fizz) fizz.visible = fill > 0.15 && !on;
       ice.visible = iceOn && !on;
     },
   };
   place();
   return g;
+}
+
+const FIZZY = new Set<DrinkId>(["cola", "pine", "pink", "lime", "cider", "bramble"]);
+const FIZZ_N = 8;
+const FIZZ_GEO = shareGeometry(new THREE.SphereGeometry(0.055, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2));
+const FIZZ_MATS = new Map<DrinkId, THREE.Material>();
+function fizzMat(f: DrinkId): THREE.Material {
+  let m = FIZZ_MATS.get(f);
+  if (!m) {
+    const c = new THREE.Color(DRINK_PAINT[f]).lerp(new THREE.Color("#ffffff"), 0.7);
+    FIZZ_MATS.set(f, (m = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.8, depthWrite: false })));
+  }
+  return m;
 }
 
 /** Many copies of one outlined shape in two draw calls. */

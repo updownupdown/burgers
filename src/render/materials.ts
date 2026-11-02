@@ -39,14 +39,104 @@ export function lineColor(color: THREE.ColorRepresentation, out = new THREE.Colo
   return out.lerp(INK_COLOR, 0.55);
 }
 
+/*
+ * Constant-width outlines (review of build #78, P2-1). A hull used to be the mesh scaled up 3%
+ * about its origin, so the line was 3% of the object's size: chunky on a fountain, missing on a
+ * pickle or a cheese slice. Now the hull is drawn at the mesh's own size and each vertex is pushed
+ * out along a smoothed normal in screen space by a fixed number of CSS pixels, so every object
+ * gets the same pencil weight, matching the map and the truck art.
+ */
+
+/** Outline width in CSS pixels, per quality tier. */
+export const OUTLINE_PX = { high: 1.25, standard: 1.25, low: 1.0 };
+/** NDC offset per outline: (2 * px / viewport width, 2 * px / viewport height), CSS px. */
+const outlineUniform = { value: new THREE.Vector2(2 * 1.25 / 390, 2 * 1.25 / 300) };
+let outlinePx = OUTLINE_PX.high;
+/** Set the outline width (CSS px) for the quality tier. */
+export function setOutlinePx(px: number): void {
+  outlinePx = px;
+}
+/** Call before rendering into a viewport of w x h CSS pixels. */
+export function setOutlineViewport(w: number, h: number): void {
+  outlineUniform.value.set((2 * outlinePx) / Math.max(1, w), (2 * outlinePx) / Math.max(1, h));
+}
+
+/**
+ * Per-vertex outline direction: the average of the normals of every vertex at the same position,
+ * so a hard edge (a box corner, a cylinder rim, a faceted mesh) pushes out as one piece instead of
+ * splitting into gaps. Recomputed if the geometry's positions change.
+ */
+export function outlineNormals(geo: THREE.BufferGeometry): void {
+  const pos = geo.attributes.position as THREE.BufferAttribute | undefined;
+  if (!pos) return;
+  const have = geo.attributes.outlineNormal as THREE.BufferAttribute | undefined;
+  if (have && geo.userData.outlineVer === pos.version && have.count === pos.count) return;
+  if (!geo.attributes.normal) geo.computeVertexNormals();
+  const nrm = geo.attributes.normal;
+  const n = pos.count;
+  const acc = new Map<string, [number, number, number]>();
+  const keys: string[] = new Array(n);
+  const q = (v: number) => Math.round(v * 1e4);
+  for (let i = 0; i < n; i++) {
+    const k = `${q(pos.getX(i))},${q(pos.getY(i))},${q(pos.getZ(i))}`;
+    keys[i] = k;
+    const a = acc.get(k);
+    if (a) {
+      a[0] += nrm.getX(i);
+      a[1] += nrm.getY(i);
+      a[2] += nrm.getZ(i);
+    } else acc.set(k, [nrm.getX(i), nrm.getY(i), nrm.getZ(i)]);
+  }
+  const out = have && have.count === n ? (have.array as Float32Array) : new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const a = acc.get(keys[i])!;
+    const l = Math.hypot(a[0], a[1], a[2]) || 1;
+    out[i * 3] = a[0] / l;
+    out[i * 3 + 1] = a[1] / l;
+    out[i * 3 + 2] = a[2] / l;
+  }
+  if (have && have.count === n) have.needsUpdate = true;
+  else geo.setAttribute("outlineNormal", new THREE.BufferAttribute(out, 3));
+  geo.userData.outlineVer = pos.version;
+}
+
+/** Turn a back-face basic material into a constant screen-width outline. */
+export function outlineShader<T extends THREE.Material>(m: T, weight = 1): T {
+  m.userData.outlineWeight = weight;
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uOutline = outlineUniform;
+    sh.uniforms.uWeight = { value: weight };
+    sh.vertexShader = sh.vertexShader
+      .replace("void main() {", "attribute vec3 outlineNormal;\nuniform vec2 uOutline;\nuniform float uWeight;\nvoid main() {")
+      .replace(
+        "#include <project_vertex>",
+        `#include <project_vertex>
+        {
+          vec3 on = outlineNormal;
+          #ifdef USE_INSTANCING
+            on = mat3( instanceMatrix ) * on;
+          #endif
+          vec4 cn = projectionMatrix * vec4( normalMatrix * on, 0.0 );
+          vec2 dp = cn.xy / uOutline;
+          float l = length( dp );
+          // The outline normal is unit length, or shorter / longer for a thinner / bolder line.
+          if ( l > 1e-6 ) gl_Position.xy += ( dp / l ) * uOutline * uWeight * length( outlineNormal ) * gl_Position.w;
+        }`,
+      );
+  };
+  m.customProgramCacheKey = () => "bv-outline";
+  (m as unknown as { onBeforeRender: (...a: unknown[]) => void }).onBeforeRender = (...a) => outlineNormals(a[3] as THREE.BufferGeometry);
+  return m;
+}
+
 const lineCache = new Map<string, THREE.MeshBasicMaterial>();
 
-/** Shared back-face material for an outline hull in the given line colour. */
-export function lineMaterial(color: THREE.ColorRepresentation): THREE.MeshBasicMaterial {
-  const key = new THREE.Color(color).getHexString();
+/** Shared back-face material for an outline hull in the given line colour (weight 1 = OUTLINE_PX). */
+export function lineMaterial(color: THREE.ColorRepresentation, weight = 1): THREE.MeshBasicMaterial {
+  const key = `${new THREE.Color(color).getHexString()}|${weight}`;
   let m = lineCache.get(key);
   if (!m) {
-    m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
+    m = outlineShader(new THREE.MeshBasicMaterial({ color, side: THREE.BackSide }), weight);
     lineCache.set(key, m);
   }
   return m;
@@ -117,18 +207,19 @@ export function disposeObject(obj: THREE.Object3D | null | undefined): void {
 }
 
 export const INK = lineMaterial(INK_COLOR);
-/** Default hull scale: a thin line. */
+/** Legacy hull scale. Outlines are now a constant screen width (OUTLINE_PX); kept for callers. */
 export const LINE = 1.03;
 
 /**
- * Inverted-hull outline: a slightly larger back-face copy drawn in the object's line colour
- * (ink for vertex-coloured meshes, whose colour changes as they cook).
+ * Inverted-hull outline: a back-face copy drawn in the object's line colour (ink for
+ * vertex-coloured meshes, whose colour changes as they cook), pushed out a fixed number of screen
+ * pixels by its material (see outlineShader). `_scale` is ignored: every line has one weight.
  */
-export function outline<T extends THREE.Mesh>(mesh: T, scale = LINE, color?: THREE.ColorRepresentation): T {
+export function outline<T extends THREE.Mesh>(mesh: T, _scale = LINE, color?: THREE.ColorRepresentation, weight = 1): T {
   const mat = mesh.material as THREE.MeshToonMaterial;
-  const line = color !== undefined ? lineMaterial(color) : mat.vertexColors || !mat.color ? INK : lineMaterial(lineColor(mat.color));
+  const line = color !== undefined ? lineMaterial(color, weight) : mat.vertexColors || !mat.color ? (weight === 1 ? INK : lineMaterial(INK_COLOR, weight)) : lineMaterial(lineColor(mat.color), weight);
+  outlineNormals(mesh.geometry);
   const hull = new THREE.Mesh(mesh.geometry, line);
-  hull.scale.setScalar(scale);
   hull.name = "hull";
   mesh.add(hull);
   return mesh;
@@ -143,12 +234,12 @@ export function faceted(geo: THREE.BufferGeometry): THREE.BufferGeometry {
 export function mesh(
   geo: THREE.BufferGeometry,
   color: THREE.ColorRepresentation,
-  opts: ToonOpts & { ink?: boolean | number; shadow?: boolean } = {},
+  opts: ToonOpts & { ink?: boolean | number; shadow?: boolean; /** Outline weight (1 = OUTLINE_PX). */ line?: number } = {},
 ): THREE.Mesh {
   const m = new THREE.Mesh(geo, toon(color, opts));
   m.castShadow = opts.shadow ?? true;
   m.receiveShadow = true;
-  if (opts.ink !== false) outline(m, typeof opts.ink === "number" ? opts.ink : LINE);
+  if (opts.ink !== false) outline(m, typeof opts.ink === "number" ? opts.ink : LINE, undefined, opts.line ?? 1);
   return m;
 }
 

@@ -131,8 +131,9 @@ export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"):
 
   const ice = new THREE.Group();
   for (const c of CUP_ICE) {
-    const cube = mesh(ICE_CUBE, ICE, { ink: 1.12, shadow: false });
-    cube.position.set(Math.cos(c.a) * c.q, c.dy, Math.sin(c.a) * c.q);
+    const cube = mesh(ICE_CUBE, ICE, { line: 0.7, shadow: false });
+    // Sunk a little, so only the tops poke above the lip (they read as crumpled paper higher up).
+    cube.position.set(Math.cos(c.a) * c.q, c.dy - 0.1, Math.sin(c.a) * c.q);
     cube.rotation.set(c.r * 0.5, c.r, c.r * 0.3);
     ice.add(cube);
   }
@@ -178,15 +179,13 @@ export function makeCup(flavor: DrinkId | null, lid: boolean, size: Size = "M"):
 }
 
 /** Many copies of one outlined shape in two draw calls. */
-function instanced(geo: THREE.BufferGeometry, color: THREE.ColorRepresentation, xf: THREE.Matrix4[], ink = 1.1): THREE.Group {
+function instanced(geo: THREE.BufferGeometry, color: THREE.ColorRepresentation, xf: THREE.Matrix4[], weight = 1): THREE.Group {
   const g = new THREE.Group();
   const body = new THREE.InstancedMesh(geo, toon(color), xf.length);
-  const hull = new THREE.InstancedMesh(geo, lineMaterial(lineColor(grade(color))), xf.length);
-  const m = new THREE.Matrix4();
-  const s = new THREE.Matrix4().makeScale(ink, ink, ink);
+  const hull = new THREE.InstancedMesh(geo, lineMaterial(lineColor(grade(color)), weight), xf.length);
   xf.forEach((x, i) => {
     body.setMatrixAt(i, x);
-    hull.setMatrixAt(i, m.multiplyMatrices(x, s));
+    hull.setMatrixAt(i, x);
   });
   body.castShadow = true;
   body.receiveShadow = true;
@@ -228,7 +227,7 @@ export function makeLidStack(count: number): THREE.Group {
   const xf: THREE.Matrix4[] = [];
   for (let i = 0; i < count; i++) xf.push(compose(0, 0.14 + i * 0.055, 0, 0, (i % 3) * 0.3, 0, 0.9));
   if (count > 0) {
-    g.add(instanced(LID, "#f8f8f4", xf, 1.06));
+    g.add(instanced(LID, "#f8f8f4", xf, 0.75));
     // Ridges only on the top lid, so the stack reads as lids without the extra draw calls.
     const ridge = mesh(LID_RIDGE, "#f8f8f4", { ink: 1.1 });
     ridge.rotation.x = Math.PI / 2;
@@ -262,7 +261,7 @@ export function makeIceBin(): THREE.Group {
     const y = 0.5 + rnd() * 0.22 * heap + (i < 24 ? 0 : 0.11);
     xf.push(compose(x, y, z, rnd() * 1.2, rnd() * 3.1, rnd() * 1.2, 0.85 + rnd() * 0.35));
   }
-  g.add(instanced(ICE_CUBE, ICE, xf, 1.12));
+  g.add(instanced(ICE_CUBE, ICE, xf, 0.6));
   const scoop = new THREE.Group();
   const bowl = mesh(SCOOP_BOWL, "#d7dedd", { side: THREE.DoubleSide });
   bowl.rotation.z = Math.PI / 2;

@@ -29,7 +29,7 @@ import { ageLayers, freshen, isTacoRun, joinTacos, RACK_FILL, RACK_SLOTS } from 
 import { makeFlatbread } from "./render/flatbread";
 import { makePeel, makeSauceLadle, PEEL } from "./render/machines/oven";
 import { flickOf, slideArmed, slidUnder, type Flick } from "./game/peel";
-import { disposeObject } from "./render/materials";
+import { disposeObject, OUTLINE_PX, setOutlinePx, setOutlineViewport } from "./render/materials";
 import { CounterView, CUP_IN_HAND, RACK_SCALE, EMPTY_PACK, STOPS, pageX, type DrinkCup, GRILL_SCALE, GRILLE_ZONE, FLAT_ZONE, HEARTH_Y, HOME_PAGE, PAGES, PEEL_Y, GRILL_TOP, ZONE_START, type GrillItem, type Hit, type PeelTarget, type PieHolder, type PiePlace } from "./scenes/counter";
 import { PLATE } from "./render/machines/press";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
@@ -102,6 +102,7 @@ try {
 function applyGfx(level: Gfx): void {
   gfx = level;
   renderer.shadowMap.enabled = level !== "low";
+  setOutlinePx(OUTLINE_PX[level]);
   for (const sun of [counter.sun, trayView.sun]) {
     sun.castShadow = level !== "low";
     sun.shadow.radius = level === "high" ? 5 : 1;
@@ -5523,6 +5524,7 @@ function render(): void {
     const y = H - r.y - r.h;
     renderer.setViewport(r.x, y, r.w, r.h);
     renderer.setScissor(r.x, y, r.w, r.h);
+    setOutlineViewport(r.w, r.h);
     renderer.render(scene, cam);
   };
   draw(bands.customers, customersView.scene, customersView.camera);

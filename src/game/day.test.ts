@@ -27,13 +27,13 @@ describe("range", () => {
 
 describe("who turns up", () => {
   const stop = townById("pinecrest");
-  const base = { stop, popularity: START_POPULARITY, rep: 2, hidden: [] as string[] };
+  const base = { stop, popularity: START_POPULARITY, rating: 4, hidden: [] as string[] };
 
   it("expects a modest first day and a bigger crowd as the truck gets known", () => {
     const first = expectedCustomers(base);
     expect(first).toBeGreaterThanOrEqual(5);
     expect(first).toBeLessThan(stop.customers);
-    expect(expectedCustomers({ ...base, popularity: 90, rep: 2.8 })).toBeGreaterThan(stop.customers);
+    expect(expectedCustomers({ ...base, popularity: 90, rating: 4.8 })).toBeGreaterThan(stop.customers);
   });
 
   it("brings fewer people to a short menu and more to a long window", () => {
@@ -92,10 +92,10 @@ describe("bonuses", () => {
   });
 
   it("great shifts ask for stars and most orders served", () => {
-    expect(greatShift([3, 3, 2, 3, 2, 3], 6, 6)).toBe(true);
-    expect(greatShift([3, 3, 2, 3, 2, 3], 6, 8)).toBe(false);
-    expect(greatShift([2, 2, 2, 2, 2, 3], 6, 6)).toBe(false);
-    expect(greatShift([3, 3, 3], 3, 3)).toBe(false);
+    expect(greatShift([5, 5, 4, 5, 4, 5], 6, 6)).toBe(true);
+    expect(greatShift([5, 5, 4, 5, 4, 5], 6, 8)).toBe(false);
+    expect(greatShift([4, 4, 4, 4, 4, 5], 6, 6)).toBe(false);
+    expect(greatShift([5, 5, 5], 3, 3)).toBe(false);
   });
 
   it("are bought only once unlocked, and only with enough savings", () => {

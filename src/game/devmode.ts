@@ -4,7 +4,6 @@
  * each stage. The real trip is kept aside in storage and comes back when the simulation is
  * turned off (or dev mode is).
  */
-import type { Review } from "./business";
 import { townBonus, type BonusId } from "./bonus";
 import { freshSave, START_POPULARITY, type Save } from "./progress";
 import { START_TOWN, STOPS, townById } from "./stops";
@@ -73,16 +72,6 @@ export function roadOrder(): string[] {
   return order;
 }
 
-const SAMPLE_REVIEWS: [number, string][] = [
-  [3, "Best burger I've had on this road. Worth the wait."],
-  [3, "Crisp fries, cold drink, perfect patty. We'll be back."],
-  [2, "Solid lunch. Fries could've been hotter."],
-  [2, "Good burger, a bit of a wait at the window."],
-  [1, "My order came out wrong the first time."],
-  [3, "The kids still talk about it."],
-  [0, "Waited too long and walked off."],
-];
-
 /** A made-up trip `level`% of the way down the road, with matching fame, ratings and upgrades. */
 export function simulatedSave(level: SimLevel): Save {
   const s = freshSave();
@@ -94,7 +83,7 @@ export function simulatedSave(level: SimLevel): Save {
   for (const id of worked) {
     s.shiftsIn[id] = SHIFTS_TO_UNLOCK;
     s.passedTowns.push(id);
-    s.best[id] = Number((1.8 + k * 0.9 - (worked.indexOf(id) % 3) * 0.15).toFixed(1));
+    s.best[id] = Number((3.8 + k * 1.0 - (worked.indexOf(id) % 3) * 0.2).toFixed(1));
   }
   const unlocked = new Set(worked);
   for (const id of worked) for (const r of townById(id).roads) unlocked.add(r);
@@ -103,11 +92,11 @@ export function simulatedSave(level: SimLevel): Save {
   s.town = worked[worked.length - 1];
   s.day = 1 + worked.length * (SHIFTS_TO_UNLOCK + 1);
   s.popularity = Math.round(START_POPULARITY + (95 - START_POPULARITY) * k);
-  const orders = worked.length * SHIFTS_TO_UNLOCK * 9;
-  s.ratingCount = orders;
-  s.ratingSum = Math.round(orders * (1.9 + 0.7 * k));
-  s.rep = Number((1.9 + 0.7 * k).toFixed(2));
-  s.repWeight = 30;
+  // About two reviews a shift, mostly glowing, a few grumbles; better further down the road.
+  const reviews = worked.length * SHIFTS_TO_UNLOCK * 2;
+  const share = [0.08 - 0.05 * k, 0.07 - 0.04 * k, 0.1 - 0.04 * k, 0.3, 0];
+  share[4] = 1 - share.reduce((a, b) => a + b, 0);
+  s.reviewCounts = share.map((f) => Math.round(f * reviews)) as Save["reviewCounts"];
   // Great shifts unlocked the bonuses of the towns worked; most are bought; some savings left.
   s.found = worked.map((id) => townBonus(id)?.id).filter((b): b is BonusId => !!b);
   s.bonuses = level === 100 ? [...s.found] : s.found.slice(0, 4);
@@ -116,10 +105,6 @@ export function simulatedSave(level: SimLevel): Save {
     s.looks = ["dusk", "teal", "string", "whitewall", "tubeman", "canoe"];
     s.look = { paint: "dusk", awning: "teal", roof: "canoe", lights: "string", wheels: "whitewall", inflatable: "tubeman", tag: "solo" };
   }
-  s.reviews = worked
-    .flatMap((id, i) => SAMPLE_REVIEWS.slice(0, 2 + (i % 3)).map(([stars, text]): Review => ({ stars: Math.min(3, stars + (level === 100 && stars < 3 ? 1 : 0)), text, stop: townById(id).name })))
-    .reverse()
-    .slice(0, 40);
   for (const id of worked) s.known[townById(id).menu[0].name] = 5;
   return s;
 }

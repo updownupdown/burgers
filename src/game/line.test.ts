@@ -42,9 +42,9 @@ describe("fame", () => {
 
 
   it("grows by word of mouth and shrinks when people give up", () => {
-    expect(wordOfMouth([3, 3, 2, 2, 3, 2], 0, 0)).toBe(2);
-    expect(wordOfMouth([3, 3, 3], 2, 0)).toBe(0);
-    expect(wordOfMouth([1, 0], 4, 3)).toBe(-3);
-    expect(wordOfMouth(new Array(40).fill(3), 0, 0)).toBe(6);
+    expect(wordOfMouth([5, 5, 4, 4, 5, 4], 0, 0)).toBe(2);
+    expect(wordOfMouth([5, 5, 5], 2, 0)).toBe(0);
+    expect(wordOfMouth([3, 1], 4, 3)).toBe(-3);
+    expect(wordOfMouth(new Array(40).fill(5), 0, 0)).toBe(6);
   });
 });

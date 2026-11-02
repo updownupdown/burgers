@@ -5,7 +5,8 @@ import { BREADS, COUNTED, FRY_LABEL, fryOf, KIND_LABEL, SAUCE_RADIUS, sauceRadiu
 export interface ScoreResult {
   /** 0..100 */
   score: number;
-  stars: 0 | 1 | 2 | 3;
+  /** What the customer thinks of it, 1..5 (see starsFor). */
+  stars: 1 | 2 | 3 | 4 | 5;
   structure: number;
   quality: number;
   presentation: number;
@@ -313,8 +314,13 @@ export function heldPenalty(piece: Piece): number {
   return clamp01(((piece.held ?? 0) - HOLD_GRACE) / (HOLD_RUIN - HOLD_GRACE)) * 0.45;
 }
 
+/**
+ * Stars out of five for a score. A good order (70+) is 4★ and a great one (90+) 5★; what used to
+ * be a 1★ order on the old three-star scale (45 to 69) splits into 2★ and 3★, and anything worse is 1★.
+ */
+export const STAR_AT = { 5: 90, 4: 70, 3: 57, 2: 45 } as const;
 export function starsFor(score: number): ScoreResult["stars"] {
-  return score >= 90 ? 3 : score >= 70 ? 2 : score >= 45 ? 1 : 0;
+  return score >= STAR_AT[5] ? 5 : score >= STAR_AT[4] ? 4 : score >= STAR_AT[3] ? 3 : score >= STAR_AT[2] ? 2 : 1;
 }
 
 /**

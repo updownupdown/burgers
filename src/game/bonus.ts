@@ -65,8 +65,11 @@ export function townBonus(town: string): Bonus | undefined {
   return BONUSES.find((b) => b.town === town);
 }
 
-/** What a great shift asks: a 2.4★ average, 85% of the people who ordered served, and at least six of them. */
-export const GREAT = { stars: 2.4, served: 0.85, min: 6 };
+/**
+ * What a great shift asks: a 4.4★ average opinion (the old 2.4 of three, now that a good order is
+ * 4★ and a great one 5★), 85% of the people who ordered served, and at least six of them.
+ */
+export const GREAT = { stars: 4.4, served: 0.85, min: 6 };
 
 /** A great shift unlocks the town's bonus. `ordered` is everyone who placed an order (served or not). */
 export function greatShift(stars: readonly number[], served: number, ordered: number): boolean {

@@ -11,7 +11,7 @@ import { eventOn, fountainFor, fryerOf, middleOf, townById, withEvent, type Town
 import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
 import { joinChance, lineDrain, linePatience, WINDOW, wordOfMouth } from "./game/line";
-import { HOLD_GRACE, HOLD_RUIN, LADLE_BAND, payout, SAUCE_BAND, sauceCoverage, sauceVerdict, scorePlate, type SauceWord } from "./game/scoring";
+import { HOLD_GRACE, HOLD_RUIN, LADLE_BAND, payout, quickSauceStroke, SAUCE_BAND, sauceCoverage, sauceVerdict, scorePlate, type SauceWord } from "./game/scoring";
 import { CROWD, menuFor, nextReputation, reviewFor, type Review } from "./game/business";
 import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "./game/menu";
 import type { DrinkId, FriesSize, FryKind, Layer, Order, Piece, Plate, SauceKind, Size } from "./game/types";
@@ -152,6 +152,8 @@ const game = {
   orderSeq: 1,
   active: 0,
   tutorial: true,
+  /** The trip's first day on Chill: nothing scores under two stars and the rating can't drop. */
+  gentle: false,
   town: save.town,
   /** Town highlighted on the map. */
   mapSel: save.town,
@@ -468,7 +470,11 @@ function serve(i: number): void {
   // Freebies kept from an earlier send-back count towards this verdict too.
   const plate: Plate = { ...s.plate, fries: s.plate.fries ?? s.kept.fries, drink: s.plate.drink ?? s.kept.drink };
   const r = scorePlate(s.order, plate);
-  const call = s.lesson === 0 || s.lesson === 1 ? "accept" : verdict(r.score, game.pacing, !!s.sentBack, r.faulty, !!r.missing);
+  let call = s.lesson === 0 || s.lesson === 1 ? "accept" : verdict(r.score, game.pacing, !!s.sentBack, r.faulty, !!r.missing);
+  // The first day on Chill never turns anyone away: a really wrong order comes back once for changes, then it's taken.
+  if (game.gentle && call === "refuse") call = s.sentBack ? "accept" : "sendBack";
+  // ...and anything taken that day is worth at least two stars.
+  if (game.gentle && r.stars < 2) r.stars = 2;
   if (call === "sendBack") return sendBack(i, r.missing ?? r.notes[0] ?? "this isn't quite right");
   if (call === "refuse") return refuse(i, r.notes[0] ?? "this isn't what I ordered", r.perks.length > 0);
   game.ratings.push(r.stars);
@@ -552,7 +558,7 @@ function sendBack(i: number, note: string): void {
   showBubble(i, `Can you fix it? ${capitalise(note)}.${took ? ` I'll keep the ${took}!` : ""}`, false);
   sfx.grumble();
   buzz([30, 40, 30]);
-  hintOnce("sent-back", "Sent back: fix the tray and swipe it up again. Drag down off the tray to take the top layer off.", 4);
+  hintOnce("sent-back", "Sent back: fix the tray and serve it again. The undo button on the tray takes the top layer off.", 4);
 }
 
 /** Really wrong: they won't take it and leave without paying (but keep any freebies). */
@@ -601,6 +607,91 @@ function coinPop(i: number, amount: number): void {
   c.style.top = `${bands.tray.y + 10}px`;
   ui.root.appendChild(c);
   setTimeout(() => c.remove(), 1500);
+}
+
+/** Where a tray's food sits on screen (its burger spot). */
+function plateScreen(i: number): { x: number; y: number } {
+  const b = trayView.plates[i].burger;
+  b.updateWorldMatrix(true, false);
+  const e = b.matrixWorld.elements;
+  const v = new THREE.Vector3(e[12], 0.3, e[14]).project(trayView.camera);
+  const r = bands.tray;
+  return { x: r.x + ((v.x + 1) / 2) * r.w, y: r.y + ((1 - v.y) / 2) * r.h };
+}
+
+/** Everything the ticket asks for is on the tray (right or not): it can be handed over with a tap. */
+function trayReady(i: number): boolean {
+  const s = game.slots[i];
+  if (!s.order || s.leaving) return false;
+  const p = s.plate;
+  if (!p.layers.length && !p.fries && !p.drink) return false;
+  const r = scorePlate(s.order, { ...p, fries: p.fries ?? s.kept.fries, drink: p.drink ?? s.kept.drink });
+  return !r.missing && !r.notes.some((n) => n.startsWith("missing"));
+}
+
+/** What the Undo button would take off: the top layer, else the drink, else the fries; null when it can't. */
+function undoable(i: number): boolean {
+  const s = game.slots[i];
+  if (!s.order || s.leaving) return false;
+  const ls = s.plate.layers;
+  if (ls.length) {
+    // Flatbreads move on the peel, and a folded quesadilla or a lidded sandwich comes off whole: no one-tap undo.
+    if (ls[0].piece.kind === "dough" && !AFTER_OVEN.has(ls[ls.length - 1].piece.kind)) return false;
+    if (ls[0].piece.folded) return false;
+    if (counter.middle === "press" && ls.length > 1 && BREADS.has(ls[0].piece.kind) && BREADS.has(ls[ls.length - 1].piece.kind)) return false;
+    return true;
+  }
+  return !!s.plate.drink || !!s.plate.fries;
+}
+
+/** Undo: the top thing on a tray goes in the trash. */
+function undoTop(i: number): void {
+  if (!undoable(i)) return;
+  const s = game.slots[i];
+  if (s.plate.layers.length) s.plate.layers.pop();
+  else if (s.plate.drink) s.plate.drink = null;
+  else s.plate.fries = null;
+  syncTray(i, false);
+  sfx.thud();
+  buzz(12);
+}
+
+// Serve and Undo buttons on the trays: a tap is easier to find than a swipe.
+const trayActs = game.slots.map((_, i) => {
+  const serveBtn = document.createElement("button");
+  serveBtn.className = "tray-serve";
+  serveBtn.hidden = true;
+  serveBtn.innerHTML = `<span aria-hidden="true">↑</span>Serve`;
+  serveBtn.addEventListener("click", () => {
+    if (game.phase === "playing" && trayReady(i)) serve(i);
+  });
+  const undoBtn = document.createElement("button");
+  undoBtn.className = "tray-undo";
+  undoBtn.hidden = true;
+  undoBtn.setAttribute("aria-label", "Undo: take the top thing off");
+  undoBtn.innerHTML = `<span aria-hidden="true">↶</span>`;
+  undoBtn.addEventListener("click", () => {
+    if (game.phase === "playing") undoTop(i);
+  });
+  ui.root.append(serveBtn, undoBtn);
+  return { serveBtn, undoBtn };
+});
+
+function updateTrayActs(): void {
+  const on = game.phase === "playing" && !ptr?.held;
+  game.slots.forEach((_, i) => {
+    const { serveBtn, undoBtn } = trayActs[i];
+    const ready = on && trayReady(i);
+    const undo = on && i === game.active && undoable(i);
+    serveBtn.hidden = !ready;
+    undoBtn.hidden = !undo;
+    if (!ready && !undo) return;
+    const p = plateScreen(i);
+    const slotW = bands.tray.w / 3;
+    // Serve sits over the finished food; Undo in the tray's bottom-left corner.
+    if (ready) serveBtn.style.transform = `translate(${(i * slotW + slotW / 2 - 42).toFixed(0)}px, ${(p.y - 18).toFixed(0)}px)`;
+    if (undo) undoBtn.style.transform = `translate(${(i * slotW + 2).toFixed(0)}px, ${(p.y + 2).toFixed(0)}px)`;
+  });
 }
 
 function syncTray(i: number, animate: boolean): void {
@@ -686,7 +777,7 @@ function tutorialHint(): string | null {
     return "A bit past done. Grab it now, before it burns.";
   }
   if (layers[layers.length - 1].piece.kind !== "bun" || layers.length < 3) return "Add the top bun.";
-  return "Swipe the tray up to hand it to the customer!";
+  return "Tap Serve (or swipe the tray up) to hand it to the customer!";
 }
 
 // ---------------------------------------------------------------------------
@@ -1452,7 +1543,7 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
     }
     sfx.plop();
     if (payload.type === "empty") {
-      hintOnce(cup.tap >= 0 ? "pour" : "cup-free", cup.tap >= 0 ? "Hold the drink's button on top of the fountain. Watch the bar on the left and let go at the line." : "Cups can stand anywhere. Move one under a nozzle to pour.", 3.5);
+      hintOnce(cup.tap >= 0 ? "pour" : "cup-free", cup.tap >= 0 ? (game.pacing === "chill" ? "Hold the drink's button on top of the fountain. On Chill it stops at the line by itself." : "Hold the drink's button on top of the fountain. Watch the bar on the left and let go at the line.") : "Cups can stand anywhere. Move one under a nozzle to pour.", 3.5);
     }
     return true;
   }
@@ -1614,12 +1705,31 @@ function paintSauce(pt: Pointer): void {
   }
 }
 
+/** A quick squeeze from a tap on the bottle: a loose spiral on that tray's top layer. */
+function quickSauce(kind: SauceKind, slot: number): void {
+  const layers = slot >= 0 ? game.slots[slot].plate.layers : [];
+  if (!layers.length) return;
+  const top = layers[layers.length - 1];
+  if (top.piece.kind === kind) {
+    showHint(`There's ${kind} on already. To add more, drag the bottle onto the burger and draw circles.`, 3);
+    return;
+  }
+  setActive(slot);
+  const p = newPiece(kind);
+  p.stroke = quickSauceStroke();
+  layers.push({ piece: p, offX: top.offX * 0.5, offZ: top.offZ * 0.5 });
+  syncTray(slot, true);
+  sfx.squirt();
+  buzz(10);
+  hintOnce("quick-sauce", "A quick squeeze. For a Perfect, drag the bottle onto the burger and draw circles until it says Perfect.", 4);
+}
+
 /** Let go: the bottle goes back in the caddy and the camera eases back out. */
 function endSauce(pt: Pointer, cancelled: boolean): void {
   const s = sauceDrag;
   if (!s) return;
-  if (!cancelled && !s.locked && Math.hypot(pt.x - pt.x0, pt.y - pt.y0) < 24)
-    showHint("Hold the bottle and drag it onto a burger. Keep moving to squeeze; let go to put it back.", 3);
+  // A tap on the bottle: a quick squeeze onto the burger being built. Good enough; draw it yourself for Perfect.
+  if (!cancelled && !s.locked && Math.hypot(pt.x - pt.x0, pt.y - pt.y0) < 24) quickSauce(s.kind, s.ok[game.active] ? game.active : s.ok.findIndex(Boolean));
   counter.liftSauce(null);
   trayView.showGhost(-1, null);
   trayView.ghostOver(null);
@@ -2411,7 +2521,7 @@ function peelFlick(pt: Pointer, f: Flick): void {
       buzz(12);
       showPeelGhost(slot);
       const after = pieOrder(layers[0].piece)?.layers.some((l) => l.after);
-      hintOnce("pie-served", after ? "On the tray. Basil, rocket and honey go on now, then swipe the tray up." : "On the tray. Swipe the tray up to hand it over.", 3);
+      hintOnce("pie-served", after ? "On the tray. Basil, rocket and honey go on now, then tap Serve." : "On the tray. Tap Serve to hand it over.", 3);
     } else if (f.dir === "up" && !full && plate.layers[0]?.piece.kind === "dough") {
       counter.setPeel(plate.layers.splice(0));
       peelJust = `slot${slot}`;
@@ -2701,7 +2811,9 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       // Swipe a plate up to hand it to its customer. (Dragging down onto the counter lifts things
       // off; nothing is ever thrown away except in the trash.)
       if (dy < -40 && -dy > Math.abs(dx)) serve(pt.plate);
-      else if (!pt.moved && game.slots[pt.plate].order) hintOnce("serve", "Swipe the tray up to hand it over.", 2.5);
+      // A tap on a finished tray hands it over too.
+      else if (!pt.moved && trayReady(pt.plate)) serve(pt.plate);
+      else if (!pt.moved && game.slots[pt.plate].order) hintOnce("serve", "When everything's on, tap Serve (or swipe the tray up) to hand it over.", 2.5);
       break;
   }
 }
@@ -3175,6 +3287,7 @@ function startShift(): void {
   });
   // Prep's choices are fixed for the whole shift: pacing, the window and the bonus.
   game.pacing = difficulty;
+  game.gentle = difficulty === "chill" && save.day === 1;
   game.shift = validShift(save.shift);
   game.bonus = save.bonus && save.bonuses.includes(save.bonus) ? save.bonus : null;
   game.shiftLength = shiftSeconds(game.shift, stop().shiftLength);
@@ -3189,7 +3302,9 @@ function startShift(): void {
   counter.fryBoost = has("turbo") ? 1.35 : 1;
   // Hot plate (the old Searing plate): the main counter cooks faster, whatever it is.
   counter.grillBoost = has("sear") ? 1.25 : 1;
-  counter.autoStopPour = has("autostop");
+  // Chill pours to the line by itself and nothing on the grill or in the fryer burns.
+  counter.autoStopPour = has("autostop") || game.pacing === "chill";
+  counter.noBurn = game.pacing === "chill";
   counter.setPage(HOME_PAGE);
   const intro = game.event
     ? `${game.event.name} today! ${game.event.blurb}${game.event.special ? ` Special: ${game.event.special.name}.` : ""}`
@@ -3389,6 +3504,7 @@ function endShift(): void {
   const word = wordOfMouth(game.stars, has("cookies") ? 0 : game.lost, has("cookies") ? 0 : game.leftLine);
   save.popularity = fadePopularity(save.popularity) + (word > 0 && has("guestbook") ? word * 2 : word) + (game.press?.pop ?? 0);
   save.popularity = Math.max(10, Math.min(100, save.popularity));
+  if (game.gentle) save.popularity = Math.max(popBefore, save.popularity);
   customersView.setLine([]);
   if (game.press) save.press = [game.press, ...save.press].slice(0, 10);
   for (const s of game.slots) {
@@ -3410,7 +3526,7 @@ function endShift(): void {
   save.bestTakings[here.id] = Math.max(bestBefore ?? 0, takings);
   const repBefore = save.rep;
   const r = nextReputation(save.rep, save.repWeight, game.ratings);
-  save.rep = r.rep;
+  save.rep = game.gentle ? Math.max(repBefore, r.rep) : r.rep;
   save.repWeight = r.weight;
   save.reviews = [...game.reviews.slice().reverse(), ...save.reviews].slice(0, 30);
   save.best[here.id] = Math.max(save.best[here.id] ?? 0, avg);
@@ -3557,7 +3673,19 @@ function tick(dt: number): void {
     if (has("rail") && game.line[0] && !game.line[0].order) game.line[0].order = nextOrder();
     // An empty window calls the first in line up by itself after a beat; otherwise it's the bell.
     if (game.slots.some((s) => s.order || s.fig)) game.emptySince = game.time;
-    else if (game.line.length && (game.time - game.emptySince >= 0.7 || guiding)) callNext();
+    else if (game.line.length && (game.time - game.emptySince >= 0.7 || guiding) && callNext()) {
+      // The bell rings itself, so the bell and "next customer" go together from the first order.
+      ui.bell.classList.remove("ring");
+      void ui.bell.offsetWidth;
+      ui.bell.classList.add("ring");
+      sfx.bell();
+    } else if (game.pacing === "chill" && !game.tutorial && game.line[0] && game.line[0].patience < game.line[0].maxPatience * 0.6 && callNext()) {
+      // On Chill nobody gives up in line: if they've waited a while and there's room, the bell rings for them.
+      ui.bell.classList.remove("ring");
+      void ui.bell.offsetWidth;
+      ui.bell.classList.add("ring");
+      sfx.bell();
+    }
     if (game.bellTaps && game.time - game.bellAt > BELL_WINDOW) game.bellTaps = 0;
     customersView.setLine(game.line.map((w) => ({ seed: w.seed, mood: patienceMood(w.patience / w.maxPatience) })));
 
@@ -3568,7 +3696,8 @@ function tick(dt: number): void {
       if (s.patience <= 0) {
         game.lost++;
         if (s.order.critic) criticVerdict(0, []);
-        game.ratings.push(0);
+        // A walk-out on the first Chill day isn't held against the truck.
+        if (!game.gentle) game.ratings.push(0);
         game.reviews.push({ stars: 0, text: reviewFor(0, [], game.rng, true), stop: stop().name });
         sfx.grumble();
         customerLeaves(i, "angry", "Too slow! I'm off.", false);
@@ -3687,6 +3816,7 @@ function spills(): number {
 
 let lastTimerText = "";
 function updateUi(dt = 0): void {
+  updateTrayActs();
   const len = game.shiftLength;
   const left = Math.max(0, len - game.time);
   const tText = left > 0 ? clockLabel(clockAt(game.time, game.shift, len)) : "Closing";

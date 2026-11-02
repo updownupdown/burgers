@@ -857,3 +857,28 @@ html, body {
 .sauce-score[data-word="drowning"] span, .sauce-score[data-word="wrong"] span { color: var(--bv-paprika); font-weight: 800; }
 /* The sauce fill bar is the shared level bar (.lvl), raised over the close-up and its dim. */
 .lvl.sauce { z-index: 6; }
+
+/* Serve and Undo on the trays (main.ts updateTrayActs): taps a first-time player can find. */
+#ui .tray-serve, #ui .tray-undo {
+  pointer-events: auto; position: absolute; left: 0; top: 0; z-index: 4; margin: 0; border: 0; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+#ui .tray-serve[hidden], #ui .tray-undo[hidden] { display: none; }
+#ui .tray-serve {
+  width: 84px; height: 36px; border-radius: 999px; padding: 0 12px 0 10px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  background: var(--bv-paprika); color: #fff7f2; font: 800 15px/1 var(--bv-font-ui);
+  box-shadow: 0 0 0 2px #fff7f2, 0 4px 10px rgb(42 38 34 / 0.3);
+  animation: serve-glow 1.3s ease-in-out infinite;
+}
+.tray-serve span { font-size: 17px; }
+@keyframes serve-glow { 50% { box-shadow: 0 0 0 2px #fff7f2, 0 0 0 6px rgb(216 87 58 / 0.35), 0 4px 10px rgb(42 38 34 / 0.3); } }
+#ui .tray-undo {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--bv-paper, #f6efe3); color: var(--bv-ink, #2a2622); font: 700 20px/1 var(--bv-font-ui);
+  box-shadow: 0 0 0 1.5px rgb(42 38 34 / 0.25), 0 3px 8px rgb(42 38 34 / 0.25);
+}
+.tray-undo:active, .tray-serve:active { transform-origin: center; filter: brightness(0.92); }
+#ui.saucing .tray-serve, #ui.saucing .tray-undo { opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .tray-serve { animation: none; } }

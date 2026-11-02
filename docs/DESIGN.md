@@ -722,3 +722,14 @@ Beyond the black tips: a coach that shows each move with a see-through thumb (da
 - **First-time lessons, any shift**: fries (scoop, lower, lift, carton, fill, salt), eggs (tap to crack, shells to the bin, flip for over easy), toasted buns, smash (hold on a fresh patty, urgent), cheese melt, each sauce, wrong layer (drag to the bin), a patty about to burn (urgent), and a send-back.
 - Learned lessons are stored per device (`bv-coach`); the old one-line tips stay for players who switch the coach off.
 - Anchors come from the counters' hit proxies and the DOM, so 3D layout changes move the thumb with them.
+
+### Easier for new players (after build #72)
+
+- **Serve button.** When everything on the receipt is on a tray, a pulsing **↑ Serve** button sits over the food; tapping it (or tapping the tray) hands it over. Swiping up still works. Readiness is `scorePlate` with no missing item or layer, right or wrong.
+- **Undo button.** The active tray shows a small ↶ in its bottom-left corner: a tap bins the top layer (else the drink, else the fries). Not for flatbreads, folded quesadillas or lidded sandwiches, which move whole.
+- **Quick squeeze.** A tap on a sauce bottle lays a loose spiral on the active burger (about 20% coverage: "a bit more", q ≈ 0.88). Drawing it on is still the only way to Perfect.
+- **Chill** now also: pours stop at the line by themselves (as the autostop bonus does), nothing on the grill passes well done or chars a face and fries hold at dark golden (`Counter.noBurn`), and the bell calls the first in line once they've used 40% of their patience if there's room (not during the guided first shift).
+- **Forgiving first day** (Chill, day 1): no refusals (a really wrong order comes back once, then is taken), every served order is at least 2★, walk-outs don't count against reputation, and reputation and popularity can't fall.
+- **The bell rings** (animation and chime) whenever it calls someone up by itself, so the bell reads as "next customer" from the first order.
+- **Touch targets.** An audit of every counter hit box at 390×844 found only the sauce bottles under 44 px (29–36 px wide); their boxes are now as wide as the gap between bottles, on every difficulty.
+- The tutorial teaches the tap squeeze on the first burger and drawing for Perfect on the next, Serve and Undo by their buttons, and the self-stopping pour on Chill.

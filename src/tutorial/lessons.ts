@@ -263,6 +263,11 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
     const e = b.matrixWorld.elements;
     return k.project("tray", new THREE.Vector3(e[12], 0.3, e[14]));
   };
+  /** The Undo button on a tray, when it's showing. */
+  const undoAt = (i: number): Pt | null => {
+    const r = rectOf(document.querySelectorAll<HTMLElement>(".tray-undo")[i] ?? null);
+    return r ? { x: r.x + r.w / 2, y: r.y + r.h / 2 } : null;
+  };
   const itemAt = (it: GrillItem): Pt => k.project("counter", c.world(HOME_PAGE, it.x, 0.95, it.z));
   const zoneAt = (i: number): Pt => k.project("counter", c.zonePoint(i));
   const trashAt = (): Pt => {
@@ -308,8 +313,8 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
       if (only) return null;
       return {
         title: "Oops, not that",
-        text: "That isn't next on the ticket. Press the tray, drag down to lift the top layer off, and drop it in the trash at the front.",
-        gesture: { kind: "drag", from: plate, to: trashAt() },
+        text: "That isn't next on the ticket. Tap the undo button on the tray to take the top layer off.",
+        gesture: undoAt(slotIdx) ? { kind: "tap", at: undoAt(slotIdx)! } : { kind: "drag", from: plate, to: trashAt() },
       };
     }
     if (pr.next >= pr.want.length) return null;
@@ -348,9 +353,12 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
       }
       if (!onGrill) return back();
       const from = proxy((h) => h.type === "bottle" && h.sauce === next.kind);
+      // The very first burger: a tap is a quick squeeze. After that, drawing it on gets Perfect.
+      if (s.lesson === 0)
+        return { title: KIND_LABEL[next.kind], text: `Tap the ${label(next.kind)} bottle for a quick squeeze onto the burger.`, gesture: from ? { kind: "tap", at: from } : null };
       return {
         title: KIND_LABEL[next.kind],
-        text: `Press the ${label(next.kind)} bottle and drag it up onto the burger. Keep your finger moving to squeeze, and let go when it says Perfect.`,
+        text: `For a Perfect, press the ${label(next.kind)} bottle and drag it up onto the burger, then draw circles until it says Perfect. (A tap is a quick squeeze.)`,
         gesture: from ? { kind: "dragCircle", from, to: plate, r: 22 } : null,
       };
     }
@@ -468,7 +476,7 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
     }
     if (cup.fill < DRINK_FILL.full) {
       const btn = ti >= 0 ? k.project("counter", c.drinkButtonPoint(ti)) : null;
-      return { title: "Pour", text: `Hold the ${name} button to pour. Watch the bar on the left and let go at the line.`, gesture: btn ? { kind: "hold", at: btn } : null, whileDown: true };
+      return { title: "Pour", text: k.game.pacing === "chill" ? `Hold the ${name} button to pour. On Chill it stops at the line by itself.` : `Hold the ${name} button to pour. Watch the bar on the left and let go at the line.`, gesture: btn ? { kind: "hold", at: btn } : null, whileDown: true };
     }
     const from = proxy((h) => h.type === "lids" && h.size === cup.size, 0.3);
     return { title: "Lid on", text: `Drag a ${SIZE_LABEL[cup.size].toLowerCase()} lid onto the cup.`, gesture: from ? { kind: "drag", from, to: cupAt } : null };
@@ -534,6 +542,8 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
     if (pr.wrong >= 0 || pr.next < pr.want.length) return null;
     if ((o.drink && !s.plate.drink) || (o.fries && !s.plate.fries)) return null;
     const at = plateAt(slotIdx);
+    const btn = rectOf(document.querySelectorAll<HTMLElement>(".tray-serve")[slotIdx] ?? null);
+    if (btn) return { title: "Order up!", text: "Everything's on the tray. Tap Serve to hand it over.", gesture: { kind: "tap", at: { x: btn.x + btn.w / 2, y: btn.y + btn.h / 2 } } };
     return { title: "Order up!", text: "Everything's on the tray. Swipe the tray up to hand it over.", gesture: { kind: "swipe", from: { x: at.x, y: at.y + 10 }, to: { x: at.x, y: at.y - 110 } } };
   };
 
@@ -673,7 +683,7 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
         const note = rectOf(document.querySelectorAll<HTMLElement>(".sentback")[i] ?? null);
         return {
           title: "Sent back",
-          text: "They want something fixed: it's in the red note. Fix the tray (drag down off it to lift the top layer), then swipe it up again.",
+          text: "They want something fixed: it's in the red note. Fix the tray (the undo button takes the top layer off), then tap Serve again.",
           ring: note,
           ok: "OK",
           place: "bottom",

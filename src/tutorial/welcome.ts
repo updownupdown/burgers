@@ -47,7 +47,7 @@ export function showWelcome(o: { pacing: Difficulty; done(tutorial: boolean, chi
         <p class="bv-body">You run a food truck on a road trip. Cook what each ticket asks for, keep the line happy, and open the road to new towns and new dishes.</p>
         <div class="welcome-sw">
           ${sw("tutorial", "help", "Tutorial mode", "A see-through thumb shows you each move the first time.", tutorial)}
-          ${sw("chill", "timer", "Start on Chill", "Patient customers, two at the window at most. Off: Balanced, a steady rush.", chill)}
+          ${sw("chill", "timer", "Start on Chill", "Patient customers, nothing burns, drinks stop at the line, and a forgiving first day. Off: Balanced, a steady rush.", chill)}
         </div>
         <p class="bv-caption">Change these any time: the tutorial in Settings, the pacing on Prep before each shift.</p>
       </div>

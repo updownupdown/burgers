@@ -223,7 +223,7 @@ function sections(): Sec[] {
       chip: "Basics",
       icon: "sparkle",
       title: "The basics",
-      lede: "Customers queue at the window. Cook what's on their receipt, stack it on their tray, swipe it up to them.",
+      lede: "Customers queue at the window. Cook what's on their receipt, stack it on their tray, tap Serve.",
       fig: `<ol class="hw-steps">
         <li>${icon("receipt")}<b>Read</b><span>the receipt</span></li>
         <li>${icon("grill")}<b>Cook</b><span>the food</span></li>
@@ -313,7 +313,7 @@ function sections(): Sec[] {
       </div>`,
       points: [
         "<b>Drag</b> ingredients up onto the active tray, or <b>flick</b> them up to toss them on.",
-        "<b>Sauce:</b> press a bottle in the caddy and drag it up onto a burger on the tray. The view zooms in; keep moving to squeeze and watch the bar on the right for Perfect. Let go and the bottle goes back.",
+        "<b>Sauce:</b> press a bottle in the caddy and drag it up onto a burger on the tray. The view zooms in; keep moving to squeeze and watch the bar on the right for Perfect. Let go and the bottle goes back. In a hurry? <b>Tap</b> the bottle for a quick, rougher squeeze.",
         "Wrong layer? <b>Swipe down</b> on the tray to take the top one off. Mistakes go down the garbage chute.",
         "Cooking ahead? Leave finished food on a <b>warm</b> grill zone rather than on the tray, where it goes cold.",
       ],
@@ -399,19 +399,19 @@ function sections(): Sec[] {
       chip: "Serving",
       icon: "arrow-up",
       title: "Serving",
-      lede: "Swipe a tray up to hand it to the customer above it.",
+      lede: "When everything on the receipt is on a tray, a Serve button pops up on it: tap it (or swipe the tray up) to hand it over.",
       fig: `<div class="hw-serve">
         <div class="plates"><i></i><i class="on"></i><i></i></div>
         <div class="hw-swipe">${icon("arrow-up")}</div>
       </div>
       <ol class="hw-verdicts">
         <li><b>Looks good</b><span>They take it and pay. The better it is, the more they pay and tip.</span></li>
-        <li><b>Sent back</b><span>Clearly off: they hand it back with what's wrong. Fix it and swipe it up again; this time they take it, and review what they got.</span></li>
+        <li><b>Sent back</b><span>Clearly off: they hand it back with what's wrong. Fix it and serve it again; this time they take it, and review what they got.</span></li>
         <li><b>Refused</b><span>Really wrong: no sale, and they leave.</span></li>
       </ol>`,
       points: [
         "Check the receipt first: a forgotten side or drink costs stars.",
-        "To fix a burger, <b>drag down</b> off its tray to lift the top layer: drop it in the trash slot, back on the grill, or on another tray.",
+        "To fix a burger, tap <b>undo</b> on its tray to bin the top layer, or <b>drag down</b> off the tray to lift it: drop it in the trash slot, back on the grill, or on another tray.",
         "Held items light up the <b>trash slot</b> red when a drop would bin them.",
         "<b>Unordered extras</b>, like fries or a drink they didn't ask for, can soften a bad review, and nobody ever turns down a freebie. They come off your takings, so save them for rescues.",
         "The bell shows how many are in line. Waiting has its own patience: the back of the line drifts off first, and people nearly at the window almost never leave. An order's patience only starts once they've ordered.",

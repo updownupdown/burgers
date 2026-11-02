@@ -4,7 +4,7 @@ import { pieceFor, popularityChange } from "./press";
 import { applyMods, makeOrder, orderFromRecipe, seededRng, sidesOrder } from "./menu";
 import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent } from "./stops";
 import { passed } from "./progress";
-import { alignLayers, layerQuality, payout, scorePlate } from "./scoring";
+import { alignLayers, layerQuality, payout, quickSauceStroke, SAUCE_BAND, sauceCoverage, sauceVerdict, scorePlate } from "./scoring";
 import { FRIES_PERFECT, FRIES_ZONE, FRY_RATE } from "./cooking";
 import type { Kind, Layer, Order, Piece, Plate } from "./types";
 import { BREADS, DONENESS_TARGET, isSauce, newPiece, PROTEINS } from "./types";
@@ -574,5 +574,14 @@ describe("grill marks, flips and eggs", () => {
     expect(layerQuality({ kind: "egg", flipped: true }, e)[1]).toBe("wanted the egg over easy");
     e.flips = 1;
     expect(layerQuality({ kind: "egg", flipped: true }, e)[0]).toBe(1);
+  });
+});
+
+describe("quick squeeze", () => {
+  it("covers enough for 'a bit more', never Perfect", () => {
+    const cov = sauceCoverage(quickSauceStroke());
+    expect(cov).toBeGreaterThanOrEqual(SAUCE_BAND.stingy);
+    expect(cov).toBeLessThan(SAUCE_BAND.lo);
+    expect(sauceVerdict(cov).word).toBe("light");
   });
 });

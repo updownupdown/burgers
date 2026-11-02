@@ -50,6 +50,7 @@ export interface ColdRailObject extends THREE.Group {
 
 function railBody(cols: number, rows: number, filled: boolean[]): Parts {
   const p = new Parts();
+  const lastEmpty = filled.lastIndexOf(false);
   const W = cols * PX;
   const zOf = (j: number) => (j - (rows - 1) / 2) * PZ + LID / 2;
   const xOf = (i: number) => (i - (cols - 1) / 2) * PX;
@@ -67,8 +68,14 @@ function railBody(cols: number, rows: number, filled: boolean[]): Parts {
       const x = xOf(i);
       const y = top - PH + 0.06;
       if (!filled[j * cols + i]) {
-        // A flush steel cover over an unused slot.
-        p.add(box(PW, 0.08, PD), C.steelL, { p: [x, top - 0.02, z], ink: 0.012 });
+        // A lidded pan in an unused slot: a brushed steel lid with a pressed panel and a handle (a
+        // flat white cover read as an empty pan). The last one stays flat: the sauce caddy stands on it.
+        p.add(box(PW, 0.08, PD), "#b9c1c2", { p: [x, top - 0.02, z], ink: 0.012 });
+        p.add(box(PW - 0.3, 0.012, PD - 0.3), "#cbd2d2", { p: [x, top + 0.026, z], ink: false });
+        if (j * cols + i !== lastEmpty) {
+          p.add(box(0.7, 0.07, 0.14), "#8f989a", { p: [x, top + 0.06, z], ink: 0.012 });
+          for (const sx of [-0.3, 0.3]) p.add(box(0.1, 0.06, 0.12), "#8f989a", { p: [x + sx, top + 0.03, z], ink: false });
+        }
         continue;
       }
       const t = 0.06;

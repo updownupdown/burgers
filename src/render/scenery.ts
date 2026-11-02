@@ -241,9 +241,11 @@ function buildRaw(g: THREE.Group, kind: Backdrop): Built {
       const x = rr(-1, 1) * (12 - z * 0.45);
       const y = f(x, z);
       if (y < G + 0.2 && rnd() < 0.6) continue;
+      // Keep the notch clear, so the snowy peak shows through it (DESIGN §28).
+      if (z < -20 && Math.abs(x + 4) < 3) continue;
       k.pine(x, z, rr(1.6, 2.6) * (1 + -z * 0.01), rnd() < 0.5 ? "#2f6b4f" : "#3b7d5a", z > -20 ? 1.02 : false, y - 0.1);
     }
-    for (const [x, h, w] of [[-4, 9, 9], [12, 7, 7]] as const) {
+    for (const [x, h, w] of [[-4, 13, 9], [12, 7, 7]] as const) {
       k.cone(w, h, "#8aa0b4", x, f(x, -66) + h / 2 - 1, -66, 6, false);
       k.cone(w * 0.33, h * 0.33, "#f4f7f8", x, f(x, -66) + h - 1 - h * 0.16, -65.6, 6, false);
     }

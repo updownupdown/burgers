@@ -32,6 +32,7 @@ import { flickOf, slideArmed, slidUnder, type Flick } from "./game/peel";
 import { cullSmallHulls, disposeObject, OUTLINE_PX, setOutlinePx, setOutlineViewport } from "./render/materials";
 import { perfReadout } from "./render/perfreadout";
 import { BlobShadows } from "./render/blobs";
+import { playShiftReveal } from "./screens/reveal";
 import { CounterView, CUP_IN_HAND, RACK_SCALE, EMPTY_PACK, STOPS, pageX, type DrinkCup, GRILL_SCALE, GRILLE_ZONE, FLAT_ZONE, HEARTH_Y, HOME_PAGE, PAGES, PEEL_Y, GRILL_TOP, ZONE_START, type GrillItem, type Hit, type PeelTarget, type PieHolder, type PiePlace } from "./scenes/counter";
 import { PLATE } from "./render/machines/press";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
@@ -4515,6 +4516,7 @@ function startShift(): void {
   counter.autoStopPour = has("autostop") || game.pacing === "chill";
   counter.noBurn = game.pacing === "chill";
   counter.setPage(HOME_PAGE);
+  playShiftReveal();
   const intro = game.event
     ? `${game.event.name} today! ${game.event.blurb}${game.event.special ? ` Special: ${game.event.special.name}.` : ""}`
     : stop().newThing;

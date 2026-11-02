@@ -4,3 +4,4 @@ dist
 .DS_Store
 tools/playtest/out
 .claude/worktrees/
+tools/playtest/shots-*

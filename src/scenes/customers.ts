@@ -6,141 +6,32 @@ import { lookColours } from "../screens/truckart";
 import { CABIN } from "../render/cabin";
 import { wallMaterial } from "../render/walls";
 
-export type Mood = "neutral" | "happy" | "sad" | "angry";
+export type { Mood } from "../render/people";
+import { buildPerson, type Mood, type Person } from "../render/people";
 
-const BODY_COLORS = ["#7fb7e6", "#f29e6d", "#9fd27a", "#e889b8", "#f2cf5b", "#a99be8", "#6fd1c4", "#e7766f"];
-const HATS: Record<Backdrop, Hat[]> = {
-  mountains: ["none", "beanie", "cap", "ranger", "antlers"],
-  beach: ["none", "sunhat", "shades", "cap", "shades"],
-  desert: ["none", "cowboy", "cowboy", "shades", "bandana"],
-  orchard: ["none", "sunhat", "cap", "beanie", "none"],
-};
-type Hat = "none" | "beanie" | "cap" | "ranger" | "antlers" | "sunhat" | "shades" | "cowboy" | "bandana";
-
-/** A chunky local built from rounded primitives, dressed for the town. */
+/** A local at the window, in the chosen customer design (src/render/people.ts), dressed for the town. */
 export class CustomerFigure {
   root = new THREE.Group();
   private body: THREE.Group;
-  private mouth: THREE.Mesh;
-  private brows: THREE.Mesh[] = [];
-  private pupils: THREE.Mesh[] = [];
+  private person: Person;
   mood: Mood = "neutral";
   private bob = Math.random() * 10;
   private jump = 0;
+  private moodSet = false;
 
   constructor(seed: number, backdrop: Backdrop = "mountains") {
-    const color = BODY_COLORS[seed % BODY_COLORS.length];
-    const hats = HATS[backdrop];
-    const hat = hats[Math.floor(seed / 3) % hats.length];
-    this.body = new THREE.Group();
-    const torso = mesh(faceted(new THREE.SphereGeometry(0.85, 14, 10)), color);
-    torso.scale.set(1, 1.15, 0.85);
-    torso.position.y = 0.95;
-    this.body.add(torso);
-    const belly = mesh(faceted(new THREE.SphereGeometry(0.55, 12, 8)), new THREE.Color(color).lerp(new THREE.Color("#ffffff"), 0.45), { ink: false });
-    belly.scale.set(1, 1.05, 0.5);
-    belly.position.set(0, 0.75, 0.48);
-    this.body.add(belly);
-    for (const s of [-1, 1]) {
-      const eye = mesh(faceted(new THREE.SphereGeometry(0.2, 10, 8)), "#ffffff", { ink: 1.12 });
-      eye.position.set(0.28 * s, 1.35, 0.62);
-      eye.scale.z = 0.6;
-      const pupil = new THREE.Mesh(faceted(new THREE.SphereGeometry(0.09, 8, 6)), toon("#1d1410"));
-      pupil.position.set(0, 0, 0.16);
-      eye.add(pupil);
-      this.pupils.push(pupil);
-      this.body.add(eye);
-      const brow = mesh(faceted(new THREE.BoxGeometry(0.28, 0.06, 0.06)), "#2a1d17", { ink: false });
-      brow.position.set(0.28 * s, 1.62, 0.66);
-      this.brows.push(brow);
-      this.body.add(brow);
-      const arm = mesh(faceted(new THREE.SphereGeometry(0.22, 8, 6)), color);
-      arm.scale.set(0.8, 1.3, 0.8);
-      arm.position.set(0.85 * s, 0.75, 0.15);
-      arm.rotation.z = 0.4 * s;
-      this.body.add(arm);
-    }
-    this.mouth = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.04, 5, 12, Math.PI), toon("#2a1d17"));
-    this.mouth.position.set(0, 1.08, 0.72);
-    this.body.add(this.mouth);
-
-    if (hat === "beanie") {
-      const b = mesh(faceted(new THREE.SphereGeometry(0.62, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2)), "#d8473a");
-      b.position.y = 1.72;
-      const pom = mesh(faceted(new THREE.SphereGeometry(0.16, 8, 6)), "#f6efe0");
-      pom.position.y = 2.33;
-      this.body.add(b, pom);
-    } else if (hat === "cap") {
-      const c = mesh(faceted(new THREE.SphereGeometry(0.6, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2)), "#2f5d8c");
-      c.position.y = 1.78;
-      const brim = mesh(faceted(new THREE.CylinderGeometry(0.45, 0.45, 0.05, 12, 1, false, -Math.PI / 2, Math.PI)), "#2f5d8c");
-      brim.position.set(0, 1.8, 0.35);
-      this.body.add(c, brim);
-    } else if (hat === "ranger") {
-      const brim = mesh(faceted(new THREE.CylinderGeometry(0.95, 0.95, 0.06, 16)), "#9c7a45");
-      brim.position.y = 1.85;
-      const crown = mesh(faceted(new THREE.CylinderGeometry(0.42, 0.52, 0.45, 12)), "#9c7a45");
-      crown.position.y = 2.1;
-      this.body.add(brim, crown);
-    } else if (hat === "antlers") {
-      for (const s of [-1, 1]) {
-        const a = mesh(faceted(new THREE.CylinderGeometry(0.05, 0.07, 0.6, 6)), "#d9c3a0");
-        a.position.set(0.35 * s, 2.05, 0);
-        a.rotation.z = -0.5 * s;
-        const tine = mesh(faceted(new THREE.CylinderGeometry(0.04, 0.05, 0.3, 6)), "#d9c3a0");
-        tine.position.set(0.55 * s, 2.25, 0);
-        tine.rotation.z = 0.4 * s;
-        this.body.add(a, tine);
-      }
-    } else if (hat === "sunhat") {
-      const brim = mesh(faceted(new THREE.CylinderGeometry(1.1, 1.1, 0.05, 18)), "#f1d98f");
-      brim.position.y = 1.82;
-      const crown = mesh(faceted(new THREE.SphereGeometry(0.5, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2)), "#f1d98f");
-      crown.position.y = 1.8;
-      const band = mesh(faceted(new THREE.CylinderGeometry(0.51, 0.51, 0.1, 14)), "#e5432b", { ink: false });
-      band.position.y = 1.86;
-      this.body.add(brim, crown, band);
-    } else if (hat === "shades") {
-      for (const s of [-1, 1]) {
-        const lens = mesh(faceted(new THREE.CylinderGeometry(0.2, 0.2, 0.05, 12)), "#1d1410", { ink: false });
-        lens.rotation.x = Math.PI / 2;
-        lens.position.set(0.28 * s, 1.37, 0.78);
-        this.body.add(lens);
-      }
-      const bridge = mesh(faceted(new THREE.BoxGeometry(0.2, 0.04, 0.04)), "#1d1410", { ink: false });
-      bridge.position.set(0, 1.42, 0.78);
-      this.body.add(bridge);
-    } else if (hat === "cowboy") {
-      const brim = mesh(faceted(new THREE.CylinderGeometry(1.05, 1.05, 0.06, 18)), "#8a5a32");
-      brim.scale.z = 0.8;
-      brim.position.y = 1.86;
-      const crown = mesh(faceted(new THREE.CylinderGeometry(0.42, 0.5, 0.5, 12)), "#8a5a32");
-      crown.position.y = 2.12;
-      const dent = mesh(faceted(new THREE.BoxGeometry(0.1, 0.12, 0.7)), "#6e4524", { ink: false });
-      dent.position.y = 2.36;
-      this.body.add(brim, crown, dent);
-    } else if (hat === "bandana") {
-      const b = mesh(faceted(new THREE.CylinderGeometry(0.62, 0.7, 0.3, 14)), "#c8382c");
-      b.position.y = 0.95;
-      b.scale.z = 0.85;
-      this.body.add(b);
-    }
+    this.person = buildPerson(seed, backdrop);
+    this.body = this.person.body;
     this.root.add(this.body);
     this.setMood("neutral");
   }
 
   setMood(m: Mood): void {
+    // Called every frame from the patience meter, so only redraw the face on a change.
+    if (m !== this.mood || !this.moodSet) this.person.setMood(m);
+    this.moodSet = true;
     this.mood = m;
-    const happy = m === "happy";
-    this.mouth.rotation.z = happy || m === "neutral" ? Math.PI : 0;
-    this.mouth.scale.set(m === "neutral" ? 0.7 : 1, m === "neutral" ? 0.4 : 1, 1);
-    this.mouth.position.y = happy ? 1.12 : m === "neutral" ? 1.1 : 1.0;
-    this.brows.forEach((b, i) => {
-      const s = i ? 1 : -1;
-      b.rotation.z = m === "angry" ? -0.45 * s : m === "sad" ? 0.35 * s : 0;
-      b.position.y = m === "happy" ? 1.66 : 1.62;
-    });
-    if (happy) this.jump = 1;
+    if (m === "happy") this.jump = 1;
   }
 
   update(dt: number, lookX: number): void {
@@ -149,7 +40,7 @@ export class CustomerFigure {
     const hop = Math.sin(this.jump * Math.PI) * 0.5;
     this.body.position.y = Math.abs(Math.sin(this.bob)) * 0.05 + hop;
     this.body.rotation.z = this.mood === "angry" ? Math.sin(this.bob) * 0.05 : 0;
-    for (const p of this.pupils) p.position.x = THREE.MathUtils.clamp(lookX, -0.06, 0.06);
+    this.person.look(lookX);
   }
 }
 

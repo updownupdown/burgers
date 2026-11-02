@@ -872,3 +872,92 @@ James: explain the Bean Tostada, and go through the whole help menu, with animat
 - **Drawings** are inline SVG looping in CSS, one verb each: tap for a name, drag a piece, flick to flip, a sauce stroke, a knife slice (once, or twice for four), the peel in and out, the press lid, the quesadilla fold and hold, Undo flying a piece back, the meter filling through its three regions. Motion paths are generated as keyframes so a moving thing follows its drawn guide. Each drawing's resting state is a still frame that explains the move, and that's all that shows under reduced motion.
 - Names of towns, counts, prices and times come from the game data (`STOPS`, `EVENTS`, `COUNT`s, `FRY_SPEED`), so they stay true when those change.
 - `openHowTo(target)` takes "toppings", a kitchen ("comal"), "kitchen:comal:tostada" or "trip:garage".
+
+## 33. Review fixes after build #78: bugs and menus
+
+Two reviews of build #78 (bugs and playability; menus and Help) were all approved by James. This section is the bugs-and-menus half; the kitchen and graphics halves have their own. Checked by `tools/playtest/review78-bugs-menus.cjs`.
+
+**Bugs**
+
+- **Food built ahead stays.** Anything put on a free tray is kept for whoever steps up to it (`spawnCustomer` no longer clears the plate; served, refused and walked-out trays are cleared when the customer leaves).
+- **Tutorial mode off means off.** Switching it off in Settings marks the guided shift done, as the welcome card does; on replays it. The guided first shift only runs in a grill town (its lessons are the grill's); elsewhere a replayed tutorial is a normal shift with the coach's other lessons, and the next shift's end marks it done.
+- **Today's results outlive an evening hop.** `todaysClosing(save)` (`src/game/progress.ts`) is today's Closing in the evening, wherever the truck is; Results, the results sheet, the night card and a reload all use it (it used to need the same town).
+- **The range refuels at the end of a shift**, not when it opens: a shift quit or reloaded half way leaves the morning's driving as it was.
+- **Prep** says "Keep at least two recipes on the menu." on the card and shakes the row (hints only show in a shift).
+- **Closing** when nobody was served: "Nobody got their food today: N walked out." when people walked out, a dash instead of five empty stars and 0.0, and no 0.0★ town best (old ones are dropped on load).
+- **Words:** smash burgers are "Smashed thin" (they go out medium like the rest); a count of one shows no "x1" on tickets or menus.
+- **An unreadable save** is copied to `bv-save-broken-<time>` before a fresh trip starts, so it can be recovered.
+- **The line holds still** while the guided first shift's clock does.
+- Kept on purpose: a recipe made well before a quit still counts toward its compact ticket, and guided order 2 still marks the tutorial done (so a restart doesn't replay it).
+
+**Menus**
+
+- **Pause card.** A header bar like the other cards: the pause icon and "Paused", Settings on the right, no eyebrow. The town and day are the body's first line. Help is a labelled button, **How to play · Grill** (or Press, Comal, Oven, Drinks, Fryer: the counter on screen), opening Help there.
+- **Today's menu** (pause) and Prep share `buildLine` and `methodTags` (`src/screens/dishtext.ts`): every layer of tacos, quesadillas, open toasts and flatbreads (only a closed burger or panini drops its bread), and how each is made (Toasted bun, Pressed, Warm tortillas, Folded, flipped once, Baked in the oven…). The sides line is the town's own (`sidesLine`: fries, chips, churros, fritti, poutine or nachos).
+- **Dish drawings.** Tacos stand in the rack, a quesadilla is a folded half moon, a tostada a flat shell piled up (`dishArt` in `menuref.ts`).
+- **Food menu.** Extras come from what the town's dishes can carry (`extrasOn` in `src/game/menu.ts`, the lists `pickMods` uses). Tacos and flatbreads have their own icons (`taco`, `flatbread`, also on Help's kitchen chips). The retired price callout and the "saves money" lines are gone.
+- **Headers.** The Garage and Popularity & reviews have the icon, title and × of the other cards; their counts moved into the body, the Garage's savings stay as a plate, and the Garage's second way back (the footer button) is gone. The town sheet's × is the plain one. Settings stacked over the pause card says "Paused" over its title; elsewhere no eyebrow.
+- **Closing** is the breakdown under the results sheet: the KPI tiles (already on the sheet) and the build label are gone; Popularity uses the people icon as on the map.
+- **Taps.** 44px for the modal × and back, the map's Help, Settings and savings buttons, zoom and find-the-truck, segmented controls; jump chips are 40px. The HUD's menu and Undo buttons keep their look and take a 44px tap.
+- **Contrast.** `--bv-mute` is #60666f (4.6:1 on paper-2, was 3.9:1); coral as small text uses `--bv-paprika-ink` #b8432a (Settings' On, Start a new trip, menu counts, the calendar's events, Help's labels). Help figure text is at least 12px (11px for step numbers).
+- **Start a new trip:** "Back to the first town with an empty garage." Confirm: "Start over? Savings, bonuses, looks, popularity and reviews all reset. Town bests are kept."
+- **Small things.** The welcome card has no ×, only Start the trip, and each switch says where to change it. The town sheet drops "A shift fills the day." In the evening the dashboard shows Results only after a shift (otherwise the Menu). The savings button has a garage icon (it was a second truck next to find-the-truck) and Help points at it. Settings' headings have their own icons. Dev mode shows once it's on; to turn it on, tap the build line at the bottom of Settings five times. Help's chip bars fade at the right edge; Help says the ticket's face is patience; the drawn "~12 customers" Prep figure is gone.
+- Already right on main (Help rewrite, §32): region-aware Help, the Grill and ticket sections, Chill and popularity, the map key, the tutorial replay line, Help opening at the current counter.
+
+## 34. Review fixes after build #78: graphics and map
+
+James approved the graphics review of build #78. Same art direction (Pencil Line toon, thin tinted outlines, three-band shading, Sorbet palette, a paper map), done better and cheaper.
+
+- **Colour.** `grade()` and `lineColor()` work in sRGB (three.js colours are linear), so darks stay dark: patties brown and char, the comal reads as seasoned iron. The toon ramp is 110/180/255; the window key light is higher, so shadows are shorter and softer.
+- **Outlines.** One constant screen width for everything (1.25 CSS px, 1.0 on low) instead of a hull scaled per object. The hull is drawn at scale 1 and pushed out along smoothed normals in clip space (`outlineShader`, `outlineNormals` in `render/materials.ts`); each part can carry a lighter weight (ice, lids, dense heaps). On low quality, hulls under 6 px tall are skipped (`cullSmallHulls`).
+- **Draw calls.** Static scenery, the awning and the trays are merged into a few vertex-coloured meshes (`bakeStatic` in `render/bake.ts`); textured, transparent, instanced and `noBake` meshes are left alone. The counter isn't baked, to keep hit areas and animations separate. Nothing is drawn while paused, apart from two frames after a resize or a quality change. A dev chip (bottom left, dev mode only) shows draw calls and triangles. Draw calls at 390x844 on high: Summit 687 → 216, Harbor 339 → 154, Sun Valley 374 → 208, Port Amber 770 → 139 (low: 648/295/333/711 → 203/129/187/123).
+- **The window.** The ground starts behind the cabin wall (no strip under the sill); Red Rock has a blue sky, a sandier ground and sage scrub; the Pines mountain is taller, with a gap in the trees in front of it.
+- **Smoke and juice.** Steam and smoke are soft sprites; grease spits off meat on a hot zone; idle fryer oil opens small rings; a four-point star pops for 0.3 s at perfect; a soft puff breathes out as a piece lands on the tray; an open soda fizzes on its surface. Textures in `render/sprites.ts`.
+- **Machines.** The oven is a stone deck with soot, ember specks and a faint heat shimmer, and flour as a light dusting. The comal has a seasoning sheen, a soft hot-to-warm glow, and HOT / WARM flat on the plate's front. Empty cold-rail slots are lidded pans. On low quality, blob shadows stand in for the shadow map.
+- **Food.** On the tray, flatbread toppings are drawn 1.5x, with mozzarella as cream puddles with a golden edge. A cheese slice is a thin slab that droops in soft waves as it melts. The panini cut shows a light crumb strip.
+- **The map.** Mesas are plateaus (a skirt, strata, hachures). Each town shows its kitchen's glyph. Zoomed out, only the capitals are named, and larger. At night, names are light on a dark halo. The compass and scale bar move clear of the land.
+- **Transitions and the Garage.** Prep to shift is a 350 ms slate wipe (none under reduced motion). The truck's searchlight beams are softer (screen blend), and by day the serving window is a warm interior.
+
+## 35. Review fixes after build #78: kitchen and mechanics
+
+From the kitchen review of build #78 (`review-3-kitchen.md`, P1-1 to P3-10). Code: `src/game/scoring.ts`, `line.ts`, `day.ts`, `bonus.ts`, `asks.ts`, `regulars.ts`, `hold.ts`, `src/scenes/counter.ts`, `tray.ts`, `src/render/sides.ts`, `src/render/models/garnish.ts`, `src/tutorial/coach.ts` and the matching parts of `src/main.ts`. Screenshots: `tools/playtest/review78-kitchen.cjs`. Supersedes the numbers below where earlier sections differ.
+
+**Balance**
+- **A great shift is reachable early.** `GREAT = { stars: 4.4, served: 0.85, min: 6, share: 0.8 }`: at least `min(6, ceil(0.8 × expected))` served (and at least 1), so a small first crowd can have a great shift. Pinecrest's base crowd is 11 (was 9). Chill no longer cuts the crowd: the crowd is divided by `pacingCrowd` = min(1, spawn gap / Balanced's), so Stressful's tighter spacing still adds people and Chill equals Balanced.
+- **Word of mouth grows a small truck.** Under `EARLY_WORD` (40) popularity, +1 per 2 happy customers (per 3 above it), so cooking well beats the daily fade.
+- **A great shift (or a met local ask) counts as two** toward opening the town's roads.
+- **Sides weigh what they cost.** `sideWeight(order)` = the sides' share of the price, clamped 0.15 to 0.35; total = main × (1 − w) + sides × w (was a flat 0.15).
+- **Patience follows the work.** `windowPatience(order)` = 40 + 7 per layer + 2 per slice + 22 per protein + the dish's own steps (`DISH_WORK`: quesadilla 45, calzone 40, flatbread 30, panini 20, cut 8, garnish 4) + fries 30 (+10 poutine) + drink 9 seconds, before the crowd, pacing and Bench factors.
+- **Tips step down by mood**: the whole tip while the face is neutral (≥ 50% patience, `TIP_MOOD.full`), half while sad (≥ 20%), none when angry. The ticket shows a coin beside the patience bar (full, half, gone), and crossing a band plays a soft tick.
+- **Grand looks priced for one trip**: the six Grand looks are a quarter of their old prices (gold leaf $10,000, velvet $1,500, hot tub $6,250, searchlights $3,000, spinners $2,000, balloon $7,500, airship $18,750).
+
+**Holding food**
+- **Warm holding costs freshness.** Cooked food that goes stale (`goesStale`) ages off the hot zone: at half the tray's pace on the warm end and in the taco rack (`WARM_AGE` = 0.5), at the tray's pace on an off zone. Fries age from the moment they leave the oil (`held`), in the basket, the carton and on the tray: no cost for 25 s, then up to −15% by 60 s ("fries went cold", `FRIES_HOLD`). The Heat lamp halves all of it.
+- **Hold bars**: a slim bar under each held item (grill off the hot zone, lifted baskets, filled cartons, the taco rack), and the tray's stale bar counts the fries.
+
+**Serving and the tray**
+- **Serve sits on the tray's front lip**, a slim 90 × 28 pill (44 px hit area) that appears 0.3 s after the order is complete, so it never covers the dish.
+- **Call from the tray.** A tap on an empty tray calls the next person in line to that tray; while people wait, the empty tray shows "Call next · N". The header bell stays.
+- **The tray's food draws 1.3× larger** while its ticket is folded (half or stub) or hidden (a true camera zoom isn't possible: three trays already fill the width).
+
+**What the player sees**
+- **Chef's touches pay.** Perfect sauce, grill marks, leopard spots, a clean cut, perfect salt and a garnish add $1 each to the tip (hand-pressed $2), on 4★ or better orders. The coin that flies up carries a small stamp for each.
+- **4★ says why.** A 4★ order with notes says its main note aside ("Fries needed salt."), as 3★ and below always did.
+- **Busy surfaces.** On the grill and comal a meter whose neighbour is within a meter's width shrinks to 44 px; a meter in its done band and 5 s or more from over-done (by its measured cook rate) goes slim and faint; the done item nearest over-done draws on top.
+- **Uneven bake.** When one side of a pie is more than `LEOPARD_EVEN` ahead, its oven meter splits into pale and dark, and a turn arrow sits on the pale edge.
+- **Fry cartons** are 0.8 / 1 / 1.25 long (and narrower and lower when small), so S, M and L read apart. Cups already differ by height.
+- **Press text uses the region's dish** (burgers, paninis, tacos, flatbreads), and its praise has regional lines.
+- **Receipts** show tiny fries and cup icons instead of "+2" and "*", and no "x1".
+- **The grill's cold rail** has only as many rows as the pantry fills (Pinecrest: two rows, not three).
+- **The coach card** goes on the other half of the screen from what it points at, unless nothing fits there.
+
+**Bonuses that are real choices**
+- Smart fountain: a pour it stops at the line also gets its lid.
+- Kitchen timer: each counter button gets a ring that fills toward the next thing there to reach done.
+- Heat lamp: halves warm-holding aging (above).
+
+**Variety between shifts**
+- **The local ask** (`asks.ts`): one small optional goal per shift, picked by town and day from what the kitchen can do (calm hand-overs, five-star orders, grill marks, perfect sauce, salt, clean cuts, hand-pressed tortillas, leopard spots, garnishes). Shown on Prep and as a chip under the HUD with its count. Needs `clamp(round(0.4 × expected), 2, base)`; pays `min(20, 8 + 3 × need)` dollars and makes the shift count as two.
+- **A garnish for the local drinks** outside the Pines: Coast cucumber, Red Rock lime, Isle apple (`garnishFor`). A dish of it stands between the ice and the cups; a slice is dragged onto the drink once it's on the tray. Missing costs × 0.9 ("no cucumber on the drink"); on, it's a chef's touch.
+- **Regulars** (`regulars.ts`): each town has a named customer, the shift's third, with the same custom order every visit (a recipe from today's menu with one or two changes, medium fries, the first local drink) and their name on the ticket. Their third good visit (4★ or better) adds +5 popularity, once (`save.regulars`).
+- **Rushes**: at capitals and on event days, once between 40% and 60% of the shift (fixed per day), "A tour bus pulls in!" (or "The event crowd's here!"), then 3 extra people join the line over 10 s; anyone past `MAX_LINE` walks on.

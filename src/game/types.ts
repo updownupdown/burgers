@@ -146,6 +146,8 @@ export interface Fries {
   gravy?: boolean;
   /** What's in the carton, when it isn't plain fries: sweet potato fries, chips or churros. (`salt` is sugar on churros.) */
   fry?: FryKind;
+  /** Seconds since these fries came out of the oil; they go soggy after a while (FRIES_HOLD in scoring.ts). */
+  held?: number;
 }
 
 export interface Drink {
@@ -154,6 +156,8 @@ export interface Drink {
   size: Size;
   ice?: boolean;
   lid?: boolean;
+  /** A garnish dropped on (Order.garnish). */
+  garnish?: Garnish;
 }
 
 export interface Plate {
@@ -210,7 +214,15 @@ export interface Order {
   fry?: FryKind;
   /** A panini to be sliced in half on the cutting board (Harbor City), or a flatbread cut in four (Port Amber). */
   slice?: boolean;
+  /** The local drink's garnish, outside the Pines: "cucumber" (Coast), "lime" (Red Rock), "apple" (the isle). */
+  garnish?: Garnish;
+  /** A town's regular (after build #78): their name, shown on the ticket; they always order the same. */
+  regular?: string;
 }
+
+/** The garnish on a region's local drinks (dropped on the cup from the dish by the fountain). */
+export type Garnish = "cucumber" | "lime" | "apple";
+export const GARNISH_LABEL: Record<Garnish, string> = { cucumber: "Cucumber", lime: "Lime", apple: "Apple" };
 
 export const GRILLABLE: ReadonlySet<Kind> = new Set<Kind>(["bun", "patty", "bacon", "egg", "pineapple", "corn", "flour"]);
 export const SAUCES: ReadonlySet<Kind> = new Set<Kind>(["ketchup", "mustard", "pesto", "aioli", "redsalsa", "greensalsa", "crema", "redsauce", "oil", "honey"]);

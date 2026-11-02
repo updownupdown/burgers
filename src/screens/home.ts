@@ -1,6 +1,6 @@
 import { CROWD } from "../game/business";
 import { expectedCustomers, rangeUnits } from "../game/day";
-import type { Save } from "../game/progress";
+import { todaysClosing, type Save } from "../game/progress";
 import { ratingPull, reviewAverage } from "../game/reviews";
 import { EVENTS, eventOn, FINAL_TOWN, nextDay, STOPS, townById, withEvent, type Stop } from "../game/stops";
 import { applyTrip, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Legs, type Trip } from "../game/travel";
@@ -12,7 +12,7 @@ import { readyToBuy } from "../game/garage";
 import { truckSvg as truckArt } from "./truckart";
 import { dollars } from "./garage";
 import { resultsSheetHtml } from "./day";
-import { renderMap, roadPath, routePoints, SEA, townPoint, VIEW } from "./map";
+import { renderMap, roadPath, routePoints, SEA, townPoint, VIEW, LAND_BOX } from "./map";
 import { PanZoom } from "./panzoom";
 import "./home.css";
 
@@ -201,7 +201,7 @@ function shellHtml(save: Save): string {
 /** Savings, one tap from the Garage; a dot when an unlocked bonus is affordable. */
 function bankHtml(save: Save): string {
   const ready = readyToBuy(save);
-  return `<button class="home-bank" data-home="garage" aria-label="Garage: savings ${dollars(save.bank)}${ready ? `, ${ready} bonus${ready > 1 ? "es" : ""} ready to buy` : ""}">${icon("truck")}<b class="bv-mono">${dollars(save.bank)}</b>${ready ? `<i class="dot"></i>` : ""}</button>`;
+  return `<button class="home-bank" data-home="garage" aria-label="Garage: savings ${dollars(save.bank)}${ready ? `, ${ready} bonus${ready > 1 ? "es" : ""} ready to buy` : ""}">${icon("garage")}<b class="bv-mono">${dollars(save.bank)}</b>${ready ? `<i class="dot"></i>` : ""}</button>`;
 }
 
 /**
@@ -212,13 +212,13 @@ function bankHtml(save: Save): string {
 function statsHtml(save: Save): string {
   const avg = reviewAverage(save.reviewCounts);
   const evening = save.time === "evening";
-  const last = save.last && save.last.town === save.town ? save.last : null;
+  const last = todaysClosing(save);
   return `<div class="home-stats bv-light" role="group" aria-label="Your truck">
     <button class="home-pill" data-home="reviews" aria-label="Popularity ${save.popularity}: see popularity and reviews">${icon("people")}<span><small>Popularity</small><b class="bv-mono">${save.popularity}</b></span></button>
     <button class="home-pill" data-home="reviews" aria-label="Rating ${avg === null ? "none yet" : avg.toFixed(1)}: see popularity and reviews">${icon("star")}<span><small>Rating</small><b class="bv-mono">${avg === null ? "–" : avg.toFixed(1)}</b></span></button>
     ${
-      evening
-        ? `<button class="home-pill" data-home="results" ${last ? "" : "disabled"}>${icon("receipt")}<span><small>Today</small><b>Results</b></span></button>`
+      evening && last
+        ? `<button class="home-pill" data-home="results">${icon("receipt")}<span><small>Today</small><b>Results</b></span></button>`
         : `<button class="home-pill" data-home="menuref">${icon("food-menu")}<span><small>Today's</small><b>Menu</b></span></button>`
     }
   </div>`;
@@ -263,9 +263,13 @@ function markerScale(world: HTMLElement, scale: number): void {
   const k = Math.max(0.62, Math.min(1.45, (MARKER_UNIT / pxPerUnit) ** 0.55));
   const v = k.toFixed(2);
   if (world.style.getPropertyValue("--mk") !== v) world.style.setProperty("--mk", v);
+  // Far out, only the capitals keep their names (larger), so the whole road stays readable.
+  world.classList.toggle("far", pxPerUnit < FAR_UNIT);
 }
 /** Screen px per map unit at which markers are drawn at their natural size. */
 const MARKER_UNIT = 5.2;
+/** Below this many screen px per map unit, town names give way to the capitals' (see markerScale). */
+const FAR_UNIT = 4.4;
 /** Screen px per map unit at the default zoom: neighbouring towns a comfortable thumb apart. */
 const DEFAULT_UNIT = 5.6;
 
@@ -290,7 +294,9 @@ function fitMap(keepView: boolean, lookAt?: string): void {
   svg.setAttribute("height", `${VIEW.h * m.base}`);
   const home = Math.min(3, Math.max(1, DEFAULT_UNIT / m.base));
   // Some slack past the edges, so towns near the coast can still be brought to the middle.
-  m.pz.resize(VIEW.w * m.base, VIEW.h * m.base, 0.6, 5, Math.round(Math.min(w * 0.55, h * 0.4)));
+  // Zoomed all the way out, the land (not the whole sheet of sea) fills the width, 16 px each side.
+  const minScale = Math.min(home, Math.max(0.6, (w - 32) / ((LAND_BOX[2] - LAND_BOX[0]) * m.base)));
+  m.pz.resize(VIEW.w * m.base, VIEW.h * m.base, minScale, 5, Math.round(Math.min(w * 0.55, h * 0.4)));
   const dockH = m.el.querySelector<HTMLElement>(".home-sheet:not([hidden]), .home-results:not([hidden])")?.offsetHeight ?? m.el.querySelector<HTMLElement>(".home-dock")?.offsetHeight ?? 0;
   const at = { x: w / 2, y: Math.max(h * 0.35, (h - dockH) / 2) };
   if (prev) m.pz.centerOn((prev.x / prevBase) * m.base, (prev.y / prevBase) * m.base, m.pz.scale, { x: w / 2, y: h / 2 });
@@ -363,7 +369,7 @@ function shiftsLine(save: Save, t: Stop): string {
   const n = save.shiftsIn[t.id] ?? 0;
   if (!t.roads.length) return n ? `${n} shift${n === 1 ? "" : "s"} here` : t.id === FINAL_TOWN ? "Last stop of the trip" : "A side road: nothing further opens from here";
   const { done, need } = unlockProgress(save.shiftsIn, t.id);
-  return done >= need ? `${pipsHtml(done, need)} roads open` : `${pipsHtml(done, need)} ${done} of ${need} shifts to open the road`;
+  return done >= need ? `${pipsHtml(done, need)}<span class="t">roads open</span>` : `${pipsHtml(done, need)}<span class="t">${done}/${need} shifts to open the road</span>`;
 }
 
 function renderDock(m: Mounted): void {
@@ -372,7 +378,7 @@ function renderDock(m: Mounted): void {
   const ev = eventOn(s.town, s.day);
   const dock = m.el.querySelector<HTMLElement>(".home-dock")!;
   const evening = s.time === "evening";
-  const last = s.last && s.last.town === s.town ? s.last : null;
+  const last = todaysClosing(s);
   const today = last ? `${last.stars.length ? `${(last.stars.reduce((a, b) => a + b, 0) / last.stars.length).toFixed(1)}★ · ` : ""}${last.served} served today` : "A day on the road";
   dock.innerHTML = `
     <div class="home-dock-row">
@@ -437,7 +443,7 @@ function renderSheet(m: Mounted, id: string): void {
       ? `<button class="bv-btn primary lg block" data-home="sleep">${icon("moon")}Sleep here</button>
       <span class="bv-caption">Tomorrow: ${eventOn(id, s.day + 1) ? `${esc(eventOn(id, s.day + 1)!.name)} here.` : `shift ${(s.shiftsIn[id] ?? 0) + 1} here, or set off.`}</span>`
       : `<button class="bv-btn primary lg block" data-home="open">${icon("bell")}Prep &amp; Open${ev ? ` · ${esc(ev.name)}` : ""}</button>
-      <span class="bv-caption">${ev ? "Event day: a longer, busier shift with its own crowd." : `Shift ${(s.shiftsIn[id] ?? 0) + 1} here. A shift fills the day.`}</span>`;
+      ${ev ? `<span class="bv-caption">Event day: a longer, busier shift with its own crowd.</span>` : ""}`;
   } else if (trip) {
     const can = trip.when !== "tomorrow";
     const how = trip.when === "now" ? (evening ? "tonight" : "this morning") : trip.when === "day" ? "takes the day" : "tomorrow";
@@ -464,7 +470,7 @@ function renderSheet(m: Mounted, id: string): void {
           ${here ? `<span class="bv-chip pill here">${icon("truck")}You're here</span>` : ""}
         </div>
       </div>
-      <button class="bv-btn icon" data-home="close" aria-label="Close">${icon("close")}</button>
+      <button class="bv-btn icon ghost" data-home="close" aria-label="Close">${icon("close")}</button>
     </div>
     <p class="bv-body home-blurb">${esc(t.blurb)} ${esc(crowd.blurb)}</p>
     ${calendarHtml(t, s.day)}
@@ -640,7 +646,7 @@ const ARRIVE_MS = { shrink: 1350, fade: 850, sheet: 1350 };
  */
 function playArrive(m: Mounted, a: Arrival): void {
   const s = m.deps.save;
-  const last = s.last && s.last.town === s.town ? s.last : null;
+  const last = todaysClosing(s);
   if (!last) return;
   const sheet = m.el.querySelector<HTMLElement>(".home-results")!;
   sheet.innerHTML = resultsSheetHtml(last, s);

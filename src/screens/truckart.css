@@ -3,18 +3,18 @@
 .tk .tk-dim { fill: #1d2340; opacity: 0; transition: opacity 0.6s; pointer-events: none; }
 .tk .tk-pool { opacity: 0; transition: opacity 0.6s; }
 .tk .tk-shadow { fill: #3f3630; opacity: 0.16; }
-.tk .tk-in { fill: #4b3f37; transition: fill 0.6s; }
-.tk .tk-in-hood { fill: #3a302a; }
-.tk .tk-in-rail { stroke: #a9a29a; stroke-width: 0.8; }
-.tk .tk-ticket { fill: #faf3e6; opacity: 0.85; }
-.tk .tk-in-shelf { stroke: #6d6158; stroke-width: 1; }
-.tk .tk-in-pot { fill: none; stroke: #8a7d72; stroke-width: 0.9; }
+.tk .tk-in { fill: #5a4436; transition: fill 0.6s; }
+.tk .tk-in-hood { fill: #463529; }
+.tk .tk-in-rail { stroke: #c9c2b8; stroke-width: 0.9; }
+.tk .tk-ticket { fill: #fffaf0; opacity: 1; }
+.tk .tk-in-shelf { stroke: #8d7f72; stroke-width: 1; }
+.tk .tk-in-pot { fill: none; stroke: #b0a294; stroke-width: 0.9; }
 .tk .tk-wire { stroke: #3f3630; stroke-width: 0.6; opacity: 0.8; }
 .tk.mini .tk-wire { stroke-width: 2; }
 .tk .tk-bulb .glass { fill: #f4e6c4; stroke: #8a7d72; stroke-width: 0.4; }
 .tk .tk-bulb .halo { opacity: 0; transition: opacity 0.6s; }
 .tk .tk-lens { fill: #e8eef0; }
-.tk .tk-beam { opacity: 0; transition: opacity 0.8s; }
+.tk .tk-beam { opacity: 0; transition: opacity 0.8s; mix-blend-mode: screen; }
 .tk .tk-neon { stroke: #f2a7c3; opacity: 0.8; }
 .tk .tk-tubglow { opacity: 0; transition: opacity 0.6s; }
 .tk .tk-glint { opacity: 0; transform-box: fill-box; transform-origin: center; animation: tk-glint 4.2s ease-in-out infinite; }

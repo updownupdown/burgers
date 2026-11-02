@@ -19,10 +19,11 @@ import { opinionFace, opinionLabel } from "../ui/faces";
 import { openHowTo } from "./howto";
 import { openMenuRef } from "./menuref";
 import { closeAllModals, esc, getDeps, modalDepth, modalHead, modalOpen, popModal, price, pushModal, setDeps, type GfxLevel, type MenuDeps, type ShiftSummary } from "./modal";
-import { stackArt } from "./menuref";
+import { buildLine, methodTags, sidesLine, stackArt } from "./menuref";
 import { clockLabel } from "../game/shift";
-import { recipeCount, type Stop } from "../game/stops";
-import { COUNTED, KIND_LABEL } from "../game/types";
+import { middleOf, type MiddleCounter, type Stop } from "../game/stops";
+
+const MIDDLE_LABEL: Record<MiddleCounter, string> = { grill: "Grill", press: "Press", comal: "Comal", oven: "Oven" };
 import { devOn, setDevOn, SIM_LEVELS, simLevel } from "../game/devmode";
 import { coachOn, setCoachOn } from "../tutorial/coach";
 
@@ -161,13 +162,17 @@ export function openMenu(over: Partial<MenuDeps> = {}): void {
 /** The pause card in a shift: how it's going, today's menu in brief, and the way out at the bottom. */
 function pauseHtml(d: MenuDeps, town: Stop): string {
   const sh = d.shift?.();
-  return `<header class="menu-head">
-      <div class="menu-headtext"><span class="bv-eyebrow">Paused${d.subtitle ? ` · ${esc(d.subtitle())}` : ""}</span><h2 class="bv-title">${esc(town.name)}</h2></div>
-      <button class="bv-btn icon sm ghost" data-m="howto" aria-label="How to play" title="How to play">${icon("help")}</button>
+  const at = d.counter?.();
+  const here = at === "drinks" ? "Drinks" : at === "fryer" ? "Fryer" : MIDDLE_LABEL[middleOf(town)];
+  return `<header class="menu-head bar">
+      <span class="menu-head-ic" aria-hidden="true">${icon("pause")}</span>
+      <div class="menu-headtext"><h2 class="bv-title">Paused</h2></div>
       <button class="bv-btn icon sm ghost" data-m="settings" aria-label="Settings" title="Settings">${icon("settings")}</button>
     </header>
     <div class="menu-body menu-scroll pause-body">
+      <p class="pause-where">${icon("pin")}<b>${esc(town.name)}</b>${d.subtitle ? `<span>${esc(d.subtitle())}</span>` : ""}</p>
       ${sh ? shiftHtml(sh) : ""}
+      <button class="bv-btn block pause-help" data-m="howto">${icon("help")}How to play · ${esc(here)}</button>
       ${todayMenuHtml(town, 1)}
     </div>
     <footer class="pause-foot">
@@ -231,16 +236,10 @@ function shiftHtml(sh: ShiftSummary): string {
 function todayMenuHtml(town: Stop, mult: number): string {
   const items = town.menu
     .map((r) => {
-      const notes: string[] = [];
-      if (r.toasted) notes.push("toasted");
-      if (r.melt) notes.push("melted");
-      if (r.smash) notes.push("smashed");
-      // Bottom to top, between the buns; counted toppings once, with their count.
-      const inner = r.layers.slice(1, -1);
-      const uniq = inner.filter((k, i) => !COUNTED.has(k) || inner.indexOf(k) === i).map((k) => (COUNTED.has(k) ? `${KIND_LABEL[k]} ×${recipeCount(r, k)}` : KIND_LABEL[k]));
+      const notes = methodTags(r);
       return `<li class="pause-dish">
         ${stackArt(r)}
-        <div class="pd-main"><b>${esc(r.name)}</b><small>${uniq.map(esc).join(" · ")}</small>${notes.length ? `<span class="tags">${notes.map((n) => `<span class="bv-chip pill">${n}</span>`).join("")}</span>` : ""}</div>
+        <div class="pd-main"><b>${esc(r.name)}</b><small>${esc(buildLine(r))}</small>${notes.length ? `<span class="tags">${notes.map((n) => `<span class="bv-chip pill">${esc(n)}</span>`).join("")}</span>` : ""}</div>
         <span class="bv-mono pr">${price(Math.round(r.price * mult))}</span>
       </li>`;
     })
@@ -248,7 +247,7 @@ function todayMenuHtml(town: Stop, mult: number): string {
   return `<section class="pause-menu" aria-label="Today's menu">
     <h3 class="menu-h">${icon("food-menu")}Today's menu <span>${town.menu.length}</span></h3>
     <ul class="pause-dishes">${items}</ul>
-    <p class="pause-note mute">Fries S, M, L · Drinks S, M, L, with ice and a lid unless asked.</p>
+    <p class="pause-note mute">${esc(sidesLine(town))}</p>
     <button class="bv-btn sm ghost" data-m="menuref">${icon("food-menu")}Full menu and prices</button>
   </section>`;
 }
@@ -263,31 +262,32 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
   const inShift = d.inShift();
   const stacked = modalDepth() > 0;
   const gfx = d.gfx();
+  let buildTaps = 0;
   const card = pushModal({
     key: "settings",
     label: "Settings",
     cls: "tall settings",
-    html: `${modalHead({ icon: "settings", title: "Settings", stacked, eyebrow: "Menu" })}
+    html: `${modalHead({ icon: "settings", title: "Settings", stacked, eyebrow: inShift ? "Paused" : undefined })}
       <div class="menu-body menu-scroll menu-general menu-groups">
         <section class="menu-group">
-          <h3 class="menu-h">${icon("settings")}Device</h3>
+          <h3 class="menu-h">${icon("phone")}Device</h3>
           ${toggle("sound", d.sound() ? "sound-on" : "sound-off", "Sound", d.sound())}
           ${hapticsSupported() ? toggle("haptics", "vibrate", "Vibration", hapticsOn(), "A buzz on flips, dings and burns") : ""}
           ${field("gfx", "sparkle", "Graphics", GFX.find((g) => g.id === gfx)!.blurb, GFX.map((g) => ({ v: g.id, label: g.label })), gfx)}
         </section>
         <section class="menu-group">
-          <h3 class="menu-h">${icon("help")}Learning</h3>
+          <h3 class="menu-h">${icon("sparkle")}Learning</h3>
           ${toggle("tutorial", "help", "Tutorial mode", coachOn(), "A see-through thumb shows each new move. Turning it on plays the lessons again.")}
         </section>
         <section class="menu-group">
           <h3 class="menu-h">${icon("truck")}App</h3>
           ${row("update", "update", "Check for updates", "", "")}
           ${d.canInstall() ? row("install", "pin", "Install the app", "Add Bun Voyage to your home screen and play offline", "") : ""}
-          ${row("newtrip", "flag", "Start a new trip", "Back to the first town. Upgrades and savings reset.", "", 'data-tone="danger"')}
-          ${confirmBox("newtrip", inShift ? "End this shift and wipe the trip? Towns and bonuses reset; best scores are kept." : "Wipe the trip and start again from the first town? Towns and bonuses reset; best scores are kept.", "Start over")}
+          ${row("newtrip", "flag", "Start a new trip", "Back to the first town with an empty garage.", "", 'data-tone="danger"')}
+          ${confirmBox("newtrip", `${inShift ? "End this shift and start over?" : "Start over?"} Savings, bonuses, looks, popularity and reviews all reset. Town bests are kept.`, "Start over")}
         </section>
         ${inShift || !d.simulate ? "" : devHtml()}
-        <p class="menu-build bv-mono">${esc(buildLabel())}</p>
+        <p class="menu-build bv-mono" ${inShift || !d.simulate ? "" : 'data-m="build"'}>${esc(buildLabel())}</p>
       </div>`,
   });
 
@@ -327,7 +327,7 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
       case "tutorial": {
         const on = !coachOn();
         setCoachOn(on);
-        if (on) d.replayTutorial?.();
+        d.setTutorial?.(on);
         setToggle(btn, on);
         break;
       }
@@ -347,6 +347,15 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
           d.simulate?.(null);
           const off = card.querySelector<HTMLElement>('[data-m="sim"][data-v="off"]');
           if (off) pickSeg(card, off, SIM_NOTE.off);
+        }
+        break;
+      }
+      case "build": {
+        buildTaps++;
+        const g = card.querySelector<HTMLElement>(".menu-devgroup");
+        if (g && g.hidden && buildTaps >= 5) {
+          g.hidden = false;
+          g.scrollIntoView({ block: "nearest" });
         }
         break;
       }
@@ -379,8 +388,8 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
 const SIM_NOTE: Record<string, string> = {
   off: "Playing your real trip.",
   "0": "A fresh trip: the first town, nothing earned yet. Your real trip is kept aside.",
-  "50": "Halfway down the road: half the towns worked, two upgrades, a fair name. Your real trip is kept aside.",
-  "100": "The whole road worked: every town open, every upgrade, well known. Your real trip is kept aside.",
+  "50": "Halfway down the road: half the towns worked, two bonuses, a fair name. Your real trip is kept aside.",
+  "100": "The whole road worked: every town open, every bonus, well known. Your real trip is kept aside.",
 };
 
 /** The bottom of Settings: dev mode, and with it the progress simulator. */
@@ -388,9 +397,10 @@ function devHtml(): string {
   const on = devOn();
   const lvl = simLevel();
   const cur = lvl === null ? "off" : String(lvl);
-  return `<section class="menu-group">
-    <h3 class="menu-h">${icon("spatula")}Developer</h3>
-    ${toggle("dev", "settings", "Dev mode", on, "Testing tools")}
+  // Hidden until five taps on the build line, unless it's already on.
+  return `<section class="menu-group menu-devgroup" ${on ? "" : "hidden"}>
+    <h3 class="menu-h">${icon("wrench")}Developer</h3>
+    ${toggle("dev", "wrench", "Dev mode", on, "Testing tools")}
     <div class="menu-dev" ${on ? "" : "hidden"}>
       ${field("sim", "chart", "Simulate progress", SIM_NOTE[cur], [{ v: "off", label: "Off" }, ...SIM_LEVELS.map((l) => ({ v: String(l), label: `${l}%` }))], cur)}
     </div>

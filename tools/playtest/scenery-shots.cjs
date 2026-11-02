@@ -6,7 +6,7 @@ const kinds = ['mountains', 'beach', 'desert', 'orchard'];
 (async () => {
   for (const o of opts) {
     const { b, p } = await open({ w: 390, h: 844, dpr: 2, query: '' });
-    await p.evaluate(() => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: 0, tutorialDone: true })));
+    await p.evaluate(() => localStorage.setItem('bv-save-v1', JSON.stringify({ town: 'pinecrest', tutorialDone: true })));
     await p.reload();
     await p.waitForTimeout(600);
     await p.addStyleTag({ content: `:root{--safe-t:47px !important} .hint{display:none !important}` });

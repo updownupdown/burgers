@@ -60,7 +60,7 @@ export interface CrowdInput {
   hidden: readonly string[];
   shift?: ShiftWindow;
   bonus?: BonusId | null;
-  /** Calmer pacing spaces people out, so fewer come in the same window. */
+  /** Stressful packs people closer, so more come; Chill spaces them out but doesn't cut the crowd. */
   pacing?: Difficulty;
 }
 
@@ -78,6 +78,14 @@ export function expectedCustomers(p: CrowdInput): number {
     menuFactor(menu) *
     crowdShare(p.shift ?? DEFAULT_SHIFT) *
     bonusCrowd(p.bonus ?? null) /
-    (DIFFICULTY[p.pacing ?? "balanced"].spawnGap / DIFFICULTY.balanced.spawnGap);
+    pacingCrowd(p.pacing ?? "balanced");
   return Math.max(3, Math.round(n));
+}
+
+/**
+ * Pacing's divisor on the crowd: Stressful's shorter gaps bring more people; Chill's longer gaps
+ * don't cut the count (after build #78 a new truck on Chill saw only four customers).
+ */
+export function pacingCrowd(d: Difficulty): number {
+  return Math.min(1, DIFFICULTY[d].spawnGap / DIFFICULTY.balanced.spawnGap);
 }

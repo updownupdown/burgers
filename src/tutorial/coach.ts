@@ -483,7 +483,12 @@ function placeCard(show: Show, g: Gesture | null): void {
     const cands: number[] = [];
     for (const b of busy) cands.push(b.y - H - 6, b.y + b.h + 6);
     cands.push(64, 8, bottom, vh * 0.5 - H / 2);
-    y = cands.find(fits) ?? (busy.length && busy[0].y + busy[0].h / 2 > vh / 2 ? 64 : bottom);
+    // After build #78: the card goes on the other half of the screen from what it points at, so it
+    // doesn't sit over the station next to the target (the cup stacks beside the grill button);
+    // only if nothing fits there does it fall back to beside the target.
+    const low = busy.length > 0 && busy[0].y + busy[0].h / 2 > vh / 2;
+    const across = (c: number) => !busy.length || c + H / 2 > vh / 2 !== low;
+    y = cands.filter(across).find(fits) ?? cands.find(fits) ?? (low ? 64 : bottom);
   }
   y = Math.max(8, Math.min(vh - H - 8, y));
   card.style.transform = `translate(${left.toFixed(0)}px, ${y.toFixed(0)}px)`;

@@ -7,13 +7,11 @@ import { PASS_STARS, type Closing, type Save } from "../game/progress";
 import { addReviews, noReviews, ratingPull, reviewAverage, reviewTotal, REVIEW_CHANCE } from "../game/reviews";
 import { opinionFace, opinionLabel } from "../ui/faces";
 import { clockLabel, FIRST_HOUR, hourRate, LAST_HOUR, MIN_SHIFT, shiftHours, type ShiftWindow } from "../game/shift";
-import { eventOn, townById, type Stop } from "../game/stops";
+import { eventOn, townById, type Recipe, type Stop } from "../game/stops";
+import { askFor } from "../game/asks";
 import { SHIFTS_TO_UNLOCK } from "../game/travel";
 import { icon } from "../ui/icons";
-import { buildLabel } from "../update";
-import { stackArt } from "./menuref";
-import { COUNTED, KIND_LABEL } from "../game/types";
-import { recipeCount } from "../game/stops";
+import { buildLine, methodTags, stackArt } from "./menuref";
 import "./day.css";
 
 /**
@@ -181,19 +179,8 @@ export function prepHtml(p: PrepInput): string {
     .map((r) => {
       const on = menu.includes(r);
       const locked = on && menu.length <= MIN_MENU;
-      const chips = r.panini
-        ? [r.open ? "Open-faced, bread pressed" : "Pressed", r.melt ? "Melted cheese" : ""].filter(Boolean)
-        : r.dish
-          ? [r.dish === "quesadilla" ? "Folded, flipped once" : r.dish === "tostada" ? "Fried shell" : "Warm tortillas", r.melt ? "Melted cheese" : ""].filter(Boolean)
-          : r.pie
-            ? [r.pie === "calzone" ? "Folded, baked" : "Baked in the oven", r.layers.some((k) => k === "basil" || k === "rocket" || k === "honey") ? `${r.layers.filter((k) => k === "basil" || k === "rocket" || k === "honey").map((k) => KIND_LABEL[k]).join(", ")} after` : ""].filter(Boolean)
-          : [r.toasted ? "Toasted bun" : "", r.smash ? "Smashed patty" : "", r.melt ? "Melted cheese" : ""].filter(Boolean);
-      // Between the buns (or on the bread of an open-faced toast, or in the tortillas), bottom to top; counted toppings once, with their count.
-      const inner = r.open || r.dish || r.pie ? r.layers.slice(r.dish && COUNTED.has(r.layers[0]) ? 0 : 1) : r.layers.slice(1, -1);
-      const build = inner
-        .filter((k, i) => !COUNTED.has(k) || inner.indexOf(k) === i)
-        .map((k) => (COUNTED.has(k) ? `${KIND_LABEL[k]} ×${recipeCount(r, k)}` : KIND_LABEL[k]))
-        .join(" · ");
+      const chips = methodTags(r);
+      const build = buildLine(r);
       return `<button class="prep-row ${on ? "" : "off"}" data-act="prep-menu" data-v="${esc(r.name)}" aria-pressed="${on}" ${locked ? 'aria-disabled="true"' : ""}>
         <span class="tick">${on ? icon("check") : ""}</span>
         <span class="nm"><b>${esc(r.name)}</b>${
@@ -258,8 +245,11 @@ export function prepHtml(p: PrepInput): string {
         <h3 class="prep-h">${icon("food-menu")}Menu
           <button class="bv-toggle prep-ing" role="switch" aria-checked="${showIngredients}" data-act="prep-ing"><span class="lbl">Show ingredients</span><span class="sw"></span></button>
         </h3>
+        <p class="day-hint prep-min" role="status" hidden>Keep at least ${MIN_MENU === 2 ? "two" : MIN_MENU} recipes on the menu.</p>
         <div class="prep-rows">${rows}</div>
       </section>
+
+      ${askHtml(stop, menu, save.day, expect)}
 
       <section class="prep-sec prep-card">
         <h3 class="prep-h">${icon("sparkle")}Bonus</h3>
@@ -274,6 +264,16 @@ export function prepHtml(p: PrepInput): string {
   </div>`;
 }
 
+/** Today's local ask (game/asks.ts): optional, a little extra money, and the shift counts as two. */
+function askHtml(stop: Stop, menu: readonly Recipe[], day: number, expect: number): string {
+  const a = askFor(stop, menu, day, expect);
+  return `<section class="prep-sec prep-card prep-ask">
+        <h3 class="prep-h">${icon("flag")}Local ask <span class="prep-shift-label bv-mono">+${money(a.reward)}</span></h3>
+        <p class="ask-text">${esc(a.text)}.</p>
+        <span class="day-hint">Optional. Met, it pays ${money(a.reward)} and this shift counts as two toward opening the roads.</span>
+      </section>`;
+}
+
 // ---------------------------------------------------------------------------
 // Closing
 
@@ -281,8 +281,11 @@ export function prepHtml(p: PrepInput): string {
 function verdictLine(c: Closing): string {
   const town = townById(c.town);
   const avg = c.stars.length ? c.stars.reduce((a, b) => a + b, 0) / c.stars.length : 0;
+  const gone = c.lost + c.leftLine;
   return c.served === 0
-      ? "The truck stayed quiet today."
+    ? gone > 0
+      ? `Nobody got their food today: ${gone} walked out.`
+      : "The truck stayed quiet today."
       : c.outcome === "failed"
         ? `${town.name} wasn't impressed. Serve at least half the customers with a ${PASS_STARS}★ average to count the day.`
         : c.great
@@ -321,7 +324,7 @@ export function resultsSheetHtml(c: Closing, save: Save): string {
   return `<div class="home-res-head">
       <div class="t">
         <span class="bv-eyebrow">Closed · Day ${c.day} · ${hourLabel(c.shift.start)} to ${hourLabel(c.shift.end)}</span>
-        <div class="nm"><h2 class="bv-title">${esc(town.name)}</h2><span class="home-res-stars" aria-label="${avg.toFixed(1)} stars average">${stars(Math.round(avg))}<span class="bv-mono">${avg.toFixed(1)}</span></span></div>
+        <div class="nm"><h2 class="bv-title">${esc(town.name)}</h2>${c.stars.length ? `<span class="home-res-stars" aria-label="${avg.toFixed(1)} stars average">${stars(Math.round(avg))}<span class="bv-mono">${avg.toFixed(1)}</span></span>` : `<span class="home-res-stars" aria-label="Nobody served"><span class="bv-mono">–</span></span>`}</div>
       </div>
       <button class="bv-btn icon" data-home="results-close" aria-label="Hide today's results">${icon("close")}</button>
     </div>
@@ -392,7 +395,7 @@ export function closingHtml(c: Closing, save: Save): string {
   });
   boxes.push({
     id: "closing:press",
-    icon: "critic",
+    icon: "people",
     title: "Popularity",
     sub: c.press ? `A critic ate here today` : "Word of mouth",
     value: c.pop[0] === c.pop[1] ? "—" : `${c.pop[1] > c.pop[0] ? "+" : "−"}${Math.abs(c.pop[1] - c.pop[0])}`,
@@ -442,26 +445,20 @@ export function closingHtml(c: Closing, save: Save): string {
   const tb = townBonus(town.id);
   const goal =
     !earned && tb && !save.found.includes(tb.id) && c.outcome !== "failed"
-      ? `<p class="day-goal">${icon("lock")}<span>A great shift here unlocks <b>${esc(tb.name)}</b>: ${GREAT.stars}★ average opinion, ${Math.round(GREAT.served * 100)}% of orders served, at least ${GREAT.min}.</span></p>`
+      ? `<p class="day-goal">${icon("lock")}<span>A great shift here unlocks <b>${esc(tb.name)}</b>: ${GREAT.stars}★ average opinion, ${Math.round(GREAT.served * 100)}% of orders served, at least ${GREAT.min} (or 80% of a smaller crowd).</span></p>`
       : "";
 
   return `<div class="day-screen bv closing">
     <header class="day-hero">
       <span class="bv-eyebrow">Closing time · Day ${c.day} · ${hourLabel(c.shift.start)} to ${hourLabel(c.shift.end)}</span>
       <h2 class="bv-title">${esc(town.name)}</h2>
-      <div class="day-hero-stars" aria-label="${avg.toFixed(1)} stars average">${stars(Math.round(avg))} <span class="bv-mono">${avg.toFixed(1)}</span></div>
+      ${c.stars.length ? `<div class="day-hero-stars" aria-label="${avg.toFixed(1)} stars average">${stars(Math.round(avg))} <span class="bv-mono">${avg.toFixed(1)}</span></div>` : `<div class="day-hero-stars" aria-label="Nobody served"><span class="bv-mono">–</span></div>`}
       <p>${verdict}</p>
     </header>
     <div class="day-scroll">
       ${reward}
-      <div class="day-kpis">
-        <div class="day-kpi"><span class="bv-eyebrow">Takings</span><b class="${newBest ? "up" : ""}">${money(c.takings)}</b><small>${newBest ? "town best" : `best ${money(c.bestBefore ?? 0)}`}</small></div>
-        <div class="day-kpi"><span class="bv-eyebrow">Rating</span><b>${c.rating === null ? "–" : c.rating.toFixed(1)}</b><small>${ratingDelta(c)}</small></div>
-        <div class="day-kpi"><span class="bv-eyebrow">Served</span><b>${c.served}</b><small>${c.lost + c.leftLine ? `${c.lost + c.leftLine} left` : "nobody left"}</small></div>
-      </div>
       ${goal}
       ${boxes.map((b) => boxHtml(b, "closing-box")).join("")}
-      <p class="day-build">${esc(buildLabel())}</p>
     </div>
     <footer class="day-foot">
       <button class="bv-btn primary lg block" data-act="evening">${icon("map")}Back to the map</button>
@@ -523,12 +520,14 @@ export function reviewsHtml(save: Save): string {
   const pct = (n: number) => `${Math.round(n * 100)}%`;
   return `<div class="day-screen bv">
     <header class="day-top">
-      <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("back")}</button>
-      <div class="where"><span class="bv-eyebrow">${total} review${total === 1 ? "" : "s"} · ${press.length} clipping${press.length === 1 ? "" : "s"}</span><b>Popularity &amp; reviews</b></div>
+      <span class="day-top-ic" aria-hidden="true">${icon("people")}</span>
+      <div class="where"><b>Popularity &amp; reviews</b></div>
+      <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("close")}</button>
     </header>
     <div class="day-scroll">
+      <p class="day-count">${total} review${total === 1 ? "" : "s"} · ${press.length} clipping${press.length === 1 ? "" : "s"}</p>
       <div class="day-kpis two">
-        <div class="day-kpi"><span class="bv-eyebrow">${icon("people")}Popularity</span><b>${save.popularity}<small class="of">/100</small></b><small>How many people have heard of the truck. Happy customers spread the word.</small></div>
+        <div class="day-kpi"><span class="bv-eyebrow">${icon("people")}Popularity</span><b>${save.popularity}<small class="of">/100</small></b><small>How many people have heard of the truck. Happy customers spread the word; walk-outs cost some.</small></div>
         <div class="day-kpi"><span class="bv-eyebrow">${icon("star")}Rating</span><b>${avg === null ? "–" : avg.toFixed(1)} <span class="st">★</span></b><small>${avg === null ? "No reviews yet." : `The average of ${total} review${total === 1 ? "" : "s"}.`} A good rating brings a few more people.</small></div>
       </div>
       <section class="day-card" aria-label="Reviews by stars">

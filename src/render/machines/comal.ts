@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { bakedMesh, Parts } from "../bake";
-import { box, C, cached, cyl, glow, machine, rbox, sideProfile, sph, studySpace, textDecal } from "./kit";
+import { box, C, cached, canvasTex, cyl, glow, machine, rbox, sideProfile, sph, studySpace, textDecal } from "./kit";
 import { STUDY } from "../units";
 
 /*
@@ -27,7 +27,10 @@ const body = cached(() => {
   const mid = (PZ0 + PZ1) / 2;
   // The plate: black seasoned steel with a soft sheen where it's been wiped.
   p.add(box(2 * PX + 0.16, 0.14, pd + 0.16), "#26292b", { p: [0, TOP - 0.07, mid] });
-  for (let i = 0; i < 5; i++) p.add(box(2 * PX - 0.6, 0.004, 0.12), "#33383b", { p: [0, TOP + 0.002, PZ0 + 0.5 + (i * (pd - 1)) / 4], ink: false });
+  // Seasoning sheen: lighter arcs where the cook's cloth has wiped, mostly over the hot part.
+  for (const [x, z, r, a0, len] of [[-2.2, -1.2, 1.1, 0.3, 1.9], [-0.6, -0.2, 0.9, 3.6, 1.6], [-2.6, 0.6, 0.7, 4.4, 1.4], [0.6, -1.6, 0.8, 0.9, 1.5], [2.3, 0.2, 0.6, 3.9, 1.2]] as const) {
+    p.add(new THREE.RingGeometry(r, r + 0.07, 16, 1, a0, len).rotateX(-Math.PI / 2), "#3a3f42", { p: [x, TOP + 0.002, z], ink: false });
+  }
   // A raised rim round the plate.
   p.add(box(2 * PX + 0.3, 0.1, 0.12), "#1d2022", { p: [0, TOP + 0.03, PZ0 - 0.05] });
   p.add(box(2 * PX + 0.3, 0.06, 0.1), "#1d2022", { p: [0, TOP + 0.01, PZ1 + 0.06] });
@@ -44,6 +47,20 @@ const body = cached(() => {
   }
   return p;
 });
+
+/** The plate's heat tint: hot over the left two thirds, warm over the right, blended across the split. */
+let heat: THREE.CanvasTexture | null = null;
+const heatTex = () =>
+  (heat ??= canvasTex(128, 4, (c, w, h) => {
+    const k = (SPLIT + PX) / (2 * PX);
+    const g = c.createLinearGradient(0, 0, w, 0);
+    g.addColorStop(0, "rgba(255,90,42,0.22)");
+    g.addColorStop(Math.max(0, k - 0.08), "rgba(255,90,42,0.2)");
+    g.addColorStop(Math.min(1, k + 0.08), "rgba(255,176,74,0.12)");
+    g.addColorStop(1, "rgba(255,176,74,0.1)");
+    c.fillStyle = g;
+    c.fillRect(0, 0, w, h);
+  }));
 
 /** Little flames along the front slot: tall and orange under the hot part, low and amber under the warm end. */
 function flames(g: THREE.Group): void {
@@ -84,18 +101,24 @@ export function makeComal(): ComalObject {
   flames(st);
   const pd = PZ1 - PZ0;
   const mid = (PZ0 + PZ1) / 2;
-  // A faint heat tint over each part of the plate.
-  const hot = glow(box(SPLIT + PX - 0.1, 0.004, pd - 0.1), "#ff5a2a", 0.1);
-  hot.position.set((-PX + SPLIT) / 2, TOP + 0.006, mid);
-  hot.renderOrder = 1;
-  const warm = glow(box(PX - SPLIT - 0.1, 0.004, pd - 0.1), "#ffb04a", 0.07);
-  warm.position.set((SPLIT + PX) / 2, TOP + 0.006, mid);
-  warm.renderOrder = 1;
-  st.add(hot, warm);
-  // HOT and WARM painted on the back guard, so the two ends read without a tag.
-  for (const [text, x, col] of [["HOT", (-PX + SPLIT) / 2, "#e0442e"], ["WARM", (SPLIT + PX) / 2, "#f39a2e"]] as const) {
-    const l = textDecal(text, 0.26, { up: false, bg: "rgba(0,0,0,0)", color: col, fs: 64, pad: 6 });
-    l.position.set(x, TOP + 0.22, PZ0 - 0.17);
+  // The heat over the plate: a red-orange glow over the hot two thirds easing into a softer amber
+  // over the warm end, the change soft rather than a hard edge.
+  const tint = new THREE.Mesh(
+    new THREE.PlaneGeometry(2 * PX - 0.1, pd - 0.1).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: heatTex(), transparent: true, depthWrite: false }),
+  );
+  tint.position.set(0, TOP + 0.006, mid);
+  tint.renderOrder = 1;
+  tint.raycast = () => {};
+  tint.castShadow = false;
+  st.add(tint);
+  // HOT and WARM stamped flat along the plate's front edge (they used to be on the back guard, small
+  // and hidden behind the rim), so they read from above; food set down there covers them.
+  for (const [text, x, col] of [["HOT", (-PX + SPLIT) / 2, "#ff6a4a"], ["WARM", (SPLIT + PX) / 2, "#ffb54a"]] as const) {
+    const l = textDecal(text, 0.42, { bg: "rgba(0,0,0,0)", color: col, fs: 64, pad: 4, weight: 800 });
+    (l.material as THREE.MeshBasicMaterial).opacity = 0.8;
+    l.renderOrder = 2;
+    l.position.set(x, TOP + 0.008, PZ1 - 0.32);
     st.add(l);
   }
   const zoneW = (2 * PX) / 3;

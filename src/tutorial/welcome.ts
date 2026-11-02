@@ -42,14 +42,14 @@ export function showWelcome(o: { pacing: Difficulty; done(tutorial: boolean, chi
     label: "Welcome",
     cls: "welcome",
     onDismiss: finish,
-    html: `${modalHead({ icon: "truck", title: "Welcome aboard", stacked: false, closeLabel: "Start" })}
+    // No ×: "Start the trip" is the one way on (Back or a tap outside does the same).
+    html: `${modalHead({ icon: "truck", title: "Welcome aboard", stacked: false }).replace(/<button[^]*?<\/button>/, "")}
       <div class="menu-body menu-scroll welcome-body">
         <p class="bv-body">You run a food truck on a road trip. Cook what each ticket asks for, keep the line happy, and open the road to new towns and new dishes.</p>
         <div class="welcome-sw">
-          ${sw("tutorial", "help", "Tutorial mode", "A see-through thumb shows you each move the first time.", tutorial)}
-          ${sw("chill", "timer", "Start on Chill", "Patient customers, nothing burns, drinks stop at the line, and a forgiving first day. Off: Balanced, a steady rush.", chill)}
+          ${sw("tutorial", "help", "Tutorial mode", "A see-through thumb shows you each move the first time. Change it in Settings.", tutorial)}
+          ${sw("chill", "timer", "Start on Chill", "Patient customers, nothing burns, drinks stop at the line, and a forgiving first day. Off: Balanced, a steady rush. Change it on Prep.", chill)}
         </div>
-        <p class="bv-caption">Change these any time: the tutorial in Settings, the pacing on Prep before each shift.</p>
       </div>
       <footer class="welcome-foot"><button class="bv-btn primary lg block" data-w="go">${icon("play")}Start the trip</button></footer>`,
   });

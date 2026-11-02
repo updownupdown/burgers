@@ -178,8 +178,9 @@ function makeBread(kind: "ciabatta" | "sourdough", body: THREE.Group): (p: Piece
   const lines = new THREE.Mesh(PRESS_LINES.geo, lineMat);
   lines.position.y = b.h + 0.009;
   lines.castShadow = false;
-  // The cut: a dark slit corner to corner, and the halves eased apart.
-  const cut = mesh(CUT_GEO, "#3a2414", { ink: false, shadow: false });
+  // The cut: corner to corner, the crumb and filling showing in the gap between the two halves
+  // (light, edged in the crust's shade) rather than a black stroke.
+  const cut = mesh(CUT_GEO, "#f0d9a6", { ink: true, shadow: false });
   cut.position.y = b.h + 0.012;
   cut.rotation.y = 0.62;
   body.add(crust, face, detail, lines, cut);

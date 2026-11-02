@@ -1,5 +1,5 @@
 import type { CrowdId } from "./business";
-import type { DrinkId, FryKind, Kind } from "./types";
+import type { DrinkId, FryKind, Garnish, Kind } from "./types";
 import { HOUSE_DRINKS, STANDARD_COUNT } from "./types";
 
 export interface Recipe {
@@ -124,6 +124,22 @@ export function fountainFor(region: RegionId): DrinkId[] {
   return [...LOCAL_DRINKS[region], ...HOUSE_DRINKS];
 }
 
+/**
+ * The garnish on an area's local drinks (after build #78, one small regional touch on the drinks
+ * counter): a cucumber wheel on the coast, a lime wedge in Red Rock, an apple slice on the isle.
+ * The Pines' drinks go without, so the first region stays as it was.
+ */
+const LOCAL_GARNISH: Partial<Record<RegionId, Garnish>> = { coast: "cucumber", desert: "lime", orchard: "apple" };
+/** The area's garnish, if it has one. */
+export function garnishOf(region: RegionId): Garnish | null {
+  return LOCAL_GARNISH[region] ?? null;
+}
+/** The garnish an order's drink comes with: the area's, on its local drinks only. */
+export function garnishFor(region: RegionId, drink: DrinkId | null): Garnish | undefined {
+  const g = LOCAL_GARNISH[region];
+  return g && drink && LOCAL_DRINKS[region].includes(drink) ? g : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // The Pines: five burgers, one signature step each (plain, egg, melt, smash, double). The old
 // Plain Jane lives on as a Classic with two NOs.
@@ -198,7 +214,8 @@ export const STOPS: Stop[] = [
     // The first town: the grill, the egg and the fryer, with a short cold rail.
     pantry: ["bun", "patty", "egg", "cheese", "lettuce", "tomato"],
     poutine: false,
-    customers: 9,
+    // 11 (was 9): a new truck's first real shift sees about six people (review of build #78).
+    customers: 11,
     shiftLength: 180,
     menu: [CLASSIC, SUNRISE],
   },

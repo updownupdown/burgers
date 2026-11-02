@@ -5,7 +5,7 @@ const { open, step, out, enterShift } = require('./lib.cjs');
 (async () => {
   for (const style of (process.env.STYLES || 'kraft,diner,sheet,board,basket').split(',')) {
     const { b, p } = await open({ w: 390, h: 844, dpr: 2, query: `?tray=${style}` });
-    await p.evaluate(() => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: 0, tutorialDone: true })));
+    await p.evaluate(() => localStorage.setItem('bv-save-v1', JSON.stringify({ town: 'pinecrest', tutorialDone: true })));
     await p.reload();
     await p.waitForTimeout(600);
     await enterShift(p);

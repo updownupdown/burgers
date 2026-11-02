@@ -364,18 +364,18 @@ function makePatty(piece: Piece, body: THREE.Group): (p: Piece) => void {
 
 /** A square slice turned to a diamond; as it melts the corners slump over the patty edge. */
 function cheeseGeo(melt: number): THREE.BufferGeometry {
-  const g = new THREE.PlaneGeometry(1.9, 1.9, 16, 16);
-  g.rotateX(-Math.PI / 2);
+  // A thin slab rather than a sheet, so its outline shows from above like everything else's.
+  const g = new THREE.BoxGeometry(1.9, 0.03, 1.9, 16, 1, 16);
   g.rotateY(Math.PI / 4 + 0.15);
-  // A cold slice only just bends at the corners (so it still reads square on the counter); melting slumps it.
-  const m = lerp(0.12, 0.95, melt);
-  const drip = melt;
-  return warp(g, (x, _y, z) => {
+  // A cold slice only just bends at the corners (so it still reads square on the counter). Melting,
+  // the corners draw in and the whole rim droops in soft waves, rather than four long pennants.
+  const m = lerp(0.12, 0.6, melt);
+  return warp(g, (x, y, z) => {
     const a = Math.atan2(z, x);
-    const over = Math.max(0, Math.hypot(x, z) - 0.92 + drip * 0.04 * Math.sin(a * 7));
-    const s = 1 - Math.min(m, 0.4) * 0.12 * Math.min(1, over * 3);
-    const sag = m * (over * 1.1 + over * over * 1.4) * (1 + drip * 0.5 * Math.max(0, Math.sin(a * 5 + 1)));
-    return [x * s, 0.025 - Math.min(sag, 0.5), z * s];
+    const over = Math.max(0, Math.hypot(x, z) - 0.88 + melt * 0.05 * Math.sin(a * 9));
+    const s = 1 - melt * 0.2 * Math.min(1, over * 2.2);
+    const sag = m * (over * 1.0 + over * over * 0.9) * (1 + melt * 0.6 * Math.max(0, Math.sin(a * 9 + 1)));
+    return [x * s, y + 0.01 - Math.min(sag, 0.32), z * s];
   });
 }
 const CHEESE_STEPS = 10;

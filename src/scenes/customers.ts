@@ -6,6 +6,8 @@ import { lookColours } from "../screens/truckart";
 import { CABIN } from "../render/cabin";
 import { wallMaterial } from "../render/walls";
 import { buildScenery } from "../render/scenery";
+import { bakeStatic } from "../render/bake";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 export type { Mood } from "../render/people";
 import { buildPerson, type Mood, type Person } from "../render/people";
@@ -119,14 +121,12 @@ export class CustomersView {
         if (look.awning !== "teal") add(new THREE.BoxGeometry(W, 0.06, 0.06), "#f8dc97", 0, band * 0.55, 0.01);
       }
     }
-    // Lights.
+    // Lights: every bulb in one mesh and every halo in another (two draw calls, not two a bulb).
+    const bulbs: THREE.BufferGeometry[] = [];
+    const halos: THREE.BufferGeometry[] = [];
     const glow = (x: number, y: number, r: number) => {
-      const b = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), new THREE.MeshBasicMaterial({ color: "#fff1c2" }));
-      b.position.set(x, y, 0.12);
-      g.add(b);
-      const h = new THREE.Mesh(new THREE.SphereGeometry(r * 2.4, 10, 8), new THREE.MeshBasicMaterial({ color: "#ffd98a", transparent: true, opacity: 0.18, depthWrite: false }));
-      h.position.copy(b.position);
-      g.add(h);
+      bulbs.push(new THREE.SphereGeometry(r, 10, 8).translate(x, y, 0.12));
+      halos.push(new THREE.SphereGeometry(r * 2.4, 10, 8).translate(x, y, 0.12));
     };
     if (look.lights === "string") {
       const span = 1.6;
@@ -142,6 +142,13 @@ export class CustomersView {
     } else if (look.lights === "marquee") {
       for (let x = -W / 2 + 0.3; x < W / 2; x += 0.6) glow(x, -0.36, 0.07);
     }
+    if (bulbs.length) {
+      g.add(new THREE.Mesh(mergeGeometries(bulbs), new THREE.MeshBasicMaterial({ color: "#fff1c2" })));
+      g.add(new THREE.Mesh(mergeGeometries(halos), new THREE.MeshBasicMaterial({ color: "#ffd98a", transparent: true, opacity: 0.18, depthWrite: false })));
+      for (const x of [...bulbs, ...halos]) x.dispose();
+    }
+    // The canvas, flags and scallops are static: bake them into a few meshes.
+    bakeStatic(g);
     this.placeValance();
   }
 
@@ -238,14 +245,16 @@ export class CustomersView {
     this.soffit.add(under);
     {
       // Stripes on the underside for the striped canvas.
+      // (All in one mesh: one draw call, not sixty.)
       if (this.awningKind === "stripes") {
-        for (let i = -60; i < 60; i += 2) {
-          const st = new THREE.Mesh(new THREE.PlaneGeometry(0.5, len), new THREE.MeshBasicMaterial({ color: new THREE.Color("#faf3e6").lerp(new THREE.Color("#3b2a3a"), 0.22), side: THREE.DoubleSide }));
-          st.position.copy(under.position).add(new THREE.Vector3(i * 0.5 + 0.25, 0, 0));
-          st.rotation.copy(under.rotation);
-          st.position.y -= 0.01;
-          this.soffit.add(st);
-        }
+        const parts: THREE.BufferGeometry[] = [];
+        for (let i = -60; i < 60; i += 2) parts.push(new THREE.PlaneGeometry(0.5, len).translate(i * 0.5 + 0.25, 0, 0));
+        const st = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshBasicMaterial({ color: new THREE.Color("#faf3e6").lerp(new THREE.Color("#3b2a3a"), 0.22), side: THREE.DoubleSide }));
+        for (const x of parts) x.dispose();
+        st.position.copy(under.position);
+        st.rotation.copy(under.rotation);
+        st.position.y -= 0.01;
+        this.soffit.add(st);
       }
     }
   }

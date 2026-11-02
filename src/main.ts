@@ -31,6 +31,7 @@ import { makePeel, makeSauceLadle, PEEL } from "./render/machines/oven";
 import { flickOf, slideArmed, slidUnder, type Flick } from "./game/peel";
 import { cullSmallHulls, disposeObject, OUTLINE_PX, setOutlinePx, setOutlineViewport } from "./render/materials";
 import { perfReadout } from "./render/perfreadout";
+import { BlobShadows } from "./render/blobs";
 import { CounterView, CUP_IN_HAND, RACK_SCALE, EMPTY_PACK, STOPS, pageX, type DrinkCup, GRILL_SCALE, GRILLE_ZONE, FLAT_ZONE, HEARTH_Y, HOME_PAGE, PAGES, PEEL_Y, GRILL_TOP, ZONE_START, type GrillItem, type Hit, type PeelTarget, type PieHolder, type PiePlace } from "./scenes/counter";
 import { PLATE } from "./render/machines/press";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
@@ -5524,9 +5525,15 @@ const clearColor = new THREE.Color("#2a3340");
 // Count draw calls over the whole frame (every band), for dev mode's readout.
 renderer.info.autoReset = false;
 let frameNo = 0;
+// Low quality has no shadow map: soft blobs keep food, cups and cartons grounded instead.
+const counterBlobs = new BlobShadows(counter.scene);
+const trayBlobs = new BlobShadows(trayView.scene);
 function render(): void {
   const H = viewH;
   renderer.info.reset();
+  const low = gfx === "low";
+  counterBlobs.update(low, low ? [...counter.grillItems.filter((g) => !g.held).map((g) => g.obj), ...counter.cups.map((c) => c.obj), ...counter.packs.map((p) => p.obj), ...counter.stacks.map((s) => s.obj)] : []);
+  trayBlobs.update(low, low ? trayView.plates.flatMap((p) => [p.entries.length ? p.burger : null, p.fries, p.cup]) : []);
   // Low quality: every so often, drop the outlines of things too small for a line to read.
   if (frameNo++ % 15 === 0) {
     cullSmallHulls(counter.scene, counter.camera, bands.counter.h, gfx === "low");

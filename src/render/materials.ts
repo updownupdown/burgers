@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
-const gradient = new THREE.DataTexture(new Uint8Array([90, 170, 255]), 3, 1, THREE.RedFormat);
+// Three bands; the shadow band sits a little lighter (90 -> 110) so shadows tint rather than grey out.
+const gradient = new THREE.DataTexture(new Uint8Array([110, 180, 255]), 3, 1, THREE.RedFormat);
 gradient.minFilter = THREE.NearestFilter;
 gradient.magFilter = THREE.NearestFilter;
 gradient.needsUpdate = true;

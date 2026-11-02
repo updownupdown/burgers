@@ -781,3 +781,19 @@ James picked **Valley view** with a **raised awning** from the scenery study on 
 - **Red Rock.** Desert floor, rail fence, a saguaro, agave and a rock; mesas in red bands with scree at their feet, buttes in the gaps and a stone arch.
 - **Orchard Isle.** Picket fence, signpost and an apple crate; orchard rows climbing a hill striped in crop colours, a red barn and a white windmill on it.
 - **Later.** Each town can vary the same set (a landmark, a season, event dressing) without a new layout.
+
+## 29. Customers (study pick)
+
+James found the old customers odd, mostly their eyes: white eye whites lit by the purple-blue
+sky light read as cold blue goggles. A study (build #74) put five designs in the real window:
+bean, chibi townsfolk, storybook grown-ups, animal locals per region, and pencil-drawn faces.
+**James picked the bean** (2026-11-02), and the others were removed.
+
+- Same chunky one-piece bean in ten shirt colours, light belly, nub arms.
+- Painted face: small dark oval eyes with a white glint, brows, a mouth and blush. Every face
+  part is unlit (MeshBasic), so the sky can never tint it. Happy closes the eyes into arcs;
+  angry squints and drops the brows; sad tilts them up.
+- A sprout of hair when the head is bare; regional headwear otherwise (beanie, cap, ranger hat,
+  antlers, sun hat, shades, cowboy hat, bandana), scaled to the head.
+- Code: `src/render/people.ts` (`buildPerson`, `Face`, `addHat`); `CustomerFigure` in
+  `src/scenes/customers.ts` adds the bob, hop and glance.

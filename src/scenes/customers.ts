@@ -10,7 +10,7 @@ import { buildScenery } from "../render/scenery";
 export type { Mood } from "../render/people";
 import { buildPerson, type Mood, type Person } from "../render/people";
 
-/** A local at the window, in the chosen customer design (src/render/people.ts), dressed for the town. */
+/** A local at the window (built in src/render/people.ts), dressed for the town. */
 export class CustomerFigure {
   root = new THREE.Group();
   private body: THREE.Group;

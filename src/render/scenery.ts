@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { Backdrop } from "../game/stops";
+import { bakeStatic } from "./bake";
 import { faceted, grade, mesh, toon } from "./materials";
 
 /*
@@ -223,7 +224,7 @@ const smooth = (a: number, b: number, t: number) => {
   return u * u * (3 - 2 * u);
 };
 
-export function buildScenery(g: THREE.Group, kind: Backdrop): Built {
+function buildRaw(g: THREE.Group, kind: Backdrop): Built {
   const k = new Kit(g);
   seed = 11;
   const edge = -8;
@@ -367,5 +368,16 @@ export function buildScenery(g: THREE.Group, kind: Backdrop): Built {
     bl.rotation.z = b * (Math.PI / 2) + 0.4;
   }
   return { background: sky("#a9d8e6", "#e6f1ea"), fog: new THREE.Fog(grade("#e6f1ea"), 38, 216) };
+}
+
+/**
+ * Build the view for an area into `g`, then bake it: everything out there is static, so its
+ * hundreds of primitives merge into a few vertex-coloured meshes and one outline (a handful of
+ * draw calls instead of 500-600; review of build #78, P1-3).
+ */
+export function buildScenery(g: THREE.Group, kind: Backdrop): Built {
+  const b = buildRaw(g, kind);
+  bakeStatic(g);
+  return b;
 }
 

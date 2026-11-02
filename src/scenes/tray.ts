@@ -5,6 +5,8 @@ import { makeDish, stretchSauce, type DishObject } from "../render/dishes";
 import { dressCup } from "../render/cup";
 import { makeCup, makeFood, makeFries, stackBases, type BunRole, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { bakeStatic } from "../render/bake";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { relScale } from "../render/units";
 import { CABIN } from "../render/cabin";
@@ -164,6 +166,7 @@ function sideMark(kind: "cup" | "fries" | "burger"): THREE.Group {
   const g = new THREE.Group();
   const mat = new THREE.MeshBasicMaterial({ color: "#cdb994", transparent: true, opacity: 0.95 });
   const n = kind === "cup" ? 14 : kind === "burger" ? 28 : 18;
+  const dashes: THREE.BufferGeometry[] = [];
   for (let i = 0; i < n; i++) {
     const t = i / n;
     let x: number, z: number, a: number;
@@ -183,11 +186,13 @@ function sideMark(kind: "cup" | "fries" | "burger"): THREE.Group {
       else if ((u -= 2 * d) < 2 * w) [x, z, a] = [w - u, d, 0];
       else [x, z, a] = [-w, d - (u - 2 * w), Math.PI / 2];
     }
-    const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.035), mat);
-    dash.rotation.set(-Math.PI / 2, 0, -a);
-    dash.position.set(x, 0, z);
-    g.add(dash);
+    const dash = new THREE.PlaneGeometry(0.09, 0.035);
+    dash.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, -a)), new THREE.Vector3(1, 1, 1)));
+    dashes.push(dash);
   }
+  // All the dashes in one mesh (one draw call, not one per dash).
+  g.add(new THREE.Mesh(mergeGeometries(dashes, false), mat));
+  for (const d of dashes) d.dispose();
   g.visible = false;
   return g;
 }
@@ -236,6 +241,7 @@ export class PlateView {
 
   constructor() {
     const trayBody = makeTrayBody(trayStyle());
+    bakeStatic(trayBody);
     // No plate: a dashed ring on the board shows where the burger goes until it's started.
     this.dish.add(sideMark("burger"));
     this.dish.children[0].visible = true;

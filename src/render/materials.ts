@@ -258,3 +258,37 @@ export function ramp(stops: [number, string][]): (t: number, out?: THREE.Color) 
     return out.copy(cols[cols.length - 1][1]);
   };
 }
+
+const _sp = new THREE.Sphere();
+/**
+ * Low quality: hide the outline of anything smaller than `minPx` CSS pixels across on screen
+ * (about the line's own width, so the line was most of what showed), and show every outline
+ * again when `on` is false. Saves a draw call per small object.
+ */
+export function cullSmallHulls(scene: THREE.Object3D, cam: THREE.PerspectiveCamera, viewH: number, on: boolean, minPx = 6): void {
+  const k = viewH / 2 / Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
+  scene.traverse((o) => {
+    if (o.name !== "hull") return;
+    const parent = o.parent as THREE.Mesh | null;
+    if (!parent?.isMesh) return;
+    if (!on) {
+      if (o.userData.culled) {
+        o.visible = true;
+        o.userData.culled = false;
+      }
+      return;
+    }
+    const geo = parent.geometry;
+    if (!geo.boundingSphere) geo.computeBoundingSphere();
+    _sp.copy(geo.boundingSphere!).applyMatrix4(parent.matrixWorld);
+    const d = Math.max(0.01, _sp.center.distanceTo(cam.position));
+    const small = (2 * _sp.radius * k) / d < minPx;
+    if (small && o.visible) {
+      o.visible = false;
+      o.userData.culled = true;
+    } else if (!small && o.userData.culled) {
+      o.visible = true;
+      o.userData.culled = false;
+    }
+  });
+}

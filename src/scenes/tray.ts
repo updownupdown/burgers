@@ -7,8 +7,8 @@ import { makeCup, makeFood, makeFries, stackBases, type BunRole, type CupObject,
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { relScale } from "../render/units";
-import { VIEW } from "../study/view";
-import { wallColor, wallMaterial } from "../study/walls";
+import { CABIN } from "../render/cabin";
+import { wallColor, wallMaterial } from "../render/walls";
 
 /**
  * One kraft serving tray per customer, lined with paper. A paper plate sits on it only when that
@@ -50,7 +50,6 @@ export function trayStyle(): TrayStyle {
   try {
     const q = new URLSearchParams(location.search).get("tray") ?? localStorage.getItem("bv-tray");
     if (q && (TRAY_STYLES as string[]).includes(q)) return q as TrayStyle;
-    if (VIEW?.tray) return VIEW.tray;
   } catch {
     // No storage: the default look.
   }
@@ -504,8 +503,7 @@ const TRAY_LOOK_Y = 0.85;
 /** The receipts hang over the back of the band down to here (a fraction of its height from the top); burgers fit under it. */
 const RECEIPT_LINE = 0.3;
 /** Where the trays' front edges sit, as a fraction of the band's height from its top. */
-const TRAY_FRONT = VIEW ? 0.86 : 0.94;
-const STEEL = "#c9d0ce";
+const TRAY_FRONT = 0.86;
 
 export class TrayView {
   scene = new THREE.Scene();
@@ -527,7 +525,7 @@ export class TrayView {
   /** While a sauce is being drawn, the held bottle sits over this point instead of bobbing over the stack. */
   private ghostAt: { x: number; z: number } | null = null;
   constructor() {
-    this.scene.background = new THREE.Color("#d6cdbf");
+    this.scene.background = wallColor(CABIN.wall);
     this.scene.add(new THREE.HemisphereLight("#fff4dc", "#7a6a9a", 1.3));
     const sun = new THREE.DirectionalLight("#fff1d6", 1.9);
     this.sun = sun;
@@ -538,24 +536,23 @@ export class TrayView {
     sun.shadow.bias = -0.002;
     this.scene.add(sun);
 
-    // The window frame behind the ledge, in the truck's wall colour, with the splash line.
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(40, 8, 0.4), toon("#d6cdbf"));
+    // The truck's painted wall behind the pass shelf (see fitRoom), the steel shelf with its front
+    // face and bright rolled nose, and the heat-lamp bar along the top of the band.
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(40, 8, 0.4), toon(CABIN.wall));
     wall.position.set(0, 2, -3.2);
-    const splash = mesh(faceted(new THREE.BoxGeometry(40, 0.5, 0.15)), "#b9d6a2", { ink: false });
-    splash.position.set(0, 0.2, -3.0);
-    // The steel pass shelf, its dark front lip, and the heat-lamp bar along the top of the band.
-    const shelf = mesh(faceted(new THREE.BoxGeometry(30, 0.35, 9)), STEEL);
+    const shelf = mesh(faceted(new THREE.BoxGeometry(30, 0.35, 9)), CABIN.shelf.top);
     shelf.position.set(0, -0.18, 1.5);
     shelf.receiveShadow = true;
-    const lip = mesh(faceted(new THREE.BoxGeometry(30, 0.1, 0.12)), "#7d8784", { ink: false });
-    lip.position.set(0, -0.03, 5.9);
+    this.face = new THREE.Mesh(new THREE.BoxGeometry(30, 1, 0.06), new THREE.MeshBasicMaterial({ color: CABIN.shelf.face, toneMapped: false }));
+    const lip = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 30, 10), new THREE.MeshBasicMaterial({ color: CABIN.shelf.nose, toneMapped: false }));
+    lip.rotation.z = Math.PI / 2;
     const lamp = mesh(faceted(new THREE.BoxGeometry(30, 0.4, 0.8)), "#6f7775");
     lamp.position.set(0, 3.6, -1.4);
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(30, 0.5), new THREE.MeshBasicMaterial({ color: "#ffcf8a", transparent: true, opacity: 0.7 }));
     glow.rotation.x = Math.PI / 2;
     glow.position.set(0, 3.39, -1.4);
-    this.scene.add(wall, splash, shelf, lip, lamp, glow);
-    this.study = { wall, splash, shelf, lip };
+    this.scene.add(wall, shelf, this.face, lip, lamp, glow);
+    this.parts = { wall, shelf, lip };
 
     const flagGeo = faceted(new THREE.BoxGeometry(0.9, 0.22, 0.06));
     for (let i = 0; i < 3; i++) {
@@ -572,26 +569,24 @@ export class TrayView {
     this.camera.lookAt(0, TRAY_LOOK_Y, 0);
   }
 
-  private studyFace: THREE.Mesh | null = null;
-  private study!: { wall: THREE.Mesh; splash: THREE.Mesh; shelf: THREE.Mesh; lip: THREE.Mesh };
+  private face: THREE.Mesh;
+  private parts!: { wall: THREE.Mesh; shelf: THREE.Mesh; lip: THREE.Mesh };
   /**
-   * View study: the wall behind the trays in the study's finish (the same wall as round the
-   * window and under the shelf), and the pass shelf with a nose and front face at the band's
-   * bottom edge, so the seam into the counter is the shelf's own edge.
+   * Fit the room to the band: the painted wall behind the trays (the same wall as round the
+   * window and under the shelf, its texture sized to the screen), and the pass shelf, its front
+   * face and rolled nose right at the band's bottom edge, so the seam into the counter is the
+   * shelf's own edge.
    */
-  studyBand(bandPx: number, wallBase: string): void {
-    if (!VIEW) return;
-    const v = VIEW;
-    const { wall, splash, shelf, lip } = this.study;
+  fitRoom(bandPx: number): void {
+    const v = CABIN;
+    const { wall, shelf, lip } = this.parts;
     const hh = TRAY_VIEW_HALF_H;
     const upp = (2 * hh) / bandPx;
-    this.scene.background = wallColor(wallBase);
     const old = wall.material as THREE.Material;
-    wall.material = wallMaterial(v.wallTex, wallBase, 40, 8, upp, upp / Math.cos(TRAY_PITCH));
+    wall.material = wallMaterial(v.wallTex, v.wall, 40, 8, upp, upp / Math.cos(TRAY_PITCH));
     if (old.userData.disposable) old.dispose();
-    splash.visible = false;
     // Shelf: from the wall to where its nose sits just above the band's bottom edge.
-    const faceH = v.shelf.fascia;
+    const faceH = v.shelf.faceH;
     const facePx = (faceH * Math.cos(TRAY_PITCH)) / upp;
     const want = -1 + (2 * (facePx + 1)) / bandPx;
     // Screen y of a point on the shelf top moves by sin(pitch) per unit of z.
@@ -604,20 +599,9 @@ export class TrayView {
     shelf.geometry.dispose();
     shelf.geometry = faceted(new THREE.BoxGeometry(30, faceH, front - back));
     shelf.position.set(0, -faceH / 2, (front + back) / 2);
-    shelf.material = toon(v.shelf.top);
-    // The front face in its own colour, and a bright rolled nose along its top edge.
-    if (!this.studyFace) {
-      this.studyFace = new THREE.Mesh(new THREE.BoxGeometry(30, 1, 0.06), new THREE.MeshBasicMaterial({ toneMapped: false }));
-      this.scene.add(this.studyFace);
-    }
-    this.studyFace.scale.y = faceH;
-    this.studyFace.position.set(0, -faceH / 2, front + 0.03);
-    (this.studyFace.material as THREE.MeshBasicMaterial).color.set(v.shelf.nose);
-    lip.geometry.dispose();
-    lip.geometry = new THREE.CylinderGeometry(0.05, 0.05, 30, 10);
-    lip.rotation.z = Math.PI / 2;
+    this.face.scale.y = faceH;
+    this.face.position.set(0, -faceH / 2, front + 0.03);
     lip.position.set(0, -0.01, front + 0.02);
-    lip.material = new THREE.MeshBasicMaterial({ color: v.shelf.hl, toneMapped: false });
   }
 
   /** Place plates under the three customer slots for the band's aspect ratio. */

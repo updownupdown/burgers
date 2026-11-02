@@ -1,6 +1,6 @@
-// Kitchen view study: screenshots of each counter with three customers, receipts and burgers,
-// on a notched phone (safe area emulated), for one or more ?view= options.
-// PORT=4175 VIEWS=0,A,B node tools/playtest/view-study.cjs  ->  out/view-<opt>-<page>.png
+// Kitchen view: screenshots of each counter with three customers, receipts and burgers,
+// on a notched phone (safe area emulated).
+// PORT=4175 [SIZE=390x844] [SAFE=47] [STOP=0] node tools/playtest/view-study.cjs  ->  out/view-0-<stop>-<page>.png
 const { open, step, out } = require('./lib.cjs');
 const views = (process.env.VIEWS || '0').split(',');
 const [W, H] = (process.env.SIZE || '390x844').split('x').map(Number);
@@ -8,7 +8,7 @@ const SAFE = +(process.env.SAFE ?? 47);
 const STOP = +(process.env.STOP ?? 0);
 (async () => {
   for (const v of views) {
-    const { b, p } = await open({ w: W, h: H, dpr: 2, query: v === '0' ? '' : `?view=${v}` });
+    const { b, p } = await open({ w: W, h: H, dpr: 2 });
     await p.evaluate(([s, look]) => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: s, tutorialDone: true, ...(look ? { look: JSON.parse(look), looks: Object.values(JSON.parse(look)) } : {}) })), [STOP, process.env.LOOK || '']);
     await p.reload();
     await p.waitForTimeout(600);

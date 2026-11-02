@@ -3,8 +3,8 @@ import type { Backdrop } from "../game/stops";
 import type { Look } from "../game/looks";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { lookColours } from "../screens/truckart";
-import { VIEW } from "../study/view";
-import { wallMaterial } from "../study/walls";
+import { CABIN } from "../render/cabin";
+import { wallMaterial } from "../render/walls";
 
 export type Mood = "neutral" | "happy" | "sad" | "angry";
 
@@ -169,64 +169,30 @@ export class CustomersView {
     this.scene.add(sun);
     this.scene.add(this.backdrop);
     this.setBackdrop("mountains");
-    // Truck window frame and serving ledge, in front of the customers.
-    // It sits in front of every backdrop's ground so nothing pokes through below the sill.
-    const ledge = mesh(faceted(new THREE.BoxGeometry(40, 0.5, 2.2)), "#f3efe4");
-    ledge.position.set(0, 0.05, 3.4);
-    // The truck's paint under the sill, with its belt line: it follows the truck's look.
-    const trim = mesh(faceted(new THREE.BoxGeometry(40, 0.6, 0.2)), "#ff8a70", { ink: false });
-    trim.position.set(0, -0.4, 4.5);
-    this.scene.add(trim);
-    this.trim = trim;
-    const belt = mesh(faceted(new THREE.BoxGeometry(40, 0.12, 0.22)), "#faf3e6", { ink: false });
-    belt.position.set(0, -0.2, 4.5);
-    this.scene.add(belt);
-    this.belt = belt;
-    this.scene.add(this.valance);
-    // The truck's inside wall under the window, where the order rail is mounted.
-    const wall = mesh(new THREE.BoxGeometry(40, 8, 0.2), "#d6cdbf", { ink: false });
-    wall.position.set(0, -4.6, 4.6);
-    this.scene.add(wall);
-    this.scene.add(ledge);
-    if (VIEW) {
-      // Study: the inside wall with the window cut into it replaces the sill, paint and wall.
-      ledge.visible = trim.visible = belt.visible = wall.visible = false;
-      this.scene.add(this.frame, this.soffit);
-    }
+    // The truck's inside wall with the serving window cut into it, and the awning seen through it
+    // (built to fit the band in layout).
+    this.scene.add(this.valance, this.frame, this.soffit);
     for (let i = 0; i < 3; i++) this.slots.push({ fig: null, x: 0, enterT: 0, leaving: false });
   }
 
-  private trim: THREE.Mesh;
-  /** Study: the truck's inside wall round the window, its trim, and the awning's underside. */
+  /** The truck's inside wall round the window, its trim and sill, and the awning's underside. */
   private frame = new THREE.Group();
   private soffit = new THREE.Group();
   private lookCols: ReturnType<typeof lookColours> | null = null;
   private awningKind = "mustard";
   private hudF = 0.18;
   private railF = 0.45;
-  /** Study: the wall colour (the truck's paint, lightened, for the enamel option). */
-  wallBase(): string {
-    if (!VIEW) return "#d6cdbf";
-    if (VIEW.wall !== "look") return VIEW.wall;
-    return "#" + new THREE.Color(this.lookCols?.base ?? "#ff8a70").lerp(new THREE.Color("#f6f0e4"), 0.8).getHexString();
-  }
-  private belt: THREE.Mesh;
   /** The awning's hem across the top of the window, and any lights on it (see setLook). */
   private valance = new THREE.Group();
-  /** World y just under the HUD strip, on the valance's plane (set by layout). */
-  private valanceY = 3.2;
-  private static VAL_Z = 2.6;
 
   /**
-   * Dress the window in the truck's look: the paint and belt line under the sill, the awning's
-   * hem hanging across the top, and string lights or marquee bulbs along it.
+   * Dress the window in the truck's look: the awning's underside and hem, and string lights or
+   * marquee bulbs along it.
    */
   setLook(look: Look): void {
     const c = lookColours(look);
     this.lookCols = c;
     this.awningKind = look.awning;
-    this.trim.material = toon(c.base);
-    this.belt.material = toon(c.belt);
     const g = this.valance;
     disposeObject(g);
     g.clear();
@@ -288,11 +254,7 @@ export class CustomersView {
   }
 
   private placeValance(): void {
-    if (VIEW) {
-      this.buildFrame();
-      return;
-    }
-    this.valance.position.set(0, this.valanceY - 0.34, CustomersView.VAL_Z);
+    this.buildFrame();
   }
 
   /** World point where the ray through a band point (NDC) meets the plane z = `z`. */
@@ -304,13 +266,13 @@ export class CustomersView {
   }
 
   /**
-   * Study: the inside of the truck. A painted wall fills the band except for the window, which
+   * The inside of the truck. A painted wall fills the band except for the window, which
    * opens just under the HUD and closes at the order rail; a trim runs round the opening. Through
    * it the awning's underside slopes away from the window head to its hem, which hangs behind the
    * customers so their heads come in front of it, the way they stand under it.
    */
   private buildFrame(): void {
-    const v = VIEW!;
+    const v = CABIN;
     const cam = this.camera;
     if (!cam.aspect) return;
     disposeObject(this.frame);
@@ -340,7 +302,7 @@ export class CustomersView {
       p.quadraticCurveTo(x0, y0, x0 + r, y0);
       return p;
     };
-    const base = this.wallBase();
+    const base = v.wall;
     const wallMat = wallMaterial(v.wallTex, base, 1, 1, upp);
     const reveal = toon(new THREE.Color(base).multiplyScalar(0.82));
     const outer = new THREE.Shape([new THREE.Vector2(tl.x - 4, br.y - 6), new THREE.Vector2(br.x + 4, br.y - 6), new THREE.Vector2(br.x + 4, tl.y + 6), new THREE.Vector2(tl.x - 4, tl.y + 6)]);
@@ -349,15 +311,15 @@ export class CustomersView {
     wall.position.z = ZF - T;
     this.frame.add(wall);
     // Trim round the opening.
-    const trimCol = v.trim === "wood" ? "#a8723f" : v.trim === "look" ? this.lookCols?.base ?? "#ff8a70" : "#c9d0ce";
-    const tw = px(v.trim === "steel" ? 5 : 7);
+    const trimCol = v.trim;
+    const tw = px(5);
     const ring = rr(new THREE.Shape(), -hw - tw, bot - tw, hw + tw, top + tw, rad + tw);
     ring.holes.push(rr(new THREE.Path(), -hw, bot, hw, top, rad));
     const trim = mesh(new THREE.ExtrudeGeometry(ring, { depth: px(3), bevelEnabled: false, curveSegments: 6 }), trimCol, { ink: false, shadow: false });
     trim.position.z = ZF;
     this.frame.add(trim);
     // The sill: a ledge along the bottom of the opening that the order rail hangs under.
-    const sill = mesh(faceted(new THREE.BoxGeometry(hw * 2 + tw * 2, px(6), 0.5)), v.trim === "look" ? "#f3efe4" : trimCol, { ink: false, shadow: false });
+    const sill = mesh(faceted(new THREE.BoxGeometry(hw * 2 + tw * 2, px(6), 0.5)), trimCol, { ink: false, shadow: false });
     sill.position.set(0, bot - px(3), ZF + 0.1);
     this.frame.add(sill);
 
@@ -490,13 +452,6 @@ export class CustomersView {
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
-    // The awning's hem hangs just under the HUD strip, on its own plane nearer the window.
-    {
-      this.raycaster.setFromCamera(new THREE.Vector2(0, 1 - 2 * hudF), this.camera);
-      const out = new THREE.Vector3();
-      if (this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), -CustomersView.VAL_Z), out)) this.valanceY = out.y;
-      this.placeValance();
-    }
     // Each customer stands centred over their receipt.
     for (let i = 0; i < 3; i++) {
       this.raycaster.setFromCamera(new THREE.Vector2(((i + 0.5) / 3) * 2 - 1, 0), this.camera);
@@ -508,7 +463,7 @@ export class CustomersView {
     const s = Math.min(0.95, spacing * 0.3);
     for (const sl of this.slots) if (sl.fig) sl.fig.root.scale.setScalar(s);
     this.figScale = s;
-    if (VIEW) this.buildFrame();
+    this.buildFrame();
   }
   private figScale = 1;
 

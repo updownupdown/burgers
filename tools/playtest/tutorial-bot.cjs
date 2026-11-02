@@ -25,7 +25,8 @@ const { open, step, out } = require('./lib.cjs');
     if (!c) {
       // Nothing shown: a nudge waiting for a quiet moment, or nothing to teach. Let time pass.
       quiet++;
-      if (ph === 'playing') { await manual(); await step(p, 0.5); }
+      // The sundown at the end of the shift runs on game time too (the loop is frozen).
+      if (ph === 'playing' || ph === 'sundown') { await manual(); await step(p, 0.5); }
       await p.waitForTimeout(400);
       const st = await p.evaluate(() => ({ day: window.__bv.save.day, served: window.__bv.game.served, phase: window.__bv.game.phase }));
       if (st.day >= 2 && st.phase === 'title' && quiet > 16) break;

@@ -12,7 +12,9 @@ import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
 import { joinChance, lineDrain, linePatience, WINDOW, wordOfMouth } from "./game/line";
 import { HOLD_GRACE, HOLD_RUIN, LADLE_BAND, payout, quickSauceStroke, SAUCE_BAND, sauceCoverage, sauceVerdict, scorePlate, type SauceWord } from "./game/scoring";
-import { CROWD, menuFor, nextReputation, reviewFor, type Review } from "./game/business";
+import { CROWD, menuFor } from "./game/business";
+import { addReviews, brief, leavesReview, opinionFor, opinionLine, ratingPull, reviewAverage } from "./game/reviews";
+import { opinionFace, starRow } from "./ui/faces";
 import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "./game/menu";
 import type { DrinkId, FriesSize, FryKind, Layer, Order, Piece, Plate, SauceKind, Size } from "./game/types";
 import { AFTER_OVEN, BREADS, COMAL_FILL, COUNTED, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, FRY_LABEL, fryOf, GRILLABLE, isSauce, KIND_LABEL, newPiece, pressable, PROTEINS, sauceRadius, SCOOPED, SIZE_LABEL, SUGARED, TORTILLAS, unfoldTortilla } from "./game/types";
@@ -36,7 +38,7 @@ import { mountHome, refreshHome, type NightShow } from "./screens/home";
 import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
-import { closingHtml, prepHtml, reviewsHtml, syncRange, toggleBox, toggleIngredients, type ReviewFilter } from "./screens/day";
+import { closingHtml, prepHtml, reviewsHtml, syncRange, toggleBox, toggleIngredients } from "./screens/day";
 import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, setTabArt, ticketHtml } from "./ui";
 import { DRINK_TINT } from "./render/machines";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
@@ -152,7 +154,7 @@ const game = {
   orderSeq: 1,
   active: 0,
   tutorial: true,
-  /** The trip's first day on Chill: nothing scores under two stars and the rating can't drop. */
+  /** The trip's first day on Chill: nothing scores under four stars and only happy customers review. */
   gentle: false,
   town: save.town,
   /** Town highlighted on the map. */
@@ -179,31 +181,36 @@ const game = {
   emptySince: -1,
   /** What unordered sides and extra toppings would have sold for: they go out free. */
   comped: 0,
-  /** Reviews written so far this shift. */
-  reviews: [] as Review[],
+  /** Reviews left so far this shift (stars, 1..5); every customer's opinion is in `stars`. */
+  reviews: [] as number[],
   /** Set on Prep and fixed for the shift: pacing, the window, and the one bonus brought along. */
   pacing: "balanced" as Difficulty,
   shift: validShift(null) as ShiftWindow,
   /** Play time of today's window in seconds (see shift.ts). */
   shiftLength: 180,
   bonus: null as BonusId | null,
-  /** Every rating this shift, walk-outs as zero, for reputation. */
-  ratings: [] as number[],
   /** Which customer (by arrival order) is a food critic today, or -1; and what they wrote. */
   criticAt: -1,
   press: null as PressPiece | null,
   /** Which screen is up over the map, so its buttons redraw the right one. */
   overlay: null as null | "closing" | "reviews" | "garage",
   garage: { ...GARAGE_START } as GarageView,
-  reviewFilter: "all" as ReviewFilter,
 };
 
-/** A critic's verdict counts like this many ordinary reviews. */
-const CRITIC_WEIGHT = 5;
-
+/** A critic's verdict goes in the paper (and, like every critic's, it's a review: see `react`). */
 function criticVerdict(stars: number, notes: string[]): void {
   game.press = pieceFor(stars, notes, stop(), game.event, game.rng);
-  for (let k = 1; k < CRITIC_WEIGHT; k++) game.ratings.push(stars);
+}
+
+/**
+ * Whether this customer leaves a review: the delighted and the angry far more often than the
+ * merely fed, critics always (game/reviews.ts). The first Chill day only keeps the happy ones.
+ */
+function maybeReview(stars: number, critic: boolean): boolean {
+  if (game.gentle && stars < 4) return false;
+  if (!leavesReview(stars, critic, game.rng)) return false;
+  game.reviews.push(stars);
+  return true;
 }
 
 /** The stop as the customers see it: just the recipes left on today's menu. */
@@ -439,16 +446,17 @@ function clearSlot(i: number): void {
   }
 }
 
-function customerLeaves(i: number, mood: "happy" | "sad" | "angry", say: string, good: boolean): void {
+/** The customer goes, showing what they thought (a face, maybe a line) and any review they left. */
+function customerLeaves(i: number, stars: number, say: string | null, reviewed: boolean): void {
   const s = game.slots[i];
   s.leaving = true;
-  s.fig?.setMood(mood);
+  s.fig?.setMood(stars >= 4 ? "happy" : stars === 3 ? "neutral" : stars === 2 ? "sad" : "angry");
   // Move straight on to the next order so nothing gets dropped on the departing plate.
   if (game.active === i) {
     const other = game.slots.findIndex((sl) => sl.order && !sl.leaving);
     if (other >= 0) setActive(other);
   }
-  showBubble(i, say, good);
+  showOpinion(i, stars, say, reviewed);
   setTimeout(() => customersView.leave(i, () => clearSlot(i)), 1100);
 }
 
@@ -473,14 +481,11 @@ function serve(i: number): void {
   let call = s.lesson === 0 || s.lesson === 1 ? "accept" : verdict(r.score, game.pacing, !!s.sentBack, r.faulty, !!r.missing);
   // The first day on Chill never turns anyone away: a really wrong order comes back once for changes, then it's taken.
   if (game.gentle && call === "refuse") call = s.sentBack ? "accept" : "sendBack";
-  // ...and anything taken that day is worth at least two stars.
-  if (game.gentle && r.stars < 2) r.stars = 2;
+  // ...and anything taken that day is worth at least four stars.
+  if (game.gentle && r.stars < 4) r.stars = 4;
   if (call === "sendBack") return sendBack(i, r.missing ?? r.notes[0] ?? "this isn't quite right");
   if (call === "refuse") return refuse(i, r.notes[0] ?? "this isn't what I ordered", r.perks.length > 0);
-  game.ratings.push(r.stars);
-  const perk = r.perks.length && r.stars < 3 ? ` Loved the ${r.perks[0]}.` : "";
-  const back = s.sentBack ? " Had to send it back once." : "";
-  game.reviews.push({ stars: r.stars, text: reviewFor(r.stars, r.notes, game.rng) + perk + back, stop: stop().name });
+  const reviewed = maybeReview(r.stars, !!s.order.critic);
   // Giveaways make people happy, but they go out free.
   game.comped += compValue(s.order, plate.fries, plate.drink, r.perks.includes("extra toppings"));
   if (s.order.critic) criticVerdict(r.stars, r.notes);
@@ -495,30 +500,21 @@ function serve(i: number): void {
   game.tips += tip;
   game.served++;
   game.stars.push(r.stars);
-  if (r.stars >= 2) {
+  if (r.stars >= 4) {
     save.known[s.order.name] = (save.known[s.order.name] ?? 0) + 1;
     writeSave(save);
   }
   if (!game.best || r.score > game.best.score) game.best = { name: `#${s.order.id} ${s.order.name} (${r.score}%)`, score: r.score };
-  const praise = ["Perfect!", "Incredible!", "Chef's kiss!", "Just like Grandma's!"];
-  const say =
-    r.stars === 3
-      ? praise[Math.floor(game.rng() * praise.length)]
-      : r.perks.length
-        ? `Thanks for the ${r.perks[0]}!`
-        : r.notes.length
-          ? capitalise(r.notes[0]) + (r.stars >= 2 ? ", but tasty!" : "…")
-          : r.stars === 2
-            ? "Pretty good!"
-            : "Hmm, okay.";
-  customerLeaves(i, r.stars >= 2 ? "happy" : r.stars === 1 ? "sad" : "angry", `${"★".repeat(r.stars)}${"☆".repeat(3 - r.stars)} ${say}`, r.stars >= 2);
+  // Everyone shows a face; only something specific (missing, wrong, especially quick or good) gets words.
+  const say = opinionLine({ stars: r.stars, missing: r.missing, notes: r.notes, perks: r.perks, patience: s.patience / s.maxPatience }, game.rng);
+  customerLeaves(i, r.stars, say, reviewed);
   // The food is handed over right away so the plate is free for the next order.
   s.plate = emptyPlate();
   syncTray(i, false);
   sfx.whoosh();
   coinPop(i, pay + tip);
   setTimeout(() => sfx.coin(), 250);
-  buzz(r.stars >= 2 ? [20, 40, 20] : 60);
+  buzz(r.stars >= 4 ? [20, 40, 20] : 60);
   // Two guided orders in, the trip counts as started: a restart won't go back to the lessons.
   if (game.tutorial && s.lesson === 1) {
     save.tutorialDone = true;
@@ -555,7 +551,7 @@ function sendBack(i: number, note: string): void {
   syncTray(i, true);
   trayView.plates[i].kick(0.5);
   s.fig?.setMood("sad");
-  showBubble(i, `Can you fix it? ${capitalise(note)}.${took ? ` I'll keep the ${took}!` : ""}`, false);
+  showBubble(i, `Can you fix it? ${capitalise(brief(note))}.${took ? ` I'll keep the ${took}!` : ""}`, false);
   sfx.grumble();
   buzz([30, 40, 30]);
   hintOnce("sent-back", "Sent back: fix the tray and serve it again. The undo button on the tray takes the top layer off.", 4);
@@ -565,37 +561,57 @@ function sendBack(i: number, note: string): void {
 function refuse(i: number, note: string, perk: boolean): void {
   const s = game.slots[i];
   const took = takeFreebies(s) ?? (s.kept.fries || s.kept.drink ? "freebie" : null);
-  const stars = took || perk ? 1 : 0;
+  const stars = took || perk ? 2 : 1;
   game.lost++;
-  if (s.order!.critic) criticVerdict(0, [note]);
-  game.ratings.push(stars);
-  game.reviews.push({ stars, text: `Refused it: ${note}.${took ? ` At least the ${took === "freebie" ? "free side" : took} was nice.` : ""}`, stop: stop().name });
+  if (s.order!.critic) criticVerdict(1, [note]);
+  const reviewed = maybeReview(stars, !!s.order!.critic);
   game.comped += compValue(s.order!, s.kept.fries, s.kept.drink);
   sfx.grumble();
   buzz(80);
-  customerLeaves(i, "angry", `No thanks. ${capitalise(note)}.${took ? ` I'll take the ${took === "freebie" ? "free side" : took} though.` : ""}`, false);
+  customerLeaves(i, stars, `No thanks. ${capitalise(brief(note))}.${took ? ` I'll keep the ${took === "freebie" ? "free side" : took}.` : ""}`, reviewed);
   s.plate = emptyPlate();
   syncTray(i, false);
 }
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+/** Over the customer's head: a speech bubble (a send-back asking for a fix). */
 function showBubble(i: number, text: string, good: boolean): void {
-  const s = game.slots[i];
-  s.bubble?.remove();
   const b = document.createElement("div");
   b.className = `bubble ${good ? "good" : "bad"}`;
   b.textContent = text;
-  const slotW = bands.customers.w / 3;
-  b.style.left = `${Math.max(70, Math.min(bands.customers.w - 70, i * slotW + slotW * 0.5))}px`;
+  placeOverHead(i, b, 2600);
+}
+
+/**
+ * Over the customer's head as they go: their opinion as a face, with a short line only when it's
+ * specific, and if they left a review, its stars popping out above.
+ */
+function showOpinion(i: number, stars: number, say: string | null, reviewed: boolean): void {
+  const b = document.createElement("div");
+  b.className = `opinion ${opinionFor(stars)}${say ? " said" : ""}`;
+  b.innerHTML = `${opinionFace(stars)}${say ? `<span class="say"></span>` : ""}${reviewed ? `<span class="review">${starRow(stars)}</span>` : ""}`;
+  if (say) b.querySelector(".say")!.textContent = say;
+  placeOverHead(i, b, reviewed ? 2800 : 2400, true);
+}
+
+/** Over customer i's head, kept on screen; `narrow` keeps it inside their third of the window so neighbours' bubbles don't overlap. */
+function placeOverHead(i: number, b: HTMLElement, ms: number, narrow = false): void {
+  const s = game.slots[i];
+  s.bubble?.remove();
+  const W = bands.customers.w;
+  const slotW = W / 3;
+  if (narrow) b.style.maxWidth = `${Math.round(slotW - 6)}px`;
   // Above the customer's head, clear of the receipts on the rail.
-  b.style.top = `${railTop * 0.55}px`;
+  b.style.top = `${railTop * 0.58}px`;
   ui.root.appendChild(b);
+  const half = b.offsetWidth / 2 + 4;
+  b.style.left = `${Math.max(half, Math.min(W - half, i * slotW + slotW * 0.5))}px`;
   s.bubble = b;
   setTimeout(() => {
     b.remove();
     if (s.bubble === b) s.bubble = null;
-  }, 2600);
+  }, ms);
 }
 
 function coinPop(i: number, amount: number): void {
@@ -3105,10 +3121,7 @@ ui.root.addEventListener("click", (e) => {
       else closeOverlay();
       break;
     case "reviews":
-      showReviews(game.reviewFilter);
-      break;
-    case "rf":
-      showReviews(btn!.dataset.v as ReviewFilter);
+      showReviews();
       break;
     case "new-trip":
       if (btn!.dataset.armed !== "1") {
@@ -3183,7 +3196,7 @@ initMenu({
       left: game.lost + game.leftLine,
       stars: game.stars,
       takings: game.money + game.tips - spills() - game.comped,
-      reviews: [...game.reviews].reverse(),
+      reviews: game.reviews.slice(),
     };
   },
   canInstall: () => !!installPrompt,
@@ -3276,7 +3289,6 @@ function startShift(): void {
     tutorial: !save.tutorialDone,
     comped: 0,
     reviews: [],
-    ratings: [],
     line: [],
     leftLine: 0,
     walkedPast: 0,
@@ -3291,7 +3303,7 @@ function startShift(): void {
   game.shift = validShift(save.shift);
   game.bonus = save.bonus && save.bonuses.includes(save.bonus) ? save.bonus : null;
   game.shiftLength = shiftSeconds(game.shift, stop().shiftLength);
-  game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rep: save.rep, hidden: save.hidden, shift: game.shift, bonus: game.bonus, pacing: game.pacing });
+  game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: game.shift, bonus: game.bonus, pacing: game.pacing });
   // A shift starts a fresh block of driving: the evening's hops count against the whole range.
   save.driven = 0;
   writeSave(save);
@@ -3332,12 +3344,6 @@ function applyStop(): void {
   customersView.setLook(save.look);
 }
 
-/** The best, a middling and the worst review of the shift, without repeats. */
-function highlights(reviews: Review[]): Review[] {
-  const sorted = [...reviews].sort((a, b) => b.stars - a.stars);
-  const picks = [sorted[0], sorted[Math.floor(sorted.length / 2)], sorted[sorted.length - 1]].filter(Boolean);
-  return picks.filter((r, i) => picks.findIndex((q) => q.text === r.text) === i);
-}
 
 /** Before opening: who to expect, the menu, the window, pacing and a bonus. A card over the map. */
 function showPrep(): void {
@@ -3420,9 +3426,8 @@ function showGarage(): void {
   if (sc) sc.scrollTop = keep;
 }
 
-function showReviews(filter: ReviewFilter): void {
-  game.reviewFilter = filter;
-  showOverlay("reviews", reviewsHtml(save, filter));
+function showReviews(): void {
+  showOverlay("reviews", reviewsHtml(save));
 }
 
 /**
@@ -3433,13 +3438,8 @@ function sleepNow(): void {
   if (save.time !== "evening") return;
   const last = save.last && save.last.town === save.town ? save.last : null;
   const fromDay = save.day;
-  let rating: [number, number] | null = null;
-  if (last && last.stars.length && save.ratingCount) {
-    const after = save.ratingSum / save.ratingCount;
-    const n = save.ratingCount - last.stars.length;
-    const before = n > 0 ? (save.ratingSum - last.stars.reduce((a, b) => a + b, 0)) / n : after;
-    rating = [before, after];
-  }
+  // Today's reviews moved the rating: from where it stood this morning (or, for a first review, from itself).
+  const rating: [number, number] | null = last && last.reviews.length && last.rating !== null ? [last.ratingBefore ?? last.rating, last.rating] : null;
   sleep(save);
   save.last = null;
   writeSave(save);
@@ -3473,7 +3473,7 @@ function showTitle(night: NightShow | null = null): void {
       screenShownAt = performance.now();
     },
     openResults: () => showClosing(),
-    openReviews: () => showReviews(game.reviewFilter),
+    openReviews: () => showReviews(),
     openGarage: () => showGarage(),
     openMenuRef: () => openMenuRef(withEvent(townById(save.town), eventOn(save.town, save.day))),
     sleep: () => sleepNow(),
@@ -3513,9 +3513,9 @@ function endShift(): void {
   }
   const here = stop();
   const avg = game.stars.length ? game.stars.reduce((a, b) => a + b, 0) / game.stars.length : 0;
-  // Lifetime rating: every served order's stars.
-  save.ratingCount += game.stars.length;
-  save.ratingSum += game.stars.reduce((a, b) => a + b, 0);
+  // The rating is every review ever left, kept as a count per star.
+  const ratingBefore = reviewAverage(save.reviewCounts);
+  save.reviewCounts = addReviews(save.reviewCounts, game.reviews);
   // A pass counts the people who ordered, so a short line isn't a fail, but serving one person out of a town's trade isn't a pass.
   const ok = passed(avg, game.served, Math.max(game.served + game.lost, Math.ceil(game.customers * 0.4)));
   let lastStop = false;
@@ -3524,11 +3524,6 @@ function endShift(): void {
   const takings = Math.max(0, Math.round(game.money + game.tips - game.comped - spills()));
   const bestBefore = save.bestTakings[here.id] ?? null;
   save.bestTakings[here.id] = Math.max(bestBefore ?? 0, takings);
-  const repBefore = save.rep;
-  const r = nextReputation(save.rep, save.repWeight, game.ratings);
-  save.rep = game.gentle ? Math.max(repBefore, r.rep) : r.rep;
-  save.repWeight = r.weight;
-  save.reviews = [...game.reviews.slice().reverse(), ...save.reviews].slice(0, 30);
   save.best[here.id] = Math.max(save.best[here.id] ?? 0, avg);
   // The takings go into savings, for the Garage.
   save.bank += takings;
@@ -3562,10 +3557,9 @@ function endShift(): void {
     spills: spills(),
     takings,
     bestBefore,
-    // The most telling ones: the best and the worst of the day.
-    reviews: highlights(game.reviews),
-    rep: save.rep,
-    repBefore,
+    reviews: game.reviews.slice(),
+    rating: reviewAverage(save.reviewCounts),
+    ratingBefore,
     pop: [popBefore, save.popularity],
     best: game.best?.name ?? null,
     outcome: !ok ? "failed" : lastStop ? "trip" : "passed",
@@ -3695,12 +3689,11 @@ function tick(dt: number): void {
       if (s.fig) s.fig.setMood(patienceMood(s.patience / s.maxPatience));
       if (s.patience <= 0) {
         game.lost++;
-        if (s.order.critic) criticVerdict(0, []);
-        // A walk-out on the first Chill day isn't held against the truck.
-        if (!game.gentle) game.ratings.push(0);
-        game.reviews.push({ stars: 0, text: reviewFor(0, [], game.rng, true), stop: stop().name });
+        if (s.order.critic) criticVerdict(1, []);
+        // A walk-out is furious, and as likely as anyone to say so (not on the first Chill day).
+        const reviewed = maybeReview(1, !!s.order.critic);
         sfx.grumble();
-        customerLeaves(i, "angry", "Too slow! I'm off.", false);
+        customerLeaves(i, 1, "Too slow! I'm off.", reviewed);
       }
     });
 
@@ -4354,6 +4347,8 @@ window.addEventListener("blur", cancelPointer);
   spawnCustomer,
   customersView,
   serve,
+  /** Show a customer's opinion (and a review) over slot i, for screenshots. */
+  opinion: showOpinion,
   goToPage,
   goToStop,
   eggInHand: () => eggHand?.stage ?? null,

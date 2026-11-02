@@ -14,6 +14,7 @@ export interface PressPiece {
   source: string;
   headline: string;
   quote: string;
+  /** The critic's verdict, 1..5. */
   stars: number;
   /** Popularity change it caused. */
   pop: number;
@@ -35,15 +36,17 @@ export function outletFor(town: Stop, event: TownEvent | null, rng: () => number
 
 const REACH: Record<Outlet, number> = { paper: 1, magazine: 1.4, tv: 1.9 };
 
-/** Popularity change from a critic's verdict, scaled by how many people the outlet reaches. */
+/** Popularity change from a critic's verdict (1..5★), scaled by how many people the outlet reaches. */
 export function popularityChange(stars: number, outlet: Outlet): number {
-  const base = [-12, -6, 4, 12][stars] ?? 0;
+  const base = [-12, -8, -3, 4, 12][stars - 1] ?? 0;
   return Math.round(base * REACH[outlet]);
 }
 
+/** Headlines by the critic's stars, 1★ first. */
 const HEADLINES: string[][] = [
   ["Skip the burger truck in {town}", "Bun Voyage runs out of road"],
   ["Bun Voyage stalls in {town}", "Burger truck needs a tune-up"],
+  ["Bun Voyage: fine, if you're passing", "A so-so stop in {town}"],
   ["A solid stop in {town}", "Bun Voyage: good, not great"],
   ["Burgers worth a road trip", "Don't miss Bun Voyage while it's in {town}", "The best thing on wheels in {town}"],
 ];
@@ -52,9 +55,9 @@ const PRAISE = ["Every layer exactly right.", "I went back for seconds.", "Toast
 export function pieceFor(stars: number, notes: string[], town: Stop, event: TownEvent | null, rng: () => number): PressPiece {
   const { outlet, source } = outletFor(town, event, rng);
   const pick = (xs: string[]) => xs[Math.floor(rng() * xs.length)];
-  const headline = pick(HEADLINES[stars]).replace("{town}", town.name);
+  const headline = pick(HEADLINES[Math.max(1, Math.min(5, stars)) - 1]).replace("{town}", town.name);
   const note = notes[0] ? notes[0].charAt(0).toUpperCase() + notes[0].slice(1) + "." : "";
-  const quote = stars === 3 ? pick(PRAISE) : stars === 0 && !note ? "I waited and waited, then gave up." : note || "Fine. Just fine.";
+  const quote = stars === 5 ? pick(PRAISE) : stars === 1 && !note ? "I waited and waited, then gave up." : note || "Fine. Just fine.";
   return { outlet, source, headline, quote, stars, pop: popularityChange(stars, outlet) };
 }
 

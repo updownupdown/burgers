@@ -164,12 +164,12 @@ describe("Red Rock scoring", () => {
   const tostada = orderFromRecipe(4, recipe("cactus", "Bean Tostada"), false, null);
   const breakfast = orderFromRecipe(5, recipe("sunvalley", "Breakfast Taco"), false, null);
 
-  it("gives three stars to tacos, a quesadilla and a tostada made right", () => {
+  it("gives five stars to tacos, a quesadilla and a tostada made right", () => {
     for (const o of [street, ques, pastor, tostada, breakfast]) {
       const r = scorePlate(o, perfect(o));
       expect(r.notes).toEqual([]);
       expect(r.score).toBe(100);
-      expect(r.stars).toBe(3);
+      expect(r.stars).toBe(5);
     }
   });
 
@@ -187,7 +187,7 @@ describe("Red Rock scoring", () => {
     cold.layers[1].piece.cook = [0, 0];
     const r = scorePlate(street, cold);
     expect(r.notes).toContain("cold, stiff tortilla");
-    expect(r.stars).toBeLessThan(3);
+    expect(r.stars).toBeLessThan(5);
     const hard = perfect(street);
     hard.layers[0].piece.cook = [0.9, 0];
     expect(scorePlate(street, hard).notes).toContain("tortilla a bit hard");
@@ -218,7 +218,7 @@ describe("Red Rock scoring", () => {
     cold.layers[1].piece.melt = 0.2;
     const r = scorePlate(ques, cold);
     expect(r.notes).toContain("cheese not melted");
-    expect(r.stars).toBeLessThan(3);
+    expect(r.stars).toBeLessThan(5);
   });
 
   it("judges the pineapple, the egg and the tostada shell", () => {

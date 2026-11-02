@@ -3,7 +3,9 @@ import { BONUSES, bonusById, GREAT, townBonus } from "../game/bonus";
 import { expectedCustomers } from "../game/day";
 import { DIFFICULTIES, DIFFICULTY, type Difficulty } from "../game/difficulty";
 import { criticChance, type PressPiece } from "../game/press";
-import type { Closing, Save } from "../game/progress";
+import { PASS_STARS, type Closing, type Save } from "../game/progress";
+import { addReviews, noReviews, ratingPull, reviewAverage, reviewTotal, REVIEW_CHANCE } from "../game/reviews";
+import { opinionFace, opinionLabel } from "../ui/faces";
 import { clockLabel, FIRST_HOUR, hourRate, LAST_HOUR, MIN_SHIFT, shiftHours, type ShiftWindow } from "../game/shift";
 import { eventOn, townById, type Stop } from "../game/stops";
 import { SHIFTS_TO_UNLOCK } from "../game/travel";
@@ -23,12 +25,13 @@ import "./day.css";
  *   and the one bonus to bring. Everything here is fixed once the window opens.
  * - **Closing**, after the shift: the town's bonus, when a great shift unlocked it (with a Buy
  *   button when savings cover it), then the stars, the takings, today's reviews, the press and the road.
- * - **Reviews**, reached from the map.
+ * - **Popularity & reviews**, reached from the map: popularity, the rating and its breakdown by
+ *   stars, and the critics' clippings.
  */
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const money = (n: number) => `${n < 0 ? "−" : ""}$${Math.abs(Math.round(n))}`;
-const stars = (n: number) => `<span class="day-stars"><span>${"★".repeat(n)}</span><span class="off">${"★".repeat(Math.max(0, 3 - n))}</span></span>`;
+const stars = (n: number) => `<span class="day-stars" aria-label="${n} of 5 stars"><span>${"★".repeat(n)}</span><span class="off">${"★".repeat(Math.max(0, 5 - n))}</span></span>`;
 const CROWD_ICON: Record<string, string> = { commuters: "truck", families: "people", foodies: "critic", party: "sparkle" };
 
 /** Which boxes are open on Closing. Remembered while the app runs. */
@@ -168,7 +171,8 @@ export function prepHtml(p: PrepInput): string {
   const crowd = CROWD[stop.crowd];
   const w = save.shift;
   const bonus = save.bonus && save.bonuses.includes(save.bonus) ? save.bonus : null;
-  const input = { stop, popularity: save.popularity, rep: save.rep, hidden: save.hidden, shift: w, bonus, pacing };
+  const input = { stop, popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: w, bonus, pacing };
+  const rating = reviewAverage(save.reviewCounts);
   const expect = expectedCustomers(input);
   const menu = menuFor(stop, save.hidden);
   const critic = bonus === "press" ? 1 : criticChance(stop.crowd, ev);
@@ -233,7 +237,7 @@ export function prepHtml(p: PrepInput): string {
         </div>
         <ul class="r">
           <li>${icon("people")}<span>Popularity</span><b class="bv-mono">${save.popularity}</b></li>
-          <li>${icon("star")}<span>Rating</span><b class="bv-mono">${save.rep.toFixed(1)}</b></li>
+          <li>${icon("star")}<span>Rating</span><b class="bv-mono">${rating === null ? "–" : rating.toFixed(1)}</b></li>
           <li>${icon("critic")}<span>Critic</span><b>${critic >= 1 ? "Booked" : critic >= 0.5 ? "Likely" : critic >= 0.25 ? "Possible" : "Unlikely"}</b></li>
         </ul>
         ${ev ? `<div class="bv-callout">${icon("flag")}<span><b>${esc(ev.name)}.</b> ${esc(ev.blurb)}${ev.special ? ` Special: ${esc(ev.special.name)}.` : ""}</span></div>` : ""}
@@ -280,10 +284,10 @@ export function closingHtml(c: Closing, save: Save): string {
     c.served === 0
       ? "The truck stayed quiet today."
       : c.outcome === "failed"
-        ? `${town.name} wasn't impressed. Serve at least half the customers with a 1★ average to count the day.`
+        ? `${town.name} wasn't impressed. Serve at least half the customers with a ${PASS_STARS}★ average to count the day.`
         : c.great
           ? `A great shift. ${town.name} will be talking about this for weeks.`
-          : avg >= 1.5
+          : avg >= 3.5
             ? "Solid shift. Everyone left full."
             : "A rough day at the grill, but you made it.";
   const row = (dt: string, dd: string, cls = "", sub = "") => `<dt class="${cls}">${dt}${sub ? `<small>${sub}</small>` : ""}</dt><dd class="${cls}">${dd}</dd>`;
@@ -308,15 +312,18 @@ export function closingHtml(c: Closing, save: Save): string {
     </dl><div class="foot"><span>Best in ${esc(town.name)}</span><b>${newBest ? "New best!" : money(c.bestBefore ?? 0)}</b></div></div>
     ${c.best ? `<span class="day-hint">Best order: ${esc(c.best)}.</span>` : ""}`,
   });
+  const today = reviewAverage(addReviews(noReviews(), c.reviews));
+  const all = reviewTotal(save.reviewCounts);
   boxes.push({
     id: "closing:rev",
     icon: "star",
     title: "Today's reviews",
-    sub: c.served ? (c.reviews.length ? `From ${c.served} orders; best and worst below` : `${c.served} orders, no written reviews`) : "Nobody was served",
-    value: `${avg.toFixed(1)}★`,
-    unit: `rating ${c.repBefore.toFixed(1)} → ${c.rep.toFixed(1)}`,
-    body: `<ul class="day-rev">${c.reviews.slice(0, 3).map((r) => `<li>${stars(r.stars)}<q>${esc(r.text)}</q></li>`).join("")}</ul>
-      <button class="bv-btn sm" data-act="reviews">${icon("review")}All ${save.reviews.length} reviews</button>`,
+    sub: c.reviews.length ? `${c.reviews.length} of ${c.served + c.lost} customers left one` : c.served ? `None from ${c.served + c.lost} customers` : "Nobody was served",
+    value: today === null ? "—" : `${today.toFixed(1)}★`,
+    unit: c.rating === null ? "" : c.ratingBefore === null || c.ratingBefore.toFixed(1) === c.rating.toFixed(1) ? `rating ${c.rating.toFixed(1)}` : `rating ${c.ratingBefore.toFixed(1)} → ${c.rating.toFixed(1)}`,
+    body: `${opinionsHtml(c.stars)}
+      ${c.reviews.length ? `<h4 class="day-sub">Reviews left today</h4>${breakdownHtml(addReviews(noReviews(), c.reviews))}` : `<span class="day-hint">Nobody wrote in today. Most people don't; the delighted and the disappointed are the ones who do.</span>`}
+      <button class="bv-btn sm" data-act="reviews">${icon("review")}All ${all} review${all === 1 ? "" : "s"}</button>`,
   });
   boxes.push({
     id: "closing:press",
@@ -343,7 +350,7 @@ export function closingHtml(c: Closing, save: Save): string {
           : opened.length
             ? `<b>${opened.map(esc).join(" and ")}</b> ${opened.length > 1 ? "are" : "is"} open. Tap ${opened.length > 1 ? "one" : "it"} on the map to see the drive.`
             : c.outcome === "failed"
-              ? "Serve at least half the customers with a 1★ average and the day counts toward the road."
+              ? `Serve at least half the customers with a ${PASS_STARS}★ average and the day counts toward the road.`
               : left > 0 && town.roads.length
                 ? `${left === 1 ? "One more good shift opens" : `${left} more good shifts open`} the road on.`
                 : town.roads.length
@@ -370,7 +377,7 @@ export function closingHtml(c: Closing, save: Save): string {
   const tb = townBonus(town.id);
   const goal =
     !earned && tb && !save.found.includes(tb.id) && c.outcome !== "failed"
-      ? `<p class="day-goal">${icon("lock")}<span>A great shift here unlocks <b>${esc(tb.name)}</b>: ${GREAT.stars}★ average, ${Math.round(GREAT.served * 100)}% of orders served, at least ${GREAT.min}.</span></p>`
+      ? `<p class="day-goal">${icon("lock")}<span>A great shift here unlocks <b>${esc(tb.name)}</b>: ${GREAT.stars}★ average opinion, ${Math.round(GREAT.served * 100)}% of orders served, at least ${GREAT.min}.</span></p>`
       : "";
 
   return `<div class="day-screen bv closing">
@@ -384,7 +391,7 @@ export function closingHtml(c: Closing, save: Save): string {
       ${reward}
       <div class="day-kpis">
         <div class="day-kpi"><span class="bv-eyebrow">Takings</span><b class="${newBest ? "up" : ""}">${money(c.takings)}</b><small>${newBest ? "town best" : `best ${money(c.bestBefore ?? 0)}`}</small></div>
-        <div class="day-kpi"><span class="bv-eyebrow">Rating</span><b>${c.rep.toFixed(1)}</b><small>${c.rep >= c.repBefore ? "+" : "−"}${Math.abs(c.rep - c.repBefore).toFixed(1)} today</small></div>
+        <div class="day-kpi"><span class="bv-eyebrow">Rating</span><b>${c.rating === null ? "–" : c.rating.toFixed(1)}</b><small>${ratingDelta(c)}</small></div>
         <div class="day-kpi"><span class="bv-eyebrow">Served</span><b>${c.served}</b><small>${c.lost + c.leftLine ? `${c.lost + c.leftLine} left` : "nobody left"}</small></div>
       </div>
       ${goal}
@@ -395,6 +402,38 @@ export function closingHtml(c: Closing, save: Save): string {
       <button class="bv-btn primary lg block" data-act="evening">${icon("moon")}Evening map</button>
     </footer>
   </div>`;
+}
+
+/** How today's reviews moved the rating, for the Closing KPI. */
+function ratingDelta(c: Closing): string {
+  const n = c.reviews.length;
+  if (!n) return "no reviews today";
+  if (c.rating === null || c.ratingBefore === null) return `${n} review${n === 1 ? "" : "s"}`;
+  // Compared as shown, to one place, so it agrees with "rating 4.1 → 4.0" in the box below.
+  const d = Number((Number(c.rating.toFixed(1)) - Number(c.ratingBefore.toFixed(1))).toFixed(1));
+  return d === 0 ? `${n} review${n === 1 ? "" : "s"}, no change` : `${d > 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} today`;
+}
+
+/** What every served customer thought: a face per opinion, 5★ to 1★, with how many. */
+function opinionsHtml(opinions: readonly number[]): string {
+  if (!opinions.length) return "";
+  return `<div class="day-ops" aria-label="What customers thought">${[5, 4, 3, 2, 1]
+    .map((n) => {
+      const k = opinions.filter((s) => s === n).length;
+      return `<span class="${k ? "" : "zero"}" title="${opinionLabel(n)}">${opinionFace(n)}<b class="bv-mono">${k}</b></span>`;
+    })
+    .join("")}</div>`;
+}
+
+/** Reviews by stars as five bars, 5★ at the top. */
+export function breakdownHtml(counts: readonly number[]): string {
+  const max = Math.max(1, ...counts);
+  return `<div class="day-bars" role="list" aria-label="Reviews by stars">${[5, 4, 3, 2, 1]
+    .map((n) => {
+      const k = counts[n - 1] ?? 0;
+      return `<div class="row" role="listitem" aria-label="${n} stars: ${k}"><span class="lbl bv-mono">${n}<i>★</i></span><span class="bar"><i style="width:${((k / max) * 100).toFixed(1)}%"></i></span><b class="bv-mono">${k}</b></div>`;
+    })
+    .join("")}</div>`;
 }
 
 const OUTLET_LABEL = { paper: "Newspaper", magazine: "Magazine", tv: "On TV" } as const;
@@ -409,35 +448,33 @@ export function pressHtml(p: PressPiece): string {
 }
 
 // ---------------------------------------------------------------------------
-// Reviews
+// Popularity & reviews
 
-export type ReviewFilter = "all" | "critics" | "good" | "bad" | "here";
-
-export function reviewsHtml(save: Save, filter: ReviewFilter): string {
-  const here = townById(save.town).name;
+export function reviewsHtml(save: Save): string {
   const press = save.press;
-  const reviews = save.reviews;
-  const list =
-    filter === "critics"
-      ? []
-      : reviews.filter((r) => filter === "all" || (filter === "good" && r.stars >= 3) || (filter === "bad" && r.stars <= 1) || (filter === "here" && r.stop === here));
-  const showPress = filter === "all" || filter === "critics";
-  const f = (v: ReviewFilter, label: string) => `<button data-act="rf" data-v="${v}" aria-pressed="${filter === v}">${label}</button>`;
+  const counts = save.reviewCounts;
+  const total = reviewTotal(counts);
+  const avg = reviewAverage(counts);
+  const pct = (n: number) => `${Math.round(n * 100)}%`;
   return `<div class="day-screen bv">
     <header class="day-top">
       <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("back")}</button>
-      <div class="where"><span class="bv-eyebrow">${reviews.length} review${reviews.length === 1 ? "" : "s"} · ${press.length} clipping${press.length === 1 ? "" : "s"}</span><b>Popularity &amp; reviews</b></div>
+      <div class="where"><span class="bv-eyebrow">${total} review${total === 1 ? "" : "s"} · ${press.length} clipping${press.length === 1 ? "" : "s"}</span><b>Popularity &amp; reviews</b></div>
     </header>
     <div class="day-scroll">
       <div class="day-kpis two">
-        <div class="day-kpi"><span class="bv-eyebrow">${icon("people")}Popularity</span><b>${save.popularity}<small class="of">/100</small></b><small>How many people have heard of the truck. Fills the line.</small></div>
-        <div class="day-kpi"><span class="bv-eyebrow">${icon("star")}Rating</span><b>${save.ratingCount ? save.rep.toFixed(1) : "–"} <span class="st">★</span></b><small>${save.ratingCount ? "Recent reviews count most." : "No orders yet."} A good rating brings a few more people.</small></div>
+        <div class="day-kpi"><span class="bv-eyebrow">${icon("people")}Popularity</span><b>${save.popularity}<small class="of">/100</small></b><small>How many people have heard of the truck. Happy customers spread the word.</small></div>
+        <div class="day-kpi"><span class="bv-eyebrow">${icon("star")}Rating</span><b>${avg === null ? "–" : avg.toFixed(1)} <span class="st">★</span></b><small>${avg === null ? "No reviews yet." : `The average of ${total} review${total === 1 ? "" : "s"}.`} A good rating brings a few more people.</small></div>
       </div>
-      <div class="day-filters">${f("all", "All")}${f("critics", "Critics")}${f("good", "3★")}${f("bad", "1★")}${f("here", esc(here))}</div>
+      <section class="day-card" aria-label="Reviews by stars">
+        <div class="day-card-h"><b>Reviews by stars</b>${avg === null ? "" : `<span class="day-avg">${stars(Math.round(avg))}<span class="bv-mono">${avg.toFixed(1)}</span></span>`}</div>
+        ${breakdownHtml(counts)}
+        <span class="day-hint">Every customer has an opinion; only some write a review. About ${pct(REVIEW_CHANCE[5])} of the delighted and ${pct(REVIEW_CHANCE[1])} of the furious do, but only ${pct(REVIEW_CHANCE[3])} of those who thought it was just okay. Critics always review.</span>
+      </section>
+      <h3 class="day-sub">${icon("critic")}From the critics</h3>
       <div class="day-rlist">
-        ${showPress ? press.map((p) => `<div class="day-rcard critic">${pressHtml(p)}</div>`).join("") : ""}
-        ${list.map((r) => `<div class="day-rcard"><div class="h">${stars(r.stars)}<span class="who">${esc(r.stop)}</span></div><q>${esc(r.text)}</q></div>`).join("")}
-        ${!list.length && !(showPress && press.length) ? `<span class="day-hint">${reviews.length || press.length ? "Nothing here yet." : "No reviews yet. Customers write one after they eat, and critics turn up at events and in foodie towns."}</span>` : ""}
+        ${press.map((p) => `<div class="day-rcard critic">${pressHtml(p)}</div>`).join("")}
+        ${press.length ? "" : `<span class="day-hint">No clippings yet. Critics turn up more at events and in foodie towns; a great review lands in the paper or on TV.</span>`}
       </div>
     </div>
   </div>`;

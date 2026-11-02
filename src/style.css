@@ -370,6 +370,73 @@ html, body {
 }
 .bubble.good { color: #2f7d33; }
 .bubble.bad { color: #b4321f; }
+
+/* Opinion faces (src/ui/faces.ts): pine when delighted down to coral when angry. */
+.op-face { --mood: #6f9a4f; width: 18px; height: 18px; flex: none; overflow: visible; }
+.op-face.delighted { --mood: #58a65c; }
+.op-face.happy { --mood: #a6c97e; }
+.op-face.meh { --mood: #e6cf8e; }
+.op-face.unhappy { --mood: var(--bv-amber); }
+.op-face.angry { --mood: var(--bv-paprika); }
+.op-face .disc { fill: var(--mood); stroke: var(--bv-ink); stroke-width: 1.2; }
+.op-face g { fill: var(--bv-ink); stroke: var(--bv-ink); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.op-face g path { fill: none; }
+.op-face g path.fill { fill: var(--bv-ink); stroke-width: 1; }
+
+/* Over a served customer: the face, and a short line only when there's something specific. */
+.opinion {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transform: translate(-50%, -100%);
+  width: max-content;
+  max-width: 33vw;
+  padding: 4px;
+  border-radius: var(--bv-r-pill);
+  background: #fff;
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.2);
+  pointer-events: none;
+  animation: pop 0.25s ease-out;
+}
+.opinion.said { padding-right: 10px; border-radius: 15px; }
+.opinion .op-face { width: 26px; height: 26px; }
+.opinion .say { font: 700 12px/1.25 var(--bv-font-ui); color: var(--bv-ink); }
+.opinion.angry .say, .opinion.unhappy .say { color: #b4321f; }
+.opinion.delighted .say, .opinion.happy .say { color: #2f6b4f; }
+.opinion::after { content: ""; position: absolute; left: 50%; bottom: -5px; border: 6px solid transparent; border-top-color: #fff; border-bottom: 0; transform: translateX(-50%); }
+/* A review: five stars that pop out above the face and float up. */
+.opinion .review {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px 3px 5px;
+  border-radius: var(--bv-r-pill);
+  background: var(--bv-night);
+  color: var(--bv-on-night);
+  font: 800 10px/1 var(--bv-font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.28);
+  opacity: 0;
+  transform: translate(-50%, 6px) scale(0.6);
+  animation: review-pop 2.2s 0.3s var(--bv-ease) forwards;
+}
+.opinion .review .bv-stars { font-size: 13px; gap: 1px; }
+.opinion .review .bv-stars .off { color: rgb(241 236 226 / 0.28); }
+@keyframes review-pop {
+  0% { opacity: 0; transform: translate(-50%, 6px) scale(0.6); }
+  14% { opacity: 1; transform: translate(-50%, 0) scale(1.08); }
+  22% { transform: translate(-50%, 0) scale(1); }
+  80% { opacity: 1; transform: translate(-50%, -4px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -8px) scale(1); }
+}
 @keyframes pop { from { transform: translate(-50%, -100%) scale(0.6); opacity: 0; } }
 
 .coin {
@@ -597,7 +664,8 @@ html, body {
 .update button.later { background: transparent; color: var(--bv-paper); border-color: rgb(255 255 255 / 0.35); }
 
 @media (prefers-reduced-motion: reduce) {
-  .bubble, .coin, .bell.ring svg { animation: none; }
+  .bubble, .coin, .bell.ring svg, .opinion { animation: none; }
+  .opinion .review { animation: none; opacity: 1; transform: translate(-50%, 0); }
 }
 .dlabel[hidden] { display: none; }
 .gtag {

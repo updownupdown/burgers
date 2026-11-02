@@ -47,10 +47,11 @@ export function lineDrain(position: number): number {
 
 /**
  * Fame earned (or lost) by a shift's service alone, before the press has its say: happy
- * customers tell their friends; walk-outs and people who gave up in line tell theirs.
+ * customers (a 4★ or 5★ opinion, reviewed or not) tell their friends; walk-outs and people who
+ * gave up in line tell theirs.
  */
 export function wordOfMouth(stars: number[], walkedOut: number, leftLine: number): number {
-  const happy = stars.filter((s) => s >= 2).length;
+  const happy = stars.filter((s) => s >= 4).length;
   const gained = Math.min(6, Math.floor(happy / 3));
   const lost = Math.min(4, Math.floor(walkedOut / 2) + Math.floor(leftLine / 3));
   return gained - lost;

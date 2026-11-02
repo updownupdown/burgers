@@ -150,8 +150,7 @@ describe("save migration", () => {
   it("starts a new truck with no ratings", () => {
     const s = migrateSave({});
     expect(s.shiftsIn).toEqual({});
-    expect(s.ratingCount).toBe(0);
-    expect(s.ratingSum).toBe(0);
+    expect(s.reviewCounts).toEqual([0, 0, 0, 0, 0]);
     expect(s.time).toBe("morning");
     expect(s.bonuses).toEqual([]);
   });
@@ -189,7 +188,8 @@ describe("save migration", () => {
       unlocked: ["pinecrest", "cactus", "dustbowl"],
       passedTowns: ["cactus", "dustbowl"],
       shiftsIn: { pinecrest: 3, cactus: 1, dustbowl: 2 },
-      best: { cactus: 1.8, dustbowl: 2.4 },
+      version: 2,
+      best: { cactus: 3.8, dustbowl: 4.4 },
       bank: 321,
       bonuses: ["bench", "sear"],
       looks: ["teal"],
@@ -200,7 +200,7 @@ describe("save migration", () => {
     expect(s.passedTowns).toEqual(["cactus"]);
     expect(s.shiftsIn.cactus).toBe(3);
     expect(s.shiftsIn.dustbowl).toBeUndefined();
-    expect(s.best.cactus).toBe(2.4);
+    expect(s.best.cactus).toBe(4.4);
     expect(s.bank).toBe(321);
     expect(s.bonuses).toEqual(["bench", "sear"]);
     expect(s.looks).toContain("teal");

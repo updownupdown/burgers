@@ -6,7 +6,10 @@
 import { CROWD } from "../game/business";
 import { RANGE_MI } from "../game/day";
 import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "../game/menu";
+import { GREAT } from "../game/bonus";
+import { PASS_STARS } from "../game/progress";
 import { HOLD_GRACE } from "../game/scoring";
+import { opinionFace } from "../ui/faces";
 import { fryerOf, type Recipe } from "../game/stops";
 import { COUNTED, FRIES_PORTION, FRIES_SCOOP, KIND_COLOR, KIND_LABEL, STANDARD_COUNT, type Kind, type Size } from "../game/types";
 import { icon } from "../ui/icons";
@@ -423,10 +426,11 @@ function sections(): Sec[] {
       id: "score",
       chip: "Stars",
       icon: "star",
-      title: "Stars and tips",
-      lede: "Every order earns 0 to 3 stars, and pays more the better it is.",
+      title: "Stars, reviews and tips",
+      lede: "Every customer rates their order from 1 to 5 stars, and pays more the better it is.",
       fig: `<div class="hw-score">
-        <span class="bv-stars lg">${[0, 1, 2].map(() => `<span class="on">${icon("star")}</span>`).join("")}</span>
+        <span class="bv-stars lg">${[0, 1, 2, 3, 4].map(() => `<span class="on">${icon("star")}</span>`).join("")}</span>
+        <span class="hw-faces" aria-label="Faces from delighted to angry">${[5, 4, 3, 2, 1].map((n) => opinionFace(n)).join("")}</span>
         <ul>
           <li>${icon("check")}Right layers, in order</li>
           <li>${icon("check")}Doneness, toast and melt</li>
@@ -438,8 +442,10 @@ function sections(): Sec[] {
       </div>`,
       points: [
         "<b>Tips</b> come from good food served before the customer gets worried.",
-        "<b>Pass a shift</b> by serving at least half your customers with an average of 1 star or more.",
-        "A <b>great shift</b> (a 2.4★ average with almost everyone served) unlocks that town's <b>bonus</b>. Every town has its own.",
+        "As they go, every customer shows a <b>face</b> for what they thought. They only say something when it's specific: a missing item, what was wrong, or that it was especially quick or good.",
+        "Only some leave a <b>review</b>, the stars that pop up over their head. The delighted and the disappointed write in most; critics always do. Your <b>rating</b> is the average of every review.",
+        `<b>Pass a shift</b> by serving at least half your customers with an average of ${PASS_STARS} stars or more.`,
+        `A <b>great shift</b> (a ${GREAT.stars}★ average with almost everyone served) unlocks that town's <b>bonus</b>. Every town has its own.`,
       ],
     },
     {

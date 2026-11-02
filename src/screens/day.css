@@ -106,9 +106,28 @@
 .day-kpi b.up { color: var(--bv-olive); }
 .day-kpi b.dn { color: var(--bv-paprika); }
 .day-kpi small { font-size: 11px; color: var(--bv-mute); line-height: 1.3; }
-.day-rev { list-style: none; margin: 0; padding: 0; display: grid; }
-.day-rev li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 6px 0; border-bottom: 1px dotted var(--bv-rule); font-size: 13.5px; color: var(--bv-ink-2); }
-.day-rev q, .day-rcard q { font-family: var(--bv-font-serif); font-style: italic; font-size: 15px; quotes: "“" "”"; }
+/* What every customer thought: a face per opinion with its count. */
+.day-ops { display: flex; flex-wrap: wrap; gap: 6px; }
+.day-ops > span { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px 4px 5px; border-radius: var(--bv-r-pill); background: var(--bv-paper-2); font-size: 13px; }
+.day-ops > span.zero { opacity: 0.45; }
+.day-ops .op-face { width: 20px; height: 20px; }
+.day-ops b { font-weight: 500; }
+.day-sub { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font: 700 var(--bv-fs-sm) / 1.2 var(--bv-font-ui); letter-spacing: var(--bv-track); text-transform: uppercase; color: var(--bv-mute); }
+.day-sub .bv-icon { font-size: 15px; color: var(--bv-ink); }
+/* Reviews by stars: five bars, 5★ on top. */
+.day-bars { display: grid; gap: 5px; }
+.day-bars .row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 34px; align-items: center; gap: 8px; }
+.day-bars .lbl { font-size: 13px; color: var(--bv-ink-2); white-space: nowrap; }
+.day-bars .lbl i { font-style: normal; color: var(--bv-amber); margin-left: 1px; }
+.day-bars .bar { height: 10px; border-radius: 5px; background: var(--bv-paper-3); overflow: hidden; }
+.day-bars .bar i { display: block; height: 100%; min-width: 0; border-radius: 5px; background: var(--bv-amber); }
+.day-bars b { font: 500 13px var(--bv-font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.day-card { display: grid; gap: 10px; padding: 12px; border-radius: var(--bv-r-lg); background: var(--bv-paper-2); }
+.day-card-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.day-card-h > b { font-size: 15px; font-weight: 700; }
+.day-avg { display: inline-flex; align-items: center; gap: 6px; }
+.day-avg .day-stars { font-size: 15px; letter-spacing: 1px; }
+.day-avg .bv-mono { font-size: 14px; }
 .day-road { display: grid; gap: 8px; font-size: 13.5px; color: var(--bv-ink-2); }
 .day-road b { color: var(--bv-ink); }
 .day-pips { display: flex; gap: 5px; }
@@ -121,14 +140,8 @@
 .day-press small { font-size: var(--bv-fs-sm); color: var(--bv-mute); font-weight: 700; }
 
 /* ---- reviews ------------------------------------------------------------------------------- */
-.day-filters { display: flex; gap: 6px; flex-wrap: wrap; }
-.day-filters button { font-size: var(--bv-fs-sm); font-weight: 700; padding: 6px 10px; border-radius: var(--bv-r-pill); border: 1px solid var(--bv-rule-2); color: var(--bv-ink-2); background: var(--bv-paper); min-height: 32px; }
-.day-filters button[aria-pressed="true"] { background: var(--bv-ink); color: var(--bv-paper); border-color: var(--bv-ink); }
 .day-rlist { display: grid; }
 .day-rcard { display: grid; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--bv-rule); }
-.day-rcard .h { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-.day-rcard .who { font-size: var(--bv-fs-sm); color: var(--bv-mute); }
-.day-rcard q { color: var(--bv-ink-2); }
 .day-rcard.critic { border-bottom: 0; padding: 6px 0; }
 
 /* ---- supplies ------------------------------------------------------------------------------ */

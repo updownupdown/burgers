@@ -1,7 +1,7 @@
-import type { Review } from "./business";
 import { migrateBonuses, type BonusId } from "./bonus";
 import { DEFAULT_LOOK, LOOKS, validLook, type Look } from "./looks";
 import type { PressPiece } from "./press";
+import { noReviews, toCounts, type StarCounts } from "./reviews";
 import type { TimeOfDay } from "./day";
 import { validShift, type ShiftWindow } from "./shift";
 import { FINAL_TOWN, REGION_START_IDS, START_TOWN, STOPS, townById } from "./stops";
@@ -10,7 +10,15 @@ import { SHIFTS_TO_UNLOCK } from "./travel";
 /** How well known a brand new truck is (10..100): enough for a few people to stop by. */
 export const START_POPULARITY = 25;
 
+/**
+ * Bumped when stored data changes meaning. 2: ratings went from three stars to five and reviews
+ * are kept as counts per star, so older ratings, reviews, press and town bests are wiped.
+ */
+export const SAVE_VERSION = 2;
+
 export interface Save {
+  /** Which shape of save this is (SAVE_VERSION). Saves from before versions count as 1. */
+  version: number;
   /** Old saves: index of the next region. Kept only to migrate into `town`. */
   stop?: number;
   /** Where the truck is parked on the road map. */
@@ -41,12 +49,11 @@ export interface Save {
   /** When the window opens and closes, picked on Prep (see shift.ts). */
   shift: ShiftWindow;
   /**
-   * Lifetime rating: every served order's stars (0–3), summed and counted. The recency-weighted
-   * rating that pulls in customers is `rep`.
+   * Every review ever left, as a count per star (index 0 is 1★, index 4 is 5★). The rating is
+   * their average (see reviews.ts); no review text is kept.
    */
-  ratingCount: number;
-  ratingSum: number;
-  /** Best average stars per stop id. */
+  reviewCounts: StarCounts;
+  /** Best average opinion (1..5★) of a shift, per stop id. */
   best: Record<string, number>;
   /** Best takings in one shift per stop id. */
   bestTakings: Record<string, number>;
@@ -58,11 +65,6 @@ export interface Save {
   trips: number;
   /** Times each recipe was served well; familiar recipes get compact tickets. */
   known: Record<string, number>;
-  /** Most recent reviews, newest first. */
-  reviews: Review[];
-  /** Rating: average stars across recent reviews (0..3), and how many reviews it's built on. */
-  rep: number;
-  repWeight: number;
   /** How well known the truck is, 10..100. Word of mouth and the press move it. */
   popularity: number;
   /** Recent press, newest first. */
@@ -77,7 +79,10 @@ export interface Closing {
   lost: number;
   leftLine: number;
   walkedPast: number;
+  /** Every served customer's opinion, 1..5★, in order. */
   stars: number[];
+  /** The reviews left today (some customers, every critic), 1..5★ each. */
+  reviews: number[];
   /** What the orders paid, the tips on top, and what went out free or spilled. */
   earned: number;
   tips: number;
@@ -87,9 +92,9 @@ export interface Closing {
   takings: number;
   /** The town's best takings before today, if any. */
   bestBefore: number | null;
-  reviews: Review[];
-  rep: number;
-  repBefore: number;
+  /** The rating (average review) after today's reviews and before them; null with no reviews. */
+  rating: number | null;
+  ratingBefore: number | null;
   pop: [number, number];
   best: string | null;
   outcome: "passed" | "failed" | "trip";
@@ -109,6 +114,7 @@ const KEY = "bv-save-v1";
 
 export function freshSave(): Save {
   return {
+    version: SAVE_VERSION,
     town: START_TOWN,
     day: 1,
     time: "morning",
@@ -123,8 +129,7 @@ export function freshSave(): Save {
     bonus: null,
     hidden: [],
     shift: validShift(null),
-    ratingCount: 0,
-    ratingSum: 0,
+    reviewCounts: noReviews(),
     best: {},
     bestTakings: {},
     looks: [],
@@ -132,16 +137,13 @@ export function freshSave(): Save {
     tutorialDone: false,
     trips: 0,
     known: {},
-    reviews: [],
-    rep: 2,
-    repWeight: 6,
     popularity: START_POPULARITY,
     press: [],
   };
 }
 
 /** Fields older saves carry that the game no longer uses (money, supplies, business mode). */
-const RETIRED = ["ribbons", "gear", "simplePlan", "biz", "plan", "ads", "offer", "upgrades", "overnightUsed"] as const;
+const RETIRED = ["ribbons", "gear", "simplePlan", "biz", "plan", "ads", "offer", "upgrades", "overnightUsed", "ratingCount", "ratingSum", "reviews", "rep", "repWeight"] as const;
 
 /**
  * Towns that left the map, and the town that took their place: progress there (shifts, bests,
@@ -174,6 +176,16 @@ function foldTowns(s: Save): void {
 /** A stored save brought up to date: missing fields filled in, old shapes converted. */
 export function migrateSave(p: Partial<Save> & Record<string, unknown>): Save {
   const s: Save = { ...freshSave(), ...p };
+  if (!(Number(p.version) >= 2)) {
+    // Three-star days (DESIGN.md §26): ratings, reviews, critics' clippings and town bests were
+    // all out of three, so they start again. Savings, bonuses, looks and the road are kept.
+    s.reviewCounts = noReviews();
+    s.press = [];
+    s.best = {};
+    s.last = null;
+  }
+  s.version = SAVE_VERSION;
+  s.reviewCounts = toCounts(s.reviewCounts);
   if (s.stop !== undefined && !p.town) {
     // Saves from before the map: start at the first town of the region they'd reached.
     const r = Math.max(0, Math.min(REGION_START_IDS.length - 1, s.stop | 0));
@@ -252,7 +264,10 @@ export function passTown(s: Save, id: string): boolean {
   return id === FINAL_TOWN;
 }
 
-/** A shift counts as passed with an average of at least one star and most customers served. */
+/** The average opinion a shift needs to count (the old 1 of three). */
+export const PASS_STARS = 2.5;
+
+/** A shift counts as passed with an average opinion of PASS_STARS or more and at least half the customers served. */
 export function passed(avgStars: number, served: number, total: number): boolean {
-  return served > 0 && avgStars >= 1 && served >= Math.ceil(total * 0.5);
+  return served > 0 && avgStars >= PASS_STARS && served >= Math.ceil(total * 0.5);
 }

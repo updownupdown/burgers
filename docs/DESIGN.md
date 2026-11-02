@@ -726,7 +726,7 @@ James on the Rodeo Platter: it could only be made on the tray, so it cooled whil
 
 James picked **A · Painted cabin** from the kitchen view study (2026-11-02). The three bands are one room seen at three angles:
 
-- **Window.** The customers band is the truck's inside wall (warm cream paint) with the serving window cut into it, opening just under the HUD and closing at a steel sill where the order rail hangs. No sky shows above the HUD. Through the window you see the awning's underside sloping away, and its hem hangs *behind* the customers, so their heads come in front of it. Awning style and lights still follow the Garage look.
+- **Window.** The customers band is the truck's inside wall (warm cream paint) with the serving window cut into it, opening just under the HUD and closing at a steel sill where the order rail hangs. No sky shows above the HUD. Through the window you see the awning's underside sloping away, and its hem hangs *behind* the customers, just above their heads (raised in §28 so the view shows). Awning style and lights still follow the Garage look.
 - **One wall.** The same painted wall (unlit, its speckle sized in screen pixels) runs round the window, behind the receipts, behind the pass shelf and down to the counter, so the bands no longer look stitched.
 - **Pass shelf.** A steel shelf a little deeper than the trays, with a mid-steel front face and a bright rolled nose right at the bottom of the tray band. That edge is the seam into the counter; under it the shelf shades the strip of wall and the back of the counter.
 - **Counter.** The counter camera keeps its zoom and angle but no longer draws the wall above the counter (only about 0.65 units of it), which frees about 85 px on a 390 × 844 phone: about 60% goes to the window, the rest to the trays. The trash chute is the last thing on the counter; after it come the counter's bright rolled front edge and its darker steel front. The counter steel carries fewer brush streaks. The fountain and the fryers moved forward to clear the shorter wall.
@@ -770,7 +770,19 @@ James, after build #72: the customers' lines were repetitive, and the clever one
 
 Supersedes the critic weighting in §9, the review list and filters in §13, and the 2.4★ great shift in §21.
 
-## 28. Customers (study pick)
+## 28. The view out of the window (study pick)
+
+James picked **Valley view** with a **raised awning** from the scenery study on 2026-11-02 (four options: Main Street, Valley view, Paper cut-out, Soft focus). Code: `src/render/scenery.ts`, used by `CustomersView.setBackdrop`.
+
+- **Why the awning moved.** With the hem at head height only a strip about 60 px tall showed, the horizon sat just under the hem, and anything tall (the old mountains and mesas) was cut off. The hem now sits a little under the window head, clear of the customers, roughly doubling the view. Heads no longer overlap it.
+- **Composition.** A roadside pull-out: near ground the customers stand on, a fence about 8 units back with a signpost and a local prop or two, then land that *rises* behind (a low-poly heightfield) so the view fills the window. A view that drops away from the fence is invisible from this camera. Near things carry the Pencil Line outline; far things don't, and a light fog in the horizon colour hazes them. The sky is a gradient from the horizon colour up.
+- **The Pines.** Meadow, rail fence, signpost and picnic table; pine-covered slopes with a notch between them and a snowy peak beyond.
+- **Sunny Coast.** Dune grass and a rope fence, a palm; the beach runs down to the sea with sails on it; a scrubby headland on the right carries the striped lighthouse; an island on the horizon.
+- **Red Rock.** Desert floor, rail fence, a saguaro, agave and a rock; mesas in red bands with scree at their feet, buttes in the gaps and a stone arch.
+- **Orchard Isle.** Picket fence, signpost and an apple crate; orchard rows climbing a hill striped in crop colours, a red barn and a white windmill on it.
+- **Later.** Each town can vary the same set (a landmark, a season, event dressing) without a new layout.
+
+## 29. Customers (study pick)
 
 James found the old customers odd, mostly their eyes: white eye whites lit by the purple-blue
 sky light read as cold blue goggles. A study (build #74) put five designs in the real window:

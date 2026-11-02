@@ -5,6 +5,7 @@ import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { lookColours } from "../screens/truckart";
 import { CABIN } from "../render/cabin";
 import { wallMaterial } from "../render/walls";
+import { buildScenery } from "../render/scenery";
 
 export type { Mood } from "../render/people";
 import { buildPerson, type Mood, type Person } from "../render/people";
@@ -160,7 +161,7 @@ export class CustomersView {
    * The inside of the truck. A painted wall fills the band except for the window, which
    * opens just under the HUD and closes at the order rail; a trim runs round the opening. Through
    * it the awning's underside slopes away from the window head to its hem, which hangs behind the
-   * customers so their heads come in front of it, the way they stand under it.
+   * customers, just above their heads, with the view out of the window below it.
    */
   private buildFrame(): void {
     const v = CABIN;
@@ -214,10 +215,10 @@ export class CustomersView {
     sill.position.set(0, bot - px(3), ZF + 0.1);
     this.frame.add(sill);
 
-    // The awning: hem behind the customers, just low enough that their heads overlap it.
+    // The awning: hem behind the customers, raised clear of their heads so the view shows under
+    // it (scenery study, 2026-11-02; it used to hang at head height and hid most of the view).
     const VZ = -1.5;
-    const headTop = new THREE.Vector3(0, 0.2 + 2.1 * this.figScale, 0).project(cam).y;
-    const hemNdc = Math.min(headTop - 0.06, 1 - 2 * this.hudF - 0.18);
+    const hemNdc = 1 - 2 * this.hudF - 0.1;
     const hemY = this.at(0, hemNdc, VZ).y;
     const k = 1.25;
     this.valance.scale.setScalar(k);
@@ -251,77 +252,16 @@ export class CustomersView {
   /** Band height in CSS px, for pixel-sized trim. */
   bandPx = 287;
 
+  /** Dress the view out of the window for an area (see render/scenery.ts). */
   setBackdrop(kind: Backdrop): void {
     this.kind = kind;
     const g = this.backdrop;
     disposeObject(g);
     g.clear();
-    const add = (geo: THREE.BufferGeometry, color: string, x: number, y: number, z: number) => {
-      const m = new THREE.Mesh(faceted(geo), toon(color));
-      m.position.set(x, y, z);
-      g.add(m);
-      return m;
-    };
-    if (kind === "mountains") {
-      this.scene.background = new THREE.Color("#9fd3e8");
-      for (const [x, h, c] of [[-7, 6, "#8aa6b8"], [-1, 7.5, "#7c98ad"], [6, 6.5, "#8aa6b8"]] as const) {
-        add(new THREE.ConeGeometry(h * 0.9, h, 5), c, x, h / 2 - 0.5, -9);
-        add(new THREE.ConeGeometry(h * 0.27, h * 0.3, 5), "#f4f7f8", x, h - 0.5 - h * 0.15, -8.95);
-      }
-      for (let i = 0; i < 14; i++) {
-        const h = 1.6 + Math.abs(Math.sin(i * 3.1)) * 1.2;
-        add(new THREE.ConeGeometry(h * 0.35, h, 6), i % 2 ? "#2f6b4f" : "#3b7d5a", -11 + i * 1.7 + Math.sin(i * 7) * 0.4, h / 2 - 0.4, -5.5);
-      }
-      add(new THREE.BoxGeometry(60, 0.4, 20), "#9cc77a", 0, -0.6, -6);
-    } else if (kind === "beach") {
-      this.scene.background = new THREE.Color("#8fd6f0");
-      add(new THREE.BoxGeometry(60, 0.2, 10), "#3fa7c9", 0, 0.2, -12);
-      add(new THREE.BoxGeometry(60, 0.4, 14), "#f2dca0", 0, -0.6, -4);
-      add(new THREE.SphereGeometry(1.4, 16, 10), "#ffe08a", 7, 6.5, -14);
-      for (const [x, z, lean] of [[-8, -6, 0.25], [-3.5, -7, -0.15], [4, -6.5, 0.2], [9, -7.5, -0.2]] as const) {
-        const trunk = add(new THREE.CylinderGeometry(0.16, 0.24, 4.2, 6), "#9a6a3c", x, 1.6, z);
-        trunk.rotation.z = lean;
-        for (let k = 0; k < 5; k++) {
-          const leaf = add(new THREE.ConeGeometry(0.35, 2.2, 4), "#3c9a52", x - lean * 3.6, 3.6, z);
-          leaf.rotation.set(0, (k * Math.PI * 2) / 5, Math.PI / 2.3);
-        }
-      }
-      for (let i = 0; i < 3; i++) {
-        const umb = add(new THREE.ConeGeometry(1.2, 0.5, 8), i % 2 ? "#e5432b" : "#f3bd3d", -6 + i * 6, 1.6, -3.5);
-        umb.rotation.z = 0.15;
-      }
-    } else if (kind === "orchard") {
-      // Orchard Isle: soft green hills, rows of vines, apple trees and a red barn.
-      this.scene.background = new THREE.Color("#a9d8e6");
-      add(new THREE.BoxGeometry(60, 0.4, 20), "#a8c97a", 0, -0.6, -6);
-      for (const [x, r] of [[-8, 5], [1, 6.5], [9, 5.5]] as const) {
-        const hill = add(new THREE.SphereGeometry(r, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), "#8fb86a", x, -0.6, -13);
-        hill.scale.y = 0.45;
-      }
-      for (let row = 0; row < 3; row++) add(new THREE.BoxGeometry(14, 0.5, 0.35), "#5f8f45", -5 + row * 0.6, 0, -8 - row * 0.9);
-      const barn = add(new THREE.BoxGeometry(2.6, 2, 2), "#b8483a", 7.5, 0.5, -9);
-      barn.rotation.y = -0.3;
-      const roof = add(new THREE.CylinderGeometry(1.5, 1.5, 2.2, 3), "#7a3a32", 7.5, 1.9, -9);
-      roof.rotation.set(Math.PI / 2, 0, Math.PI / 2 - 0.3);
-      for (const [x, z] of [[-8, -5], [-3.5, -6], [2.5, -5.5], [10.5, -6]] as const) {
-        add(new THREE.CylinderGeometry(0.14, 0.2, 1.4, 6), "#7a5434", x, 0.3, z);
-        add(new THREE.SphereGeometry(0.95, 10, 8), "#4f8f45", x, 1.5, z);
-        for (let k = 0; k < 4; k++) add(new THREE.SphereGeometry(0.13, 6, 5), "#d9443a", x + Math.cos(k * 1.7) * 0.75, 1.3 + Math.sin(k * 2.3) * 0.4, z + 0.55);
-      }
-    } else {
-      this.scene.background = new THREE.Color("#f6c48a");
-      add(new THREE.BoxGeometry(60, 0.4, 20), "#e0a868", 0, -0.6, -6);
-      for (const [x, w, h] of [[-8, 4, 3.5], [-1, 6, 5], [7, 3.5, 4]] as const) {
-        add(new THREE.BoxGeometry(w, h, 2), "#c4623a", x, h / 2 - 0.5, -11);
-        add(new THREE.BoxGeometry(w + 0.4, 0.4, 2.2), "#a94f2e", x, h - 0.4, -11);
-      }
-      add(new THREE.SphereGeometry(1.2, 16, 10), "#fff1c4", -5, 6.2, -14);
-      for (const [x, z] of [[-6, -5], [-1.5, -6], [3.5, -5.5], [8, -6]] as const) {
-        add(new THREE.CylinderGeometry(0.28, 0.32, 2.2, 8), "#4f8f4a", x, 0.7, z);
-        const arm = add(new THREE.CylinderGeometry(0.18, 0.2, 0.9, 8), "#4f8f4a", x + 0.45, 1.1, z);
-        arm.rotation.z = -0.2;
-      }
-    }
+    const b = buildScenery(g, kind);
+    (this.scene.background as THREE.Texture | null)?.dispose?.();
+    this.scene.background = b.background;
+    this.scene.fog = b.fog;
   }
 
   /**

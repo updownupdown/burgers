@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { CABIN } from "./render/cabin";
 import { buzz, Sfx } from "./audio";
-import { cookLevel, COOK_SCALE, cookZone, darkSide, DRINK_FILL, friesZone, FRY_ZONE, isMelted, paleSide, SALT, type Cookable } from "./game/cooking";
+import { cookLevel, COOK_SCALE, cookZone, darkSide, DRINK_FILL, friesZone, FRY_ZONE, isMelted, paleSide, SALT, setFolded, type Cookable } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { expectedCustomers, sleep } from "./game/day";
 import { greatShift, townBonus, type BonusId } from "./game/bonus";
@@ -45,7 +45,7 @@ import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
 import { closingHtml, prepHtml, reviewsHtml, syncRange, toggleBox, toggleIngredients } from "./screens/day";
-import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, setTabArt, ticketHtml } from "./ui";
+import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, setTabArt, ticketHtml, tortillaMeter } from "./ui";
 import { DRINK_TINT } from "./render/machines";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 import { scrollShadows } from "./screens/modal";
@@ -2088,7 +2088,7 @@ function zoneHint(x: number): void {
   const heat = counter.zones[zone];
   if (counter.middle === "comal") {
     if (heat === "warm") hintOnce("comal-warm", "The right end of the comal keeps things warm without cooking them on. Warm tortillas on the hot side, then stand them in the taco rack.", 4);
-    else hintOnce("comal-hot", "Tortillas warm in about 6 seconds: soft, with brown spots. Don't leave them till they go hard.", 4);
+    else hintOnce("comal-hot", "Tortillas warm in about 6 seconds: soft, with brown spots, and the meter turns orange and says Warm. Don't leave them till they go hard.", 4);
     return;
   }
   if (heat === "off") showHint("That part of the grill is off. Tap its button on the front to heat it.", 2.5);
@@ -2999,7 +2999,8 @@ function foldMove(pt: Pointer, it: GrillItem): boolean {
   // How far past the middle the finger has come, along the line from the edge it started on.
   const along = ((cur.x - it.x) * ux + (cur.z - it.z) * uz) / ul;
   if (along < -R * 0.2) {
-    it.piece.folded = true;
+    // Folding keeps the meter where it was (the half that goes over brings its cooked face up).
+    setFolded(it.piece, true);
     // The half moon lies on the side the finger went, its crease across the drag.
     it.piece.foldYaw = Math.atan2(-ux, -uz);
     pt.foldFrom = undefined;
@@ -5172,10 +5173,12 @@ const grillTags: HTMLElement[] = [];
 /** The meter for a grill item, and how many are in its stack. */
 function itemTag(it: GrillItem): string {
   const k = it.piece.kind;
-  const meter = k in COOK_SCALE ? cookMeter(k as Cookable, cookLevel(it.piece)) : "";
+  // A taco tortilla's meter says when it's warm (the ticket's "Warm" chip); a quesadilla's, its cheese.
+  const jack = it.piece.fill?.find((f) => f.kind === "jack");
+  const taco = (k === "corn" || k === "flour") && !it.piece.folded && !jack;
+  const meter = taco ? tortillaMeter(k, cookLevel(it.piece)) : k in COOK_SCALE ? cookMeter(k as Cookable, cookLevel(it.piece)) : "";
   const n = counter.stackSize(it);
   // A quesadilla's cheese: melting, then melted.
-  const jack = it.piece.fill?.find((f) => f.kind === "jack");
   const melt = jack ? `<b class="mlt${isMelted(jack) ? " on" : ""}">${isMelted(jack) ? "Melted" : "Melting"}</b>` : "";
   return `${meter}${melt}${n > 1 ? `<b class="sc">×${n}</b>` : ""}`;
 }

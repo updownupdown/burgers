@@ -623,7 +623,7 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
     case "pineapple": {
       const ring = mesh(GEO.pineapple, "#f5d33f", { unique: true });
       body.add(ring);
-      set((p) => (ring.material as THREE.MeshToonMaterial).color.copy(pineRamp(Math.max(p.cook[0], p.cook[1]), tmpA)));
+      set((p) => (ring.material as THREE.MeshToonMaterial).color.copy(pineRamp(cookLevel(p), tmpA)));
       break;
     }
     case "cheese":

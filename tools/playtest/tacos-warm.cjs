@@ -233,7 +233,7 @@ const QUESA = { ...RODEO, name: 'Quesadilla', price: 9, layers: [{ kind: 'flour'
       await warmAll(t, ['corn']);
       await tortillasToRack(t, spots, { at: 1, name: 'rodeo-two-in-rack' });
       console.log('  rack:', await rackNow(t));
-      // One drag from the well is one scoop into the rack (DESIGN §30: a tap only names it).
+      // One drag from the well is one scoop into the rack (DESIGN §31: a tap only names it).
       for (let i = 0; i < 4; i++) await binTo(t, 'pork', await rackPt(t));
       await t.shot('rodeo-pork-in-rack', { hint: true });
       for (const k of ['onion', 'cilantro', 'lime']) await binTo(t, k, await rackPt(t));

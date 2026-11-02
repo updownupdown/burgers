@@ -112,7 +112,7 @@ const NACHOS = { name: 'Nachos', price: 8, mods: [], layers: [], poutine: true, 
       await t.drag(line(...(await t.proj(it.at)), px, py, 14));
     }
     const pork = await t.hp('bin', { kind: 'pork' });
-    // A drag from the well is one scoop (DESIGN §30: a tap only names it).
+    // A drag from the well is one scoop (DESIGN §31: a tap only names it).
     for (let i = 0; i < 3; i++) await t.drag(line(...pork, px, py, 12));
     for (const k of ['onion', 'cilantro', 'lime']) {
       const [bx, by] = await t.hp('bin', { kind: k });

@@ -23,7 +23,7 @@ export interface Recipe {
   /** Open-faced: only the bread goes in the press; what goes on top is never heated. */
   open?: boolean;
   /**
-   * Made on the comal (Red Rock): tacos in the rack (warmed tortillas, then fillings on the tray),
+   * Made on the comal (Red Rock): tacos in the rack (warmed tortillas filled in the rack on the comal's warm end, then up to the tray),
    * a quesadilla (folded and crisped on the comal), or a tostada (a fried shell built flat).
    */
   dish?: "tacos" | "quesadilla" | "tostada";
@@ -143,8 +143,8 @@ const TUNA_MELT: Recipe = { name: "Tuna Melt", price: 11, layers: ["sourdough", 
 const CHICKEN_PESTO: Recipe = { name: "Chicken Pesto", price: 13, layers: ["ciabatta", "pesto", "chicken", "mozzarella", "tomato", "ciabatta"], toasted: true, panini: true, melt: true, counts: { mozzarella: 2, tomato: 2 }, from: 0.15 };
 const VEGGIE_CLUB: Recipe = { name: "Veggie Club", price: 12, layers: ["ciabatta", "aioli", "veggie", "tomato", "rocket", "ciabatta"], toasted: true, panini: true, counts: { tomato: 2 }, from: 0.2 };
 // Red Rock: tacos and quesadillas on the comal (DESIGN §24, phase 3). Taco tortillas are warmed on
-// the comal and filled in the rack on the tray, one scoop of pork per taco; toppings sprinkle over
-// the whole rack. A quesadilla is built, folded and flipped on the comal. The tostada's shell comes
+// the comal and filled in the taco rack on its warm end (after build #73), one scoop of pork per
+// taco; toppings sprinkle over the whole rack, which then goes up to the tray. A quesadilla is built, folded and flipped on the comal. The tostada's shell comes
 // from the fryer and is built flat on the tray.
 const STREET_TACOS: Recipe = { name: "Street Tacos", price: 10, layers: ["corn", "pork", "onion", "cilantro", "lime"], toasted: true, dish: "tacos", counts: { corn: 3, pork: 3, onion: 1 } };
 const QUESADILLA: Recipe = { name: "Quesadilla", price: 9, layers: ["flour", "jack"], toasted: true, dish: "quesadilla", melt: true, counts: { jalapeno: 2, pork: 1 } };
@@ -348,7 +348,7 @@ export const STOPS: Stop[] = [
     fryer: ["chips"],
     customers: 11,
     shiftLength: 200,
-    newThing: "New here: the comal, hot on the left and warm on the right. Warm tortillas until they're soft and spotted. For a quesadilla, lay cheese on a flour tortilla, drag its edge across to fold it, and flip it once.",
+    newThing: "New here: the comal, hot on the left and warm on the right. Warm tortillas until they're soft and spotted, then stand them in the taco rack on the warm end, fill them there and drag the rack up to the tray. For a quesadilla, lay cheese on a flour tortilla, drag its edge across to fold it, and flip it once.",
     menu: [STREET_TACOS, QUESADILLA],
   },
   {

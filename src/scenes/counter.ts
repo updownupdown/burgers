@@ -11,6 +11,8 @@ import { atRim, bladeUnder, grip, NUDGE, nudgeSpin, pieYawOf, spinPie, underPie,
 import { INNER_RX, INNER_RZ, makeFlatbread, PIE, pieYaw, type FlatbreadObject } from "../render/flatbread";
 import { QUESO } from "../render/sides";
 import { tickTacos } from "../render/tacos";
+import { makeTacoRack } from "../render/dishes";
+import { RACK_SLOTS } from "../game/hold";
 import { brushedSteel, counterTop } from "../render/wear";
 import { CUP_DIMS, cupSurfaceY, makeCarton, makeCartonStack, makeCup, makeFood, makeBasketFries, makeFries, stackBases, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
 import { dressCup } from "../render/cup";
@@ -88,6 +90,15 @@ const COMAL_CADDY = { x: -0.45, z: 2.42 };
 const TPRESS = { x: 2.45, z: 2.5 };
 /** The tortilla press is drawn a little smaller than life, so it fits the front corner. */
 const TPRESS_SCALE = 0.85;
+/**
+ * The taco rack on the comal's warm end (after build #73), page-local half sizes of its footprint
+ * (a four-slot rack drawn as on a tray, at the counter food scale) and how far right of the warm
+ * end's middle it stands.
+ */
+const RACK_HALF = { x: 0.8, z: 0.37 };
+const RACK_DX = -0.04;
+/** The rack is drawn a little bigger than a platter's on a tray, so its four tacos read on the plate. */
+export const RACK_SCALE = 1.08;
 /** Kinds that go in the row of pans behind the comal. */
 const COMAL_BACK = (k: Kind) => TORTILLAS.has(k) || SCOOPED.has(k) || k === "pineapple";
 /** The left rail's back edge stays put whatever its row count, so the pans line up with the grill page's. */
@@ -360,7 +371,8 @@ export type Hit =
   | { type: "peel" }
   | { type: "bench" }
   | { type: "spot"; idx: number }
-  | { type: "batter" };
+  | { type: "batter" }
+  | { type: "rack" };
 
 /** Something a pie sits on: the peel, a spot in the oven, the bench or the board. */
 export interface PieHolder {
@@ -536,6 +548,13 @@ export class CounterView {
   redRock = false;
   private comalGroup = new THREE.Group();
   private comalCaddy: SauceCaddyObject | null = null;
+  /**
+   * The taco rack standing on the comal's warm end (after build #73): warm tortillas go in it and
+   * tacos are filled there, where nothing cools or cooks on; then the whole rack goes up to a tray.
+   * Its layers are a tray's taco layers (tortillas, then fillings in the order they went in).
+   */
+  rack: { layers: Layer[]; food: THREE.Group | null; foodKey: string; x: number; z: number } = { layers: [], food: null, foodKey: "", x: 0, z: 0 };
+  private rackObj = new THREE.Group();
   /** The tortilla press (Sun Valley), how far its lever is down (0..1), and whether it's out. */
   tpress!: TortillaPressObject;
   tpressT = 0;
@@ -1094,6 +1113,43 @@ export class CounterView {
     C.add(tp);
     this.tpress = tp;
     this.proxy(new THREE.BoxGeometry(1.7, 1.0, 1.3), at(TPRESS.x, 0.4, TPRESS.z), { type: "tpress" }, tp);
+    // The taco rack, at the back of the warm end: the front of the warm end stays free to park on.
+    const warm = GRILL_ZONES[GRILL_ZONES.length - 1];
+    this.rack.x = (warm.x0 + warm.x1) / 2 + RACK_DX;
+    this.rack.z = GRILL_BOUNDS.z0 + RACK_HALF.z - 0.05;
+    this.rackObj.position.copy(at(this.rack.x, GRILL_TOP, this.rack.z));
+    C.add(this.rackObj);
+    this.proxy(new THREE.BoxGeometry(RACK_HALF.x * 2 + 0.2, 0.6, RACK_HALF.z * 2 + 0.3), at(this.rack.x, GRILL_TOP + 0.25, this.rack.z), { type: "rack" }, this.rackObj);
+    this.setRack([]);
+  }
+
+  /** Put these tacos in the comal's rack (or empty it with []). */
+  setRack(layers: Layer[]): void {
+    const r = this.rack;
+    r.layers = layers;
+    const key = layers.map((l) => l.piece.uid).join(",") || "empty";
+    if (key === r.foodKey && r.food) return;
+    r.foodKey = key;
+    if (r.food) {
+      this.rackObj.remove(r.food);
+      disposeObject(r.food);
+    }
+    const dish = makeTacoRack(layers.map((l) => l.piece), RACK_SLOTS);
+    dish.group.scale.setScalar(GRILL_SCALE * RACK_SCALE);
+    r.food = dish.group;
+    this.rackObj.add(dish.group);
+  }
+
+  /** True when a world point is over the taco rack on the comal. */
+  overRack(world: THREE.Vector3): boolean {
+    if (this.middle !== "comal") return false;
+    const x = world.x - pageX(1);
+    return Math.abs(x - this.rack.x) < RACK_HALF.x + 0.12 && Math.abs(world.z - this.rack.z) < RACK_HALF.z + 0.2;
+  }
+
+  /** The rack's middle, world space (the playtest bot, and where a drop is aimed). */
+  rackPoint(): THREE.Vector3 {
+    return this.world(1, this.rack.x, GRILL_TOP + 0.2, this.rack.z);
   }
 
   /** The comal's sauce caddy: whatever squeeze bottles this town's menu uses (none at Red Mesa). */
@@ -1169,6 +1225,7 @@ export class CounterView {
     // The comal has no buttons: hot under the left two thirds, warm at the right end.
     if (mode === "comal") this.zones = ["hot", "hot", "warm"];
     this.tpressOn = mode === "comal" && tpress;
+    this.setRack([]);
     this.tpress.visible = this.tpressOn;
     this.tpressT = 0;
     this.tpress.userData.setPress(0);
@@ -1756,6 +1813,7 @@ export class CounterView {
       Object.assign(b, { closed: false, open: 1 });
     }
     this.setBoard([]);
+    this.setRack([]);
     this.spillCost = 0;
   }
 

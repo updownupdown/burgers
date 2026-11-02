@@ -97,6 +97,15 @@ async function start(town) {
       await send('touchMove', x, y);
     },
     async tap(pt) { await t.down(pt[0] + jit(2), pt[1] + jit(2)); await sleep(60 + rnd() * 50); await t.up(); await sleep(150); },
+    /** Press on `from`, pause like a person, carry it to `to` and let go (placing takes a drag). */
+    async drag(from, to, ms = 380) {
+      await t.down(from[0] + jit(3), from[1] + jit(3));
+      await sleep(80 + rnd() * 60);
+      await t.move(to[0] + jit(3), to[1] + jit(3), ms + rnd() * 100, { bow: jit(10) });
+      await sleep(50);
+      await t.up();
+      await sleep(220);
+    },
     /** A drag along screen points at a steady pace (painting sauce, folding, cutting). */
     async trace(pts, msPer = 14) {
       await t.down(...pts[0]);
@@ -186,7 +195,9 @@ async function trayBottle(t, kind) {
   await t.trace(full, 12);
   await sleep(300);
 }
-const tapBin = async (t, kind, n) => { const b = await t.hp('bin', { kind }); for (let i = 0; i < n; i++) await t.tap(b); };
+/** Toppings go on with a drag apiece (DESIGN §30: a tap on a pan only names it): onto the pie on the peel, or the active tray. */
+const binToPie = async (t, kind, n) => { for (let i = 0; i < n; i++) await t.drag(await t.hp('bin', { kind }), await t.proj((await t.oven()).peel.at)); };
+const binToTray = async (t, kind) => t.drag(await t.hp('bin', { kind }), await t.plate(await t.ev(() => window.__bv.game.active)));
 const crust = async (t, i) => { const o = await t.oven(); const d = o.spots[i].layers[0]; return d ? `rim ${d.rim.map((c) => c.toFixed(2)).join('/')} yaw ${d.yaw.toFixed(2)}` : 'empty'; };
 
 /**
@@ -312,20 +323,20 @@ async function toTray(t) {
 /** Build a pie on the peel at home. */
 async function buildPie(t, kind) {
   const o = await t.oven();
-  await t.tap(await t.proj(o.dough));
+  await t.drag(await t.proj(o.dough), await t.proj(o.peel.at));
   if (kind === 'fig') {
     await ladle(t, await t.hp('bottle', { sauce: 'oil' }), 'oil');
-    await tapBin(t, 'mozzarella', 3); await tapBin(t, 'ham', 3); await tapBin(t, 'fig', 4);
+    await binToPie(t, 'mozzarella', 3); await binToPie(t, 'ham', 3); await binToPie(t, 'fig', 4);
   } else if (kind === 'calzone') {
     await ladle(t, await t.proj(o.pot), 'redsauce');
-    await tapBin(t, 'mozzarella', 3); await tapBin(t, 'ham', 2); await tapBin(t, 'mushroom', 3);
+    await binToPie(t, 'mozzarella', 3); await binToPie(t, 'ham', 2); await binToPie(t, 'mushroom', 3);
     // Fold: press near the left edge of the dough and drag across the middle.
     const [x, y, z] = (await t.oven()).peel.at;
     await t.trace(line(...(await t.proj([x - 0.62, y, z])), ...(await t.proj([x + 0.4, y, z])), 10), 16);
     console.log('  folded?', (await t.oven()).peel.layers[0].folded);
   } else {
     await ladle(t, await t.proj(o.pot), 'redsauce');
-    await tapBin(t, 'mozzarella', 4);
+    await binToPie(t, 'mozzarella', 4);
   }
 }
 /** Fast-forward the game until `s` seconds after `t0`. */
@@ -371,7 +382,7 @@ const report = [];
     await t.shot('bake-even', OVEN_CLIP);
     await scoop(t, 0, 'slide', 'scoop-slide');
     await toTray(t);
-    await tapBin(t, 'basil', 1);
+    await binToTray(t, 'basil');
     await sleep(300);
     await t.shot('served-on-tray');
     const even = await serve(t);
@@ -388,7 +399,7 @@ const report = [];
     await t.shot('bake-unturned-rim', OVEN_CLIP);
     await scoop(t, 1, 'flick', 'scoop-mid-flick');
     await toTray(t);
-    await tapBin(t, 'basil', 1);
+    await binToTray(t, 'basil');
     const one = await serve(t);
     console.log('SERVED Harvest Red (unturned)', JSON.stringify(one));
     report.push(['Harvest Red, unturned', one]);
@@ -456,10 +467,16 @@ const report = [];
     await t.up();
     await sleep(300);
     console.log('  on the board:', JSON.stringify((await t.oven()).rest.layers.map((l) => l.kind)));
+    // The knife (DESIGN §30): tap it, tap the flatbread, then two slices across in the cut view.
     const bd = await t.proj((await t.oven()).rest.at);
-    await t.trace(line(bd[0] - 38, bd[1] - 4, bd[0] + 38, bd[1] - 4, 10), 14);
-    await t.trace(line(bd[0] - 38, bd[1] + 5, bd[0] + 38, bd[1] + 5, 10), 14);
-    console.log('  cuts', (await t.oven()).rest.layers[0]?.cuts);
+    await t.tap(await t.hp('knife'));
+    await t.tap(bd);
+    await sleep(450);
+    const [sx, sy, sw, sh] = (await t.ev(() => window.__bv.knife())).square;
+    await t.trace(line(sx + sw * 0.05, sy + sh * 0.5 + jit(6), sx + sw * 0.95, sy + sh * 0.5 + jit(6), 18), 16);
+    await t.trace(line(sx + sw * 0.5 + jit(6), sy + sh * 0.05, sx + sw * 0.5 + jit(6), sy + sh * 0.95, 18), 16);
+    await sleep(900);
+    console.log('  cuts', (await t.oven()).rest.layers[0]?.cuts, 'cutQ', await t.ev(() => window.__bv.counter.rest.layers[0]?.piece.cutQ));
     await t.shot('board-cut-in-four');
     // Off the board: the blade pushed in under it from the front, then up to the tray.
     await grab(t);
@@ -467,7 +484,7 @@ const report = [];
     await flick(t, 'up', { len: 38, ms: 120, drift: jit(10) });
     console.log('  off the board:', (await t.oven()).peel.layers.length ? 'yes' : 'NO');
     await toTray(t);
-    await tapBin(t, 'basil', 1);
+    await binToTray(t, 'basil');
     await t.shot('cut-on-tray');
     const cut = await serve(t);
     console.log('SERVED cut Harvest Red', JSON.stringify(cut));

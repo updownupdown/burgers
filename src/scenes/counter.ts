@@ -23,6 +23,7 @@ import { makeColdRail } from "../render/machines/coldRail";
 import { makeSauceBottle, makeSauceCaddy, type SauceCaddyObject } from "../render/machines/sauces";
 import { DRINK_TINT, makeCupStack, makeFountain, type FountainObject, makeFryBasket, makeFryer, makeIceWell, makeLidStackSized, makePackPad, makeTrashChute, FRY_BASKET, type FryerObject } from "../render/machines";
 import { CABIN } from "../render/cabin";
+import { makeKnife } from "../render/knife";
 import { wallMaterial } from "../render/walls";
 import { applyKitchenLight, KITCHEN_BG, type KitchenLight } from "../render/lighting";
 import { COUNTER_FOOD, SCALE } from "../render/units";
@@ -127,6 +128,13 @@ const POT_AT = { x: 3.3, z: 0.62 };
 const OVEN_CADDY = { x: 3.02, z: 2.2 };
 /** The board at Port Amber, in the bench's place and a little smaller so it fits. */
 const OVEN_BOARD = { x: BENCH_AT.x, z: BENCH_AT.z, scale: 0.88 };
+/**
+ * Where the board's knife lies (DESIGN §30), from the board's middle. At the press it lies along
+ * the board's right edge; at the oven a flatbread fills the board and the peel stands right beside
+ * it, so it lies on the counter at the front, past the peel's handle (narrower to tap there, so it
+ * never takes a grab meant for the handle).
+ */
+const KNIFE_AT = { press: { x: 0.86, y: BOARD.h, z: 0.02, tap: 1 }, oven: { x: 2.95, y: 0, z: 0.34, tap: 0.65 } };
 /** How high the peel rides over the front of the counter while it's carried. */
 const PEEL_HOVER = 0.28;
 /** The fryer's batter bowl (Orchard Isle), at the gravy well's spot. */
@@ -372,7 +380,8 @@ export type Hit =
   | { type: "bench" }
   | { type: "spot"; idx: number }
   | { type: "batter" }
-  | { type: "rack" };
+  | { type: "rack" }
+  | { type: "knife" };
 
 /** Something a pie sits on: the peel, a spot in the oven, the bench or the board. */
 export interface PieHolder {
@@ -733,6 +742,38 @@ export class CounterView {
     P.add(board);
     this.board = { obj: board, x: PRESS_BOARD.x, z: PRESS_BOARD.z, layers: [], food: null, foodKey: "", on: false };
     this.boardProxy = this.proxy(new THREE.BoxGeometry(BOARD.w, 0.7, BOARD.d), at(PRESS_BOARD.x, 0.3, PRESS_BOARD.z), { type: "board" }, board);
+    // The knife: its own object, so it can be picked up (DESIGN §30). Its hit box stands taller than
+    // the board's so a press on it is the knife's.
+    const knife = makeKnife();
+    knife.scale.setScalar(0.9);
+    P.add(knife);
+    this.knifeObj = knife;
+    this.knifeProxy = this.proxy(new THREE.BoxGeometry(0.62, 1.0, 1.3), at(PRESS_BOARD.x, 0.4, PRESS_BOARD.z), { type: "knife" }, knife);
+  }
+
+  /** The board's knife, and its hit box (DESIGN §30). */
+  knifeObj: THREE.Group | null = null;
+  private knifeProxy: THREE.Mesh | null = null;
+  /** Where the knife rests, world space. */
+  private knifeRest = new THREE.Vector3();
+  private knifeState: "rest" | "lifted" | "away" = "rest";
+  private knifeLift = 0;
+  /** Lay the knife on the board, lift it up (tapped: waiting for a tap on the food), or take it away (in hand). */
+  setKnife(state: "rest" | "lifted" | "away"): void {
+    this.knifeState = state;
+    if (this.knifeObj) this.knifeObj.visible = state !== "away" && !!this.board?.on;
+  }
+  /** Where the knife lies, world space (the playtest bot and hints). */
+  knifePoint(): THREE.Vector3 {
+    return this.knifeRest.clone().setY(this.knifeRest.y + 0.05);
+  }
+  private placeKnife(dt: number): void {
+    const k = this.knifeObj;
+    if (!k || !k.visible) return;
+    this.knifeLift += ((this.knifeState === "lifted" ? 1 : 0) - this.knifeLift) * Math.min(1, dt * 14);
+    const t = this.knifeLift;
+    k.position.copy(this.knifeRest).add(new THREE.Vector3(0, 0.55 * t + 0.04 * Math.sin(performance.now() / 160) * t, 0));
+    k.rotation.set(0.25 * t, 0, -0.35 * t);
   }
 
   /** The oven page (Orchard Isle): see OVEN_Z. Built once, shown in place of the grill. */
@@ -1247,6 +1288,16 @@ export class CounterView {
       this.boardProxy?.scale.set(k, 1, k);
       bd.on = board;
       bd.obj.visible = board;
+      if (this.knifeObj) {
+        const ka = mode === "oven" ? KNIFE_AT.oven : KNIFE_AT.press;
+        (mode === "oven" ? this.ovenGroup : this.pressGroup).add(this.knifeObj);
+        this.knifeRest.copy(this.world(1, spot.x + ka.x * k, ka.y, spot.z + ka.z * k));
+        this.knifeObj.position.copy(this.knifeRest);
+        this.knifeProxy?.position.copy(this.knifeRest).setY(0.4);
+        this.knifeProxy?.scale.set(ka.tap, 1, 1);
+        this.knifeLift = 0;
+        this.setKnife("rest");
+      }
       this.setBoard([]);
     }
     // Port Amber's board stands where the bench is.
@@ -2133,6 +2184,14 @@ export class CounterView {
     return true;
   }
 
+  /** Take the cheese slice off a patty (undo). */
+  removeTopping(item: GrillItem): void {
+    if (!item.topping) return;
+    item.obj.remove(item.topping.obj);
+    disposeObject(item.topping.obj);
+    item.topping = null;
+  }
+
   removeGrillItem(item: GrillItem): void {
     this.scene.remove(item.obj);
     disposeObject(item.obj);
@@ -2315,6 +2374,7 @@ export class CounterView {
   update(dt: number): void {
     this.time += dt;
     tickTacos(dt);
+    this.placeKnife(dt);
     // Camera glides between stops along the window line.
     const stop = STOPS[this.stop];
     this.camX += (stop.x + this.dragOffset - this.camX) * Math.min(1, dt * 10);

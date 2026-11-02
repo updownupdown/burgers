@@ -60,8 +60,12 @@ export interface KitchenWorld {
   bell: HTMLElement;
   /** The round counter buttons, one per counter. */
   tabs: HTMLElement[];
-  /** Sauce being squeezed: true once the view has zoomed onto the burger. */
-  sauce(): { locked: boolean } | null;
+  /** Sauce being put on: `armed` once a bottle was tapped (waiting for a tap on a burger), `locked` once the view has zoomed onto the burger. */
+  sauce(): { locked: boolean; armed: boolean } | null;
+  /** The tray whose top layer the header's Undo would take off right now, or -1. */
+  undoTray(): number;
+  /** The header's Undo button. */
+  undoButton: HTMLElement;
   /** Middle of the zoomed sauce view, and its radius, viewport px. */
   sauceCentre(): { x: number; y: number; r: number };
   eggStage(): EggStage | null;
@@ -263,9 +267,9 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
     const e = b.matrixWorld.elements;
     return k.project("tray", new THREE.Vector3(e[12], 0.3, e[14]));
   };
-  /** The Undo button on a tray, when it's showing. */
+  /** The header's Undo button, when it would take something off this tray. */
   const undoAt = (i: number): Pt | null => {
-    const r = rectOf(document.querySelectorAll<HTMLElement>(".tray-undo")[i] ?? null);
+    const r = k.undoTray() === i ? rectOf(k.undoButton) : null;
     return r ? { x: r.x + r.w / 2, y: r.y + r.h / 2 } : null;
   };
   const itemAt = (it: GrillItem): Pt => k.project("counter", c.world(HOME_PAGE, it.x, 0.95, it.z));
@@ -313,7 +317,7 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
       if (only) return null;
       return {
         title: "Oops, not that",
-        text: "That isn't next on the ticket. Tap the undo button on the tray to take the top layer off.",
+        text: undoAt(slotIdx) ? "That isn't next on the ticket. Tap Undo, top left, to put it back." : "That isn't next on the ticket. Drag it down off the tray into the trash.",
         gesture: undoAt(slotIdx) ? { kind: "tap", at: undoAt(slotIdx)! } : { kind: "drag", from: plate, to: trashAt() },
       };
     }
@@ -347,18 +351,20 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
 
     if (isSauce(next.kind)) {
       if (only && only !== "sauce") return null;
-      if (k.sauce()?.locked) {
+      const sc = k.sauce();
+      if (sc?.locked) {
         const z = k.sauceCentre();
-        return { title: "Squeeze", text: `Keep your finger moving in circles to cover the bun. Let go when it says Perfect.`, gesture: { kind: "circle", at: { x: z.x, y: z.y - z.r * 0.4 }, r: z.r * 0.35 }, whileDown: true, place: "top" };
+        return { title: "Squeeze", text: `Draw circles with your finger to cover the bun. Lift it when it says Perfect.`, gesture: { kind: "circle", at: { x: z.x, y: z.y - z.r * 0.4 }, r: z.r * 0.35 }, whileDown: true, place: "top" };
       }
+      if (sc?.armed) return { title: KIND_LABEL[next.kind], text: "Now tap the burger to put it on.", gesture: { kind: "tap", at: plate } };
       if (!onGrill) return back();
       const from = proxy((h) => h.type === "bottle" && h.sauce === next.kind);
-      // The very first burger: a tap is a quick squeeze. After that, drawing it on gets Perfect.
+      // The very first burger: tap the bottle, then the burger. After that, the quicker drag.
       if (s.lesson === 0)
-        return { title: KIND_LABEL[next.kind], text: `Tap the ${label(next.kind)} bottle for a quick squeeze onto the burger.`, gesture: from ? { kind: "tap", at: from } : null };
+        return { title: KIND_LABEL[next.kind], text: `Tap the ${label(next.kind)} bottle, then tap the burger.`, gesture: from ? { kind: "tap", at: from } : null };
       return {
         title: KIND_LABEL[next.kind],
-        text: `For a Perfect, press the ${label(next.kind)} bottle and drag it up onto the burger, then draw circles until it says Perfect. (A tap is a quick squeeze.)`,
+        text: `Quicker: press the ${label(next.kind)} bottle and drag it up onto the burger, then keep drawing circles until it says Perfect.`,
         gesture: from ? { kind: "dragCircle", from, to: plate, r: 22 } : null,
       };
     }
@@ -683,7 +689,7 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
         const note = rectOf(document.querySelectorAll<HTMLElement>(".sentback")[i] ?? null);
         return {
           title: "Sent back",
-          text: "They want something fixed: it's in the red note. Fix the tray (the undo button takes the top layer off), then tap Serve again.",
+          text: "They want something fixed: it's in the red note. Fix the tray (drag a wrong layer down off it into the trash), then tap Serve again.",
           ring: note,
           ok: "OK",
           place: "bottom",

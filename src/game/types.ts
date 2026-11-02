@@ -107,6 +107,8 @@ export interface Piece {
   scorch?: number;
   /** Cuts across a flatbread on the board (Port Amber cuts in four: two cuts). */
   cuts?: number;
+  /** How well it was cut with the knife, 0..1 (straight, through the middle; see game/knife.ts). Missing counts as clean. */
+  cutQ?: number;
   /** The order a flatbread was started for (its ticket ticks off as it's built on the peel). */
   forOrder?: number;
 }

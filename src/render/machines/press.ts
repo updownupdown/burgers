@@ -142,7 +142,7 @@ export function makePressBay(): PressBayObject {
   return g;
 }
 
-/** The cutting board (Harbor City): end-grain wood with a knife lying along its right edge. */
+/** The cutting board (Harbor City, and Port Amber's oven): end-grain wood. Its knife is separate (render/knife.ts). */
 export const BOARD = { w: 2.1, d: 1.3, h: 0.12 };
 let boardBaked: Baked | null = null;
 export function makeCuttingBoard(): THREE.Mesh {
@@ -152,9 +152,7 @@ export function makeCuttingBoard(): THREE.Mesh {
     p.add(rbox(w, h, d, 0.06), "#c98a52", { p: [0, h / 2, 0] });
     for (let i = 0; i < 5; i++) p.add(box(w - 0.14, 0.004, 0.025), "#b07440", { p: [0, h + 0.002, -d / 2 + 0.2 + i * 0.26], ink: false });
     p.add(cyl(0.07, 0.07, 0.02, 12), "#8a5a30", { p: [w / 2 - 0.18, h + 0.005, -d / 2 + 0.18], ink: false });
-    // The knife, lying along the board's right edge: a steel blade and a dark handle.
-    p.add(box(0.15, 0.03, 0.8), "#dde3e2", { p: [w / 2 - 0.16, h + 0.02, -0.2], ink: 0.012 });
-    p.add(rbox(0.13, 0.08, 0.38, 0.03), "#3a2a22", { p: [w / 2 - 0.16, h + 0.04, 0.38] });
+    // The knife lies along its right edge, but it's its own object now (render/knife.ts) so it can be picked up.
     boardBaked = bakeShared(p);
   }
   return bakedMesh(boardBaked);

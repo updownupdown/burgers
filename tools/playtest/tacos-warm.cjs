@@ -233,8 +233,8 @@ const QUESA = { ...RODEO, name: 'Quesadilla', price: 9, layers: [{ kind: 'flour'
       await warmAll(t, ['corn']);
       await tortillasToRack(t, spots, { at: 1, name: 'rodeo-two-in-rack' });
       console.log('  rack:', await rackNow(t));
-      const pork = await t.hp('bin', { kind: 'pork' });
-      for (let i = 0; i < 4; i++) await t.tap(pork);
+      // One drag from the well is one scoop into the rack (DESIGN §30: a tap only names it).
+      for (let i = 0; i < 4; i++) await binTo(t, 'pork', await rackPt(t));
       await t.shot('rodeo-pork-in-rack', { hint: true });
       for (const k of ['onion', 'cilantro', 'lime']) await binTo(t, k, await rackPt(t));
       await t.shot('rodeo-built-on-warm-side');
@@ -262,7 +262,7 @@ const QUESA = { ...RODEO, name: 'Quesadilla', price: 9, layers: [{ kind: 'flour'
       await t.tap(await t.proj(pin.at));
       await warmAll(t, ['corn']);
       await tortillasToRack(t, spots.slice(0, 2));
-      for (let i = 0; i < 2; i++) await t.tap(await t.hp('bin', { kind: 'pork' }));
+      for (let i = 0; i < 2; i++) await binTo(t, 'pork', await rackPt(t));
       for (let i = 0; i < 20; i++) { const it = near((await t.comal()).items, spots[2]); if (it.faces[0] >= 0.45 && it.faces[1] >= 0.3) break; await sleep(250); }
       await t.drag(await t.proj(near((await t.comal()).items, spots[2]).at), await rackPt(t));
       await binTo(t, 'onion', await rackPt(t));
@@ -287,8 +287,7 @@ const QUESA = { ...RODEO, name: 'Quesadilla', price: 9, layers: [{ kind: 'flour'
       await binTo(t, 'pork', await t.proj(first.at));
       await binTo(t, 'onion', await t.proj(first.at));
       await tortillasToRack(t, spots);
-      await t.tap(await t.hp('bin', { kind: 'pork' }));
-      await t.tap(await t.hp('bin', { kind: 'pork' }));
+      for (let i = 0; i < 2; i++) await binTo(t, 'pork', await rackPt(t));
       for (const k of ['onion', 'cilantro', 'lime']) await binTo(t, k, await rackPt(t));
       console.log('  rack:', await rackNow(t));
       await t.shot('street-in-rack');

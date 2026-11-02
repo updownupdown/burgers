@@ -797,3 +797,24 @@ bean, chibi townsfolk, storybook grown-ups, animal locals per region, and pencil
   antlers, sun hat, shades, cowboy hat, bandana), scaled to the head.
 - Code: `src/render/people.ts` (`buildPerson`, `Face`, `addHat`); `CustomerFigure` in
   `src/scenes/customers.ts` adds the bob, hop and glance.
+
+## 30. Undo, names, sauces and the knife
+
+James, after build #74: mistakes cost too much to fix, a tap that drops an ingredient by surprise is a mistake waiting to happen, sauce should work for people who don't find the drag, and the swipe that cut paninis and flatbreads was too easy to miss. Code: `src/game/undo.ts` (the rules), `src/game/knife.ts` (cut judging), `sauceGate` in `src/game/scoring.ts`, `src/scenes/cutzoom.ts`, and the Undo, Sauce and Knife sections of `src/main.ts`.
+
+- **Undo.** A round button at the left of the header (greyed while there's nothing to undo) puts back the last move made by hand. A move is something carried from one place to another: an ingredient from its pan, bin or stack (onto a tray, the grill, the comal, a press bay, the board, the rack, the pie on the peel), a patty or tortilla moved between grill, rack and tray, a sandwich into or out of a bay, a pie moved with the peel (oven spot, board, tray), fries into a carton, a cup put down or onto a tray, a carton onto a tray, a squeeze of sauce. Undo flies the thing back along a short hop (0.4 s): back to the spot it came from, or into its pan, bin or stack (the supply never runs out). The button goes to the page it needs.
+  - **Cooking stays.** Undo moves things; it never turns back the clock. A patty undone off a tray lands back on the grill with the cook it has now, and keeps cooking. Melt, char and toast stay too.
+  - **Trashing can be undone.** The thing comes back as it was, so binning and undoing gains nothing. A thing fresh from its pan dropped straight in the bin isn't a move (the pan is full again either way).
+  - **Never undone.** Serving (a served or sent-back tray's moves are forgotten), cooking and burning, and the verbs on food in place: flips, folds, smashing, an egg cracked, pressing, cutting, turning a pie in the oven.
+  - **Stale moves drop.** The history (24 moves) keeps the actual pieces. A move is offered only while its thing is still where the move put it and its old place can take it back (a grill spot that's free, a bay that's open and empty); otherwise it's dropped and the next one is offered. A new shift clears it.
+- **Names on tap.** A tap with no movement on an ingredient pan, bin, stack, well or the dough shows a small name bubble over the finger and places nothing. Placing always takes a drag; a drag from a scoop well (pork, beans, tuna) is one scoop. Verb taps are kept: flipping, cracking an egg, lowering a basket, a lid, a pour.
+- **Sauce, two ways**, for every bottle and every target, scored on coverage as before (§24):
+  - *Tap the bottle* (it lifts and the burgers it can go on pulse), *tap the burger*: the close-up opens and waits for one stroke; press, draw it on, lift, and it closes. Waits 8 s for the burger and 6 s for the stroke.
+  - *Press the bottle and drag it onto the burger* and spread, as before. **Edge grace:** no sauce lands until the nozzle has come in over the bun to within 70% of its radius (`SAUCE_GRACE`), so the thumb crossing the near edge on its way in leaves nothing; after that the edge is meant and counts.
+  - The ladle (red sauce from the pot) is dragged; a tap names it.
+- **The knife.** Harbor City cuts its paninis in half, Port Amber its flatbreads in four (`slice` orders). The knife lies by the board: along the board's right edge at the press, on the counter past the peel's handle at the oven. Same two ways as sauce: *tap the knife, then the food*, or *drag the knife onto the food*. Either opens the **cut view**, the board seen from above in a square over the counter (the truck dims), where a slice is drawn across: it cuts once the stroke has gone in one side and out the other. A panini takes one cut, a flatbread two (the second "the other way"). Dragged in, the slice carries straight on from the drag, so it may start a little way in.
+  - **Judged modestly** (`judgeCut`): the line from where the stroke went in to where it came out, on how near the middle it runs and how far the stroke wobbles off it; for quarters, the pair also on how square they cross (`quarterQuality`). The quality costs at most 5% of the dish (`cutFactor`), and below 0.45 the customer says "cut a bit crooked". The view says "Clean cut!", "A bit off the middle" or "A bit crooked".
+  - The old swipe across the board is gone; a drag on the board lifts the food.
+- **Fixing a tray.** The tray's own Undo button is gone (the header's covers it); a wrong layer is dragged off to the trash, and Undo brings it back if that was a mistake too.
+
+Supersedes the tray Undo button, tap-to-place on pans and bins, the sauce drag as the only way, and the swipe-to-cut in §24.

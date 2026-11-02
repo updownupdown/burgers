@@ -28,6 +28,8 @@ export interface Ui {
   menuBtn: HTMLButtonElement;
   /** The service bell: a ring calls the next person in line. */
   bell: HTMLButtonElement;
+  /** Undo, at the left of the header: carries the last move back (DESIGN §30). */
+  undo: HTMLButtonElement;
   bellCount: HTMLElement;
   bellLabel: HTMLElement;
   title: HTMLElement;
@@ -104,6 +106,7 @@ export function setTabArt(tab: HTMLButtonElement | undefined, page: string): voi
 export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   root.innerHTML = `
   <div class="hud">
+    <button class="icon-btn undo-btn" data-r="undo" disabled aria-label="Undo the last move" title="Undo">${icon("undo")}</button>
     <div class="hud-clock" role="timer" aria-label="Shift time">
       <span class="chip" data-r="timer">11:00am</span>
       <span class="hud-bar" aria-hidden="true"><i data-r="clockFill"></i></span>
@@ -151,6 +154,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     tabs,
     menuBtn: q("menuBtn") as HTMLButtonElement,
     bell: q("bell") as HTMLButtonElement,
+    undo: q("undo") as HTMLButtonElement,
     bellCount: q("bellCount"),
     bellLabel: q("bellLabel"),
     title: q("title"),

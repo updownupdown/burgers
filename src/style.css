@@ -926,12 +926,12 @@ html, body {
 /* The sauce fill bar is the shared level bar (.lvl), raised over the close-up and its dim. */
 .lvl.sauce { z-index: 6; }
 
-/* Serve and Undo on the trays (main.ts updateTrayActs): taps a first-time player can find. */
-#ui .tray-serve, #ui .tray-undo {
+/* Serve on the trays (main.ts updateTrayActs): a tap a first-time player can find. */
+#ui .tray-serve {
   pointer-events: auto; position: absolute; left: 0; top: 0; z-index: 4; margin: 0; border: 0; cursor: pointer;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
-#ui .tray-serve[hidden], #ui .tray-undo[hidden] { display: none; }
+#ui .tray-serve[hidden] { display: none; }
 #ui .tray-serve {
   width: 84px; height: 36px; border-radius: 999px; padding: 0 12px 0 10px;
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
@@ -941,12 +941,40 @@ html, body {
 }
 .tray-serve span { font-size: 17px; }
 @keyframes serve-glow { 50% { box-shadow: 0 0 0 2px #fff7f2, 0 0 0 6px rgb(216 87 58 / 0.35), 0 4px 10px rgb(42 38 34 / 0.3); } }
-#ui .tray-undo {
-  width: 36px; height: 36px; border-radius: 50%;
-  display: grid; place-items: center;
-  background: var(--bv-paper, #f6efe3); color: var(--bv-ink, #2a2622); font: 700 20px/1 var(--bv-font-ui);
-  box-shadow: 0 0 0 1.5px rgb(42 38 34 / 0.25), 0 3px 8px rgb(42 38 34 / 0.25);
+.tray-serve:active { transform-origin: center; filter: brightness(0.92); }
+#ui.saucing .tray-serve { opacity: 0; pointer-events: none; }
+
+/* Undo, at the left of the header (DESIGN §30): greyed out when there's nothing to take back. */
+#ui .undo-btn { flex: none; width: 34px; height: 34px; margin-left: -4px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+#ui .undo-btn svg { width: 18px; height: 18px; }
+#ui .undo-btn:disabled { border-color: var(--bv-rule, #d8d0c2); color: var(--bv-mute); opacity: 0.55; cursor: default; }
+#ui .undo-btn.pulse { animation: undo-pulse 0.35s ease-out; }
+@keyframes undo-pulse { 40% { transform: rotate(-28deg) scale(1.08); } }
+
+/* A tap on a pan, bin or bottle names it (DESIGN §30): a small bubble over the finger. */
+.name-bubble {
+  position: absolute; z-index: 7; pointer-events: none; transform: translate(-50%, -100%);
+  padding: 5px 11px 6px; border-radius: 999px; white-space: nowrap;
+  background: var(--bv-ink); color: var(--bv-paper); font: 700 14px/1.15 var(--bv-font-ui);
+  box-shadow: 0 3px 10px rgb(20 16 12 / 0.3);
 }
-.tray-undo:active, .tray-serve:active { transform-origin: center; filter: brightness(0.92); }
-#ui.saucing .tray-serve, #ui.saucing .tray-undo { opacity: 0; pointer-events: none; }
+.name-bubble::after {
+  content: ""; position: absolute; left: calc(50% + var(--tail, 0px)); bottom: -5px; margin-left: -5px;
+  border: 5px solid transparent; border-bottom: 0; border-top-color: var(--bv-ink);
+}
+.name-bubble[hidden] { display: none; }
+.name-bubble.pop { animation: name-pop 1.3s ease-out both; }
+@keyframes name-pop { 0% { opacity: 0; transform: translate(-50%, -80%) scale(0.85); } 12% { opacity: 1; transform: translate(-50%, -100%) scale(1); } 78% { opacity: 1; } 100% { opacity: 0; } }
+.name-bubble.hold { animation: none; }
+
+/* The knife's cut view (DESIGN §30): the zoomed board with the slice drawn over it, like the sauce close-up. */
+.cut-ui { position: absolute; pointer-events: none; z-index: 6; box-shadow: 0 0 0 200vmax rgb(20 16 12 / var(--dim, 0)); }
+.cut-ui[hidden] { display: none; }
+.cut-ui > * { opacity: var(--ui, 0); }
+.cut-ui svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.cut-ui .stroke { fill: none; stroke: #fff; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 2px rgb(20 16 12 / 0.6)); }
+.cut-ui .made { fill: none; stroke: rgb(42 38 34 / 0.75); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 2 6; }
+.cut-ui .sauce-score { top: 10px; }
+#ui.cutting .ticket { opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+#ui.cutting .tray-serve { opacity: 0; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .tray-serve { animation: none; } }

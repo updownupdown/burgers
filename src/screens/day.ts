@@ -12,6 +12,8 @@ import { askFor } from "../game/asks";
 import { SHIFTS_TO_UNLOCK } from "../game/travel";
 import { icon } from "../ui/icons";
 import { buildLine, methodTags, stackArt } from "./menuref";
+import { scrollShadows } from "./modal";
+import { morph, parseOne } from "../ui/morph";
 import "./day.css";
 
 /**
@@ -262,6 +264,30 @@ export function prepHtml(p: PrepInput): string {
       <button class="bv-btn primary lg" data-act="open">${icon("bell")}Open</button>
     </footer>
   </div>`;
+}
+
+/**
+ * Draw Prep into its host. The first time it builds the card; after that (`again`: a dish
+ * switched, the pacing or the window changed) it updates the same card in place, so it doesn't
+ * rise in again, keeps its scroll and keeps focus on what was tapped.
+ */
+export function renderPrep(host: HTMLElement, p: PrepInput, again: boolean): void {
+  const html = prepHtml(p);
+  const cur = again ? host.querySelector<HTMLElement>(":scope > .day-screen.prep") : null;
+  const next = cur && parseOne(html);
+  if (cur && next) {
+    // The scroll shadows are the card's own state: carry them over so they don't fade and back.
+    for (const c of ["sh-top", "sh-bot"]) next.classList.toggle(c, cur.classList.contains(c));
+    morph(cur, next);
+  } else {
+    host.innerHTML = html;
+    const card = host.querySelector<HTMLElement>(".prep");
+    const sc = card?.querySelector<HTMLElement>(".day-scroll");
+    if (card && sc) sc.addEventListener("scroll", () => scrollShadows(card, sc), { passive: true });
+  }
+  const card = host.querySelector<HTMLElement>(".prep");
+  const sc = card?.querySelector<HTMLElement>(".day-scroll");
+  if (card && sc) scrollShadows(card, sc);
 }
 
 /** Today's local ask (game/asks.ts): optional, a little extra money, and the shift counts as two. */

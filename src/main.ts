@@ -44,6 +44,10 @@ import { scrollShadows } from "./screens/modal";
 import { closeAll, initMenu, openHowTo, openMenu, openMenuRef, openSettings } from "./screens/menu";
 import { dropBack, pushBack } from "./screens/nav";
 import { simulate, type SimLevel } from "./game/devmode";
+import { coachOn, coachShowing, coachState, setCoachOn, skipLessonsFor, startCoach } from "./tutorial/coach";
+import { lessons } from "./tutorial/lessons";
+import { showWelcome, welcomeDue } from "./tutorial/welcome";
+import { modalOpen } from "./screens/modal";
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -71,11 +75,18 @@ try {
 } catch {
   // ignore
 }
-/** Chill, Balanced or Stressful (src/game/difficulty.ts); takes effect for new customers. */
+/**
+ * Chill, Balanced or Stressful (src/game/difficulty.ts), picked on Prep. A new player starts on
+ * Chill (the welcome card says so); a trip already under way that never picked keeps Balanced.
+ */
 let difficulty: Difficulty = "balanced";
+let pickedPacing = false;
 try {
   const saved = localStorage.getItem("bv-difficulty");
-  if (saved && saved in DIFFICULTY) difficulty = saved as Difficulty;
+  if (saved && saved in DIFFICULTY) {
+    difficulty = saved as Difficulty;
+    pickedPacing = true;
+  }
 } catch {
   // ignore
 }
@@ -91,6 +102,7 @@ function applyGfx(level: Gfx): void {
 const ui = buildUi(document.getElementById("ui")!, PAGES);
 
 const save = loadSave();
+if (!pickedPacing && !save.tutorialDone) difficulty = "chill";
 /** The town being played, as it is today (an event makes it busier and changes the crowd). */
 const stop = () => withEvent(townById(game.town), game.event);
 /** The bonus brought into this shift (one at most, picked on Prep). */
@@ -109,6 +121,8 @@ interface Slot {
   sentBack: string | null;
   /** Free sides they kept when they sent the order back: a customer never turns down free food. */
   kept: Pick<Plate, "fries" | "drink">;
+  /** On the first shift, which guided order this is (0, 1, 2; see tutorial/lessons.ts), else -1. */
+  lesson: number;
 }
 
 const emptyPlate = (): Plate => ({ layers: [], fries: null, drink: null });
@@ -145,7 +159,7 @@ const game = {
   event: null as TownEvent | null,
   rng: seededRng(Date.now() % 100000) as Rng,
   slots: [0, 1, 2].map(
-    (): Slot => ({ order: null, plate: emptyPlate(), patience: 0, maxPatience: 1, leaving: false, fig: null, ticketKey: "", bubble: null, sentBack: null, kept: { fries: null, drink: null } }),
+    (): Slot => ({ order: null, plate: emptyPlate(), patience: 0, maxPatience: 1, leaving: false, fig: null, ticketKey: "", bubble: null, sentBack: null, kept: { fries: null, drink: null }, lesson: -1 }),
   ),
   hintsShown: new Set<string>(),
   pendingUpdate: null as VersionInfo | null,
@@ -319,8 +333,15 @@ function ndcIn(r: Rect, x: number, y: number): THREE.Vector2 {
 function spawnCustomer(slotIdx: number, seed: number, early?: Order): void {
   const s = game.slots[slotIdx];
   let order = early ?? nextOrder();
-  // The very first order of the trip is the simplest burger, with no sides.
-  if (game.tutorial && game.ordered === 0) order = orderFromRecipe(order.id, stop().menu[0], false, null);
+  // The first shift's guided orders (tutorial/lessons.ts): the simplest burger, then the same with a
+  // small drink (so the counters get swiped), then once more on its own.
+  const lesson = game.tutorial && game.ordered < GUIDED ? game.ordered : -1;
+  if (lesson >= 0) {
+    const drink = lesson === 1 ? fountainFor(stop().region)[0] : null;
+    order = orderFromRecipe(order.id, stop().menu[0], false, drink, [], "S", "S");
+    if (drink) order.ice = null;
+  }
+  s.lesson = lesson;
   s.order = order;
   s.plate = emptyPlate();
   s.sentBack = null;
@@ -329,7 +350,8 @@ function spawnCustomer(slotIdx: number, seed: number, early?: Order): void {
   // Every extra slice of a counted topping is another trip to the bin.
   const slices = order.layers.reduce((n, l) => n + Math.max(0, (l.count ?? 1) - 1), 0);
   s.maxPatience = (50 + order.layers.length * 7 + slices * 2 + order.layers.filter((l) => l.kind === "patty" || PROTEINS.has(l.kind)).length * 22 + (BREADS.has(order.layers[0]?.kind) ? 14 : 0) + (order.fries ? 30 : 0) + (order.poutine ? 10 : 0) + (order.drink ? 9 : 0)) * (has("bench") ? 1.3 : 1) * CROWD[stop().crowd].patience * DIFFICULTY[game.pacing].patience;
-  if (game.tutorial && game.ordered === 0) s.maxPatience = 600;
+  // Guided orders wait as long as it takes.
+  if (lesson >= 0) s.maxPatience = 900;
   s.patience = s.maxPatience;
   s.leaving = false;
   if (game.ordered === game.criticAt && !game.tutorial) {
@@ -343,11 +365,17 @@ function spawnCustomer(slotIdx: number, seed: number, early?: Order): void {
   syncTray(slotIdx, false);
 }
 
+/** How many orders of the first shift are talked through (tutorial/lessons.ts). */
+const GUIDED = 3;
+
 /** A fresh order, as hard as this point in the shift. */
 function nextOrder(): Order {
   const level = Math.min(1, game.time / game.shiftLength);
   return makeOrder(game.orderSeq++, game.rng, level, shopStop());
 }
+
+/** Things the tutorial waits for the player to do once (tutorial/lessons.ts). */
+const coachCounts = { bell: 0, folds: 0, opens: 0 };
 
 /**
  * A tap on the bell calls the next person up. Taps within this many seconds of the last one only
@@ -385,7 +413,10 @@ function ringBell(): void {
     hintOnce("bell-full", `No room at the window: ${WINDOW[game.pacing]} at a time on ${DIFFICULTY[game.pacing].label}. Serve someone first.`, 3.5);
     return;
   }
-  if (callNext()) hintOnce("bell-called", "Next! More people at the window means more money, if you can keep up.", 3.5);
+  if (callNext()) {
+    coachCounts.bell++;
+    hintOnce("bell-called", "Next! More people at the window means more money, if you can keep up.", 3.5);
+  }
 }
 ui.bell.addEventListener("click", ringBell);
 
@@ -437,7 +468,7 @@ function serve(i: number): void {
   // Freebies kept from an earlier send-back count towards this verdict too.
   const plate: Plate = { ...s.plate, fries: s.plate.fries ?? s.kept.fries, drink: s.plate.drink ?? s.kept.drink };
   const r = scorePlate(s.order, plate);
-  const call = game.tutorial ? "accept" : verdict(r.score, game.pacing, !!s.sentBack, r.faulty, !!r.missing);
+  const call = s.lesson === 0 || s.lesson === 1 ? "accept" : verdict(r.score, game.pacing, !!s.sentBack, r.faulty, !!r.missing);
   if (call === "sendBack") return sendBack(i, r.missing ?? r.notes[0] ?? "this isn't quite right");
   if (call === "refuse") return refuse(i, r.notes[0] ?? "this isn't what I ordered", r.perks.length > 0);
   game.ratings.push(r.stars);
@@ -482,12 +513,12 @@ function serve(i: number): void {
   coinPop(i, pay + tip);
   setTimeout(() => sfx.coin(), 250);
   buzz(r.stars >= 2 ? [20, 40, 20] : 60);
-  if (game.tutorial) {
-    game.tutorial = false;
-    game.nextSpawn = game.time + 2;
+  // Two guided orders in, the trip counts as started: a restart won't go back to the lessons.
+  if (game.tutorial && s.lesson === 1) {
     save.tutorialDone = true;
     writeSave(save);
   }
+  s.lesson = -1;
 }
 
 /** Unordered sides on the plate: the customer keeps them whatever happens to the order. */
@@ -637,8 +668,9 @@ function hintOnce(key: string, text: string, seconds = 4): void {
   showHint(text, seconds);
 }
 
+/** The old text walkthrough of the first burger, for when tutorial mode (the thumb) is off. */
 function tutorialHint(): string | null {
-  if (!game.tutorial || game.phase !== "playing") return null;
+  if (!game.tutorial || game.phase !== "playing" || coachOn()) return null;
   const s = game.slots.find((sl) => sl.order);
   if (!s) return null;
   const layers = s.plate.layers;
@@ -2740,11 +2772,15 @@ ui.tickets.forEach((t, i) => {
     wasOpen = t.dataset.mode === "big";
     if (!counter.inHand && !wasOpen) {
       setActive(i);
+      if (!ticketOpen) coachCounts.opens++;
       ticketOpen = true;
     }
   });
   t.addEventListener("click", () => {
-    if (wasOpen && t.dataset.mode === "big" && !counter.inHand) ticketOpen = false;
+    if (wasOpen && t.dataset.mode === "big" && !counter.inHand) {
+      ticketOpen = false;
+      coachCounts.folds++;
+    }
     wasOpen = false;
   });
   // Scroll events don't bubble; listen in the capture phase for the list inside.
@@ -2858,10 +2894,8 @@ ui.root.addEventListener("click", (e) => {
   switch (act) {
     case "start":
     case "restart":
-      if (save.tutorialDone) {
-        showPrep();
-        screenShownAt = performance.now();
-      } else startShift();
+      showPrep();
+      screenShownAt = performance.now();
       break;
     case "prep-menu": {
       // Hide or show a recipe; the menu never drops below two.
@@ -3046,11 +3080,12 @@ initMenu({
   resume: () => {
     if (game.phase === "paused") game.phase = "playing";
   },
-  restart: () => {
-    if (save.tutorialDone) showPrep();
-    else startShift();
-  },
+  restart: () => showPrep(),
   quit: () => showTitle(),
+  replayTutorial: () => {
+    save.tutorialDone = false;
+    writeSave(save);
+  },
   simulate: (level) => {
     simulate(save, level === null ? null : (level as SimLevel));
     game.mapSel = save.town;
@@ -3139,11 +3174,9 @@ function startShift(): void {
     press: null,
   });
   // Prep's choices are fixed for the whole shift: pacing, the window and the bonus.
-  // The very first shift is the lunch rush on Balanced with no bonus.
-  const first = !save.tutorialDone;
-  game.pacing = first ? "balanced" : difficulty;
-  game.shift = first ? validShift(null) : validShift(save.shift);
-  game.bonus = !first && save.bonus && save.bonuses.includes(save.bonus) ? save.bonus : null;
+  game.pacing = difficulty;
+  game.shift = validShift(save.shift);
+  game.bonus = save.bonus && save.bonuses.includes(save.bonus) ? save.bonus : null;
   game.shiftLength = shiftSeconds(game.shift, stop().shiftLength);
   game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rep: save.rep, hidden: save.hidden, shift: game.shift, bonus: game.bonus, pacing: game.pacing });
   // A shift starts a fresh block of driving: the evening's hops count against the whole range.
@@ -3321,10 +3354,8 @@ function showTitle(night: NightShow | null = null): void {
     focus: game.mapSel,
     night,
     startShift: () => {
-      if (save.tutorialDone) {
-        showPrep();
-        screenShownAt = performance.now();
-      } else startShift();
+      showPrep();
+      screenShownAt = performance.now();
     },
     openResults: () => showClosing(),
     openReviews: () => showReviews(game.reviewFilter),
@@ -3432,6 +3463,7 @@ function endShift(): void {
     shift: game.shift,
   };
   save.last = closing;
+  save.tutorialDone = true;
   writeSave(save);
   ui.title.hidden = false;
   showClosing();
@@ -3479,15 +3511,28 @@ window.addEventListener("appinstalled", () => {
 // ---------------------------------------------------------------------------
 // Main loop
 
+/** Seconds since the last guided arrival on the first shift. */
+let guideGap = 0;
+
 function tick(dt: number): void {
   if (game.phase === "playing") {
-    // The shift clock waits while the first customer is talked through their burger.
-    if (!(game.tutorial && game.ordered >= 1)) game.time += dt;
+    // The first shift's guided orders (tutorial/lessons.ts): the clock waits while the first two are
+    // talked through, and people come one at a time. The first customer; once they're served, the
+    // next; and once that burger is under way, one more waits in line so the bell gets rung.
+    const guiding = game.tutorial && game.served < 2;
+    if (!(guiding && game.ordered >= 1)) game.time += dt;
+    let due = game.time >= game.nextSpawn;
+    if (guiding && game.ordered >= 1) {
+      const started = game.slots.some((s) => s.lesson === 1 && (s.plate.layers.length > 0 || counter.grillItems.length > 0));
+      const allowed = game.served === 0 ? 1 : started ? 3 : 2;
+      guideGap += dt;
+      due = game.ordered + game.line.length < allowed && guideGap > 1.2;
+      if (due) guideGap = 0;
+    }
     // People arrive while the window is open and join the line, unless it's long and they've never heard of the truck.
-    const tutorialHold = game.tutorial && game.ordered >= 1;
-    if (game.time < game.shiftLength && game.spawned < game.customers && game.time >= game.nextSpawn && !tutorialHold) {
+    if (game.time < game.shiftLength && game.spawned < game.customers && due) {
       game.spawned++;
-      if (game.rng() < joinChance(game.line.length, save.popularity)) {
+      if (guiding || game.rng() < joinChance(game.line.length, save.popularity)) {
         const max = linePatience(game.pacing, stop().crowd) * (has("bench") ? 1.3 : 1);
         game.line.push({ seed: Math.floor(game.rng() * 1000), patience: max, maxPatience: max });
       } else game.walkedPast++;
@@ -3496,7 +3541,7 @@ function tick(dt: number): void {
       game.nextSpawn = game.time + arrivalGap(hour, game.shift, game.shiftLength, game.customers) * (0.8 + game.rng() * 0.4);
     }
     // If nobody's about, don't make the player wait for the next arrival.
-    if (!game.slots.some((s) => s.order) && !game.line.length && game.nextSpawn > game.time + 2 && !game.tutorial) game.nextSpawn = game.time + 2;
+    if (!game.slots.some((s) => s.order) && !game.line.length && game.nextSpawn > game.time + 2 && !guiding) game.nextSpawn = game.time + 2;
 
     // The line: patience drains slowest at the front, where they're nearly there.
     for (let k = game.line.length - 1; k >= 0; k--) {
@@ -3512,7 +3557,7 @@ function tick(dt: number): void {
     if (has("rail") && game.line[0] && !game.line[0].order) game.line[0].order = nextOrder();
     // An empty window calls the first in line up by itself after a beat; otherwise it's the bell.
     if (game.slots.some((s) => s.order || s.fig)) game.emptySince = game.time;
-    else if (game.line.length && game.time - game.emptySince >= 0.7) callNext();
+    else if (game.line.length && (game.time - game.emptySince >= 0.7 || guiding)) callNext();
     if (game.bellTaps && game.time - game.bellAt > BELL_WINDOW) game.bellTaps = 0;
     customersView.setLine(game.line.map((w) => ({ seed: w.seed, mood: patienceMood(w.patience / w.maxPatience) })));
 
@@ -3679,7 +3724,7 @@ function updateUi(dt = 0): void {
     const order = s.order;
     const focused = i === game.active;
     const pct = s.patience / s.maxPatience;
-    const shownPct = game.tutorial && game.ordered === 1 && i === game.slots.findIndex((x) => x.order) ? 1 : pct;
+    const shownPct = s.lesson >= 0 ? 1 : pct;
     const mode = t.dataset.mode ?? "stub";
     // At the oven a pie is built on the peel and baked before it reaches the tray: until then the
     // ticket ticks off what's on the pie being made for this order.
@@ -3774,7 +3819,8 @@ function updateUi(dt = 0): void {
   const tut = tutorialHint();
   const now = performance.now();
   const text = now < hintUntil ? hintText : tut;
-  const show = !!text && text !== hintDismissed && game.phase === "playing";
+  // The tutorial's card says it better while it's up.
+  const show = !!text && text !== hintDismissed && game.phase === "playing" && !coachShowing();
   if (show && ui.hintText.textContent !== text) {
     ui.hintText.textContent = text;
     ui.hint.style.transform = "";
@@ -4097,6 +4143,65 @@ function frame(now: number): void {
 showTitle();
 requestAnimationFrame(frame);
 
+// Tutorial mode: the thumb (src/tutorial). It reads the game through this and never changes it.
+startCoach(
+  lessons({
+    save,
+    phase: () => game.phase,
+    prepOpen: () => prepOpen,
+    overlay: () => game.overlay,
+    mapSelected: () => document.querySelector<HTMLElement>(".home-town.sel")?.dataset.town ?? null,
+    kitchen: {
+      game,
+      counter,
+      trayView,
+      project: (band, v) => {
+        const cam = band === "counter" ? counter.camera : trayView.camera;
+        cam.updateMatrixWorld();
+        const p = v.clone().project(cam);
+        const r = bands[band];
+        return { x: r.x + ((p.x + 1) / 2) * r.w, y: r.y + ((1 - p.y) / 2) * r.h };
+      },
+      counterBand: () => ({ x: bands.counter.x, y: bands.counter.y, w: bands.counter.w, h: bands.counter.h }),
+      ticketOpen: () => ticketOpen,
+      tickets: ui.tickets,
+      bell: ui.bell,
+      tabs: ui.tabs,
+      sauce: () => (sauceDrag ? { locked: sauceDrag.locked } : null),
+      sauceCentre: () => {
+        const f = sauceFinal();
+        return { x: colX + f.x + f.w / 2, y: f.y + f.h / 2, r: f.w / 2 };
+      },
+      eggStage: () => eggHand?.stage ?? null,
+      holding: () => !!counter.inHand || !!eggHand || ptr?.mode === "held",
+      windowCap: () => WINDOW[game.pacing],
+      counts: coachCounts,
+    },
+  }),
+  { paused: () => modalOpen() || (game.phase === "playing" && document.hidden) },
+);
+skipLessonsFor(save.tutorialDone);
+
+// A brand-new player: say hello, and that tutorial mode and Chill pacing are on (both can be switched off here).
+if (welcomeDue(save)) {
+  showWelcome({
+    pacing: difficulty,
+    done: (tutorial, chill) => {
+      setCoachOn(tutorial);
+      if (!tutorial) {
+        save.tutorialDone = true;
+        writeSave(save);
+      }
+      difficulty = chill ? "chill" : "balanced";
+      try {
+        localStorage.setItem("bv-difficulty", difficulty);
+      } catch {
+        // Storage can be unavailable; the pick still holds for this session.
+      }
+    },
+  });
+}
+
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     cancelPointer();
@@ -4183,6 +4288,7 @@ window.addEventListener("blur", cancelPointer);
   }),
   save,
   showTitle,
+  coach: coachState,
   menu: { openMenu, openHowTo, openMenuRef, closeAll },
   manual: (on: boolean) => {
     manualClock = on;

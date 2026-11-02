@@ -23,6 +23,7 @@ import { clockLabel } from "../game/shift";
 import { recipeCount, type Stop } from "../game/stops";
 import { COUNTED, KIND_LABEL } from "../game/types";
 import { devOn, setDevOn, SIM_LEVELS, simLevel } from "../game/devmode";
+import { coachOn, setCoachOn } from "../tutorial/coach";
 
 export type { GfxLevel, MenuDeps } from "./modal";
 export { openHowTo } from "./howto";
@@ -269,6 +270,10 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
           ${field("gfx", "sparkle", "Graphics", GFX.find((g) => g.id === gfx)!.blurb, GFX.map((g) => ({ v: g.id, label: g.label })), gfx)}
         </section>
         <section class="menu-group">
+          <h3 class="menu-h">${icon("help")}Learning</h3>
+          ${toggle("tutorial", "help", "Tutorial mode", coachOn(), "A see-through thumb shows each new move. Turning it on plays the lessons again.")}
+        </section>
+        <section class="menu-group">
           <h3 class="menu-h">${icon("truck")}App</h3>
           ${row("update", "update", "Check for updates", "", "")}
           ${d.canInstall() ? row("install", "pin", "Install the app", "Add Bun Voyage to your home screen and play offline", "") : ""}
@@ -311,6 +316,13 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
         d.setSound(on);
         setToggle(btn, on);
         btn.querySelector(".lead")!.innerHTML = icon(on ? "sound-on" : "sound-off");
+        break;
+      }
+      case "tutorial": {
+        const on = !coachOn();
+        setCoachOn(on);
+        if (on) d.replayTutorial?.();
+        setToggle(btn, on);
         break;
       }
       case "haptics": {

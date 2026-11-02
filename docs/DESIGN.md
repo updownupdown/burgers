@@ -710,3 +710,15 @@ James picked **A · Painted cabin** from the kitchen view study (2026-11-02). Th
 - **Counter.** The counter camera keeps its zoom and angle but no longer draws the wall above the counter (only about 0.65 units of it), which frees about 85 px on a 390 × 844 phone: about 60% goes to the window, the rest to the trays. The trash chute is the last thing on the counter; after it come the counter's bright rolled front edge and its darker steel front. The counter steel carries fewer brush streaks. The fountain and the fryers moved forward to clear the shorter wall.
 
 Code: `src/render/cabin.ts` (colours and sizes), `src/render/walls.ts`, `CustomersView.buildFrame`, `TrayView.fitRoom`, `Counter.cropFor`/`setCrop`. Screenshots: `tools/playtest/view-study.cjs`.
+
+## 26. Tutorial mode
+
+Beyond the black tips: a coach that shows each move with a see-through thumb (dark disc, darker rim, white edge). A tap shrinks and dips; a swipe or drag shrinks and travels along a dashed, marching path to a breathing target ring; a hold presses and stays; sauce circles. A coral glow rings whatever to look at (the bell, a ticket, a meter), and a dusk card with a coral edge says what and why, placed clear of the thumb's path and of the tickets. The overlay never takes a touch except a card's OK button, so the game always plays underneath.
+
+- **On by default**, off in Settings → Learning → Tutorial mode. Turning it back on replays every lesson (and the guided first shift on the next shift).
+- **Welcome card** on a fresh trip: one line on what the game is, and two switches, Tutorial mode and Start on Chill (both on), with where to change each later. Trips that were under way before this count every lesson as learned.
+- **Map**: Prep & Open, the pacing row on Prep, Open; the shift summary; Sleep on the evening map; what the town dots mean; later, tapping a newly opened town, driving there, and the Garage once a bonus is affordable.
+- **The first shift is guided**: three orders, one at a time, and the clock stands still until two are served. Order 1 is the town's first burger with no sides, every step shown (patty first, bottom bun, sauce, flip, the meter's hatched band, layers in ticket order, top bun, swipe the tray up). Order 2 adds a small local drink: the bell lesson (a second customer is held in line), folding and opening tickets, swiping to the drinks counter, cup, ice, hold to pour to the line, lid, tray. The thumb comes back after 3.5 s of no progress. Order 3 is plain and the thumb only comes back after 6 s idle. Guided orders are always accepted and very patient, so nothing goes wrong while learning.
+- **First-time lessons, any shift**: fries (scoop, lower, lift, carton, fill, salt), eggs (tap to crack, shells to the bin, flip for over easy), toasted buns, smash (hold on a fresh patty, urgent), cheese melt, each sauce, wrong layer (drag to the bin), a patty about to burn (urgent), and a send-back.
+- Learned lessons are stored per device (`bv-coach`); the old one-line tips stay for players who switch the coach off.
+- Anchors come from the counters' hit proxies and the DOM, so 3D layout changes move the thumb with them.

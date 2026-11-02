@@ -78,11 +78,16 @@ export function stretchSauce(p: Piece, rx: number, rz: number): Piece {
   return { ...p, stroke: p.stroke?.map((q) => ({ x: q.x * rx, z: q.z * rz })) };
 }
 
-/** Tacos in a rack: one slot per tortilla, the fillings shared out between them. */
-export function makeTacoRack(pieces: Piece[]): DishObject {
+/**
+ * Tacos in a rack: one slot per tortilla, the fillings shared out between them. `slots` draws at
+ * least that many slots (the rack on the comal's warm end always has room for four), the empty
+ * ones bare.
+ */
+export function makeTacoRack(pieces: Piece[], slots = 0): DishObject {
   const g = new THREE.Group();
   const tortillas = pieces.filter((p) => TORTILLAS.has(p.kind));
-  const n = Math.max(1, tortillas.length);
+  const n = Math.max(1, slots, tortillas.length);
+  const filled = Math.max(1, tortillas.length);
   const kind = (tortillas[0]?.kind ?? "corn") as "corn" | "flour";
   const shell = SHELL_SIZE[kind];
   const pitch = Math.max(RACK_PITCH, shell.w + 0.2);
@@ -122,9 +127,9 @@ export function makeTacoRack(pieces: Piece[]): DishObject {
     }
     // Scoops (pork, beans) and an egg go one per taco; onion, cilantro and the rest are sprinkled on every one.
     const scoop = p.kind === "pork" || p.kind === "beans" || p.kind === "egg";
-    const slots = scoop ? [(per.get(p.kind) ?? 0) % n] : xs.map((_, i) => i);
+    const into = scoop ? [(per.get(p.kind) ?? 0) % filled] : xs.slice(0, filled).map((_, i) => i);
     per.set(p.kind, (per.get(p.kind) ?? 0) + 1);
-    for (const i of slots) {
+    for (const i of into) {
       let o: THREE.Object3D;
       if (p.kind === "egg") {
         // A fried egg folded into the taco.

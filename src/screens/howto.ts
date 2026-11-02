@@ -199,12 +199,13 @@ function comalSec(tpress: boolean): Sec {
     chip: "Comal",
     icon: "flame",
     title: "The comal",
-    lede: "In Red Rock the grill makes way for a comal: one long steel plate, hot on the left two thirds and warm on the right end. No buttons to set.",
+    lede: "In Red Rock the grill makes way for a comal: one long steel plate, hot on the left two thirds and warm on the right end, where the taco rack stands. No buttons to set.",
     fig: `${foldSvg()}
       <div class="hw-stack">${stackArt(TACOS)}<p class="hw-cap">Street Tacos: 3 corn tortillas, a scoop of pork in each, onion, cilantro and a lime wedge.</p></div>`,
     points: [
-      "<b>Tortillas</b> warm on the hot side in about 6 seconds: pale and stiff, then <b>soft with brown spots</b> (done), then hard. Watch the meter under each one. Park finished ones on the warm end.",
-      "<b>Tacos</b>: drag each warm tortilla up to the tray; it stands in the rack. Each <b>tap on the pork or bean well</b> is one scoop onto the tray, one per taco; the toppings go on once.",
+      "<b>Tortillas</b> warm on the hot side in about 6 seconds: pale and stiff, then <b>soft with brown spots</b> (done), then hard. Watch the meter under each one. The warm end keeps things warm without cooking them on.",
+      "<b>Tacos</b> are built in the <b>taco rack</b> on the warm end: drag each warm tortilla into it, while the next ones warm on the hot side. With tacos in the rack, each <b>tap on the pork or bean well</b> is one scoop into it, one per taco; tap or drag the toppings in <b>once</b> (they go over every taco). Then <b>drag the rack up to the tray</b>, and squeeze any salsa or crema there.",
+      "Tacos only start to cool once they're on the tray, so take your time in the rack. On a tray, tacos go cold from the <b>last one placed</b>, not the first.",
       "<b>Quesadilla</b>: a flour tortilla on the comal, cheese on it, then <b>fold it</b>: press its edge and drag across the middle. <b>Flip it once</b>, and take it off when the cheese has melted, before the shell goes dark. Forgot something? <b>Press and hold</b> it to unfold it.",
       "<b>Pineapple</b> chars on the comal like on the grill; flick it to flip. Eggs crack on the hot side: flip once for over easy.",
       "<b>Tostadas</b> come from the fryer: drop a corn tortilla in an empty basket and lower it. The fryer also makes <b>chips</b> from the tortilla wedges, and nachos get jalapeños and queso where a poutine gets curds and gravy.",

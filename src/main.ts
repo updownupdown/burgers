@@ -22,11 +22,13 @@ import { SCALE } from "./render/units";
 import { dressCup } from "./render/cup";
 import { makeCarton, makeCup, makeFood, makeFries, sliceSpot, stackBases } from "./render/food";
 import { TORTILLA_R } from "./render/tacos";
+import { makeTacoRack } from "./render/dishes";
+import { ageLayers, freshen, isTacoRun, joinTacos, RACK_FILL, RACK_SLOTS } from "./game/hold";
 import { makeFlatbread } from "./render/flatbread";
 import { makePeel, makeSauceLadle, PEEL } from "./render/machines/oven";
 import { flickOf, slideArmed, slidUnder, type Flick } from "./game/peel";
 import { disposeObject } from "./render/materials";
-import { CounterView, CUP_IN_HAND, EMPTY_PACK, STOPS, GRILL_SCALE, GRILLE_ZONE, FLAT_ZONE, HEARTH_Y, HOME_PAGE, PAGES, PEEL_Y, GRILL_TOP, ZONE_START, type GrillItem, type Hit, type PeelTarget, type PieHolder, type PiePlace } from "./scenes/counter";
+import { CounterView, CUP_IN_HAND, RACK_SCALE, EMPTY_PACK, STOPS, GRILL_SCALE, GRILLE_ZONE, FLAT_ZONE, HEARTH_Y, HOME_PAGE, PAGES, PEEL_Y, GRILL_TOP, ZONE_START, type GrillItem, type Hit, type PeelTarget, type PieHolder, type PiePlace } from "./scenes/counter";
 import { PLATE } from "./render/machines/press";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
@@ -801,7 +803,7 @@ function tutorialHint(): string | null {
 
 type Payload =
   | { type: "piece"; piece: Piece; fromGrill: { x: number; z: number } | null; fromPlate?: number; fromBasket?: number }
-  | { type: "stack"; layers: Layer[]; grill?: { x: number; z: number }; fromPlate?: number; bay?: number; board?: boolean; peel?: boolean; spot?: number }
+  | { type: "stack"; layers: Layer[]; grill?: { x: number; z: number }; fromPlate?: number; bay?: number; board?: boolean; peel?: boolean; spot?: number; rack?: boolean }
   | { type: "fries"; cook: number; basket: number | null; amount: number; fry?: FryKind; fromBatter?: boolean }
   | { type: "carton"; size: FriesSize; cook: number; fill: number; pack: number; salt: number; curds: boolean; gravy: boolean; fry?: FryKind; fromPlate?: number }
   | { type: "salt"; sugar?: boolean }
@@ -828,7 +830,7 @@ interface Pointer {
   x: number;
   y: number;
   band: ReturnType<typeof bandAt>;
-  mode: "none" | "swipe" | "held" | "grill" | "basket" | "pour" | "sauce" | "plate" | "wipe" | "rub" | "egg" | "bay" | "handle" | "board" | "tpress" | "ladle" | "peel" | "fold" | "spot" | "bench";
+  mode: "none" | "swipe" | "held" | "grill" | "basket" | "pour" | "sauce" | "plate" | "wipe" | "rub" | "egg" | "bay" | "handle" | "board" | "tpress" | "ladle" | "peel" | "fold" | "spot" | "bench" | "rack";
   /** The sauce or oil being spread on a pie being built (the oven page). */
   ladle?: SauceKind;
   /** A press near the side of an unbaked pie on the peel or the bench (pie-local): dragging it across the middle folds it into a calzone. */
@@ -877,7 +879,13 @@ function stackVisual(layers: Layer[]): THREE.Object3D {
   return g;
 }
 
-function payloadVisual(p: Payload): THREE.Object3D {
+function payloadVisual(p: Payload, tray = false): THREE.Object3D {
+  if (p.type === "stack" && p.rack) {
+    // The taco rack off the comal, carried whole: four slots in hand, as many as it holds over a tray.
+    const g = makeTacoRack(p.layers.map((l) => l.piece), tray ? 0 : RACK_SLOTS).group;
+    if (!tray) g.scale.setScalar(GRILL_SCALE * RACK_SCALE);
+    return g;
+  }
   if (p.type === "stack") return stackVisual(p.layers);
   if (p.type === "piece") {
     const o = makeFood(p.piece, "top");
@@ -914,7 +922,7 @@ function payloadVisual(p: Payload): THREE.Object3D {
 
 function startHold(pt: Pointer, payload: Payload): void {
   const counterObj = payloadVisual(payload);
-  const trayObj = payloadVisual(payload);
+  const trayObj = payloadVisual(payload, true);
   if (payload.type !== "piece" && payload.type !== "stack") trayObj.scale.multiplyScalar(0.55);
   if (payload.type === "stack") trayObj.scale.setScalar(1);
   // Over the trays, a cup or carton shows exactly where it will land, at the size it lands at.
@@ -982,6 +990,19 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
     showHint("That customer is on their way out.", 1.5);
     return false;
   }
+  if (payload.type === "stack" && isTacoRun(payload.layers)) {
+    // Tacos (the rack off the comal, or one tortilla built there) join the tacos on the tray. They
+    // only start to go cold here, and the run is as fresh as its newest taco.
+    if (s.plate.layers.length && !isTacoRun(s.plate.layers)) {
+      showHint("That tray already has something else on it.", 2);
+      return false;
+    }
+    s.plate.layers.splice(0, s.plate.layers.length, ...joinTacos(s.plate.layers, payload.layers));
+    syncTray(slot, true);
+    trayView.plates[slot].kick(0.4);
+    if (payload.rack) hintOnce("rack-tray", game.slots[slot].order?.layers.some((l) => isSauce(l.kind)) ? "On the tray. Squeeze the salsa or crema over them here: sauce goes on at the tray." : "On the tray. Tacos only start to cool once they leave the comal.", 3.5);
+    return true;
+  }
   if (payload.type === "stack") {
     // A cheesed patty off the grill goes on as one piece.
     for (const l of payload.layers) s.plate.layers.push(l);
@@ -993,6 +1014,8 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
     const p = payload.piece;
     const l = landing(s.plate.layers, p, spread);
     s.plate.layers.push(l);
+    // A taco run on a tray goes cold from the last taco placed, not the first.
+    if (TORTILLAS.has(p.kind) && isTacoRun(s.plate.layers)) freshen(s.plate.layers, [l]);
     syncTray(slot, true);
     trayView.plates[slot].kick(COUNTED.has(p.kind) ? 0.05 : spread * 4);
     if (s.order && COUNTED.has(p.kind)) {
@@ -1070,12 +1093,19 @@ function finishHold(pt: Pointer): void {
     return;
   }
 
-  if (payload.type === "piece" && SCOOPED.has(payload.piece.kind) && payload.fromPlate === undefined && !payload.fromGrill && !pt.moved && dur < 450) {
+  const tapped = payload.type === "piece" && payload.fromPlate === undefined && !payload.fromGrill && !pt.moved && dur < 450;
+  if (tapped && counter.middle === "comal" && counter.page === HOME_PAGE && rackHasTacos() && RACK_FILL.has(payload.piece.kind)) {
+    // With tacos standing in the rack on the comal, a tap on a well or a pan is one scoop (or one
+    // pinch) into the rack.
+    if (rackDrop(payload)) sfx.plop();
+    return;
+  }
+  if (tapped && SCOOPED.has(payload.piece.kind)) {
     // The tuna well, and the pork and bean wells: a tap is one scoop onto the tray in front.
     addToPlate(game.active, payload, 0.04);
     sfx.plop();
     if (payload.piece.kind === "tuna") hintOnce("tuna", "Each tap is one scoop of tuna onto the tray. A Tuna Melt takes two.", 3);
-    else hintOnce("scoop", "Each tap is one scoop onto the tray: one per taco. Or drag a scoop onto a tortilla on the comal.", 3.5);
+    else hintOnce("scoop", "Each tap is one scoop onto the tray: one per taco. With tortillas standing in the rack on the comal, a tap scoops into the rack instead.", 3.5);
     return;
   }
 
@@ -1101,14 +1131,18 @@ function finishHold(pt: Pointer): void {
     const gTop = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), GRILL_TOP);
     const station = payload.type === "empty" || payload.type === "carton" || payload.type === "drink" || payload.type === "ice" || payload.type === "lid" || payload.type === "curds" || payload.type === "gravy" || (payload.type === "fries" && payload.basket !== null);
     if (station) done = dropAtStation(payload, g);
-    if (!done && counter.overTrash(g)) {
+    if (!station && counter.overRack(gTop) && (payload.type === "piece" || (payload.type === "stack" && !payload.rack))) {
+      // The taco rack on the comal's warm end: tortillas stand in it, fillings go in it.
+      done = rackDrop(payload);
+      if (done) sfx.plop();
+    } else if (!done && counter.overTrash(g)) {
       // Every counter has a trash slot along its front edge.
       sfx.thud();
       buzz(20);
       done = true;
     } else if (station) {
       // Missed the station: it goes back where it came from below.
-    } else if (payload.type === "stack") {
+    } else if (payload.type === "stack" && !payload.rack) {
       // A single grill item can go back on the grill.
       const over = counter.overGrill(gTop);
       const [base, top] = payload.layers.map((l) => l.piece);
@@ -1151,7 +1185,7 @@ function finishHold(pt: Pointer): void {
           (under.piece.fill ??= []).push(payload.piece);
           sfx.plop();
           if (payload.piece.kind === "jack") hintOnce("quesa-fold", "Now fold it: drag the tortilla's edge across its middle. Then flip it once.", 4);
-          else hintOnce("taco-fill", "Drag it up by its middle to take it to the tray. Dragging its edge across the middle folds it.", 4);
+          else hintOnce("taco-fill", "Drag it by its middle into the taco rack on the warm end, or up to the tray. Dragging its edge across the middle folds it.", 4);
           done = true;
         }
       } else if (under && payload.piece.kind === "cheese" && counter.addTopping(under, payload.piece)) {
@@ -1238,6 +1272,7 @@ function finishHold(pt: Pointer): void {
     }
     if (payload.type === "stack" && payload.bay !== undefined) counter.setBay(counter.bays[payload.bay], payload.layers);
     if (payload.type === "stack" && payload.board) counter.setBoard(payload.layers);
+    if (payload.type === "stack" && payload.rack) counter.setRack(payload.layers);
     if (payload.type === "stack" && payload.peel) counter.setPeel(payload.layers);
     if (payload.type === "stack" && payload.spot !== undefined) counter.setSpot(payload.spot, payload.layers);
     // Battered zucchini dropped nowhere useful goes back in the bowl.
@@ -1418,6 +1453,37 @@ function backOnGrill(piece: Piece, at: { x: number; z: number }): void {
   counter.addGrillItem(piece, at.x, at.z, undefined, under && counter.canStack(under, piece) && Math.hypot(under.x - at.x, under.z - at.z) < 0.1 ? under : null);
 }
 
+/** Tortillas stand in the comal's taco rack. */
+function rackHasTacos(): boolean {
+  return counter.rack.layers.some((l) => TORTILLAS.has(l.piece.kind));
+}
+
+/**
+ * Something dropped on the taco rack on the comal's warm end (after build #73): a warm tortilla
+ * (with whatever was laid on it on the comal) stands in the next slot, and a filling goes in with
+ * the tacos already there, as on a tray. In the rack nothing cooks on or goes cold. Sauce goes on
+ * at the tray. False (with a hint) if it can't go in.
+ */
+function rackDrop(payload: Extract<Payload, { type: "piece" | "stack" }>): boolean {
+  const layers: Layer[] = payload.type === "stack" ? payload.layers : [{ piece: payload.piece, offX: 0, offZ: 0 }];
+  const base = layers[0]?.piece;
+  if (!base) return false;
+  const ls = counter.rack.layers;
+  const tacos = ls.filter((l) => TORTILLAS.has(l.piece.kind)).length;
+  const more = layers.filter((l) => TORTILLAS.has(l.piece.kind)).length;
+  if (isSauce(base.kind)) return showHint("Salsa and crema go on at the tray.", 2), false;
+  if (TORTILLAS.has(base.kind) && base.folded) return showHint("A quesadilla goes straight up to a tray.", 2), false;
+  if (!TORTILLAS.has(base.kind) && !RACK_FILL.has(base.kind)) return showHint(`${KIND_LABEL[base.kind]} doesn't go in the taco rack.`, 2), false;
+  if (!more && !tacos) return showHint("Stand a warm tortilla in the rack first, then fill it.", 2.5), false;
+  if (tacos + more > RACK_SLOTS) return showHint(`The rack holds ${RACK_SLOTS} tacos. Take this one up to the tray first.`, 2.5), false;
+  if (ls.length + layers.length > 24) return showHint("That's plenty in the rack.", 1.5), false;
+  if (more && cookLevel(base) < COOK_SCALE[base.kind as Cookable].done * 0.5) return showHint("Warm it on the hot side first: the rack only keeps tortillas warm.", 2.5), false;
+  counter.setRack(joinTacos(ls, layers));
+  if (more) hintOnce("rack-in", "In the rack, where tacos stay warm. Tap the pork or bean well for a scoop in each, drop the toppings in once, then drag the rack up to the tray.", 4.5);
+  else if (!SCOOPED.has(base.kind) && base.kind !== "egg") hintOnce("rack-sprinkle", "Toppings go in once: they're sprinkled over every taco in the rack.", 3);
+  return true;
+}
+
 /** A tortilla and what's on it, as one comal item (the fillings ride along in piece.fill). */
 function onTortilla(layers: Layer[]): Piece {
   const [base, ...rest] = layers.map((l) => l.piece);
@@ -1436,7 +1502,7 @@ function zoneHint(x: number): void {
   const zone = counter.zoneAt(x);
   const heat = counter.zones[zone];
   if (counter.middle === "comal") {
-    if (heat === "warm") hintOnce("comal-warm", "The right end of the comal only keeps things warm. Cook on the hot side, then park them here.", 3.5);
+    if (heat === "warm") hintOnce("comal-warm", "The right end of the comal keeps things warm without cooking them on. Warm tortillas on the hot side, then stand them in the taco rack.", 4);
     else hintOnce("comal-hot", "Tortillas warm in about 6 seconds: soft, with brown spots. Don't leave them till they go hard.", 4);
     return;
   }
@@ -1880,6 +1946,7 @@ canvas.addEventListener("pointerdown", (e) => {
         if (Math.hypot(at.x - it.x, at.z - it.z) > R * 0.3) pt.foldFrom = at;
       }
     }
+    else if (hit.type === "rack") pt.mode = "rack";
     else if (hit.type === "tpress") {
       pt.mode = "tpress";
       sfx.pop();
@@ -2173,6 +2240,20 @@ canvas.addEventListener("pointermove", (e) => {
     case "peel":
       movePeel(pt);
       break;
+    case "rack": {
+      // The taco rack on the comal: a drag lifts it whole, to go up to a tray.
+      if (!pt.moved) break;
+      const layers = counter.rack.layers;
+      if (!layers.length) {
+        showHint("Stand warm tortillas in the rack and fill them there, then drag it up to a tray.", 2.5);
+        pt.mode = "none";
+        break;
+      }
+      counter.setRack([]);
+      startHold(pt, { type: "stack", layers, rack: true });
+      hintOnce("rack-lift", "Up to a tray with it. A tray's tacos start to cool from when they land.", 3);
+      break;
+    }
     case "board": {
       const bd = counter.board!;
       if (!pt.moved || !bd.layers.length) break;
@@ -2876,6 +2957,9 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
         const b = counter.bays[pt.hit.idx];
         showHint(b.closed ? "Swipe the handle up to lift the lid." : b.layers.length ? "Pull the handle down to close it, or drag the food out." : "Drop bread or chicken in here, or build a sandwich in it.", 2);
       }
+      break;
+    case "rack":
+      if (!cancelled && !pt.moved) showHint(rackHasTacos() ? "Drag the rack up to a tray when the tacos are ready." : "The taco rack: stand warm tortillas in it and fill them here, where they stay warm.", 2.5);
       break;
     case "board":
       if (!cancelled && !pt.moved) {
@@ -3779,7 +3863,7 @@ function tick(dt: number): void {
 
     // Cooked food waiting on a tray slowly goes cold and dry (the warm grill zone is the place to hold it).
     for (const s of game.slots)
-      for (const l of s.plate.layers) if ((GRILLABLE.has(l.piece.kind) || BREADS.has(l.piece.kind) || PROTEINS.has(l.piece.kind) || l.piece.kind === "dough") && Math.max(...l.piece.cook) > 0.15) l.piece.held = (l.piece.held ?? 0) + dt * (has("lamp") ? 0.5 : 1);
+      ageLayers(s.plate.layers, dt, has("lamp") ? 0.5 : 1);
 
     if (counter.middle === "oven") {
       const o = game.slots[game.active]?.order;
@@ -3790,6 +3874,9 @@ function tick(dt: number): void {
       const o = game.slots[game.active]?.order;
       if (o?.layers.some((l) => l.kind === "chicken" || l.kind === "veggie")) hintOnce("press-first", "The patty in this one goes in the press on its own first. Then build the sandwich and press it again.", 4.5);
       else if (o?.slice) hintOnce("slice-order", "Harbor City cuts its paninis: after pressing, put it on the board and swipe across it.", 4.5);
+    } else if (counter.middle === "comal") {
+      const base = game.slots[game.active]?.order?.layers[0];
+      if (base && TORTILLAS.has(base.kind) && !base.folded) hintOnce("taco-order", "Tacos: warm the tortillas on the hot side, stand them in the rack on the warm end and fill them there, then drag the rack up to the tray.", 4.5);
     } else if (!game.hintsShown.has("melt-order") && game.slots[game.active]?.order?.layers.some((l) => l.melted))
       hintOnce("melt-order", "This one wants melted cheese: drop the slice on the patty while it's on the grill.", 4.5);
     // Elk Pass is a side road, so the first smash order may turn up in Summit City untaught.
@@ -3925,7 +4012,9 @@ function updateUi(dt = 0): void {
     // At the oven a pie is built on the peel and baked before it reaches the tray: until then the
     // ticket ticks off what's on the pie being made for this order.
     const pieShown = !s.plate.layers.length && counter.middle === "oven" ? piesFor(order.id) : null;
-    const plate = pieShown ? { ...s.plate, layers: pieShown } : s.plate;
+    // At the comal the active ticket also ticks off the tacos being filled in the rack.
+    const rackShown = focused && counter.middle === "comal" && counter.rack.layers.length && (!s.plate.layers.length || isTacoRun(s.plate.layers)) ? [...s.plate.layers, ...counter.rack.layers] : null;
+    const plate = pieShown ? { ...s.plate, layers: pieShown } : rackShown ? { ...s.plate, layers: rackShown } : s.plate;
     const key = `${order.id}|${focused}|${mode}|${t.style.width}|${plate.layers.map((l) => l.piece.kind).join(",")}|${s.plate.fries ? `${s.plate.fries.size}${+!!s.plate.fries.salt}${+!!s.plate.fries.curds}${+!!s.plate.fries.gravy}` : ""}|${s.plate.drink ? `${s.plate.drink.flavor}${s.plate.drink.size}${+!!s.plate.drink.ice}${+!!s.plate.drink.lid}` : ""}`;
     if (key !== s.ticketKey || !t.dataset.fit) {
       t.classList.toggle("active", focused);
@@ -4483,6 +4572,7 @@ window.addEventListener("blur", cancelPointer);
     zones: [...counter.zones],
     items: counter.grillItems.map((g) => ({ kind: g.piece.kind, at: g.obj.position.toArray(), cook: cookLevel(g.piece), faces: [...g.piece.cook], folded: !!g.piece.folded, fill: (g.piece.fill ?? []).map((f) => ({ kind: f.kind, melt: f.melt ?? 0 })), flips: g.piece.flips ?? 0, r: TORTILLA_R[g.piece.kind as "corn" | "flour"] ? TORTILLA_R[g.piece.kind as "corn" | "flour"] * GRILL_SCALE : 0 })),
     tpress: counter.tpressOn ? counter.tpressPoint().toArray() : null,
+    rack: { at: counter.rackPoint().toArray(), layers: counter.rack.layers.map((l) => ({ kind: l.piece.kind, cook: cookLevel(l.piece), held: l.piece.held ?? 0 })) },
     zonePoints: [0, 1, 2].map((i) => counter.zonePoint(i).toArray()),
     baskets: counter.baskets.map((b, i) => ({ loaded: b.loaded, down: b.down, fry: b.fry, cook: b.cook, shell: b.shell ? cookLevel(b.shell) : null, at: counter.fryTagPoint(i).toArray() })),
     packs: counter.packs.map((p) => ({ size: p.size, fill: p.fill, fry: p.fry, at: [p.x, p.y, p.z] })),

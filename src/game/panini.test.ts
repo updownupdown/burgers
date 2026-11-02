@@ -141,12 +141,12 @@ describe("panini scoring", () => {
   const chicken = orderFromRecipe(2, recipe("driftwood", "Chicken Pesto"), false, null);
   const toast = orderFromRecipe(3, recipe("saltwater", "Avocado Toast"), false, null);
 
-  it("gives three stars to a well-pressed panini", () => {
+  it("gives five stars to a well-pressed panini", () => {
     for (const o of [caprese, chicken, toast]) {
       const r = scorePlate(o, perfect(o));
       expect(r.notes).toEqual([]);
       expect(r.score).toBe(100);
-      expect(r.stars).toBe(3);
+      expect(r.stars).toBe(5);
     }
   });
 
@@ -156,7 +156,7 @@ describe("panini scoring", () => {
     p.layers[p.layers.length - 1].piece.cook = [0, 0];
     const r = scorePlate(caprese, p);
     expect(r.notes).toContain("bread not pressed");
-    expect(r.stars).toBeLessThan(3);
+    expect(r.stars).toBeLessThan(5);
     const b = perfect(caprese);
     b.layers[0].piece.cook = [1.2, 1.2];
     expect(scorePlate(caprese, b).notes).toContain("burnt bread");
@@ -167,7 +167,7 @@ describe("panini scoring", () => {
     p.layers.find((l) => l.piece.kind === "chicken")!.piece.cook = [0.15, 0.15];
     const r = scorePlate(chicken, p);
     expect(r.notes).toContain("pink chicken");
-    expect(r.stars).toBeLessThanOrEqual(1);
+    expect(r.stars).toBeLessThanOrEqual(3);
   });
 
   it("wants the cheese melted", () => {

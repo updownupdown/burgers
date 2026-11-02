@@ -72,12 +72,12 @@ export interface ShiftSummary {
   atWindow: number;
   inLine: number;
   left: number;
-  /** Stars (0–3) of every served order, in order. */
+  /** Every served customer's opinion, 1..5★, in order. */
   stars: number[];
   /** Takings so far (sales and tips, less spills), or null if the game doesn't count money. */
   takings: number | null;
-  /** Written reviews so far, newest first. */
-  reviews: { stars: number; text: string }[];
+  /** Reviews left so far (1..5★ each), in order: only some customers leave one. */
+  reviews: number[];
 }
 
 let deps: MenuDeps | null = null;

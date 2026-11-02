@@ -54,7 +54,8 @@ export interface CrowdInput {
   /** The town as it plays today (event applied). */
   stop: Stop;
   popularity: number;
-  rep: number;
+  /** The rating passers-by see, 1..5 (`ratingPull` in reviews.ts). */
+  rating: number;
   /** Recipe names hidden from the menu. */
   hidden: readonly string[];
   shift?: ShiftWindow;
@@ -73,7 +74,7 @@ export function expectedCustomers(p: CrowdInput): number {
     p.stop.customers *
     CROWD[p.stop.crowd].traffic *
     popularityTraffic(p.popularity) *
-    ratingFactor(p.rep) *
+    ratingFactor(p.rating) *
     menuFactor(menu) *
     crowdShare(p.shift ?? DEFAULT_SHIFT) *
     bonusCrowd(p.bonus ?? null) /

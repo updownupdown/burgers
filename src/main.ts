@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { CABIN } from "./render/cabin";
 import { buzz, Sfx } from "./audio";
-import { cookLevel, COOK_SCALE, cookZone, DRINK_FILL, fireLead, friesZone, FRY_ZONE, isMelted, ovenLead, paleSide, SALT, type Cookable } from "./game/cooking";
+import { cookLevel, COOK_SCALE, cookZone, darkSide, DRINK_FILL, friesZone, FRY_ZONE, isMelted, paleSide, SALT, type Cookable } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { expectedCustomers, sleep } from "./game/day";
 import { greatShift, townBonus, type BonusId } from "./game/bonus";
@@ -12,7 +12,9 @@ import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
 import { joinChance, lineDrain, linePatience, WINDOW, wordOfMouth } from "./game/line";
 import { HOLD_GRACE, HOLD_RUIN, LADLE_BAND, payout, quickSauceStroke, SAUCE_BAND, sauceCoverage, sauceVerdict, scorePlate, type SauceWord } from "./game/scoring";
-import { CROWD, menuFor, nextReputation, reviewFor, type Review } from "./game/business";
+import { CROWD, menuFor } from "./game/business";
+import { addReviews, brief, leavesReview, opinionFor, opinionLine, ratingPull, reviewAverage } from "./game/reviews";
+import { opinionFace, starRow } from "./ui/faces";
 import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE } from "./game/menu";
 import type { DrinkId, FriesSize, FryKind, Layer, Order, Piece, Plate, SauceKind, Size } from "./game/types";
 import { AFTER_OVEN, BREADS, COMAL_FILL, COUNTED, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, FRY_LABEL, fryOf, GRILLABLE, isSauce, KIND_LABEL, newPiece, pressable, PROTEINS, sauceRadius, SCOOPED, SIZE_LABEL, SUGARED, TORTILLAS, unfoldTortilla } from "./game/types";
@@ -22,9 +24,9 @@ import { makeCarton, makeCup, makeFood, makeFries, sliceSpot, stackBases } from 
 import { TORTILLA_R } from "./render/tacos";
 import { makeFlatbread } from "./render/flatbread";
 import { makePeel, makeSauceLadle, PEEL } from "./render/machines/oven";
-import { flickOf, type Flick } from "./game/peel";
+import { flickOf, slideArmed, slidUnder, type Flick } from "./game/peel";
 import { disposeObject } from "./render/materials";
-import { CounterView, CUP_IN_HAND, EMPTY_PACK, STOPS, GRILL_SCALE, GRILLE_ZONE, FLAT_ZONE, HEARTH_Y, HOME_PAGE, PAGES, PEEL_Y, GRILL_TOP, ZONE_START, type GrillItem, type Hit, type PeelTarget, type PieHolder } from "./scenes/counter";
+import { CounterView, CUP_IN_HAND, EMPTY_PACK, STOPS, GRILL_SCALE, GRILLE_ZONE, FLAT_ZONE, HEARTH_Y, HOME_PAGE, PAGES, PEEL_Y, GRILL_TOP, ZONE_START, type GrillItem, type Hit, type PeelTarget, type PieHolder, type PiePlace } from "./scenes/counter";
 import { PLATE } from "./render/machines/press";
 import { CustomersView, type CustomerFigure } from "./scenes/customers";
 import { TrayView } from "./scenes/tray";
@@ -36,7 +38,7 @@ import { mountHome, refreshHome, type NightShow } from "./screens/home";
 import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
-import { closingHtml, prepHtml, reviewsHtml, syncRange, toggleBox, toggleIngredients, type ReviewFilter } from "./screens/day";
+import { closingHtml, prepHtml, reviewsHtml, syncRange, toggleBox, toggleIngredients } from "./screens/day";
 import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, setTabArt, ticketHtml } from "./ui";
 import { DRINK_TINT } from "./render/machines";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
@@ -152,7 +154,7 @@ const game = {
   orderSeq: 1,
   active: 0,
   tutorial: true,
-  /** The trip's first day on Chill: nothing scores under two stars and the rating can't drop. */
+  /** The trip's first day on Chill: nothing scores under four stars and only happy customers review. */
   gentle: false,
   town: save.town,
   /** Town highlighted on the map. */
@@ -179,31 +181,36 @@ const game = {
   emptySince: -1,
   /** What unordered sides and extra toppings would have sold for: they go out free. */
   comped: 0,
-  /** Reviews written so far this shift. */
-  reviews: [] as Review[],
+  /** Reviews left so far this shift (stars, 1..5); every customer's opinion is in `stars`. */
+  reviews: [] as number[],
   /** Set on Prep and fixed for the shift: pacing, the window, and the one bonus brought along. */
   pacing: "balanced" as Difficulty,
   shift: validShift(null) as ShiftWindow,
   /** Play time of today's window in seconds (see shift.ts). */
   shiftLength: 180,
   bonus: null as BonusId | null,
-  /** Every rating this shift, walk-outs as zero, for reputation. */
-  ratings: [] as number[],
   /** Which customer (by arrival order) is a food critic today, or -1; and what they wrote. */
   criticAt: -1,
   press: null as PressPiece | null,
   /** Which screen is up over the map, so its buttons redraw the right one. */
   overlay: null as null | "closing" | "reviews" | "garage",
   garage: { ...GARAGE_START } as GarageView,
-  reviewFilter: "all" as ReviewFilter,
 };
 
-/** A critic's verdict counts like this many ordinary reviews. */
-const CRITIC_WEIGHT = 5;
-
+/** A critic's verdict goes in the paper (and, like every critic's, it's a review: see `react`). */
 function criticVerdict(stars: number, notes: string[]): void {
   game.press = pieceFor(stars, notes, stop(), game.event, game.rng);
-  for (let k = 1; k < CRITIC_WEIGHT; k++) game.ratings.push(stars);
+}
+
+/**
+ * Whether this customer leaves a review: the delighted and the angry far more often than the
+ * merely fed, critics always (game/reviews.ts). The first Chill day only keeps the happy ones.
+ */
+function maybeReview(stars: number, critic: boolean): boolean {
+  if (game.gentle && stars < 4) return false;
+  if (!leavesReview(stars, critic, game.rng)) return false;
+  game.reviews.push(stars);
+  return true;
 }
 
 /** The stop as the customers see it: just the recipes left on today's menu. */
@@ -439,16 +446,17 @@ function clearSlot(i: number): void {
   }
 }
 
-function customerLeaves(i: number, mood: "happy" | "sad" | "angry", say: string, good: boolean): void {
+/** The customer goes, showing what they thought (a face, maybe a line) and any review they left. */
+function customerLeaves(i: number, stars: number, say: string | null, reviewed: boolean): void {
   const s = game.slots[i];
   s.leaving = true;
-  s.fig?.setMood(mood);
+  s.fig?.setMood(stars >= 4 ? "happy" : stars === 3 ? "neutral" : stars === 2 ? "sad" : "angry");
   // Move straight on to the next order so nothing gets dropped on the departing plate.
   if (game.active === i) {
     const other = game.slots.findIndex((sl) => sl.order && !sl.leaving);
     if (other >= 0) setActive(other);
   }
-  showBubble(i, say, good);
+  showOpinion(i, stars, say, reviewed);
   setTimeout(() => customersView.leave(i, () => clearSlot(i)), 1100);
 }
 
@@ -473,14 +481,11 @@ function serve(i: number): void {
   let call = s.lesson === 0 || s.lesson === 1 ? "accept" : verdict(r.score, game.pacing, !!s.sentBack, r.faulty, !!r.missing);
   // The first day on Chill never turns anyone away: a really wrong order comes back once for changes, then it's taken.
   if (game.gentle && call === "refuse") call = s.sentBack ? "accept" : "sendBack";
-  // ...and anything taken that day is worth at least two stars.
-  if (game.gentle && r.stars < 2) r.stars = 2;
+  // ...and anything taken that day is worth at least four stars.
+  if (game.gentle && r.stars < 4) r.stars = 4;
   if (call === "sendBack") return sendBack(i, r.missing ?? r.notes[0] ?? "this isn't quite right");
   if (call === "refuse") return refuse(i, r.notes[0] ?? "this isn't what I ordered", r.perks.length > 0);
-  game.ratings.push(r.stars);
-  const perk = r.perks.length && r.stars < 3 ? ` Loved the ${r.perks[0]}.` : "";
-  const back = s.sentBack ? " Had to send it back once." : "";
-  game.reviews.push({ stars: r.stars, text: reviewFor(r.stars, r.notes, game.rng) + perk + back, stop: stop().name });
+  const reviewed = maybeReview(r.stars, !!s.order.critic);
   // Giveaways make people happy, but they go out free.
   game.comped += compValue(s.order, plate.fries, plate.drink, r.perks.includes("extra toppings"));
   if (s.order.critic) criticVerdict(r.stars, r.notes);
@@ -495,30 +500,21 @@ function serve(i: number): void {
   game.tips += tip;
   game.served++;
   game.stars.push(r.stars);
-  if (r.stars >= 2) {
+  if (r.stars >= 4) {
     save.known[s.order.name] = (save.known[s.order.name] ?? 0) + 1;
     writeSave(save);
   }
   if (!game.best || r.score > game.best.score) game.best = { name: `#${s.order.id} ${s.order.name} (${r.score}%)`, score: r.score };
-  const praise = ["Perfect!", "Incredible!", "Chef's kiss!", "Just like Grandma's!"];
-  const say =
-    r.stars === 3
-      ? praise[Math.floor(game.rng() * praise.length)]
-      : r.perks.length
-        ? `Thanks for the ${r.perks[0]}!`
-        : r.notes.length
-          ? capitalise(r.notes[0]) + (r.stars >= 2 ? ", but tasty!" : "…")
-          : r.stars === 2
-            ? "Pretty good!"
-            : "Hmm, okay.";
-  customerLeaves(i, r.stars >= 2 ? "happy" : r.stars === 1 ? "sad" : "angry", `${"★".repeat(r.stars)}${"☆".repeat(3 - r.stars)} ${say}`, r.stars >= 2);
+  // Everyone shows a face; only something specific (missing, wrong, especially quick or good) gets words.
+  const say = opinionLine({ stars: r.stars, missing: r.missing, notes: r.notes, perks: r.perks, patience: s.patience / s.maxPatience }, game.rng);
+  customerLeaves(i, r.stars, say, reviewed);
   // The food is handed over right away so the plate is free for the next order.
   s.plate = emptyPlate();
   syncTray(i, false);
   sfx.whoosh();
   coinPop(i, pay + tip);
   setTimeout(() => sfx.coin(), 250);
-  buzz(r.stars >= 2 ? [20, 40, 20] : 60);
+  buzz(r.stars >= 4 ? [20, 40, 20] : 60);
   // Two guided orders in, the trip counts as started: a restart won't go back to the lessons.
   if (game.tutorial && s.lesson === 1) {
     save.tutorialDone = true;
@@ -555,7 +551,7 @@ function sendBack(i: number, note: string): void {
   syncTray(i, true);
   trayView.plates[i].kick(0.5);
   s.fig?.setMood("sad");
-  showBubble(i, `Can you fix it? ${capitalise(note)}.${took ? ` I'll keep the ${took}!` : ""}`, false);
+  showBubble(i, `Can you fix it? ${capitalise(brief(note))}.${took ? ` I'll keep the ${took}!` : ""}`, false);
   sfx.grumble();
   buzz([30, 40, 30]);
   hintOnce("sent-back", "Sent back: fix the tray and serve it again. The undo button on the tray takes the top layer off.", 4);
@@ -565,37 +561,57 @@ function sendBack(i: number, note: string): void {
 function refuse(i: number, note: string, perk: boolean): void {
   const s = game.slots[i];
   const took = takeFreebies(s) ?? (s.kept.fries || s.kept.drink ? "freebie" : null);
-  const stars = took || perk ? 1 : 0;
+  const stars = took || perk ? 2 : 1;
   game.lost++;
-  if (s.order!.critic) criticVerdict(0, [note]);
-  game.ratings.push(stars);
-  game.reviews.push({ stars, text: `Refused it: ${note}.${took ? ` At least the ${took === "freebie" ? "free side" : took} was nice.` : ""}`, stop: stop().name });
+  if (s.order!.critic) criticVerdict(1, [note]);
+  const reviewed = maybeReview(stars, !!s.order!.critic);
   game.comped += compValue(s.order!, s.kept.fries, s.kept.drink);
   sfx.grumble();
   buzz(80);
-  customerLeaves(i, "angry", `No thanks. ${capitalise(note)}.${took ? ` I'll take the ${took === "freebie" ? "free side" : took} though.` : ""}`, false);
+  customerLeaves(i, stars, `No thanks. ${capitalise(brief(note))}.${took ? ` I'll keep the ${took === "freebie" ? "free side" : took}.` : ""}`, reviewed);
   s.plate = emptyPlate();
   syncTray(i, false);
 }
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+/** Over the customer's head: a speech bubble (a send-back asking for a fix). */
 function showBubble(i: number, text: string, good: boolean): void {
-  const s = game.slots[i];
-  s.bubble?.remove();
   const b = document.createElement("div");
   b.className = `bubble ${good ? "good" : "bad"}`;
   b.textContent = text;
-  const slotW = bands.customers.w / 3;
-  b.style.left = `${Math.max(70, Math.min(bands.customers.w - 70, i * slotW + slotW * 0.5))}px`;
+  placeOverHead(i, b, 2600);
+}
+
+/**
+ * Over the customer's head as they go: their opinion as a face, with a short line only when it's
+ * specific, and if they left a review, its stars popping out above.
+ */
+function showOpinion(i: number, stars: number, say: string | null, reviewed: boolean): void {
+  const b = document.createElement("div");
+  b.className = `opinion ${opinionFor(stars)}${say ? " said" : ""}`;
+  b.innerHTML = `${opinionFace(stars)}${say ? `<span class="say"></span>` : ""}${reviewed ? `<span class="review">${starRow(stars)}</span>` : ""}`;
+  if (say) b.querySelector(".say")!.textContent = say;
+  placeOverHead(i, b, reviewed ? 2800 : 2400, true);
+}
+
+/** Over customer i's head, kept on screen; `narrow` keeps it inside their third of the window so neighbours' bubbles don't overlap. */
+function placeOverHead(i: number, b: HTMLElement, ms: number, narrow = false): void {
+  const s = game.slots[i];
+  s.bubble?.remove();
+  const W = bands.customers.w;
+  const slotW = W / 3;
+  if (narrow) b.style.maxWidth = `${Math.round(slotW - 6)}px`;
   // Above the customer's head, clear of the receipts on the rail.
-  b.style.top = `${railTop * 0.55}px`;
+  b.style.top = `${railTop * 0.58}px`;
   ui.root.appendChild(b);
+  const half = b.offsetWidth / 2 + 4;
+  b.style.left = `${Math.max(half, Math.min(W - half, i * slotW + slotW * 0.5))}px`;
   s.bubble = b;
   setTimeout(() => {
     b.remove();
     if (s.bubble === b) s.bubble = null;
-  }, 2600);
+  }, ms);
 }
 
 function coinPop(i: number, amount: number): void {
@@ -1994,7 +2010,7 @@ canvas.addEventListener("pointermove", (e) => {
   // Use coalesced events so flicks are measured accurately even when frames are slow.
   const evs = e.getCoalescedEvents?.() ?? [];
   for (const ce of evs.length ? evs : [e]) pt.samples.push({ x: ce.clientX - colX, y: ce.clientY, t: ce.timeStamp });
-  while (pt.samples.length > 24) pt.samples.shift();
+  while (pt.samples.length > 40) pt.samples.shift();
   const dx = pt.x - pt.x0;
   const dy = pt.y - pt.y0;
   if (Math.hypot(dx, dy) > 12) pt.moved = true;
@@ -2165,7 +2181,7 @@ canvas.addEventListener("pointermove", (e) => {
         cutOnBoard();
         pt.mode = "none";
       } else if (counter.middle === "oven" && (Math.abs(dy) > 24 || bandAt(pt.y) !== "counter")) {
-        showHint("Lift it with the peel: slide the blade under it and swipe up.", 2);
+        showHint("Lift it with the peel: push the blade in under it.", 2);
         pt.mode = "none";
       } else if (Math.abs(dy) > 24 || bandAt(pt.y) !== "counter") {
         const layers = bd.layers;
@@ -2328,11 +2344,11 @@ function pressDrop(pt: Pointer, payload: Extract<Payload, { type: "stack" | "pie
 }
 
 // ---------------------------------------------------------------------------
-// The oven (Orchard Isle; DESIGN §24, after build #69). Flatbreads are built on the peel as it
-// lies at home (or on the bench), and only the peel moves them: drag it by its handle, slide the
-// blade under a pie and swipe up to lift it, swipe down to set it down where the blade is (in
-// the oven, on the bench or board, on a tray), and nudge a pie in the oven with the blade's edge
-// to spin its pale side round to the hot back wall.
+// The oven (Orchard Isle; DESIGN §24, after builds #69 and #71). Flatbreads are built on the peel
+// as it lies at home (or on the bench), and only the peel moves them: drag it by its handle, push
+// the blade in under a pie (or set it under and swipe up) to lift it, swipe down to set it down
+// where the blade is (in the oven, on the bench or board, on a tray), and push a pie in the oven
+// sideways with the blade's tip to spin its pale side round to the hot back wall.
 
 /** The order a pie on the counter is being built for: the one it was started for, else the active one. */
 function pieOrder(d: Piece | undefined): Order | null {
@@ -2426,7 +2442,7 @@ function foldPie(h: PieHolder): void {
   syncHolder(h);
   sfx.flip();
   buzz(15);
-  hintOnce("calzone-in", "Folded! Into the oven with it on the peel. A calzone is thick: nudge it round twice.", 3.5);
+  hintOnce("calzone-in", "Folded! Into the oven with it on the peel. A calzone is thick and bakes slower.", 3.5);
 }
 
 /** A press near the side of an unbaked pie on the peel (at home) or the bench: the start of a fold. False if it isn't one. */
@@ -2451,25 +2467,82 @@ function grabPeel(pt: Pointer): void {
   peelJust = null;
   pt.flickT = -Infinity;
   counter.grabPeel(ndcIn(bands.counter, pt.x, pt.y));
+  // A pie the blade is already under (one just built on it, or set down there) isn't slid onto it.
+  slideArm.clear();
+  slideScoop(true);
   sfx.pop();
   const full = counter.peel.layers.length > 0;
-  hintOnce(full ? "peel-launch" : "peel-scoop", full ? "Over a free spot in the oven, swipe down to slide the pie off." : "Slide the blade right under a pie and swipe up to lift it onto the peel.", 3.5);
+  hintOnce(full ? "peel-launch" : "peel-scoop", full ? "Over a free spot in the oven, swipe down to slide the pie off." : "Push the blade in under a pie to lift it onto the peel (or set it under and swipe up).", 3.5);
 }
 
-/** The peel follows the finger; over the trays it shows over the tray it would serve to. A quick swipe up or down scoops or drops. */
+/** The peel follows the finger; over the trays it shows over the tray it would serve to. Pushed under a pie it scoops it; a quick swipe up or down scoops or drops. */
 function movePeel(pt: Pointer): void {
   const band = bandAt(pt.y);
   counter.movePeel(band === "counter" ? ndcIn(bands.counter, pt.x, pt.y) : null);
   const slot = band === "tray" ? trayView.pick(ndcIn(bands.tray, pt.x, pt.y)) : band === "customers" ? game.active : -1;
   showPeelGhost(slot);
-  // Once the blade has left where it last scooped or set down, a swipe there counts again.
-  const here = band === "counter" ? targetKey(counter.peelTarget()) : slot >= 0 ? `slot${slot}` : null;
-  if (peelJust && here !== peelJust) peelJust = null;
+  // Once the blade has properly left where it last scooped from (or lingered there a while), a
+  // swipe down that starts there counts again.
+  const pj = peelJust;
+  if (pj && pj.left === Infinity) {
+    const b = counter.peelBlade();
+    const p = pj.key.startsWith("spot") ? counter.ovenSpots[+pj.key.slice(4)] : pj.key === "rest" ? counter.rest : null;
+    const away = pj.key.startsWith("slot") ? slot !== +pj.key.slice(4) : !b || !p || Math.hypot(b.x - p.x, b.z - p.z) > 1.1;
+    if (away || performance.now() - pj.at > 1500) pj.left = performance.now();
+  }
+  if (band === "counter") slideScoop(false);
   const f = flickOf(pt.samples, pt.flickT);
   if (f) {
     pt.flickT = pt.samples[pt.samples.length - 1].t + 1;
     peelFlick(pt, f);
   }
+}
+
+/** The pies the peel can slide under: in the oven, and on the bench or board. */
+function peelPies(): { key: string; place: PiePlace; take: () => void }[] {
+  const out: { key: string; place: PiePlace; take: () => void }[] = [];
+  for (let i = 0; i < counter.ovenCount; i++) if (counter.ovenSpots[i].layers.length) out.push({ key: `spot${i}`, place: counter.ovenSpots[i], take: () => scoopSpot(i) });
+  if (counter.rest.layers.length) out.push({ key: "rest", place: counter.rest, take: scoopRest });
+  return out;
+}
+/** Which pies a slide under would take (the blade's tip came at them from the front), by target key. */
+const slideArm = new Map<string, boolean>();
+/**
+ * The empty blade pushed forward in under a pie scoops it, like a real peel: no swipe needed.
+ * `init` only notes where the blade is (on picking the peel up), so a pie already on the blade stays put.
+ */
+function slideScoop(init: boolean): void {
+  const b = counter.peelBlade();
+  if (!b) return;
+  for (const { key, place, take } of peelPies()) {
+    const was = init ? false : (slideArm.get(key) ?? false);
+    const armed = slideArmed(was, b, place, PEEL);
+    if (!init && armed && !counter.peel.layers.length && slidUnder(b, place, PEEL)) {
+      slideArm.set(key, false);
+      take();
+      return;
+    }
+    slideArm.set(key, armed);
+  }
+}
+
+/** Scoop the pie in oven spot i onto the peel. */
+function scoopSpot(i: number): void {
+  const layers = counter.ovenSpots[i].layers;
+  counter.setSpot(i, []);
+  counter.setPeel(layers);
+  justDid(`spot${i}`, "down");
+  sfx.whoosh();
+  buzz(12);
+  hintOnce("oven-out", counter.board?.on && !layers[0].piece.folded ? "Out it comes. Set it on the board to cut it in four (swipe down over it), then up to a tray." : "Out it comes. Carry it up to a tray and swipe down. Basil, rocket and honey go on there.", 3.5);
+}
+/** Scoop the pie on the bench or board onto the peel. */
+function scoopRest(): void {
+  counter.setPeel(counter.rest.layers);
+  counter.setRest([]);
+  justDid("rest", "down");
+  sfx.whoosh();
+  buzz(12);
 }
 
 /** The peel (and its pie) drawn hovering over a tray while it's carried up there. */
@@ -2496,9 +2569,30 @@ function showPeelGhost(slot: number): void {
   trayView.showGhost(slot, peelGhost.obj);
 }
 
-/** Where the peel last scooped a pie from, or set one down, until the blade leaves it: the swipe back the other way there is just the carry. */
-let peelJust: string | null = null;
+/**
+ * Where the peel last scooped a pie from or set one down, and the swipe back the other way that's
+ * ignored there: after a scoop, pulling the peel back out (quickly, down the screen) is a carry,
+ * not a drop, for any swipe that began before the blade had left (or lingered there 1.5 s); after
+ * a drop, the finger's little rebound up isn't a scoop. `left` is when swipes there count again.
+ */
+let peelJust: { key: string; dir: "up" | "down"; at: number; left: number } | null = null;
 const targetKey = (t: PeelTarget | null): string | null => (t ? (t.kind === "spot" ? `spot${t.idx}` : t.kind) : null);
+/** Note a scoop (ignore a swipe down there until the blade has left) or a drop (ignore the rebound up). */
+function justDid(key: string, ignore: "up" | "down"): void {
+  const now = performance.now();
+  peelJust = { key, dir: ignore, at: now, left: ignore === "down" ? Infinity : now + 450 };
+}
+/**
+ * A swipe `dir` that began at `t` (ms) over `key` is the carry or rebound after a scoop or drop
+ * there. After a scoop on the counter, a swipe down anywhere on it that began before the blade left
+ * is the pull out (so a pie never drops into the next spot on its way out).
+ */
+const ignored = (key: string | null, dir: "up" | "down", t: number): boolean => {
+  const pj = peelJust;
+  if (!key || !pj || pj.dir !== dir || t >= pj.left) return false;
+  const counter = (k: string) => !k.startsWith("slot");
+  return pj.key === key || (dir === "down" && counter(key) && counter(pj.key));
+};
 
 /** A swipe with the peel in hand: up to scoop the pie the blade is under, down to set its pie down there. */
 function peelFlick(pt: Pointer, f: Flick): void {
@@ -2508,14 +2602,14 @@ function peelFlick(pt: Pointer, f: Flick): void {
     const slot = fromBand === "tray" ? trayView.pick(ndcIn(bands.tray, f.from.x, f.from.y)) : game.active;
     if (slot < 0) return;
     const plate = game.slots[slot].plate;
-    if (peelJust === `slot${slot}`) return;
+    if (ignored(`slot${slot}`, f.dir, f.from.t)) return;
     if (f.dir === "down" && full) {
       const layers = counter.peel.layers;
       if (plate.layers.length) return void showHint("That tray already has food on it.", 1.8);
       if (paleSide(layers[0].piece) < 0.12) hintOnce("raw-pie", "That one hasn't been in the oven yet!", 2);
       if (!addToPlate(slot, { type: "stack", layers }, 0)) return;
       counter.setPeel([]);
-      peelJust = `slot${slot}`;
+      justDid(`slot${slot}`, "up");
       setActive(slot);
       sfx.plop();
       buzz(12);
@@ -2524,7 +2618,7 @@ function peelFlick(pt: Pointer, f: Flick): void {
       hintOnce("pie-served", after ? "On the tray. Basil, rocket and honey go on now, then tap Serve." : "On the tray. Tap Serve to hand it over.", 3);
     } else if (f.dir === "up" && !full && plate.layers[0]?.piece.kind === "dough") {
       counter.setPeel(plate.layers.splice(0));
-      peelJust = `slot${slot}`;
+      justDid(`slot${slot}`, "down");
       syncTray(slot, false);
       sfx.whoosh();
       showPeelGhost(slot);
@@ -2532,36 +2626,37 @@ function peelFlick(pt: Pointer, f: Flick): void {
     return;
   }
   if (fromBand !== "counter") return;
-  // The swipe acts where the peel was when it began.
-  const from = ndcIn(bands.counter, f.from.x, f.from.y);
-  const b = counter.bladeAt(from);
-  const t = counter.peelTarget(b);
-  if (targetKey(t) && targetKey(t) === peelJust) return;
-  const act = (key: string | null) => {
-    // The swipe doesn't carry the peel along: it stays where the swipe began.
-    counter.anchorPeel(from, ndcIn(bands.counter, pt.x, pt.y));
-    peelJust = key;
-  };
+  const now = ndcIn(bands.counter, pt.x, pt.y);
   if (f.dir === "up") {
     if (full) return;
-    if (t?.kind === "spot" && counter.ovenSpots[t.idx].layers.length) {
-      const layers = counter.ovenSpots[t.idx].layers;
-      act(targetKey(t));
-      counter.setSpot(t.idx, []);
-      counter.setPeel(layers);
-      sfx.whoosh();
-      buzz(12);
-      hintOnce("oven-out", counter.board?.on && !layers[0].piece.folded ? "Out it comes. Set it on the board to cut it in four (swipe down over it), then up to a tray." : "Out it comes. Carry it up to a tray and swipe down. Basil, rocket and honey go on there.", 3.5);
-    } else if (t?.kind === "rest" && counter.rest.layers.length) {
-      act("rest");
-      counter.setPeel(counter.rest.layers);
-      counter.setRest([]);
-      sfx.whoosh();
-      buzz(12);
-    } else if (b.z < 0.2) hintOnce("scoop-under", "Slide the blade right under a pie, then swipe up to lift it.", 2.5);
+    // Wherever along the swipe the blade was under a pie counts (a quick push in under it and up
+    // is one move), and the peel stays there: the swipe doesn't carry it on up the screen.
+    for (const q of f.path) {
+      if (bandAt(q.y) !== "counter") break;
+      const at = ndcIn(bands.counter, q.x, q.y);
+      const t = counter.peelTarget(counter.bladeAt(at));
+      const pie = t?.kind === "spot" ? counter.ovenSpots[t.idx].layers.length > 0 : t?.kind === "rest" && counter.rest.layers.length > 0;
+      if (!t || !pie || ignored(targetKey(t), "up", f.from.t)) continue;
+      counter.anchorPeel(at, now);
+      if (t.kind === "spot") scoopSpot(t.idx);
+      else scoopRest();
+      slideArm.set(targetKey(t)!, false);
+      return;
+    }
+    if (counter.bladeAt(ndcIn(bands.counter, f.from.x, f.from.y)).z < 0.2) hintOnce("scoop-under", "Push the blade in under a pie to lift it, or set it under and swipe up.", 2.5);
     return;
   }
   if (!full) return;
+  // A swipe down acts where the peel was when it began, and doesn't carry it along.
+  const from = ndcIn(bands.counter, f.from.x, f.from.y);
+  const b = counter.bladeAt(from);
+  const t = counter.peelTarget(b);
+  if (ignored(targetKey(t), "down", f.from.t)) return;
+  const act = (key: string) => {
+    counter.anchorPeel(from, now);
+    justDid(key, "up");
+    slideArm.set(key, false);
+  };
   const layers = counter.peel.layers;
   const d = layers[0].piece;
   if (t?.kind === "trash") {
@@ -2587,8 +2682,9 @@ function peelFlick(pt: Pointer, f: Flick): void {
     si = near;
   }
   if (si < 0) si = counter.nearFreeSpot(b);
+  if (si >= 0 && ignored(`spot${si}`, "down", f.from.t)) return;
   if (si < 0) {
-    if (b.z < 0.4) showHint("Swipe down over a free spot in the oven, the bench or a tray.", 2);
+    if (b.z < -0.6) showHint("Swipe down over a free spot in the oven, the bench or a tray.", 2);
     return;
   }
   act(`spot${si}`);
@@ -2596,8 +2692,8 @@ function peelFlick(pt: Pointer, f: Flick): void {
   counter.setPeel([]);
   sfx.sizzleHit();
   buzz(10);
-  if (d.folded) hintOnce("oven-calzone", "A calzone bakes slower and catches quicker: nudge it round about a third of the way, and again later.", 4);
-  else hintOnce("oven-turn", "In it goes. The half facing the hot back wall bakes twice as fast: about halfway, set the peel's tip against the front of the pie and slide it sideways to spin it round.", 4.5);
+  if (d.folded) hintOnce("oven-calzone", "A calzone is thick and bakes slower. Watch its crust: turn it round with the peel if one side is getting ahead.", 4);
+  else hintOnce("oven-turn", "In it goes. The side facing the hot back wall browns faster: watch the crust, and if you like, push the front of the pie sideways with the peel's tip to turn it round. An even bake is best.", 5);
 }
 
 function endPeel(pt: Pointer, cancelled: boolean): void {
@@ -2612,7 +2708,7 @@ function endPeel(pt: Pointer, cancelled: boolean): void {
 function peelTapHint(): void {
   const ls = counter.peel.layers;
   const raw = ls.length && paleSide(ls[0].piece) <= 0.2;
-  showHint(!ls.length ? "Drag the peel by its handle. Slide it under a pie and swipe up to lift it; tap the dough for a new base." : raw && !ls[0].piece.folded ? "Sauce it and add the toppings, then drag the peel into the oven and swipe down." : "Drag the peel by its handle and swipe down where the pie should go.", 2.6);
+  showHint(!ls.length ? "Drag the peel by its handle. Push it in under a pie to lift it; tap the dough for a new base." : raw && !ls[0].piece.folded ? "Sauce it and add the toppings, then drag the peel into the oven and swipe down." : "Drag the peel by its handle and swipe down where the pie should go.", 2.6);
 }
 
 /** A piece dropped on the oven counter: onto a pie being built (on the peel at home, the bench or board). True if it was taken. */
@@ -2800,7 +2896,7 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
     case "spot":
       if (!cancelled && !pt.moved) {
         const s = pt.mode === "spot" && pt.hit?.type === "spot" ? counter.ovenSpots[pt.hit.idx] : counter.bench;
-        showHint(s.layers.length ? "Pies move on the peel: drag it by the handle, slide the blade under, and swipe up to lift." : pt.mode === "spot" ? "Carry a pie in on the peel and swipe down to slide it off." : "Set a pie down here off the peel: swipe down over the bench.", 2.6);
+        showHint(s.layers.length ? "Pies move on the peel: drag it by the handle and push the blade in under to lift." : pt.mode === "spot" ? "Carry a pie in on the peel and swipe down to slide it off." : "Set a pie down here off the peel: swipe down over the bench.", 2.6);
       }
       break;
     case "sauce":
@@ -3105,10 +3201,7 @@ ui.root.addEventListener("click", (e) => {
       else closeOverlay();
       break;
     case "reviews":
-      showReviews(game.reviewFilter);
-      break;
-    case "rf":
-      showReviews(btn!.dataset.v as ReviewFilter);
+      showReviews();
       break;
     case "new-trip":
       if (btn!.dataset.armed !== "1") {
@@ -3183,7 +3276,7 @@ initMenu({
       left: game.lost + game.leftLine,
       stars: game.stars,
       takings: game.money + game.tips - spills() - game.comped,
-      reviews: [...game.reviews].reverse(),
+      reviews: game.reviews.slice(),
     };
   },
   canInstall: () => !!installPrompt,
@@ -3276,7 +3369,6 @@ function startShift(): void {
     tutorial: !save.tutorialDone,
     comped: 0,
     reviews: [],
-    ratings: [],
     line: [],
     leftLine: 0,
     walkedPast: 0,
@@ -3291,7 +3383,7 @@ function startShift(): void {
   game.shift = validShift(save.shift);
   game.bonus = save.bonus && save.bonuses.includes(save.bonus) ? save.bonus : null;
   game.shiftLength = shiftSeconds(game.shift, stop().shiftLength);
-  game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rep: save.rep, hidden: save.hidden, shift: game.shift, bonus: game.bonus, pacing: game.pacing });
+  game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: game.shift, bonus: game.bonus, pacing: game.pacing });
   // A shift starts a fresh block of driving: the evening's hops count against the whole range.
   save.driven = 0;
   writeSave(save);
@@ -3332,12 +3424,6 @@ function applyStop(): void {
   customersView.setLook(save.look);
 }
 
-/** The best, a middling and the worst review of the shift, without repeats. */
-function highlights(reviews: Review[]): Review[] {
-  const sorted = [...reviews].sort((a, b) => b.stars - a.stars);
-  const picks = [sorted[0], sorted[Math.floor(sorted.length / 2)], sorted[sorted.length - 1]].filter(Boolean);
-  return picks.filter((r, i) => picks.findIndex((q) => q.text === r.text) === i);
-}
 
 /** Before opening: who to expect, the menu, the window, pacing and a bonus. A card over the map. */
 function showPrep(): void {
@@ -3420,9 +3506,8 @@ function showGarage(): void {
   if (sc) sc.scrollTop = keep;
 }
 
-function showReviews(filter: ReviewFilter): void {
-  game.reviewFilter = filter;
-  showOverlay("reviews", reviewsHtml(save, filter));
+function showReviews(): void {
+  showOverlay("reviews", reviewsHtml(save));
 }
 
 /**
@@ -3433,13 +3518,8 @@ function sleepNow(): void {
   if (save.time !== "evening") return;
   const last = save.last && save.last.town === save.town ? save.last : null;
   const fromDay = save.day;
-  let rating: [number, number] | null = null;
-  if (last && last.stars.length && save.ratingCount) {
-    const after = save.ratingSum / save.ratingCount;
-    const n = save.ratingCount - last.stars.length;
-    const before = n > 0 ? (save.ratingSum - last.stars.reduce((a, b) => a + b, 0)) / n : after;
-    rating = [before, after];
-  }
+  // Today's reviews moved the rating: from where it stood this morning (or, for a first review, from itself).
+  const rating: [number, number] | null = last && last.reviews.length && last.rating !== null ? [last.ratingBefore ?? last.rating, last.rating] : null;
   sleep(save);
   save.last = null;
   writeSave(save);
@@ -3473,7 +3553,7 @@ function showTitle(night: NightShow | null = null): void {
       screenShownAt = performance.now();
     },
     openResults: () => showClosing(),
-    openReviews: () => showReviews(game.reviewFilter),
+    openReviews: () => showReviews(),
     openGarage: () => showGarage(),
     openMenuRef: () => openMenuRef(withEvent(townById(save.town), eventOn(save.town, save.day))),
     sleep: () => sleepNow(),
@@ -3513,9 +3593,9 @@ function endShift(): void {
   }
   const here = stop();
   const avg = game.stars.length ? game.stars.reduce((a, b) => a + b, 0) / game.stars.length : 0;
-  // Lifetime rating: every served order's stars.
-  save.ratingCount += game.stars.length;
-  save.ratingSum += game.stars.reduce((a, b) => a + b, 0);
+  // The rating is every review ever left, kept as a count per star.
+  const ratingBefore = reviewAverage(save.reviewCounts);
+  save.reviewCounts = addReviews(save.reviewCounts, game.reviews);
   // A pass counts the people who ordered, so a short line isn't a fail, but serving one person out of a town's trade isn't a pass.
   const ok = passed(avg, game.served, Math.max(game.served + game.lost, Math.ceil(game.customers * 0.4)));
   let lastStop = false;
@@ -3524,11 +3604,6 @@ function endShift(): void {
   const takings = Math.max(0, Math.round(game.money + game.tips - game.comped - spills()));
   const bestBefore = save.bestTakings[here.id] ?? null;
   save.bestTakings[here.id] = Math.max(bestBefore ?? 0, takings);
-  const repBefore = save.rep;
-  const r = nextReputation(save.rep, save.repWeight, game.ratings);
-  save.rep = game.gentle ? Math.max(repBefore, r.rep) : r.rep;
-  save.repWeight = r.weight;
-  save.reviews = [...game.reviews.slice().reverse(), ...save.reviews].slice(0, 30);
   save.best[here.id] = Math.max(save.best[here.id] ?? 0, avg);
   // The takings go into savings, for the Garage.
   save.bank += takings;
@@ -3562,10 +3637,9 @@ function endShift(): void {
     spills: spills(),
     takings,
     bestBefore,
-    // The most telling ones: the best and the worst of the day.
-    reviews: highlights(game.reviews),
-    rep: save.rep,
-    repBefore,
+    reviews: game.reviews.slice(),
+    rating: reviewAverage(save.reviewCounts),
+    ratingBefore,
     pop: [popBefore, save.popularity],
     best: game.best?.name ?? null,
     outcome: !ok ? "failed" : lastStop ? "trip" : "passed",
@@ -3695,12 +3769,11 @@ function tick(dt: number): void {
       if (s.fig) s.fig.setMood(patienceMood(s.patience / s.maxPatience));
       if (s.patience <= 0) {
         game.lost++;
-        if (s.order.critic) criticVerdict(0, []);
-        // A walk-out on the first Chill day isn't held against the truck.
-        if (!game.gentle) game.ratings.push(0);
-        game.reviews.push({ stars: 0, text: reviewFor(0, [], game.rng, true), stop: stop().name });
+        if (s.order.critic) criticVerdict(1, []);
+        // A walk-out is furious, and as likely as anyone to say so (not on the first Chill day).
+        const reviewed = maybeReview(1, !!s.order.critic);
         sfx.grumble();
-        customerLeaves(i, "angry", "Too slow! I'm off.", false);
+        customerLeaves(i, 1, "Too slow! I'm off.", reviewed);
       }
     });
 
@@ -3710,7 +3783,7 @@ function tick(dt: number): void {
 
     if (counter.middle === "oven") {
       const o = game.slots[game.active]?.order;
-      if (o?.layers[0]?.folded) hintOnce("calzone-order", "A calzone: build it on the peel, then drag the dough's edge across the middle to fold it. Nudge it round twice in the oven.", 4.5);
+      if (o?.layers[0]?.folded) hintOnce("calzone-order", "A calzone: build it on the peel, then drag the dough's edge across the middle to fold it, then into the oven.", 4.5);
       else if (o?.slice) hintOnce("slice-pie", "Port Amber cuts its flatbreads in four: after the oven, set it on the board with the peel and swipe across it twice.", 4.5);
       else if (o?.layers.some((l) => l.after)) hintOnce("after-order", "Basil, rocket and honey go on after the oven, once the flatbread is on the tray.", 4);
     } else if (counter.middle === "press") {
@@ -3790,18 +3863,11 @@ counter.events.done = () => {
 counter.events.burning = () => {
   const where = counter.middle === "press" ? "in the press" : counter.middle === "oven" ? "in the oven" : "on the grill";
   if (counter.page !== HOME_PAGE) showHint(`Something's burning ${where}! ←`, 2.5);
-  else if (counter.middle === "oven") hintOnce("burning-oven", "That pie's catching on the hot side! Nudge it round with the peel, or lift it out.", 3);
+  else if (counter.middle === "oven") hintOnce("burning-oven", "That pie's catching on the hot side! Turn it round with the peel's tip, or lift it out.", 3);
   else hintOnce("burning", counter.middle === "press" ? "Smoke means burning! Lift the lid and get it out." : "Smoke means burning! Drag it to the trash can.", 2.5);
 };
-// The peel nudging a pie in the oven round: a soft scrape as it goes, a flip sound once the other half faces the heat.
+// The peel nudging a pie in the oven round: a soft scrape as it goes.
 counter.events.nudge = () => sfx.whoosh();
-counter.events.turned = (i) => {
-  sfx.flip();
-  buzz(12);
-  const d = counter.ovenSpots[i]?.layers[0]?.piece;
-  if (d?.folded) hintOnce("turn-calzone", (d.turns ?? 0) >= 2 ? "Turned twice: that calzone will bake through." : "Turned. A calzone is thick: nudge it round again later so the far side catches up.", 3);
-  else hintOnce("turn-done", "Turned! The other half faces the hot wall now. Once is right for a flatbread.", 3);
-};
 
 /** Soda lost to overflows this shift, in whole dollars. */
 /** The pie being made for an order, wherever it is on the oven counter (peel, oven, bench or board), or null. */
@@ -3938,7 +4004,7 @@ function updateUi(dt = 0): void {
   // The oven: a pie golden and ready, or one catching (the fire side running away, or burning).
   const pies = counter.middle === "oven" ? counter.ovenSpots.slice(0, counter.ovenCount).map((s) => s.layers[0]?.piece).filter((d): d is Piece => d?.kind === "dough") : [];
   const ovenReady = pies.some((d) => cookZone("dough", paleSide(d)) === "done");
-  const ovenBurning = pies.some((d) => Math.max(...d.cook) > COOK_SCALE.dough.over + 0.05 || fireLead(d) > ovenLead(d));
+  const ovenBurning = pies.some((d) => darkSide(d) > COOK_SCALE.dough.over);
   const dots = [false, grillBurning || ovenBurning || ovenReady, friesReady || friesBurning];
   const hot = [false, grillBurning || ovenBurning, friesBurning];
   ui.tabs.forEach((t, i) => {
@@ -4177,7 +4243,7 @@ function updatePressTags(): void {
   });
 }
 
-/** A meter in front of each pie in the oven: its paler side's bake, and when to nudge it round. */
+/** A meter in front of each pie in the oven: its paler side's bake (how even it is shows on the crust itself). */
 const ovenTags: HTMLElement[] = [];
 function updateOvenTags(): void {
   const on = game.phase === "playing" && counter.middle === "oven" && counter.page === HOME_PAGE && counter.settled;
@@ -4191,11 +4257,7 @@ function updateOvenTags(): void {
     const d = on && i < counter.ovenCount ? s.layers[0]?.piece : undefined;
     el.hidden = !d || d.kind !== "dough";
     if (el.hidden || !d) return;
-    const lead = fireLead(d) / ovenLead(d);
-    const turns = d.turns ?? 0;
-    // The chip says when to nudge it round: soon, now (the hot side is running away), or that it's been turned.
-    const chip = lead > 1 ? `<em class="turn hot">↻ Nudge!</em>` : lead > 0.6 ? `<em class="turn">↻ Nudge</em>` : turns ? `<em class="turn on">Turned${turns > 1 ? ` ×${turns}` : ""}</em>` : "";
-    const html = `${cookMeter("dough", paleSide(d))}${chip}`;
+    const html = cookMeter("dough", paleSide(d));
     if (el.innerHTML !== html) el.innerHTML = html;
     const v = counter.spotTagPoint(i).project(counter.camera);
     el.style.left = `${((v.x + 1) / 2) * bands.counter.w}px`;
@@ -4354,6 +4416,8 @@ window.addEventListener("blur", cancelPointer);
   spawnCustomer,
   customersView,
   serve,
+  /** Show a customer's opinion (and a review) over slot i, for screenshots. */
+  opinion: showOpinion,
   goToPage,
   goToStop,
   eggInHand: () => eggHand?.stage ?? null,
@@ -4361,6 +4425,11 @@ window.addEventListener("blur", cancelPointer);
   stops: STOPS.length,
   ring: ringBell,
   callNext,
+  scorePlate,
+  /** What the finger on the counter is doing now (for the bot). */
+  ptrMode: () => ptr?.mode ?? null,
+  /** The tray slot under a screen point (CSS px), and which band it's in (for the bot). */
+  trayPick: (x: number, y: number) => [bandAt(y), trayView.pick(ndcIn(bands.tray, x - colX, y))],
   gesture: () => lastGesture,
   /** Screen point (CSS px) of the fully zoomed sauce view's middle, and its side. */
   sauceCentre: () => {
@@ -4373,6 +4442,8 @@ window.addEventListener("blur", cancelPointer);
     for (let t = 0; t < seconds; t += 1 / 30) tick(1 / 30);
     render();
   },
+  /** One frame of the game without drawing it (a bot's touch playtest runs the clock this way in real time). */
+  tick: (dt: number) => tick(dt),
   /** Screen position (CSS px) of a world point in one of the bands. */
   project: (band: "counter" | "tray" | "customers", x: number, y: number, z: number) => {
     const cam = band === "counter" ? counter.camera : band === "tray" ? trayView.camera : customersView.camera;
@@ -4393,7 +4464,7 @@ window.addEventListener("blur", cancelPointer);
   }),
   /** The oven, for the playtest bot: the peel, each spot and the board, and where the dough, pot and bottles are. */
   oven: () => {
-    const pie = (ls: Layer[]) => ls.map((l) => ({ kind: l.piece.kind, cook: [...l.piece.cook], melt: l.piece.melt ?? 0, turns: l.piece.turns ?? 0, scorch: l.piece.scorch ?? 0, folded: !!l.piece.folded, cuts: l.piece.cuts ?? 0, stroke: l.piece.stroke?.length ?? 0 }));
+    const pie = (ls: Layer[]) => ls.map((l) => ({ kind: l.piece.kind, cook: [...l.piece.cook], melt: l.piece.melt ?? 0, rim: [...(l.piece.rim ?? [])], yaw: l.piece.yaw ?? 0, scorch: l.piece.scorch ?? 0, folded: !!l.piece.folded, cuts: l.piece.cuts ?? 0, stroke: l.piece.stroke?.length ?? 0 }));
     return {
       middle: counter.middle,
       peel: { at: counter.peelPointWorld().toArray(), handle: counter.peelHandleWorld().toArray(), held: counter.peelHeld, home: counter.peelHome, layers: pie(counter.peel.layers), target: counter.peelTarget() },

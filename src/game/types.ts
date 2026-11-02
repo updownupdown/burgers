@@ -96,13 +96,14 @@ export interface Piece {
   /** A corn tortilla flattened by hand in the tortilla press (Sun Valley). */
   handmade?: boolean;
   /**
-   * A flatbread's dough (Orchard Isle): times it was turned in the hearth oven. `cook[0]` is the
-   * half that started facing the fire, `cook[1]` the other; an even count has half 0 to the fire.
+   * A flatbread's crust (Orchard Isle), segment by segment round the rim (RIM_SEGS, see cooking.ts):
+   * each bakes by how it faces the oven's hot back wall. `cook[0]` and `cook[1]` keep the averages of
+   * half A (segments 0..3, the back half until it's turned) and half B.
    */
-  turns?: number;
-  /** A flatbread's heading on the counter (radians about y), as the peel has nudged it round: half A faces the oven's back wall while cos(yaw) > 0. */
+  rim?: number[];
+  /** A flatbread's heading on the counter (radians about y), as the peel has nudged it round: half A faces the oven's back wall at 0. */
   yaw?: number;
-  /** Seconds the side facing the fire spent running too far ahead of the pale side (it scorches). */
+  /** Seconds its darkest side spent past the band (it scorches). */
   scorch?: number;
   /** Cuts across a flatbread on the board (Port Amber cuts in four: two cuts). */
   cuts?: number;
@@ -172,8 +173,6 @@ export interface ExpectedLayer {
   cold?: boolean;
   /** A flour tortilla folded over its filling and crisped on both sides (a quesadilla), or a calzone. */
   folded?: boolean;
-  /** A flatbread's dough: baked in the hearth oven, turned this many times (the calzone twice). */
-  turns?: number;
   /** Goes on a flatbread after the oven (basil, rocket, honey): it should never have been baked. */
   after?: boolean;
 }

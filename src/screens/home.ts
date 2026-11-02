@@ -1,6 +1,7 @@
 import { CROWD } from "../game/business";
 import { expectedCustomers, rangeUnits } from "../game/day";
 import type { Save } from "../game/progress";
+import { ratingPull, reviewAverage } from "../game/reviews";
 import { EVENTS, eventOn, FINAL_TOWN, nextDay, STOPS, townById, withEvent, type Stop } from "../game/stops";
 import { applyTrip, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Legs, type Trip } from "../game/travel";
 import { icon } from "../ui/icons";
@@ -190,7 +191,7 @@ function bankHtml(save: Save): string {
  * and the menu (or, in the evening, today's results).
  */
 function statsHtml(save: Save): string {
-  const avg = save.ratingCount ? save.rep : null;
+  const avg = reviewAverage(save.reviewCounts);
   const evening = save.time === "evening";
   const last = save.last && save.last.town === save.town ? save.last : null;
   return `<div class="home-stats bv-light" role="group" aria-label="Your truck">
@@ -446,7 +447,7 @@ function renderSheet(m: Mounted, id: string): void {
     <div class="home-facts">
       <div><span class="bv-eyebrow">Shifts here</span><b>${t.roads.length ? pipsHtml(unlockProgress(s.shiftsIn, id).done, SHIFTS_TO_UNLOCK) : ""}${s.shiftsIn[id] ?? 0}</b></div>
       <div><span class="bv-eyebrow">Best shift</span><b>${best !== undefined ? `${icon("star")}${best.toFixed(1)}` : "–"}</b></div>
-      <div><span class="bv-eyebrow">${trip ? "From here" : "Customers"}</span><b>${trip ? `${miles(trip.distance)} mi` : `${icon("people")}~${expectedCustomers({ stop: withEvent(t, ev), popularity: s.popularity, rep: s.rep, hidden: s.hidden, shift: s.shift })}`}</b></div>
+      <div><span class="bv-eyebrow">${trip ? "From here" : "Customers"}</span><b>${trip ? `${miles(trip.distance)} mi` : `${icon("people")}~${expectedCustomers({ stop: withEvent(t, ev), popularity: s.popularity, rating: ratingPull(s.reviewCounts), hidden: s.hidden, shift: s.shift })}`}</b></div>
     </div>
     ${bonusRow(s, id)}
     ${open && t.newThing && !(s.shiftsIn[id] ?? 0) ? `<div class="bv-callout new">${icon("new")}<span>${esc(t.newThing)}</span></div>` : ""}

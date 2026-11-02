@@ -15,6 +15,7 @@
 import { hapticsOn, hapticsSupported, setHaptics } from "../audio";
 import { buildLabel, CURRENT, reloadTo } from "../update";
 import { icon } from "../ui/icons";
+import { opinionFace, opinionLabel } from "../ui/faces";
 import { openHowTo } from "./howto";
 import { openMenuRef } from "./menuref";
 import { closeAllModals, esc, getDeps, modalDepth, modalHead, modalOpen, popModal, price, pushModal, setDeps, type GfxLevel, type MenuDeps, type ShiftSummary } from "./modal";
@@ -157,8 +158,6 @@ export function openMenu(over: Partial<MenuDeps> = {}): void {
   });
 }
 
-const starRow = (n: number) => `<span class="pause-stars" aria-label="${n} star${n === 1 ? "" : "s"}">${"★".repeat(n)}<span class="off">${"★".repeat(Math.max(0, 3 - n))}</span></span>`;
-
 /** The pause card in a shift: how it's going, today's menu in brief, and the way out at the bottom. */
 function pauseHtml(d: MenuDeps, town: Stop): string {
   const sh = d.shift?.();
@@ -196,7 +195,7 @@ const pauseConfirm = (id: string, ic: string, q: string, note: string, yes: stri
 function shiftHtml(sh: ShiftSummary): string {
   const pct = Math.round(sh.progress * 100);
   const avg = sh.stars.length ? sh.stars.reduce((a, b) => a + b, 0) / sh.stars.length : null;
-  const tally = [3, 2, 1, 0].map((n) => ({ n, count: sh.stars.filter((x) => x === n).length }));
+  const tally = [5, 4, 3, 2, 1].map((n) => ({ n, count: sh.stars.filter((x) => x === n).length }));
   const phase = sh.closing ? "Window shut · last orders" : pct < 25 ? "Opening hour" : pct < 70 ? "The rush" : "Winding down";
   return `<section class="pause-shift" aria-label="This shift">
     <div class="pause-clock">
@@ -214,10 +213,17 @@ function shiftHtml(sh: ShiftSummary): string {
     <p class="pause-note">About ${sh.expected} people today${sh.takings !== null ? ` · <b class="bv-mono">$${Math.round(sh.takings)}</b> taken so far` : ""}.</p>
     ${
       sh.stars.length
-        ? `<div class="pause-tally" aria-label="Ratings so far">${tally.map((t) => `<span class="${t.count ? "" : "zero"}">${t.n ? starRow(t.n) : `<span class="pause-zero">${icon("frown")}</span>`}<b class="bv-mono">${t.count}</b></span>`).join("")}</div>`
+        ? `<div class="pause-tally" aria-label="What customers thought so far">${tally.map((t) => `<span class="${t.count ? "" : "zero"}" title="${opinionLabel(t.n)}">${opinionFace(t.n)}<b class="bv-mono">${t.count}</b></span>`).join("")}</div>`
         : `<p class="pause-note mute">No one has been served yet.</p>`
     }
-    ${sh.reviews.length ? `<ul class="pause-revs">${sh.reviews.slice(0, 2).map((r) => `<li>${starRow(r.stars)}<q>${esc(r.text)}</q></li>`).join("")}</ul>` : ""}
+    ${
+      sh.served
+        ? `<p class="pause-revs">${icon("review")}<span>${sh.reviews.length ? `${sh.reviews.length} review${sh.reviews.length === 1 ? "" : "s"} so far` : "No reviews yet"}</span>${sh.reviews
+            .slice(-6)
+            .map((n) => `<b class="bv-mono">${n}<i>★</i></b>`)
+            .join("")}</p>`
+        : ""
+    }
   </section>`;
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { menuFactor, menuFor, nextReputation, ratingFactor } from "./business";
+import { menuFactor, menuFor, ratingFactor } from "./business";
 import { pieceFor, popularityChange } from "./press";
 import { applyMods, makeOrder, orderFromRecipe, seededRng, sidesOrder } from "./menu";
 import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent } from "./stops";
@@ -85,17 +85,17 @@ describe("alignLayers", () => {
 });
 
 describe("scorePlate", () => {
-  it("gives three stars to a perfect burger", () => {
+  it("gives five stars to a perfect burger", () => {
     const r = scorePlate(classic, perfectPlate());
     expect(r.score).toBe(100);
-    expect(r.stars).toBe(3);
+    expect(r.stars).toBe(5);
     expect(r.notes).toEqual([]);
   });
 
   it("scores an empty plate as zero-ish", () => {
     const r = scorePlate(classic, { layers: [], fries: null, drink: null });
     expect(r.score).toBe(0);
-    expect(r.stars).toBe(0);
+    expect(r.stars).toBe(1);
   });
 
   it("penalises a burnt patty and says so", () => {
@@ -111,7 +111,7 @@ describe("scorePlate", () => {
     p.layers.pop();
     const r = scorePlate(classic, p);
     expect(r.notes.some((n) => n.includes("missing bun"))).toBe(true);
-    expect(r.stars).toBeLessThan(3);
+    expect(r.stars).toBeLessThan(5);
   });
 
   it("penalises a messy stack", () => {
@@ -383,10 +383,11 @@ describe("melted cheese", () => {
 });
 
 describe("road trip progress", () => {
-  it("needs most customers served at one star or better to move on", () => {
-    expect(passed(1.2, 6, 9)).toBe(true);
-    expect(passed(0.8, 9, 9)).toBe(false);
-    expect(passed(3, 4, 9)).toBe(false);
+  it("needs most customers served at two and a half stars or better to move on", () => {
+    expect(passed(2.8, 6, 9)).toBe(true);
+    expect(passed(2.5, 5, 9)).toBe(true);
+    expect(passed(2.2, 9, 9)).toBe(false);
+    expect(passed(5, 4, 9)).toBe(false);
   });
 });
 
@@ -439,8 +440,10 @@ describe("the crowd", () => {
     expect(menuFactor(4)).toBeCloseTo(1);
     expect(menuFactor(6)).toBeCloseTo(1.1);
     expect(menuFactor(9)).toBeCloseTo(1.1);
-    expect(ratingFactor(3)).toBeGreaterThan(ratingFactor(2));
-    expect(ratingFactor(1)).toBeLessThan(1);
+    expect(ratingFactor(5)).toBeGreaterThan(ratingFactor(4));
+    expect(ratingFactor(4)).toBeCloseTo(1.05);
+    expect(ratingFactor(3)).toBeLessThan(1);
+    expect(ratingFactor(1)).toBeCloseTo(ratingFactor(2));
   });
 
   it("never lets the menu drop below two recipes", () => {
@@ -448,12 +451,6 @@ describe("the crowd", () => {
     expect(menuFor(t, []).length).toBe(t.menu.length);
     expect(menuFor(t, [t.menu[0].name]).length).toBe(t.menu.length - 1);
     expect(menuFor(t, t.menu.map((r) => r.name)).length).toBe(t.menu.length);
-  });
-
-  it("moves reputation gradually", () => {
-    const r = nextReputation(2, 6, [3, 3, 3]);
-    expect(r.rep).toBeGreaterThan(2);
-    expect(r.rep).toBeLessThan(3);
   });
 
   it("gives every town a crowd", () => {
@@ -491,12 +488,14 @@ describe("events", () => {
 
 describe("critics and popularity", () => {
   it("a great TV spot moves popularity more than a newspaper piece", () => {
-    expect(popularityChange(3, "tv")).toBeGreaterThan(popularityChange(3, "paper"));
-    expect(popularityChange(0, "paper")).toBeLessThan(0);
+    expect(popularityChange(5, "tv")).toBeGreaterThan(popularityChange(5, "paper"));
+    expect(popularityChange(4, "paper")).toBeGreaterThan(0);
+    expect(popularityChange(3, "paper")).toBeLessThan(0);
+    expect(popularityChange(1, "paper")).toBeLessThan(popularityChange(2, "paper"));
   });
 
   it("writes a piece with a headline and quote", () => {
-    const p = pieceFor(3, [], townById("summit"), null, seededRng(1));
+    const p = pieceFor(5, [], townById("summit"), null, seededRng(1));
     expect(p.headline.length).toBeGreaterThan(5);
     expect(p.pop).toBeGreaterThan(0);
   });
@@ -531,8 +530,8 @@ describe("drinks-only and fries-only customers", () => {
   });
 
   it("scores the drink or the fries as the whole order", () => {
-    expect(scorePlate(drinkOnly, { layers: [], fries: null, drink: goodDrink }).stars).toBe(3);
-    expect(scorePlate(friesOnly, { layers: [], fries: goodFries, drink: null }).stars).toBe(3);
+    expect(scorePlate(drinkOnly, { layers: [], fries: null, drink: goodDrink }).stars).toBe(5);
+    expect(scorePlate(friesOnly, { layers: [], fries: goodFries, drink: null }).stars).toBe(5);
     const missing = scorePlate(drinkOnly, { layers: [], fries: goodFries, drink: null });
     expect(missing.notes).toContain("forgot the drink");
     expect(missing.faulty).toBe(true);

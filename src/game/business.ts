@@ -30,34 +30,10 @@ export function menuFactor(size: number): number {
   return Math.max(0.8, Math.min(1.1, 0.8 + 0.1 * (size - 2) - (size > 4 ? 0.05 * (size - 4) : 0)));
 }
 
-/** A well-rated truck draws a few more people: 0.9 at 1 star, 1.05 at 2, 1.2 at 3. */
-export function ratingFactor(rep: number): number {
-  return 0.75 + 0.15 * Math.max(0, Math.min(3, rep));
-}
-
-export interface Review {
-  stars: number;
-  text: string;
-  stop: string;
-}
-
-const GREAT = ["Best burger on the road!", "Worth the detour.", "I'd drive back for this.", "Ten out of ten, would honk again."];
-const OKAY = ["Pretty good.", "Solid lunch.", "Not bad at all.", "Would stop again."];
-const MEH = ["Meh.", "Could be better.", "Not my favourite.", "Disappointing."];
-
-/** A one-line review from a served (or abandoned) order. */
-export function reviewFor(stars: number, notes: string[], rng: () => number, walkedOut = false): string {
-  const pick = (xs: string[]) => xs[Math.floor(rng() * xs.length)];
-  const note = notes[0] ? notes[0].charAt(0).toUpperCase() + notes[0].slice(1) : "";
-  if (walkedOut) return "Waited forever and left hungry.";
-  return stars === 3 ? pick(GREAT) : stars === 2 ? (note ? `${note}, but good.` : pick(OKAY)) : note ? `${pick(MEH)} ${note}.` : pick(MEH);
-}
-
-/** Rolling average: recent shifts count, but one bad day doesn't sink the truck. */
-export function nextReputation(rep: number, weight: number, shiftStars: number[]): { rep: number; weight: number } {
-  if (!shiftStars.length) return { rep, weight };
-  const sum = shiftStars.reduce((a, b) => a + b, 0);
-  const w = Math.min(weight, 40);
-  const n = shiftStars.length;
-  return { rep: (rep * w + sum) / (w + n), weight: w + n };
+/**
+ * A well-rated truck draws a few more people: 0.75 at 2★ or below, 0.9 at 3★, 1.05 at 4★ and 1.2
+ * at 5★. Takes the rating passers-by see (`ratingPull` in reviews.ts), 1..5.
+ */
+export function ratingFactor(rating: number): number {
+  return 0.75 + 0.15 * Math.max(0, Math.min(3, rating - 2));
 }

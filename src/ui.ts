@@ -456,10 +456,10 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     let label = ticketLabel(exp.kind);
     let tail = "";
     if (exp.kind === "dough") {
-      // Baked in the hearth oven and turned (a calzone folded first, turned twice); Port Amber cuts in four.
+      // Baked in the deck oven (a calzone folded first); turning it is up to the cook, for an even bake. Port Amber cuts in four.
       if (exp.folded) icon = "calzone";
       label = exp.folded ? "Calzone" : "Dough";
-      tail = (exp.folded ? modBox("fold", "Fold") : "") + modBox("toast", "Bake") + modBox("flip", (exp.turns ?? 1) > 1 ? "Turn ×2" : "Turn") + (order.slice ? modBox("cut", "Cut 4") : "");
+      tail = (exp.folded ? modBox("fold", "Fold") : "") + modBox("toast", "Bake") + (order.slice ? modBox("cut", "Cut 4") : "");
     } else if (exp.after) tail = modBox("cold", "After");
     else if (TORTILLAS.has(exp.kind)) {
       // Warm on the comal; a quesadilla is folded over and flipped once.

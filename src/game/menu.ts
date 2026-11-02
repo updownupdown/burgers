@@ -142,10 +142,10 @@ export function orderFromRecipe(
   const counted = (kind: Kind) => recipeCount(recipe, kind) + (more.has(kind) ? extraCount(kind) : 0);
   const layers: ExpectedLayer[] = kinds.map((kind, i) => {
     if (recipe.pie) {
-      // Orchard Isle: the dough is baked and turned (a calzone folded first and turned twice), the
-      // cheese melts in the oven, and basil, rocket and honey go on after.
+      // Orchard Isle: the dough is baked (a calzone folded first; turning it round is up to the cook,
+      // for an even bake), the cheese melts in the oven, and basil, rocket and honey go on after.
       const calzone = recipe.pie === "calzone";
-      if (kind === "dough") return calzone ? { kind, toasted: true, turns: 2, folded: true } : { kind, toasted: true, turns: 1 };
+      if (kind === "dough") return calzone ? { kind, toasted: true, folded: true } : { kind, toasted: true };
       const exp: ExpectedLayer = { kind };
       if (COUNTED.has(kind)) exp.count = counted(kind);
       if (OVEN_CHEESE.has(kind)) exp.melted = true;

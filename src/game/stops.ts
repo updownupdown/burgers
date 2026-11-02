@@ -28,8 +28,8 @@ export interface Recipe {
    */
   dish?: "tacos" | "quesadilla" | "tostada";
   /**
-   * Baked in the hearth oven (Orchard Isle): a flatbread built on the peel, baked and turned once,
-   * or a calzone, folded before the oven and turned twice.
+   * Baked in the deck oven (Orchard Isle): a flatbread built on the peel and baked (turned round
+   * for an even bake, if the cook likes), or a calzone, folded before the oven.
    */
   pie?: "flatbread" | "calzone";
 }
@@ -154,9 +154,9 @@ const BREAKFAST_TACO: Recipe = { name: "Breakfast Taco", price: 11, layers: ["fl
 /** The Rodeo special at Cactus Junction: a platter of four street tacos. */
 const RODEO_PLATTER: Recipe = { name: "Rodeo Platter", price: 15, layers: ["corn", "pork", "onion", "cilantro", "lime"], toasted: true, dish: "tacos", counts: { corn: 4, pork: 4, onion: 1 }, from: 0.1 };
 // Orchard Isle: flatbreads from the hearth oven (DESIGN §24, phase 4). Built on the peel (dough,
-// sauce or oil, then the toppings), slid into the oven and turned once so both halves bake;
-// basil, rocket and honey go on at the tray after the oven. The calzone is folded on the peel and
-// turned twice.
+// sauce or oil, then the toppings) and slid into the oven, turned round there if the cook wants
+// an even bake; basil, rocket and honey go on at the tray after the oven. The calzone is folded on
+// the peel.
 const HARVEST_RED: Recipe = { name: "Harvest Red", price: 10, layers: ["dough", "redsauce", "mozzarella", "basil"], toasted: true, pie: "flatbread", melt: true, counts: { mozzarella: 4 } };
 const MUSHROOM: Recipe = { name: "Mushroom", price: 11, layers: ["dough", "redsauce", "mozzarella", "mushroom"], toasted: true, pie: "flatbread", melt: true, counts: { mozzarella: 3, mushroom: 5 } };
 const FIG_HAM: Recipe = { name: "Fig & Ham", price: 13, layers: ["dough", "oil", "mozzarella", "ham", "fig", "honey"], toasted: true, pie: "flatbread", melt: true, counts: { mozzarella: 3, ham: 3, fig: 4 }, from: 0.15 };
@@ -407,7 +407,7 @@ export const STOPS: Stop[] = [
     fryer: ["fries", "zucchini"],
     customers: 11,
     shiftLength: 200,
-    newThing: "New here: the deck oven. Build a flatbread on the peel, drag the peel by its handle into the oven and swipe down. Nudge the pie round once with the peel so both halves bake, swipe up to lift it out, and swipe down over a tray. Basil goes on after.",
+    newThing: "New here: the deck oven. Build a flatbread on the peel, drag the peel by its handle into the oven and swipe down. The side facing the hot wall browns faster: turn the pie round with the peel's tip for an even bake. Push the peel in under it to lift it out, and swipe down over a tray. Basil goes on after.",
     menu: [HARVEST_RED, MUSHROOM],
   },
   {
@@ -446,7 +446,7 @@ export const STOPS: Stop[] = [
     fryer: ["fries", "zucchini", "fritters"],
     customers: 14,
     shiftLength: 220,
-    newThing: "New here: the Calzone (fold it on the peel, nudge it round twice), a third oven spot and the board: set a flatbread on it with the peel and swipe across it twice to cut it in four.",
+    newThing: "New here: the Calzone (fold it on the peel; it bakes slower), a third oven spot and the board: set a flatbread on it with the peel and swipe across it twice to cut it in four.",
     menu: [HARVEST_RED, MUSHROOM, FIG_HAM, PEAR_BLUE, CALZONE],
   },
 ];

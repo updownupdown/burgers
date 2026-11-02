@@ -2,13 +2,15 @@ import { describe, expect, it } from "vitest";
 import { makeOrder, orderFromRecipe, seededRng } from "./menu";
 import { fryerOf, middleOf, STOPS, townById } from "./stops";
 import { leopard, scorePlate } from "./scoring";
-import { bakeStep, bakeTopping, COOK_SCALE, friesQuality, fryPerfect, paleSide } from "./cooking";
+import { bakeStep, bakeTopping, COOK_SCALE, fireHalf, friesQuality, fryPerfect, paleSide } from "./cooking";
+import { flickOf, nudgeSpin, spinPie, underPie, type Sample } from "./peel";
 import type { Kind, Layer, Order, Piece, Plate } from "./types";
 import { AFTER_OVEN, isSauce, newPiece, OVEN_CHEESE } from "./types";
 
 /*
- * Orchard Isle's hearth oven (DESIGN §24, phase 4): flatbread and calzone orders, baking and
- * turning in the oven, the board at Port Amber, and the isle's fryer.
+ * Orchard Isle's oven (DESIGN §24, phase 4; the peel and deck oven after build #69): flatbread and
+ * calzone orders, baking in the oven and nudging pies round with the peel, the peel's swipes, the
+ * board at Port Amber, and the isle's fryer.
  */
 
 /** A spiral from the middle out, as the ladle spreads tomato sauce over a base. */
@@ -27,7 +29,29 @@ const ZIGZAG = [
 ];
 const recipe = (town: string, name: string) => townById(town).menu.find((r) => r.name === name)!;
 
-/** Bake a pie's layers in the oven for `seconds`, turning it at each of `turnAt` (seconds in). */
+/** The peel's blade and a pie's reach, game units, as on the oven page. */
+const BLADE = { rx: 1.12, rz: 0.84 };
+const PIE_R = 0.8;
+/**
+ * Nudge a pie (centred at the origin) round with the peel, as a player would: the blade's tip set
+ * against the front of the pie and slid sideways along it, again and again, until it's spun `rad`.
+ */
+function nudgeRound(d: Piece, rad: number): number {
+  let spun = 0;
+  let b = { x: -1.0, z: 0.7 + BLADE.rz };
+  for (let i = 0; i < 400 && spun < rad; i++) {
+    const step = { x: 0.04, z: 0 };
+    const s = nudgeSpin(b, step, { x: 0, z: 0 }, PIE_R, BLADE);
+    spinPie(d, s);
+    spun += s;
+    b = { x: b.x + step.x, z: b.z };
+    // Back round for another push once the blade has slid past.
+    if (b.x > 1.0) b = { x: -1.0, z: b.z };
+  }
+  return spun;
+}
+
+/** Bake a pie's layers in the oven for `seconds`, nudging it half round with the peel at each of `turnAt` (seconds in). */
 function bake(layers: Layer[], seconds: number, turnAt: number[] = []): void {
   const d = layers[0].piece;
   const dt = 1 / 30;
@@ -35,7 +59,7 @@ function bake(layers: Layer[], seconds: number, turnAt: number[] = []): void {
   for (let t = 0; t < seconds; t += dt) {
     if (turns.length && t >= turns[0]) {
       turns.shift();
-      d.turns = (d.turns ?? 0) + 1;
+      nudgeRound(d, Math.PI);
     }
     bakeStep(d, dt);
     for (const l of layers.slice(1)) bakeTopping(l.piece, dt, OVEN_CHEESE.has(l.piece.kind));
@@ -118,8 +142,8 @@ describe("Orchard Isle orders", () => {
   });
 });
 
-describe("baking and turning", () => {
-  it("a Harvest Red turned once near halfway scores full marks, with leopard spots", () => {
+describe("baking and nudging round", () => {
+  it("a Harvest Red nudged round once near halfway scores full marks, with leopard spots", () => {
     const order = orderFromRecipe(1, recipe("applecross", "Harvest Red"), false, null);
     const { pie, after } = build(order);
     bake(pie, 21, [10]);
@@ -132,7 +156,7 @@ describe("baking and turning", () => {
     expect(r.perks).toContain("leopard spots");
   });
 
-  it("left unturned, the fire side scorches before the pale side is done", () => {
+  it("left unturned, the hot side scorches before the pale side is done", () => {
     const order = orderFromRecipe(1, recipe("applecross", "Harvest Red"), false, null);
     const { pie, after } = build(order);
     bake(pie, 22);
@@ -192,6 +216,70 @@ describe("baking and turning", () => {
     pie[1].piece.stroke = SPIRAL.slice(0, 8);
     bake(pie, 21, [10]);
     expect(scorePlate(order, plateOf([...pie, ...after])).notes).toContain("stingy with the sauce");
+  });
+});
+
+describe("the peel", () => {
+  it("sliding the blade's tip sideways along a pie's front spins it; pushing at its middle, from under it, beside it or from afar doesn't", () => {
+    const pie = { x: 0, z: 0 };
+    const tip = { x: 0.2, z: 0.7 + BLADE.rz };
+    // The tip against the front of the pie, slid right: the front swings right, the right side back (positive yaw).
+    expect(nudgeSpin(tip, { x: 0.1, z: 0 }, pie, PIE_R, BLADE)).toBeGreaterThan(0.1);
+    // ...and slid left, the other way.
+    expect(nudgeSpin(tip, { x: -0.1, z: 0 }, pie, PIE_R, BLADE)).toBeLessThan(-0.1);
+    // Straight at its middle: no turn.
+    expect(nudgeSpin({ x: 0, z: 0.6 + BLADE.rz }, { x: 0, z: -0.1 }, pie, PIE_R, BLADE)).toBeCloseTo(0, 6);
+    // Right under it (a scoop), level beside it (a neighbour brushed past), or well clear of it: no turn.
+    expect(nudgeSpin({ x: 0.1, z: 0.1 }, { x: 0.2, z: 0 }, pie, PIE_R, BLADE)).toBe(0);
+    expect(nudgeSpin({ x: 0.7 + BLADE.rx, z: 0.2 }, { x: 0, z: 0.2 }, pie, PIE_R, BLADE)).toBe(0);
+    expect(nudgeSpin({ x: 3, z: 0 }, { x: 0, z: -0.2 }, pie, PIE_R, BLADE)).toBe(0);
+  });
+
+  it("a pie is turned once its other half swings round to the back, and wobbling about sideways doesn't count twice", () => {
+    const d = newPiece("dough");
+    expect(fireHalf(d)).toBe(0);
+    expect(spinPie(d, 1.3)).toBe(false);
+    expect(spinPie(d, 0.5)).toBe(true);
+    expect(d.turns).toBe(1);
+    expect(fireHalf(d)).toBe(1);
+    // Rocking either side of sideways: still one turn.
+    for (let i = 0; i < 6; i++) spinPie(d, i % 2 ? 0.1 : -0.1);
+    expect(d.turns).toBe(1);
+    // All the way round again: two turns, half A back at the hot wall.
+    spinPie(d, Math.PI);
+    expect(d.turns).toBe(2);
+    expect(fireHalf(d)).toBe(0);
+    expect(Math.cos(d.yaw!)).toBeGreaterThan(0);
+  });
+
+  it("a couple of sideways nudges with the peel's tip turn a pie half round", () => {
+    const d = newPiece("dough");
+    nudgeRound(d, Math.PI);
+    expect(d.turns).toBe(1);
+    expect(Math.cos(d.yaw!)).toBeLessThan(-0.9);
+  });
+
+  it("scoops only with the blade right under a pie", () => {
+    expect(underPie({ x: 0.2, z: -0.1 }, { x: 0, z: 0 }, BLADE)).toBe(true);
+    expect(underPie({ x: 0.9, z: 0 }, { x: 0, z: 0 }, BLADE)).toBe(false);
+    expect(underPie({ x: 0, z: 0.7 }, { x: 0, z: 0 }, BLADE)).toBe(false);
+  });
+
+  it("reads a quick thumb swipe up or down, even mid-drag, but not a slow drag or a sideways one", () => {
+    const run = (pts: [number, number, number][]): Sample[] => pts.map(([x, y, t]) => ({ x, y, t }));
+    const move = (dx: number, dy: number, ms: number, n = 8, x0 = 200, y0 = 500, t0 = 0): [number, number, number][] => Array.from({ length: n + 1 }, (_, i) => [x0 + (dx * i) / n, y0 + (dy * i) / n, t0 + (ms * i) / n]);
+    expect(flickOf(run(move(0, -50, 80)))?.dir).toBe("up");
+    expect(flickOf(run(move(4, 45, 70)))?.dir).toBe("down");
+    expect(flickOf(run(move(0, -50, 400)))).toBeNull();
+    expect(flickOf(run(move(60, -20, 80)))).toBeNull();
+    expect(flickOf(run(move(0, -18, 40)))).toBeNull();
+    // A slow carry, then a flick down at the end: the flick counts, measured from where it began.
+    const carry = [...move(-80, -200, 900, 20), ...move(0, 50, 70, 6, 120, 300, 920)];
+    const f = flickOf(run(carry));
+    expect(f?.dir).toBe("down");
+    expect(f?.from.y).toBeLessThanOrEqual(305);
+    // Once a swipe has been counted, the same samples don't count again.
+    expect(flickOf(run(carry), 991)).toBeNull();
   });
 });
 

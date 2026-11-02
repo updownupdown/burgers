@@ -407,7 +407,7 @@ export const STOPS: Stop[] = [
     fryer: ["fries", "zucchini"],
     customers: 11,
     shiftLength: 200,
-    newThing: "New here: the hearth oven. Build a flatbread on the peel, slide it into the oven and tap it once to turn it, so both halves bake. Basil goes on after, at the tray.",
+    newThing: "New here: the deck oven. Build a flatbread on the peel, drag the peel by its handle into the oven and swipe down. Nudge the pie round once with the peel so both halves bake, swipe up to lift it out, and swipe down over a tray. Basil goes on after.",
     menu: [HARVEST_RED, MUSHROOM],
   },
   {
@@ -446,7 +446,7 @@ export const STOPS: Stop[] = [
     fryer: ["fries", "zucchini", "fritters"],
     customers: 14,
     shiftLength: 220,
-    newThing: "New here: the Calzone (fold it on the peel, turn it twice), a third oven spot and the board: swipe across a flatbread twice to cut it in four.",
+    newThing: "New here: the Calzone (fold it on the peel, nudge it round twice), a third oven spot and the board: set a flatbread on it with the peel and swipe across it twice to cut it in four.",
     menu: [HARVEST_RED, MUSHROOM, FIG_HAM, PEAR_BLUE, CALZONE],
   },
 ];

@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { COOK_SCALE, fireHalf, isMelted } from "../game/cooking";
+import { COOK_SCALE, isMelted } from "../game/cooking";
+import { pieYawOf } from "../game/peel";
 import { leopard } from "../game/scoring";
 import type { Kind, Piece } from "../game/types";
 import { COUNTED, LADLE_RADIUS, SAUCE_RADIUS } from "../game/types";
@@ -397,5 +398,9 @@ export function makeFlatbread(pieces: Piece[]): FlatbreadObject {
   return g;
 }
 
-/** Which way a flatbread faces, from how many times it's been turned: half A to the back (the fire) when even. */
-export const pieYaw = (p: Piece): number => fireHalf(p) * Math.PI;
+/**
+ * Which way a flatbread faces on the counter: as the peel has nudged it round, half A to the back
+ * (the oven's hot wall) at 0. A calzone's halves are its left and right, so it's drawn a quarter
+ * turn round: its half A to the back too, the crease down its right side.
+ */
+export const pieYaw = (p: Piece): number => pieYawOf(p) + (p.folded ? -Math.PI / 2 : 0);

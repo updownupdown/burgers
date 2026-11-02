@@ -72,15 +72,15 @@ const TAB_ART: Record<string, string> = {
     <path d="M17 30c-1-1.4.4-2.6 0-4 1.2.8 1.6 1.8 1.2 2.6.6-.4.8-1 .6-1.8 1 1 .8 2.4-.2 3.2z" fill="#ff8a2a"/>
     <path d="M23 30c-1-1.4.4-2.6 0-4 1.2.8 1.6 1.8 1.2 2.6.6-.4.8-1 .6-1.8 1 1 .8 2.4-.2 3.2z" fill="#ff8a2a"/>
     <path d="M13 11.5c-1.2-1.6 1.2-2.6 0-4.4M24 10.5c-1.2-1.6 1.2-2.6 0-4.4" fill="none" stroke="#c8472e" stroke-width="1.4" stroke-linecap="round"/>`,
-  // Orchard Isle's hearth oven: a brick dome with its mouth open, fire glowing inside, a flatbread on the hearth.
-  Oven: `<path d="M24 4.5c-2 1.6-.4 3-1.2 4.4M27.5 5.5c-1.6 1.2-.2 2.6-.9 3.6" fill="none" stroke="#9a948a" stroke-width="1.3" stroke-linecap="round"/>
-    <path d="M6 27V22C6 13 14 8 24 8s18 5 18 14v5z" fill="#c8664a" ${INK}/>
-    <path d="M10.5 18.5c2-4 7.5-6.5 13.5-6.5s11.5 2.5 13.5 6.5M8.5 23.4c2.4-1.4 5-2.2 7-2.4M39.5 23.4c-2.4-1.4-5-2.2-7-2.4" fill="none" stroke="#2a2622" stroke-width="1" opacity=".45"/>
-    <path d="M13 27v-3.2c0-4.4 4.8-7.6 11-7.6s11 3.2 11 7.6V27z" fill="#33302c" ${INK}/>
-    <path d="M16.6 26c-.6-2 1-3.2.6-5 1.8 1 2.4 2.6 1.8 3.6 1-.6 1.2-1.4 1-2.6 1.6 1.4 1.4 3.2.2 4z" fill="#ff8a2a"/>
-    <path d="M5 27h38v3.2a1.6 1.6 0 0 1-1.6 1.6H6.6A1.6 1.6 0 0 1 5 30.2z" fill="#8a8178" ${INK}/>
-    <ellipse cx="27.5" cy="26.4" rx="6.2" ry="2" fill="#e8b25c" ${INK}/>
-    <circle cx="25.5" cy="26.2" r=".8" fill="#c8402a"/><circle cx="29.2" cy="26.6" r=".8" fill="#c8402a"/>`,
+  // Orchard Isle's deck oven: a square brick oven, open at the front, its back glowing from the heating element, a flatbread on the deck.
+  Oven: `<path d="M6 29V9.5A1.5 1.5 0 0 1 7.5 8h33A1.5 1.5 0 0 1 42 9.5V29z" fill="#c8664a" ${INK}/>
+    <path d="M6.6 12.4h4.6M36.8 12.4h4.6M6.6 17.6h4.6M36.8 17.6h4.6M6.6 22.8h4.6M36.8 22.8h4.6M8.8 8.4v4M39 12.6v5M8.8 17.8v5M39 23v5.6M18 8.4v3M30 8.4v3M24 11.4v.4" fill="none" stroke="#2a2622" stroke-width="1" opacity=".45"/>
+    <path d="M11.5 29V13h25v16z" fill="#4a3326" ${INK}/>
+    <path d="M12.2 17.5h23.6v6.8H12.2z" fill="#ff8a2a" opacity=".28"/>
+    <rect x="12.6" y="22.6" width="22.8" height="2" rx="1" fill="#ff8a2a"/>
+    <path d="M5 28h38v3.2a1.6 1.6 0 0 1-1.6 1.6H6.6A1.6 1.6 0 0 1 5 31.2z" fill="#dcc8a4" ${INK}/>
+    <ellipse cx="24" cy="27.4" rx="8" ry="2.1" fill="#e8b25c" ${INK}/>
+    <circle cx="21.6" cy="27.2" r=".85" fill="#c8402a"/><circle cx="26.2" cy="27.6" r=".85" fill="#c8402a"/>`,
   Fryer: `<path d="M17.5 12.5 16 5M20.5 12.5V3.5M23.5 12.5l1-8M26.5 12.5l1.8-6.6M29.2 12.5l2.4-5.4" fill="none" stroke="#2a2622" stroke-width="3.4" stroke-linecap="round"/>
     <path d="M17.5 12.5 16 5M20.5 12.5V3.5M23.5 12.5l1-8M26.5 12.5l1.8-6.6M29.2 12.5l2.4-5.4" fill="none" stroke="#f0c341" stroke-width="1.6" stroke-linecap="round"/>
     <path d="M7 19h34v11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z" fill="#b9b2a6" ${INK}/>

@@ -105,7 +105,7 @@ const totalShifts = (s: Save) => Object.values(s.shiftsIn ?? {}).reduce((a, b) =
 
 /** Nothing covers the map: no screen over it, no night playing, no menu. */
 function mapClear(w: CoachWorld): boolean {
-  return w.phase() === "title" && !w.prepOpen() && !w.overlay() && !document.querySelector("div.home-night") && !document.querySelector(".home.driving") && !document.querySelector(".home-arrive");
+  return w.phase() === "title" && !w.prepOpen() && !w.overlay() && !document.querySelector("div.home-night") && !document.querySelector(".home.driving") && !document.querySelector(".home-arrive") && !document.querySelector(".menu-layer");
 }
 
 /** The first new town the road has opened that the truck hasn't worked yet. */
@@ -145,14 +145,14 @@ function mapSteps(w: CoachWorld): Step[] {
     {
       id: "closing",
       once: true,
-      when: () => mapClear(w) && !!q(".home-results.in:not([hidden])") && totalShifts(s) <= 1,
+      // After the report card has been put away: it comes back from Results.
+      when: () => mapClear(w) && s.time === "evening" && !!q(".home-stats [data-home=results]") && totalShifts(s) <= 1,
       done: () => okDone("closing") || totalShifts(s) > 1 || s.day > 1,
       show: () => ({
         title: "Shift done!",
-        text: "Here's how the day went: takings, stars and what people thought. Results has the full breakdown.",
-        ring: rectOf(q(".home-results .day-kpis")),
+        text: "Today's report card is under Results for the rest of the evening: takings, stars and what people thought.",
+        ring: rectOf(q(".home-stats [data-home=results]")),
         ok: "Got it",
-        place: "top",
       }),
     },
     {
@@ -163,7 +163,7 @@ function mapSteps(w: CoachWorld): Step[] {
       show: () => ({
         title: "Evening",
         text: "The day's work is done. In the evening you can make a short drive, or sleep. For now, tap Sleep to start tomorrow.",
-        gesture: tapOn(q(".home-results:not([hidden]) [data-home=sleep]") ?? q(".home-sheet:not([hidden]) [data-home=sleep]") ?? q(".home-dock [data-home=sleep]")),
+        gesture: tapOn(q(".home-sheet:not([hidden]) [data-home=sleep]") ?? q(".home-dock [data-home=sleep]")),
       }),
     },
     {
@@ -216,8 +216,8 @@ function mapSteps(w: CoachWorld): Step[] {
       done: () => w.overlay() === "garage",
       show: () => ({
         title: "Treat the truck",
-        text: "You've saved enough for the bonus you unlocked. Tap your savings to open the Garage.",
-        gesture: tapOn(q(".home-bank")),
+        text: "You've saved enough for the bonus you unlocked. Tap the Garage to spend your savings.",
+        gesture: tapOn(q(".home-stats [data-home=garage]")),
       }),
     },
   ];

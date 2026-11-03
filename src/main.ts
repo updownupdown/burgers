@@ -51,7 +51,7 @@ import { Dusk } from "./render/dusk";
 import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
-import { closingHtml, renderPrep, reviewsHtml, syncRange, toggleBox, toggleIngredients } from "./screens/day";
+import { renderPrep, reviewsHtml, syncRange, toggleIngredients } from "./screens/day";
 import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, setTabArt, ticketHtml, tortillaMeter } from "./ui";
 import { icon } from "./ui/icons";
 import { esc } from "./screens/modal";
@@ -4512,13 +4512,6 @@ ui.root.addEventListener("click", (e) => {
       showPrep();
       break;
     }
-    case "buy-bonus":
-      if (buyBonus(save, btn!.dataset.v as BonusId)) {
-        writeSave(save);
-        sfx.coin();
-        showClosing();
-      }
-      break;
     case "gar-tab":
       game.garage.tab = btn!.dataset.v === "looks" ? "looks" : "bonuses";
       showGarage();
@@ -4559,17 +4552,8 @@ ui.root.addEventListener("click", (e) => {
         showGarage();
       }
       break;
-    case "closing-box":
-      toggleBox(btn!.dataset.v!);
-      showClosing();
-      break;
     case "open":
       startShift();
-      break;
-    case "evening":
-      // Closing is opened from the evening map (its results sheet or the Results tab): go back to it as it was.
-      if (game.phase === "title") closeOverlay();
-      else showTitle();
       break;
     case "next":
       showTitle();
@@ -4879,14 +4863,6 @@ function closeOverlay(fromBack = false): void {
   else refreshHome();
 }
 
-function showClosing(): void {
-  if (!save.last) {
-    showTitle();
-    return;
-  }
-  showOverlay("closing", closingHtml(save.last, save));
-}
-
 /** The Garage: savings spent on bonuses and looks (src/screens/garage.ts). */
 function showGarage(): void {
   const keep = game.overlay === "garage" ? (ui.summary.querySelector<HTMLElement>(".day-scroll")?.scrollTop ?? 0) : 0;
@@ -4943,7 +4919,6 @@ function showTitle(night: NightShow | null = null, arrive: Arrival | null = null
       showPrep();
       screenShownAt = performance.now();
     },
-    openResults: () => showClosing(),
     openReviews: () => showReviews(),
     openGarage: () => showGarage(),
     openMenuRef: () => openMenuRef(withEvent(townById(save.town), eventOn(save.town, save.day))),

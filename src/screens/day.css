@@ -46,30 +46,13 @@
 .day-note .bv-icon { color: var(--bv-paprika); font-size: 16px; flex: none; margin-top: 1px; }
 .day-build { font: 500 12px var(--bv-font-mono); color: var(--bv-mute); text-align: center; margin: 4px 0 0; }
 
-/* ---- expand boxes --------------------------------------------------------------------- */
-.day-box { border: 1px solid var(--bv-rule-2); border-radius: var(--bv-r-lg); background: var(--bv-paper); overflow: hidden; }
-.day-box.open { border-color: var(--bv-ink); }
-.day-box-h { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto 20px; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; min-height: 58px; background: none; border: 0; text-align: left; }
-.day-box-h .ic { font-size: 20px; color: var(--bv-ink); display: grid; place-items: center; }
-.day-box-h .t { display: grid; gap: 2px; min-width: 0; }
-.day-box-h .t b { font-size: 15px; font-weight: 700; }
-.day-box-h .t small { font-size: var(--bv-fs-sm); color: var(--bv-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.day-box-h .v { font-family: var(--bv-font-mono); font-weight: 500; font-size: 14px; text-align: right; display: grid; gap: 1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.day-box-h .v small { font-family: var(--bv-font-mono); font-size: 11px; color: var(--bv-olive); }
-.day-box-h .v small.warn { color: var(--bv-amber); }
-.day-box-h .chev { color: var(--bv-mute); font-size: 16px; transition: transform var(--bv-mid) var(--bv-ease); display: grid; place-items: center; }
-.day-box.open .day-box-h .chev { transform: rotate(180deg); }
-.day-box-b { display: grid; gap: 10px; padding: 10px 12px 12px; border-top: 1px dashed var(--bv-rule); }
-.day-box-b[hidden] { display: none; }
-.day-box .bv-seg.compact button { min-height: 42px; }
-.day-box .bv-seg button small { font-family: var(--bv-font-mono); font-weight: 500; font-size: 11px; opacity: 0.8; }
+/* ---- prep fields ---------------------------------------------------------------------- */
 .day-field { display: grid; gap: 6px; }
 .day-field .bv-eyebrow { display: flex; justify-content: space-between; align-items: center; }
 .day-field .bv-eyebrow .bv-icon { font-size: 13px; margin-right: 4px; vertical-align: -2px; }
 .day-crowd { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--bv-ink-2); line-height: 1.4; }
 .day-crowd .bv-icon { font-size: 18px; color: var(--bv-ink); flex: none; margin-top: 1px; }
 .day-crowd b { color: var(--bv-ink); }
-.day-box .bv-callout { font-size: 13px; }
 
 /* menu rows */
 
@@ -88,18 +71,9 @@
 .day-ledger .foot { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: var(--bv-fs-sm); color: var(--bv-mute); font-weight: 600; }
 .day-ledger .foot b { color: var(--bv-ink); }
 
-/* ---- closing ---------------------------------------------------------------------------- */
-/* Dusk hero band: the home ground's colour, so Closing reads as part of the map's evening. */
-.day-hero { padding: calc(var(--safe-t) + 16px) 16px 16px; display: grid; gap: 6px; background: var(--bv-night); color: var(--bv-on-night); }
-.day-hero .bv-eyebrow { color: #aab2bd; }
-.day-hero .bv-title { color: var(--bv-on-night); font-size: 27px; }
-.day-hero p { margin: 0; font-size: 13px; color: #d5d0c6; font-weight: 600; }
-.day-hero-stars { display: flex; align-items: center; gap: 8px; font-size: 22px; color: #f2c262; }
-.day-hero-stars .bv-mono { font-size: 14px; color: var(--bv-on-night); }
+/* ---- stars and clippings (the reviews screen and the report card) ---------------------- */
 .day-stars { letter-spacing: 2px; color: var(--bv-amber); font-size: 12px; white-space: nowrap; }
 .day-stars .off { opacity: 0.3; }
-.day-hero-stars .day-stars { font-size: 22px; color: #f2c262; }
-.day-hero-stars .day-stars .off { opacity: 0.3; }
 .day-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .day-kpis.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .day-kpi { background: var(--bv-paper-2); border-radius: var(--bv-r-lg); padding: 8px 10px; display: grid; gap: 2px; line-height: 1.1; min-width: 0; }
@@ -150,8 +124,6 @@
 /* ---- supplies ------------------------------------------------------------------------------ */
 
 @media (max-width: 379px) {
-  .day-box-h { gap: 8px; padding: 10px 10px; }
-  .day-box-h .t b { font-size: 14px; }
   .day-top .where b { font-size: 20px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -224,18 +196,8 @@
 .prep-bonus[aria-pressed="true"] .ic { color: var(--bv-paprika); }
 .prep .day-foot .sum b { font-size: 18px; }
 
-/* ---- Closing: the bonus a great shift earned -------------------------------------------- */
-.day-reward { display: grid; justify-items: center; gap: 4px; text-align: center; padding: 16px 14px 14px; border-radius: var(--bv-r-lg); background: var(--bv-amber-soft); border: 1.5px solid var(--bv-amber); animation: day-reward-in 0.6s var(--bv-ease) both; }
-.day-reward .ic { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--bv-paper); color: var(--bv-ink); font-size: 28px; box-shadow: var(--bv-shadow-2, 0 2px 6px rgb(0 0 0 / 0.12)); margin: 4px 0; }
-.day-reward b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 24px; line-height: 1.1; }
-.day-reward p { margin: 0; font-size: 14px; color: var(--bv-ink-2); }
-.day-reward small { font-size: 11.5px; color: var(--bv-mute); }
-.day-reward .bv-btn { margin-top: 8px; }
-.day-goal { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 10px 12px; border-radius: var(--bv-r-md, 12px); background: var(--bv-paper-2); font-size: 12.5px; font-weight: 600; color: var(--bv-ink-2); line-height: 1.4; }
-.day-goal .bv-icon, .prep .day-hint > .bv-icon { flex: none; font-size: 16px; margin-top: 1px; color: var(--bv-ink); }
+.prep .day-hint > .bv-icon { flex: none; font-size: 16px; margin-top: 1px; color: var(--bv-ink); }
 .prep .day-hint:has(> .bv-icon) { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; }
-@keyframes day-reward-in { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .day-reward { animation: none; } }
 
 /* ---- Prep & Open as a card over the map (after build #62) ---------------------------------- */
 .screen.prep-host:has(> .day-screen) { padding: calc(var(--safe-t) + 12px) 12px calc(var(--safe-b) + 12px); place-items: center; }

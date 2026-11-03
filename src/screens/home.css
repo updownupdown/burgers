@@ -55,19 +55,23 @@
 .home-actions .bv-btn .bv-icon { font-size: 19px; }
 .home-brand .bv-eyebrow:empty { display: none; }
 
-/* ---- the plate under the bar: popularity, rating and the menu, as three buttons ---------- */
+/* ---- the plate under the bar: popularity & rating, the Garage, and the menu (or results) ---- */
+/* Each button's icon sits small in its label, in the label's colour, so the three fit one row. */
 .home-stats {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 6px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); gap: 6px; padding: 6px;
   background: var(--bv-paper); border-radius: var(--bv-r-lg); box-shadow: var(--bv-shadow-3);
 }
 .home-pill {
-  display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 46px; padding: 6px 10px;
+  position: relative; display: flex; align-items: center; gap: 14px; min-width: 0; min-height: 46px; padding: 6px 10px;
   border: 1px solid var(--bv-rule-2); border-radius: var(--bv-r-md); background: var(--bv-paper-2); color: var(--bv-ink);
   text-align: left; transition: background var(--bv-fast), transform var(--bv-fast) var(--bv-ease);
 }
-.home-pill > .bv-icon { flex: none; font-size: 18px; color: var(--bv-paprika); }
-.home-pill > span { display: grid; min-width: 0; line-height: 1.1; }
-.home-pill small { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bv-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-pill > span { display: grid; gap: 1px; min-width: 0; line-height: 1.1; }
+.home-pill.duo { gap: 12px; }
+.home-pill.duo > span { flex: 1 1 auto; min-width: 2.5em; }
+.home-pill small { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bv-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-pill small .bv-icon { font-size: 11px; color: inherit; vertical-align: -0.14em; margin-right: 3px; }
+.home-pill .dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--bv-paprika); box-shadow: 0 0 0 2px var(--bv-paper-2); }
 .home-pill b { font-size: 16px; font-weight: 600; white-space: nowrap; }
 .home-pill b.bv-mono { font-weight: 500; }
 .home-pill:active { background: var(--bv-paper-3); transform: translateY(1px); }
@@ -327,16 +331,17 @@
 }
 @media (max-width: 379px) {
   .home-logo { font-size: 17px; }
-  .home-pill { padding: 6px 8px; gap: 6px; }
-  .home-pill b { font-size: 14px; }
+  .home-pill { padding: 6px 8px; gap: 10px; }
+  .home-pill b { font-size: 15px; }
+  .home-pill small { letter-spacing: 0.02em; }
   .home-dock-info b { font-size: 20px; }
   .home-sheet-head .bv-title { font-size: 23px; }
 }
 @media (max-width: 359px) {
   .home-dock-row > .bv-btn.lg { padding: 0 12px; font-size: 18px; }
   .home-dock-row > .bv-btn.lg .bv-icon { display: none; }
-  .home-pill > .bv-icon { display: none; }
-  .home-pill small { letter-spacing: 0; }
+  .home-pill small { letter-spacing: 0; font-size: 10px; }
+  .home-pill small .bv-icon { display: none; }
 }
 @media (max-height: 700px) {
   .home-sheet { gap: 8px; }
@@ -395,17 +400,9 @@
 /* Dev mode's progress simulation is on: say so by the logo, so a simulated trip is never mistaken for the real one. */
 .home-dev { align-self: center; padding: 2px 7px; border-radius: var(--bv-r-pill); border: 1px dashed var(--bv-amber); color: var(--bv-amber); font-size: 11px; letter-spacing: 0.02em; }
 
-/* ---- the truck under the stars in the night card, and the savings button ---------------- */
+/* ---- the truck under the stars in the night card ---------------------------------------- */
 .home-night-truck { width: min(300px, 78vw); margin: -6px 0 2px; }
 .home-night-truck .tk { width: 100%; height: auto; max-height: 34vh; }
-.home-bank {
-  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px 0 10px;
-  border-radius: var(--bv-r-pill); background: var(--bv-paper-2); color: var(--bv-ink); font-weight: 700;
-}
-.home-bank .bv-icon { font-size: 18px; }
-.home-bank b { font-weight: 500; font-size: 14px; }
-.home-bank .dot { position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--bv-paprika); box-shadow: 0 0 0 2px var(--bv-paper-2); }
-.home-bank:active { background: var(--bv-paper-3); }
 .home-bonus { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 10px; margin-top: 10px; border: 1px solid var(--bv-rule-2); border-radius: var(--bv-r-lg); }
 .home-bonus.found { border-color: var(--bv-amber); background: var(--bv-amber-soft); }
 .home-bonus .ic { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--bv-paper-2); font-size: 18px; }
@@ -426,53 +423,3 @@
 /* The hatch lights up as the view lands on the truck. */
 .home-svg .home-truck .mk { transition: filter 0.6s var(--bv-ease); }
 .home-svg .home-truck.lit .mk { filter: drop-shadow(0 0 2.5px rgb(255 214 140 / 0.95)) drop-shadow(0 0 7px rgb(255 190 110 / 0.6)); }
-
-/* ---- today's results, on the evening map ------------------------------ */
-.home-results {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 6;
-  display: grid; gap: 10px; padding: 12px 14px calc(var(--safe-b) + 14px);
-  background: var(--bv-paper); color: var(--bv-ink);
-  border-radius: 18px 18px 0 0; box-shadow: 0 -10px 30px rgb(10 14 20 / 0.45);
-  transform: translateY(105%);
-  transition: transform 0.5s var(--bv-ease);
-}
-.home-results[hidden] { display: none; }
-.home-results.in { transform: none; }
-.home-res-head { display: flex; align-items: flex-start; gap: 10px; }
-.home-res-head .t { display: grid; gap: 3px; min-width: 0; flex: 1; }
-.home-res-head .nm { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.home-res-head .bv-title { font-size: 26px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.home-res-stars { display: inline-flex; align-items: center; gap: 6px; flex: none; }
-.home-res-stars .day-stars { font-size: 16px; letter-spacing: 1px; }
-.home-res-stars .bv-mono { font-size: 13px; font-weight: 500; }
-.home-res-head .bv-btn.icon { flex: none; width: 44px; height: 44px; border: 0; background: var(--bv-paper-2); color: var(--bv-ink); margin: -2px -2px 0 0; }
-.home-res-head .bv-btn.icon .bv-icon { font-size: 20px; }
-.home-res-verdict { margin: -4px 0 0; font-size: 13.5px; color: var(--bv-ink-2); font-weight: 600; }
-.home-res-reward { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--bv-r-lg); background: var(--bv-amber-soft); border: 1px solid var(--bv-amber); text-align: left; }
-.home-res-reward > .bv-icon { font-size: 22px; color: var(--bv-amber); flex: none; }
-.home-res-reward span { display: grid; gap: 1px; flex: 1; min-width: 0; }
-.home-res-reward b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 18px; line-height: 1.1; }
-.home-res-reward em { font-style: normal; font-weight: 700; color: var(--bv-paprika); }
-.home-res-rows { display: grid; }
-.home-res-row { display: flex; align-items: center; gap: 8px; padding: 8px 2px; border-bottom: 1px solid var(--bv-rule); font-size: 14px; text-align: left; width: 100%; }
-.home-res-row:last-child { border-bottom: 0; }
-.home-res-row > .bv-icon { font-size: 16px; color: var(--bv-mute); flex: none; }
-.home-res-row > span { flex: 1; min-width: 0; }
-.home-res-row em { font-style: normal; font-family: var(--bv-font-mono); font-weight: 500; font-size: 12.5px; color: var(--bv-ink-2); text-align: right; }
-.home-res-row em b { font-family: var(--bv-font-ui); font-weight: 700; color: var(--bv-ink); }
-.home-res-row.up em { color: var(--bv-olive); }
-.home-res-row.dn em { color: var(--bv-paprika); }
-.home-res-row.go em { color: var(--bv-ink); }
-.home-res-row.go > .bv-icon:last-child { color: var(--bv-paprika); }
-.home-res-foot { display: grid; grid-template-columns: auto 1fr; gap: 8px; }
-.home-res-foot .bv-btn { gap: 8px; }
-.home-res-foot .bv-btn:first-child { padding: 0 16px; }
-.home-res-foot .bv-btn .bv-icon { font-size: 20px; }
-@media (min-width: 720px) {
-  .home-results { left: 50%; right: auto; width: min(480px, calc(100% - 24px)); bottom: 16px; border-radius: 14px; transform: translate(-50%, calc(100% + 24px)); }
-  .home-results.in { transform: translateX(-50%); }
-}
-@media (max-height: 700px) {
-  .home-res-verdict { display: none; }
-  .home-res-row { padding: 6px 2px; }
-}

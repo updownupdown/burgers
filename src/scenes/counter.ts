@@ -2434,8 +2434,15 @@ export class CounterView {
   sizzleLevel(): number {
     const on = this.grillItems.filter((g) => !g.held && !g.below && g.flipT < 0);
     const pressing = this.middle === "press" ? this.bays.filter((b) => b.closed && b.layers.length).length : 0;
-    const baking = this.middle === "oven" ? this.ovenSpots.filter((s, i) => i < this.ovenCount && s.layers.length).length : 0;
-    return on.filter((g) => this.heatOf(g) === "hot").length * 0.35 + on.filter((g) => this.heatOf(g) === "warm").length * 0.08 + pressing * 0.3 + baking * 0.12;
+    // Pies in the oven don't sizzle (playtest #84: a grill's hiss over the oven was grating); see ovenLevel.
+    return on.filter((g) => this.heatOf(g) === "hot").length * 0.35 + on.filter((g) => this.heatOf(g) === "warm").length * 0.08 + pressing * 0.3;
+  }
+
+  /** The deck oven's faint roar and crackle, 0..1: a little for a lit oven, more with pies in it. */
+  ovenLevel(): number {
+    if (this.middle !== "oven") return 0;
+    const baking = this.ovenSpots.filter((s, i) => i < this.ovenCount && s.layers.length).length;
+    return Math.min(1, 0.25 + baking * 0.25);
   }
 
   /** Which grill zone a page-local x is over (nearest at the ends). */

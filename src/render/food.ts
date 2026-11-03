@@ -765,7 +765,7 @@ export function makeFood(piece: Piece, role: BunRole = "top"): FoodObject {
 }
 
 /** Sauce lines on the stack. */
-const SAUCE_COLOR: Record<"ketchup" | "mustard" | "pesto" | "aioli" | "redsalsa" | "greensalsa" | "crema" | "redsauce" | "oil" | "honey", string> = { ketchup: "#d8261b", mustard: "#f0c419", pesto: "#4f8f2e", aioli: "#f1e4b8", redsalsa: "#c8321f", greensalsa: "#6c9e2c", crema: "#f7f1e1", redsauce: "#c8402a", oil: "#d6c64a", honey: "#eaa22a" };
+const SAUCE_COLOR: Record<"ketchup" | "mustard" | "pesto" | "aioli" | "redsalsa" | "greensalsa" | "crema" | "redsauce" | "oil" | "honey", string> = { ketchup: "#d8261b", mustard: "#f0c419", pesto: "#4f8f2e", aioli: "#f1e4b8", redsalsa: "#c8321f", greensalsa: "#6c9e2c", crema: "#f7f1e1", redsauce: "#c8402a", oil: "#c9aa1e", honey: "#eaa22a" };
 
 /** How far from the middle of the burger each counted topping's slices sit. */
 const SLICE_RING: Partial<Record<Kind, number>> = { tomato: 0.42, onion: 0.28, pickle: 0.45, jalapeno: 0.46, mozzarella: 0.44, avocado: 0.2, redonion: 0.36, tuna: 0.36 };

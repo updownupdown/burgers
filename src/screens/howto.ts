@@ -416,7 +416,7 @@ function fryerSec(town: Stop | undefined): Sec {
   const poutineFrom = STOPS.find((t) => t.poutine && middleOf(t) === "grill")?.name;
   const nachosFrom = STOPS.find((t) => t.poutine && middleOf(t) === "comal")?.name;
   const here = town
-    ? `<div class="hw-key lite ticket" style="display:grid">${kinds
+    ? `<div class="hw-key lite ticket list">${kinds
         .map((k) => `<span><b>${FRY_LABEL[k]}</b>: ${FRY_NOTE[k]}</span>`)
         .join("")}${tostada ? `<span><b>Tostada</b>: a corn tortilla in an empty basket. See the Comal.</span>` : ""}</div>`
     : "";

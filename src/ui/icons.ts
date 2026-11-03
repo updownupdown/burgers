@@ -50,6 +50,8 @@ export const ICONS: Record<string, IconDef> = {
   "sound-off": { group: "system", svg: P("M4 10v4h3l5 4V6L7 10zM16 10l4 4M20 10l-4 4"), tags: "mute volume speaker" },
   music: { group: "system", svg: P("M9 18V6l10-2v12") + C(7, 18, 2) + C(17, 16, 2), tags: "radio note" },
   vibrate: { group: "system", svg: P("M9 4h6a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM4 9v6M20 9v6M12 17h.01"), tags: "haptics phone" },
+  phone: { group: "system", svg: P("M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2"), tags: "device screen" },
+  wrench: { group: "system", svg: P("M14.5 4.5a4.5 4.5 0 0 0-5.6 5.6L4 15v5h5l4.9-4.9a4.5 4.5 0 0 0 5.6-5.6l-2.8 2.8-3-3z"), tags: "dev tools developer" },
   info: { group: "system", svg: C(12, 12, 8.5) + P("M12 11v5") + DOT(12, 8), tags: "about" },
   help: { group: "system", svg: C(12, 12, 8.5) + P("M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.7") + DOT(12, 17), tags: "question how to play" },
   check: { group: "system", svg: P("M5 12.5l4.5 4.5L19 7"), tags: "done tick ok" },
@@ -114,12 +116,15 @@ export const ICONS: Record<string, IconDef> = {
   coffee: { group: "food", svg: P("M5 8h11v6a5 5 0 0 1-10 0zM16 9h2a2 2 0 0 1 0 4h-2M4 20h14M9 5V3M12 5V3"), tags: "hot mug breakfast" },
   panini: { group: "food", svg: P("M4 9h16v3H4zM4 15h16v3H4zM4 12h16v3H4zM6 9V7h12v2M7 12l2 1M11 12l2 1M15 12l2 1"), tags: "pressed sandwich melt toasted" },
   toast: { group: "food", svg: P("M6 10a3 3 0 0 1 0-6h12a3 3 0 0 1 0 6v10H6zM9 13l3 3 3-3"), tags: "toasted bun bread" },
+  taco: { group: "food", svg: P("M3 17a9 9 0 0 1 18 0zM6 11.5c1.5 1 3 1 4.5 0s3-1 4.5 0 2.5 1 3 .5M3 17h18"), tags: "tortilla tacos comal quesadilla red rock" },
+  flatbread: { group: "food", svg: C(12, 12, 8.5) + C(12, 12, 6) + DOT(10, 10) + DOT(14.5, 11) + DOT(11, 14.5) + DOT(15, 15), tags: "pizza pie oven orchard isle" },
   smash: { group: "food", svg: P("M5 13h14M4 16a8 3 0 0 0 16 0M12 13V5M9 8l3-3 3 3"), tags: "pressed thin crust" },
   /** The food menu: a menu card with a burger at its head (not the three-line app menu). */
   "food-menu": { group: "food", svg: P("M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8.5 10a3.5 2.6 0 0 1 7 0zM8.5 12.5h7M9 15h6M9 18h6"), tags: "menu card dishes recipes food" },
   "menu-book": { group: "food", svg: P("M4 5h7a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H4zM20 5h-7a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2h7zM7 9h3M7 12h3M14 9h3M14 12h3"), tags: "recipe book cookbook" },
 
   /* ---- trip (road, stops, map) -------------------------------------- */
+  garage: { group: "trip", svg: P("M3 10l9-6 9 6v10H3zM7 20v-7h10v7M7 15.5h10M7 18h10"), tags: "savings bonuses looks shop" },
   truck: { group: "trip", svg: P("M3 7h11v9H3zM14 10h4l3 3v3h-7zM3 16v-1") + C(7, 17, 2) + C(17, 17, 2) + P("M5 11h7"), tags: "food truck van vehicle" },
   road: { group: "trip", svg: P("M7 21L10 3M17 21L14 3M12 6v2M12 11v2M12 16v2"), tags: "highway trip route" },
   map: { group: "trip", svg: P("M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14"), tags: "atlas trip" },

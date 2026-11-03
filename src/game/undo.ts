@@ -8,7 +8,8 @@
  * stays as it is: undo moves things, it never turns back the clock.
  *
  * Never undone: serving (or a send-back: that tray's moves are forgotten), cooking and burning,
- * and the verbs on food in place (flips, folds, smashing, cracking an egg, cutting, pressing).
+ * and the verbs on food in place (flips, folds, smashing, cracking an egg, pressing). A cut can be
+ * undone (after build #82): the knife's one tap is easy to give by mistake.
  *
  * This file holds the rules only; main.ts finds where things are and moves them.
  */
@@ -28,7 +29,9 @@ export type Place =
   | { at: "pack"; i: number }
   | { at: "cup"; x: number; z: number }
   | { at: "batter" }
-  | { at: "trash" };
+  | { at: "trash" }
+  /** A cut was made with the knife (its undo flies the knife back). */
+  | { at: "knife" };
 
 export interface Move<T> {
   what: T;
@@ -67,11 +70,18 @@ export function mentionsTray(m: Move<unknown>, slot: number): boolean {
 /**
  * The history: newest last. `ok` (from main.ts) says whether a move can still be undone: its thing
  * is still where the move put it, and its old place can take it back. A move that can't be is
- * dropped (whatever came after it already moved the thing on in a way that isn't undone), so the
- * button always offers the newest move that works, or nothing.
+ * dropped, and so is every older move of the same things (`keys`: the pieces, cups or cartons a
+ * move carried): those things have moved on in a way undo doesn't follow, so carrying them back
+ * by an older move would split them up (a sandwich undone layer by layer, sauce left alone on a
+ * tray). The button always offers the newest move that works, or nothing.
+ *
+ * The caller must not ask while something is in the hand or flying back (main.ts: canUndo), as
+ * every move of a thing that's in the air looks stale.
  */
 export class History<T> {
   private moves: Move<T>[] = [];
+
+  constructor(private keys: (m: Move<T>) => readonly object[] = () => []) {}
 
   get size(): number {
     return this.moves.length;
@@ -85,12 +95,19 @@ export class History<T> {
     return true;
   }
 
-  /** The newest move that can be undone, dropping any above it that no longer can. */
+  /** Drop the newest move, and every older one that carried any of the same things. */
+  private dropTop(): void {
+    const m = this.moves.pop()!;
+    const gone = new Set(this.keys(m));
+    if (gone.size) this.moves = this.moves.filter((o) => !this.keys(o).some((k) => gone.has(k)));
+  }
+
+  /** The newest move that can be undone, dropping any above it that no longer can (with their things' older moves). */
   top(ok: (m: Move<T>) => boolean): Move<T> | null {
     while (this.moves.length) {
       const m = this.moves[this.moves.length - 1];
       if (ok(m)) return m;
-      this.moves.pop();
+      this.dropTop();
     }
     return null;
   }
@@ -102,9 +119,10 @@ export class History<T> {
     return m;
   }
 
-  /** A tray was served (or sent back): its moves can't be undone any more. */
+  /** A tray was served (or sent back): its moves can't be undone any more, nor older moves of what was on it. */
   forgetTray(slot: number): void {
-    this.moves = this.moves.filter((m) => !mentionsTray(m, slot));
+    const gone = new Set(this.moves.filter((m) => mentionsTray(m, slot)).flatMap((m) => [...this.keys(m)]));
+    this.moves = this.moves.filter((m) => !mentionsTray(m, slot) && !this.keys(m).some((k) => gone.has(k)));
   }
 
   clear(): void {

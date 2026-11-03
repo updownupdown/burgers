@@ -396,7 +396,7 @@ function searchLamps(W: number, mini: boolean): string {
 }
 
 function searchBeams(id: string, defs: string[], mini: boolean): string {
-  defs.push(`<linearGradient id="${id}-beam" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#fff6d8" stop-opacity="0.75"/><stop offset="1" stop-color="#fff6d8" stop-opacity="0"/></linearGradient>`);
+  defs.push(`<linearGradient id="${id}-beam" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#fff6d0" stop-opacity="0.55"/><stop offset="1" stop-color="#fff6d0" stop-opacity="0"/></linearGradient>`);
   const len = mini ? 700 : 240;
   const half = mini ? 70 : 46;
   return [26, 132]

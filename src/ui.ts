@@ -1,7 +1,7 @@
 import type { Order, Plate } from "./game/types";
 import { COOK_SCALE, cookZone, type Cookable } from "./game/cooking";
-import { collapseCounted, dishOrder, layerQuality, PATTY_OFF } from "./game/scoring";
-import { BREADS, COUNTED, DRINK_COLOR, DRINK_LABEL, DRINK_SHORT, extraCount, FRY_LABEL, fryOf, KIND_COLOR, KIND_LABEL, PROTEINS, SUGARED, TORTILLAS, type DrinkId, type FryKind, type Kind } from "./game/types";
+import { collapseCounted, dishOrder, layerQuality, PATTY_OFF, TIP_MOOD } from "./game/scoring";
+import { BREADS, COUNTED, DRINK_COLOR, GARNISH_LABEL, DRINK_LABEL, DRINK_SHORT, extraCount, FRY_LABEL, fryOf, KIND_COLOR, KIND_LABEL, PROTEINS, SUGARED, TORTILLAS, type DrinkId, type FryKind, type Kind } from "./game/types";
 import { fountainFor } from "./game/stops";
 import { icon } from "./ui/icons";
 
@@ -27,7 +27,7 @@ export interface Ui {
   tabs: HTMLButtonElement[];
   menuBtn: HTMLButtonElement;
   /** The service bell: a ring calls the next person in line. */
-  bell: HTMLButtonElement;
+  bell: HTMLElement;
   /** Undo, at the left of the header: carries the last move back (DESIGN §31). */
   undo: HTMLButtonElement;
   bellCount: HTMLElement;
@@ -113,9 +113,9 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     </div>
     <span class="chip money" data-r="money">$0</span>
     <span class="spacer"></span>
-    <button class="bell-btn" data-r="bell" hidden aria-label="Ring the bell for the next customer">
-      <span class="bell-count" data-r="bellCount">0</span>${icon("bell")}<span class="bell-label" data-r="bellLabel">Next</span>
-    </button>
+    <span class="bell-btn line-chip" data-r="bell" hidden role="status" aria-label="People waiting in line">
+      ${icon("people")}<span class="bell-count" data-r="bellCount">0</span><span class="bell-label" data-r="bellLabel">in line</span>
+    </span>
     <button class="icon-btn" data-r="menuBtn" aria-label="Menu">${icon("menu")}</button>
   </div>
   <div class="rail" data-r="rail"></div>
@@ -153,7 +153,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     hintClose: q("hintClose") as HTMLButtonElement,
     tabs,
     menuBtn: q("menuBtn") as HTMLButtonElement,
-    bell: q("bell") as HTMLButtonElement,
+    bell: q("bell"),
     undo: q("undo") as HTMLButtonElement,
     bellCount: q("bellCount"),
     bellLabel: q("bellLabel"),
@@ -209,7 +209,7 @@ export function tortillaMeter(kind: "corn" | "flour", t: number): string {
 
 /** How a waiting customer feels. The figure at the window and the face on their ticket always agree. */
 export function patienceMood(pct: number): "neutral" | "sad" | "angry" {
-  return pct >= 0.5 ? "neutral" : pct >= 0.2 ? "sad" : "angry";
+  return pct >= TIP_MOOD.full ? "neutral" : pct >= TIP_MOOD.half ? "sad" : "angry";
 }
 
 function moodFace(mood: "neutral" | "sad" | "angry", critic = false): string {
@@ -534,9 +534,11 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     // topping asked for extra keeps its one line with the full count and says how many are added.
     const add = addedAt.get(i);
     if (add === "add") label = `${kw("ADD")}${label}`;
-    if (exp.count) {
+    // A count of one ("Onion x1") says nothing; it shows while short or when some are added.
+    if (exp.count && (exp.count > 1 || add === "extra")) {
       const short = got[i] && got[i] < exp.count;
-      label += countMark(short ? `${got[i]}/${exp.count}` : `x${exp.count}`);
+      // No "x1" (one onion on a taco is just "Onion").
+      if (exp.count > 1 || short) label += countMark(short ? `${got[i]}/${exp.count}` : `x${exp.count}`);
       if (add === "extra") tail = modBox("add", `ADD ${extraCount(exp.kind)}`) + tail;
     } else if (add === "extra") label = `${kw("ADD")}${label}`;
     for (const r of removed.filter((r) => r.at === i + 1)) rows.push(removedRow(r.kind, states[i + 1] ?? ""));
@@ -580,18 +582,38 @@ function sideRows(order: Order, plate: Plate): string {
     const wrong = !!d && (d.flavor !== order.drink || d.size !== order.drinkSize || !iceOk);
     const state = !d ? "" : wrong ? "wrong" : d.lid ? "done" : "";
     const ice = order.ice === true ? modBox("ice", "Ice") : order.ice === false ? modBox("noice", "No ice") : "";
+    // The local drink's garnish (Coast cucumber, Red Rock lime, Isle apple), dropped on from the dish.
+    const garnish = order.garnish ? modBox("add", GARNISH_LABEL[order.garnish]) : "";
+    const marks = ice + garnish;
     out.push(
-      `<div class="sg">${section("drink", DRINK_COLOR[order.drink])}<div class="sd ${state}"><span class="sl"><i class="sz">${order.drinkSize}</i><span class="dn">${DRINK_LABEL[order.drink]}</span></span>${ice ? `<span class="sm">${ice}</span>` : ""}</div></div>`,
+      `<div class="sg">${section("drink", DRINK_COLOR[order.drink])}<div class="sd ${state}"><span class="sl"><i class="sz">${order.drinkSize}</i><span class="dn">${DRINK_LABEL[order.drink]}</span></span>${marks ? `<span class="sm">${marks}</span>` : ""}</div></div>`,
     );
   }
   return out.join("");
 }
 
-/** "+2" for each side ordered with the main (fries, drink), "*" when the order changes the menu recipe. */
+/**
+ * Tiny fries and cup icons for the sides ordered with the main (after build #78; they were "+2"
+ * and a "*" for a changed recipe, which the stub's own lines already say).
+ */
 function nameMarks(order: Order): string {
   // Sides with a burger; with no burger they're the order itself.
-  const extras = order.layers.length ? (order.fries ? 1 : 0) + (order.drink ? 1 : 0) : order.poutine && order.drink ? 1 : 0;
-  return `${order.mods.length ? `<span class="ast">*</span>` : ""}${extras ? `<span class="plus">+${extras}</span>` : ""}`;
+  const fries = order.layers.length > 0 && order.fries;
+  const drink = !!order.drink && (order.layers.length > 0 || !!order.poutine);
+  if (!fries && !drink) return "";
+  return `<span class="plus" aria-label="${[fries ? "fries" : "", drink ? "a drink" : ""].filter(Boolean).join(" and ")}">${fries ? ticketIcon(FRY_ICON[fryOf(order)], "#c8472e") : ""}${drink ? ticketIcon("drink", DRINK_COLOR[order.drink!]) : ""}</span>`;
+}
+
+/** A regular's name on their ticket (they order the same thing every visit). */
+const regularMark = (order: Order): string => (order.regular ? `<b class="reg">${esc(order.regular)}</b>` : "");
+
+/**
+ * The tip coin on the ticket (after build #78): the tip steps down with the customer's mood, so the
+ * coin is whole while they look calm, half once they look sad, and gone once they're angry.
+ */
+function tipCoin(pct: number): string {
+  const share = pct >= TIP_MOOD.full ? "full" : pct >= TIP_MOOD.half ? "half" : "none";
+  return `<i class="tipc ${share}" title="${share === "full" ? "Full tip" : share === "half" ? "Half tip" : "No tip"}" aria-label="${share === "full" ? "Full tip" : share === "half" ? "Half tip" : "No tip"}">$</i>`;
 }
 
 /** What an order changes from the menu, for the folded stub: "NO Pickles", "ADD Bacon", "Toast". */
@@ -628,8 +650,8 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, focused
   if (!focused) {
     // A stub is just the name and what's different from the menu.
     const ex = exceptions(order);
-    return `<div class="pat ${mood}">${moodFace(mood, !!order.critic)}${bar}</div>
-      <div class="name"><span class="l">${esc(shortName(order.name))}</span>${nameMarks(order)}</div>
+    return `<div class="pat ${mood}">${moodFace(mood, !!order.critic)}${bar}${tipCoin(pct)}</div>
+      <div class="name">${regularMark(order)}<span class="l">${esc(shortName(order.name))}</span>${nameMarks(order)}</div>
       ${ex.length ? `<ul class="ex">${ex.map((e) => `<li>${e}</li>`).join("")}</ul>` : ""}`;
   }
   let list = rows;
@@ -642,8 +664,8 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, focused
     }
   }
   const sides = sideRows(order, plate);
-  return `<div class="pat ${mood}">${moodFace(mood)}${bar}${order.critic ? `<em class="critic" title="Food critic">Critic</em>` : ""}</div>
-    <div class="name"><span class="l">${esc(order.name)}</span>${nameMarks(order)}</div>
+  return `<div class="pat ${mood}">${moodFace(mood)}${bar}${tipCoin(pct)}${order.critic ? `<em class="critic" title="Food critic">Critic</em>` : ""}</div>
+    <div class="name">${regularMark(order)}<span class="l">${esc(order.name)}</span>${nameMarks(order)}</div>
     <div class="cols${sides ? "" : " solo"}"><div class="tb"><ol>${methodHtml(order)}${list.map(rowHtml).join("")}${folded}</ol></div>${sides ? `<div class="sides">${sides}</div>` : ""}</div>`;
 }
 

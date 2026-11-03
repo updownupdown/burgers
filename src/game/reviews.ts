@@ -102,12 +102,19 @@ export function opinionLine(o: OpinionInput, rng: () => number): string | null {
   if (o.stars <= 3 && o.notes.length) return `${cap(brief(o.notes[0]))}.`;
   const free = o.perks.find((p) => p.startsWith("free "));
   if (free) return `Thanks for the ${free}!`;
+  // A 4★ says what cost the fifth star (after build #78), shown as a small grey line.
+  if (o.stars === 4 && o.notes.length) return fourStarNote(o.notes);
   if (o.stars >= 4 && o.patience >= QUICK_AT) return pick(QUICK);
   if (o.stars === 5) {
     const perk = o.perks.find((p) => PERK_LINE[p]);
     return perk ? PERK_LINE[perk] : pick(SPOT_ON);
   }
   return null;
+}
+
+/** What kept a 4★ order from five, as the customer's small aside ("Fries needed salt."). */
+export function fourStarNote(notes: readonly string[]): string {
+  return `${cap(brief(notes[0]))}.`;
 }
 
 /** A note kept short enough for a bubble: "missing ketchup, patty, lettuce, bun" → "missing ketchup and more". */

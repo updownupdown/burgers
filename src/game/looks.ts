@@ -42,12 +42,12 @@ export const LOOKS: LookItem[] = [
   { id: "twotone", slot: "paint", name: "Diner two-tone", text: "Cream over cherry, split by a chrome strip.", price: 600 },
   { id: "woodie", slot: "paint", name: "Woodie", text: "Varnished wood panels in a cream frame.", price: 1200 },
   { id: "chrome", slot: "paint", name: "Polished aluminium", text: "Riveted, mirror-bright, catches every sunset.", price: 4000 },
-  { id: "gold", slot: "paint", name: "Gold leaf", text: "Hand-laid gold leaf with filigree. It glints.", price: 40000, grand: true },
+  { id: "gold", slot: "paint", name: "Gold leaf", text: "Hand-laid gold leaf with filigree. It glints.", price: 10000, grand: true },
 
   { id: "mustard", slot: "awning", name: "Mustard", text: "A plain canvas awning.", price: 0 },
   { id: "stripes", slot: "awning", name: "Candy stripes", text: "Red and cream, with pointed flags.", price: 120 },
   { id: "teal", slot: "awning", name: "Teal scallops", text: "Teal canvas with cream scallops.", price: 200 },
-  { id: "velvet", slot: "awning", name: "Velvet and fringe", text: "Burgundy velvet, gold fringe, tassels.", price: 6000, grand: true },
+  { id: "velvet", slot: "awning", name: "Velvet and fringe", text: "Burgundy velvet, gold fringe, tassels.", price: 1500, grand: true },
 
   { id: "none", slot: "roof", name: "Bare roof", text: "Nothing up there.", price: 0 },
   { id: "herbs", slot: "roof", name: "Herb garden", text: "Planters of basil, thyme and cherry tomatoes.", price: 300 },
@@ -56,17 +56,17 @@ export const LOOKS: LookItem[] = [
   { id: "windmill", slot: "roof", name: "Windmill", text: "A little desert windmill that turns in the breeze. Sold in Cactus Junction.", price: 900, town: "cactus" },
   { id: "neon", slot: "roof", name: "Neon sign", text: "The cloche in pink neon. Glows after dark.", price: 1500 },
   { id: "burger", slot: "roof", name: "Giant burger", text: "A fibreglass burger on a short, sturdy post.", price: 2500 },
-  { id: "hottub", slot: "roof", name: "Rooftop hot tub", text: "Cedar tub, warm water, steam on cold nights.", price: 25000, grand: true },
+  { id: "hottub", slot: "roof", name: "Rooftop hot tub", text: "Cedar tub, warm water, steam on cold nights.", price: 6250, grand: true },
 
   { id: "plain", slot: "lights", name: "No lights", text: "Lights out at closing.", price: 0 },
   { id: "string", slot: "lights", name: "String lights", text: "Warm bulbs along the awning. They glow at night.", price: 250 },
   { id: "marquee", slot: "lights", name: "Marquee bulbs", text: "Bulbs round the window that chase after dark.", price: 900 },
-  { id: "search", slot: "lights", name: "Searchlights", text: "Two beams sweeping the night sky, seen across the map.", price: 12000, grand: true },
+  { id: "search", slot: "lights", name: "Searchlights", text: "Two beams sweeping the night sky, seen across the map.", price: 3000, grand: true },
 
   { id: "steel", slot: "wheels", name: "Steel wheels", text: "Black tyres, cream caps.", price: 0 },
   { id: "whitewall", slot: "wheels", name: "Whitewalls", text: "Wide white walls and chrome caps.", price: 200 },
   { id: "chromehub", slot: "wheels", name: "Chrome spokes", text: "Polished spoked rims.", price: 500 },
-  { id: "spinners", slot: "wheels", name: "Gold spinners", text: "Gold rims that keep spinning when she's parked.", price: 8000, grand: true },
+  { id: "spinners", slot: "wheels", name: "Gold spinners", text: "Gold rims that keep spinning when she's parked.", price: 2000, grand: true },
 
   { id: "flat", slot: "inflatable", name: "None", text: "Nothing on the pavement.", price: 0 },
   { id: "fries", slot: "inflatable", name: "Inflatable fries", text: "A giant carton of fries, pegged down behind the front wheel.", price: 900 },
@@ -75,8 +75,8 @@ export const LOOKS: LookItem[] = [
 
   { id: "solo", slot: "tag", name: "Nobody", text: "Just the truck.", price: 0 },
   { id: "trailer", slot: "tag", name: "Teardrop trailer", text: "A little trailer in matching paint.", price: 3000 },
-  { id: "balloon", slot: "tag", name: "Hot-air balloon", text: "Tethered to the roof, in your colours.", price: 30000, grand: true },
-  { id: "airship", slot: "tag", name: "Airship", text: "Follows the truck from town to town. Why not.", price: 75000, grand: true },
+  { id: "balloon", slot: "tag", name: "Hot-air balloon", text: "Tethered to the roof, in your colours.", price: 7500, grand: true },
+  { id: "airship", slot: "tag", name: "Airship", text: "Follows the truck from town to town. Why not.", price: 18750, grand: true },
 ];
 
 /** What the truck is wearing, one item id per slot. */

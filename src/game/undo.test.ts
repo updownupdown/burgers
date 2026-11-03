@@ -83,3 +83,54 @@ describe("the history", () => {
     expect(mentionsTray(mv("x", supply, tray(1)), 2)).toBe(false);
   });
 });
+
+/*
+ * After build #82 (James: "I can end up with just sauce on the customer tray, or a sandwich
+ * reappearing"): a move that can't be undone takes the older moves of the same things with it, so
+ * undo never splits a thing's story up.
+ */
+describe("dropping stale moves with their things' older moves", () => {
+  type Food = { name: string; items: object[] };
+  const bread = {};
+  const sauce = {};
+  const cheese = {};
+  const lid = {};
+  const cup = {};
+  const fm = (name: string, items: object[], from: Place, to: Place): Move<Food> => ({ what: { name, items }, from, to });
+  const keyed = () => new History<Food>((m) => m.what.items);
+
+  it("a sandwich carried on by a move that's gone doesn't come apart layer by layer", () => {
+    const h = keyed();
+    h.push(fm("bread", [bread], supply, tray(0)));
+    h.push(fm("sauce", [sauce], supply, tray(0)));
+    h.push(fm("cheese", [cheese], supply, tray(0)));
+    h.push(fm("lid", [lid], supply, tray(0)));
+    h.push(fm("sandwich", [bread, sauce, cheese, lid], tray(0), { at: "bay", i: 0 }));
+    h.push(fm("sandwich", [bread, sauce, cheese, lid], { at: "bay", i: 0 }, { at: "board" }));
+    h.push(fm("cup", [cup], supply, tray(1)));
+    // The board move can't be undone (say the bay was taken): it and every older move of the sandwich go.
+    const stale = new Set(["board"]);
+    const ok = (m: Move<Food>) => !(m.to.at === "board" && stale.has("board"));
+    expect(h.pop(ok)?.what.name).toBe("cup");
+    expect(h.pop(ok)).toBeNull();
+    expect(h.size).toBe(0);
+  });
+
+  it("an unrelated older move survives a stale one", () => {
+    const h = keyed();
+    h.push(fm("cup", [cup], supply, tray(1)));
+    h.push(fm("bread", [bread], supply, tray(0)));
+    expect(h.pop((m) => m.what.name !== "bread")?.what.name).toBe("cup");
+  });
+
+  it("serving a tray forgets what was on it, wherever it came from", () => {
+    const h = keyed();
+    h.push(fm("bread", [bread], supply, { at: "board" }));
+    h.push(fm("lid", [lid], supply, { at: "board" }));
+    h.push(fm("sandwich", [bread, lid], { at: "board" }, tray(2)));
+    h.push(fm("cup", [cup], supply, tray(1)));
+    h.forgetTray(2);
+    expect(h.size).toBe(1);
+    expect(h.top(() => true)?.what.name).toBe("cup");
+  });
+});

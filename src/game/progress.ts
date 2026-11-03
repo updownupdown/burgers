@@ -67,6 +67,8 @@ export interface Save {
   known: Record<string, number>;
   /** How well known the truck is, 10..100. Word of mouth and the press move it. */
   popularity: number;
+  /** Good visits from each town's regular, by town id (after build #78; game/regulars.ts). */
+  regulars?: Record<string, number>;
   /** Recent press, newest first. */
   press: PressPiece[];
 }
@@ -231,17 +233,44 @@ export function migrateSave(p: Partial<Save> & Record<string, unknown>): Save {
   for (const k of RETIRED) delete bag[k];
   if (s.time !== "morning" && s.time !== "evening") s.time = "morning";
   // A Closing from before takings is dropped rather than half shown.
-  if (s.last && (s.last.town !== s.town || typeof s.last.takings !== "number" || typeof s.last.bank !== "number")) s.last = null;
+  // A shift with nobody served once recorded a best of 0.0★; it never was one.
+  for (const [id, v] of Object.entries(s.best)) if (!(Number(v) > 0)) delete s.best[id];
+  // Today's Closing outlives an evening hop to another town; only a stale or partial one goes.
+  if (s.last && (!todaysClosing(s) || typeof s.last.takings !== "number" || typeof s.last.bank !== "number")) s.last = null;
   return s;
 }
 
+/**
+ * Today's Closing, for the evening's Results and the night card. It stays wherever the truck hops
+ * to in the evening; a new day (sleep clears it anyway) or a morning drop it.
+ */
+export function todaysClosing(s: Pick<Save, "last" | "day" | "time">): Closing | null {
+  return s.last && s.last.day === s.day && s.time === "evening" ? s.last : null;
+}
+
 export function loadSave(): Save {
+  let raw: string | null = null;
   try {
-    const raw = localStorage.getItem(KEY);
+    raw = localStorage.getItem(KEY);
     if (!raw) return freshSave();
     return migrateSave(JSON.parse(raw) as Partial<Save>);
-  } catch {
+  } catch (err) {
+    // A save that can't be read starts a fresh trip, but the old one is kept aside first: the next
+    // write would otherwise overwrite it for good.
+    if (raw) keepBrokenSave(raw, err);
     return freshSave();
+  }
+}
+
+/** Copy an unreadable save to its own key (bv-save-broken-<time>) so it can still be recovered. */
+export function keepBrokenSave(raw: string, err: unknown): string | null {
+  const key = `bv-save-broken-${Date.now()}`;
+  try {
+    localStorage.setItem(key, raw);
+    console.warn(`Bun Voyage: the save couldn't be read and was kept as ${key}.`, err);
+    return key;
+  } catch {
+    return null;
   }
 }
 

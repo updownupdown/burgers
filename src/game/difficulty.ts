@@ -17,8 +17,14 @@ export interface DifficultySpec {
   refuse: number;
 }
 
+/** Chill customers are 1.5x as patient as on the old Chill, 2.4 (James, after build #82). */
+export const CHILL_PATIENCE = 1.5;
+const OLD_CHILL_PATIENCE = 2.4;
+/** On Chill, cooking past over-done runs at this share of its pace: burning takes twice as long. */
+export const CHILL_BURN = 0.5;
+
 export const DIFFICULTY: Record<Difficulty, DifficultySpec> = {
-  chill: { label: "Chill", blurb: "Patient customers, two at the window at most, and only a really wrong order comes back. Nothing burns, drinks stop pouring at the line, and the bell calls whoever has waited a while.", patience: 2.4, spawnGap: 1.45, sendBack: 40, refuse: 12 },
+  chill: { label: "Chill", blurb: "Very patient customers, two at the window at most, and only a really wrong order comes back. Food takes twice as long to burn, and the bell calls whoever has waited a while.", patience: OLD_CHILL_PATIENCE * CHILL_PATIENCE, spawnGap: 1.45, sendBack: 40, refuse: 12 },
   balanced: { label: "Balanced", blurb: "A steady lunch rush. Customers send back what's clearly off.", patience: 1.3, spawnGap: 1.15, sendBack: 55, refuse: 22 },
   stressful: { label: "Stressful", blurb: "Short fuses and a packed line. Picky about every order.", patience: 0.92, spawnGap: 0.9, sendBack: 68, refuse: 32 },
 };

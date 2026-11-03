@@ -60,7 +60,7 @@ describe("panini orders", () => {
     expect(coast("gullpoint").menu.map((r) => r.name)).toContain("Tuna Melt");
     expect(coast("driftwood").menu.map((r) => r.name)).toContain("Chicken Pesto");
     expect(coast("harbor").menu.map((r) => r.name)).toContain("Veggie Club");
-    expect(coast("saltwater").press).toEqual({ bays: 2, slice: false });
+    expect(coast("saltwater").press).toEqual({ bays: 3, slice: false });
     expect(coast("harbor").press).toEqual({ bays: 3, slice: true });
     expect(coast("saltwater").fryer).toBeUndefined();
     expect(coast("driftwood").fryer).toEqual(["fries", "sweet"]);

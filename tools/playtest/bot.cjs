@@ -12,7 +12,7 @@ const TARGET = { rare: 0.32, medium: 0.55, well: 0.78 };
   let errors = 0;
   p.on('pageerror', () => errors++);
   p.on('console', m => { if (m.type() === 'error') errors++; });
-  await p.evaluate(([n]) => localStorage.setItem('bv-save-v1', JSON.stringify({ stop: n, tutorialDone: true })), [+(process.env.STOP || 0)]);
+  await p.evaluate(([t]) => localStorage.setItem('bv-save-v1', JSON.stringify({ town: t, unlocked: [t], tutorialDone: true })), [process.env.TOWN || 'pinecrest']);
   await p.reload(); await p.waitForTimeout(600);
   await enterShift(p);
   await p.evaluate(() => window.__bv.manual(true));

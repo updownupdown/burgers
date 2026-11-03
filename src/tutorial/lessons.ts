@@ -57,7 +57,8 @@ export interface KitchenWorld {
   counterBand(): Box;
   ticketOpen(): boolean;
   tickets: HTMLElement[];
-  bell: HTMLElement;
+  /** The desk bell on an empty tray, while one shows (after build #82). */
+  bell: () => HTMLElement | null;
   /** The round counter buttons, one per counter. */
   tabs: HTMLElement[];
   /** Sauce being put on: `armed` once a bottle was tapped (waiting for a tap on a burger), `locked` once the view has zoomed onto the burger. */
@@ -480,7 +481,7 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
     }
     if (cup.fill < DRINK_FILL.full) {
       const btn = ti >= 0 ? k.project("counter", c.drinkButtonPoint(ti)) : null;
-      return { title: "Pour", text: k.game.pacing === "chill" ? `Hold the ${name} button to pour. On Chill it stops at the line by itself.` : `Hold the ${name} button to pour. Watch the bar on the left and let go at the line.`, gesture: btn ? { kind: "hold", at: btn } : null, whileDown: true };
+      return { title: "Pour", text: `Hold the ${name} button to pour. Watch the bar on the left and let go at the line.`, gesture: btn ? { kind: "hold", at: btn } : null, whileDown: true };
     }
     const from = proxy((h) => h.type === "lids" && h.size === cup.size, 0.3);
     return { title: "Lid on", text: `Drag a ${SIZE_LABEL[cup.size].toLowerCase()} lid onto the cup.`, gesture: from ? { kind: "drag", from, to: cupAt } : null };
@@ -590,7 +591,7 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
       id: "bell",
       once: true,
       when: () => {
-        if (!playing() || k.holding() || k.sauce()) return false;
+        if (!playing() || k.holding() || k.sauce() || !k.bell()) return false;
         // Only while someone is being served (an empty window calls the next person up by itself).
         const busy = k.game.slots.filter((s) => s.order && !s.leaving).length;
         const at = k.game.slots.filter((s) => s.order || s.fig).length;
@@ -599,8 +600,8 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
       done: () => k.counts.bell > 0,
       show: () => ({
         title: "Ring the bell",
-        text: "Someone's waiting in line: the number on the bell. Ring it to call them up to the window. More orders at once means more money.",
-        gesture: tapOn(k.bell),
+        text: "Someone's waiting in line: the number at the top. Ring the bell on an empty tray to call them up. Ring it twice to call two. More orders at once means more money.",
+        gesture: tapOn(k.bell()),
         place: "bottom",
       }),
     },

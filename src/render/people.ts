@@ -54,6 +54,8 @@ function flat(color: string, opacity = 1): THREE.MeshBasicMaterial {
 }
 
 const sph = (r: number, color: string, w = 12, h = 9, ink: boolean | number = true) => mesh(faceted(new THREE.SphereGeometry(r, w, h)), color, { ink });
+/** A smooth-shaded sphere, for the body and belly: clean toon bands instead of facet patches. */
+const smoothSph = (r: number, color: string, w = 12, h = 9, ink: boolean | number = true) => mesh(new THREE.SphereGeometry(r, w, h), color, { ink });
 
 interface FaceOpts {
   /** Horizontal angle of each eye from the front, radians. */
@@ -267,11 +269,11 @@ function addHat(g: THREE.Group, hat: Hat, c: HatCtx): boolean {
 export function buildPerson(seed: number, backdrop: Backdrop): Person {
   const body = new THREE.Group();
   const color = CLOTH[seed % CLOTH.length];
-  const torso = sph(0.85, color, 16, 12);
+  const torso = smoothSph(0.85, color, 20, 14);
   torso.scale.set(1, 1.15, 0.88);
   torso.position.y = 0.95;
   body.add(torso);
-  const belly = sph(0.55, new THREE.Color(color).lerp(new THREE.Color("#ffffff"), 0.5).getStyle(), 12, 8, false);
+  const belly = smoothSph(0.55, new THREE.Color(color).lerp(new THREE.Color("#ffffff"), 0.5).getStyle(), 16, 10, false);
   belly.scale.set(1, 1.0, 0.5);
   belly.position.set(0, 0.62, 0.5);
   body.add(belly);

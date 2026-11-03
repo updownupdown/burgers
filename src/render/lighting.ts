@@ -10,7 +10,9 @@ import * as THREE from "three";
  */
 
 const DAY = { sky: "#fff4dc", ground: "#6e62a0", hemi: 1.15, sun: "#fff1d6", sunK: 1.9, dir: new THREE.Vector3(3, 10, 5) };
-const WINDOW = { sky: "#f6f3ff", ground: "#8a7fa8", hemi: 1.15 * 0.95, sun: "#fffaf0", sunK: 1.9 * 1.5, dir: new THREE.Vector3(-1.0, 1.1, 0.35) };
+// The window sun sits higher than the study had it (y 1.1 -> 2.2): the same light from the left, but
+// shadows half as long, so cup stacks and nozzles no longer throw long bars across the counter.
+const WINDOW = { sky: "#f6f3ff", ground: "#8a7fa8", hemi: 1.15 * 0.95, sun: "#fffaf0", sunK: 1.9 * 1.5, dir: new THREE.Vector3(-1.0, 2.2, 0.35) };
 /** How far toward window light the mood sits. */
 const MIX = 0.5;
 

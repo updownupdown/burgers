@@ -180,6 +180,11 @@ const ISLE: Pt[] = [
   [110.5, 150.5], [104.5, 156.5], [96.5, 160.5], [87.5, 161.5], [80.5, 158.5], [75.5, 153], [73.5, 146.5], [74.5, 139.5], [74, 132.5],
 ];
 const LANDS = [ISLAND, ISLE];
+/** The land's bounding box (x0, y0, x1, y1): the farthest the map zooms out is this across. */
+export const LAND_BOX = (() => {
+  const all = LANDS.flat();
+  return [Math.min(...all.map((p) => p[0])), Math.min(...all.map((p) => p[1])), Math.max(...all.map((p) => p[0])), Math.max(...all.map((p) => p[1]))] as const;
+})();
 const onLand = (p: Pt) => LANDS.some((l) => inPoly(p, l));
 const coastDist = (p: Pt) => Math.min(...LANDS.map((l) => polyDist(p, l)));
 
@@ -203,7 +208,8 @@ const AREA_LABEL: Record<RegionId, { x: number; y: number; rot: number; size: nu
 const WATER_LABEL: { name: string; x: number; y: number; rot: number; size: number; halo?: boolean }[] = [
   { name: "Westering Sea", x: 5, y: 84, rot: -90, size: 2.9 },
   { name: "Morning Sea", x: 113.5, y: 88, rot: 90, size: 2.9 },
-  { name: "Saltwater Bay", x: 72.5, y: 43.2, rot: -14, size: 1.9 },
+  // Out on the open bay, clear of the town of the same name and the truck parked there.
+  { name: "Saltwater Bay", x: 90, y: 37.5, rot: -18, size: 1.9 },
   { name: "Lantern Sound", x: 69.2, y: 129, rot: -81, size: 2.1 },
   { name: "the Shallows", x: 65.4, y: 152.4, rot: 0, size: 1.7 },
   { name: "Mirror Lake", x: 59.6, y: 16, rot: 0, size: 1.6, halo: true },
@@ -279,13 +285,25 @@ const LABEL_AT: Record<string, LabelAt> = {
   portamber: "left",
 };
 
+/**
+ * What each town cooks on, drawn in the node in thin ink (about 1.4 units): a burger (the grill),
+ * a pressed sandwich (the press), a taco (the comal) and a pie in quarters (the oven).
+ */
+const KITCHEN_GLYPH: Record<RegionId, string> = {
+  mountains: "M-0.78 -0.12a0.78 0.62 0 0 1 1.56 0zM-0.86 0.2h1.72M-0.74 0.5a0.12 0.12 0 0 0 0.12 0.12h1.24a0.12 0.12 0 0 0 0.12 -0.12z",
+  coast: "M-0.82 -0.5h1.64v1h-1.64zM-0.5 0.5l0.5 -1M0 0.5l0.5 -1M-0.82 0h1.64",
+  desert: "M-0.85 -0.05a0.85 0.75 0 0 0 1.7 0M-0.85 -0.05q0.2 -0.3 0.42 -0.05q0.22 -0.28 0.43 0q0.22 -0.28 0.43 0q0.2 -0.26 0.42 0.05",
+  orchard: "M0 -0.82a0.82 0.82 0 1 1 0 1.64a0.82 0.82 0 1 1 0 -1.64zM0 -0.82v1.64M-0.82 0h1.64",
+};
+
 /** The name's offset from the node and its anchor, for a node of radius `r`. */
 function labelPlace(id: string, r: number): { dx: number; dy: number; anchor: "start" | "middle" | "end"; side: string } {
   const at = LABEL_AT[id] ?? "below";
   if (typeof at === "object") return { ...at, side: "custom" };
   if (at === "above") return { dx: 0, dy: -r - 1.6, anchor: "middle", side: at };
-  if (at === "left") return { dx: -r - 1.4, dy: 1, anchor: "end", side: at };
-  if (at === "right") return { dx: r + 1.4, dy: 1, anchor: "start", side: at };
+  // Beside the node, clear of the selection halo (r + 1.6) as it pulses.
+  if (at === "left") return { dx: -r - 2.1, dy: 1, anchor: "end", side: at };
+  if (at === "right") return { dx: r + 2.1, dy: 1, anchor: "start", side: at };
   return { dx: 0, dy: r + 3.7, anchor: "middle", side: at };
 }
 
@@ -565,7 +583,12 @@ const cactus = (x: number, y: number, s: number) =>
 const marsh = (x: number, y: number, s: number) =>
   g(x, y, s, `<path d="M-1.1 0.3h2.2M-0.5 0.3v-0.6M0 0.3v-0.95M0.5 0.3v-0.6" fill="none" stroke="${WATER_LINE}" stroke-width="0.2" stroke-linecap="round" opacity="0.8"/>`);
 
-/** A mesa: a wobbly loop for the plateau rim with cliff ticks on the lit side. */
+/**
+ * A mesa drawn as a plateau: a light flat top with a wobbly rim, its cliff face showing below it
+ * as a darker skirt, hachured with short vertical strokes falling from the rim along the south
+ * side, and a strata line or two in the face. (The ticks used to point outward round the lower
+ * right and read as legs.)
+ */
 function mesa(m: { x: number; y: number; rx: number; ry: number; rot: number }, seed: number): string {
   const r = seeded(seed);
   const a = (m.rot * Math.PI) / 180;
@@ -580,20 +603,22 @@ function mesa(m: { x: number; y: number; rx: number; ry: number; rot: number }, 
     const x = m.x + ex * Math.cos(a) - ey * Math.sin(a);
     const y = m.y + ex * Math.sin(a) + ey * Math.cos(a);
     pts.push([x, y]);
-    // Outward normal of the ellipse, turned with it.
-    const ox = (Math.cos(t) / m.rx) * Math.cos(a) - (Math.sin(t) / m.ry) * Math.sin(a);
+    // Cliff hachure: on the south half of the rim (the face we see), short strokes straight down.
     const oy = (Math.cos(t) / m.rx) * Math.sin(a) + (Math.sin(t) / m.ry) * Math.cos(a);
-    const om = Math.hypot(ox, oy);
-    if (ox + oy > 0.1) {
-      const len = 0.7 + r() * 0.6;
-      ticks.push(`M${f(x)} ${f(y)}l${f((ox / om) * len)} ${f((oy / om) * len)}`);
+    if (oy > 0.02) {
+      const len = 0.6 + r() * 0.3;
+      ticks.push(`M${f(x)} ${f(y + 0.15)}v${f(len)}`);
+      // A second, shorter stroke between rim points keeps the face evenly shaded.
+      ticks.push(`M${f(x + 0.35)} ${f(y + 0.3)}v${f(len * 0.6)}`);
     }
   }
   const rim = smooth(pts);
   return `<g class="mesa">
-    <path d="${rim}" fill="${RELIEF}" opacity="0.1" transform="translate(0.5 0.7)"/>
-    <path d="${rim}" fill="${DESERT_DEEP}" stroke="${MESA}" stroke-width="0.3" stroke-linejoin="round" opacity="0.9"/>
-    <path d="${ticks.join("")}" fill="none" stroke="${MESA}" stroke-width="0.24" stroke-linecap="round" opacity="0.8"/>
+    <path d="${rim}" fill="${RELIEF}" opacity="0.1" transform="translate(0.7 1.3)"/>
+    <path d="${rim}" fill="${MESA}" opacity="0.55" transform="translate(0.35 0.9)"/>
+    <path d="${rim}" fill="none" stroke="${MESA}" stroke-width="0.16" stroke-dasharray="0.9 0.6" opacity="0.6" transform="translate(0.2 0.5)"/>
+    <path d="${ticks.join("")}" fill="none" stroke="${MESA}" stroke-width="0.2" stroke-linecap="round" opacity="0.85"/>
+    <path d="${rim}" fill="#edd2b0" stroke="${MESA}" stroke-width="0.3" stroke-linejoin="round"/>
   </g>`;
 }
 
@@ -830,7 +855,7 @@ function buildStatic(): string {
   const waterName = (w: (typeof WATER_LABEL)[number]) => rotText(w.x, w.y, w.rot, `wname${w.halo ? " halo" : ""}`, w.name, ` style="font-size:${w.size}px"`);
 
   return `
-    <g class="home-sea">${ripples}${shallows(coasts)}${shoal}${boat(94, 24, 1)}${boat(44, 163, 0.9, true)}${compassRose(110, 14)}${scaleBar(5, 164)}</g>
+    <g class="home-sea">${ripples}${shallows(coasts)}${shoal}${boat(94, 24, 1)}${boat(44, 163, 0.9, true)}${compassRose(104, 14)}${scaleBar(10, 160)}</g>
     ${WATER_LABEL.filter((w) => !w.halo).map(waterName).join("")}
     <path class="home-land" d="${coasts}" fill="${LAND}"/>
     <g clip-path="url(#home-island)">
@@ -893,6 +918,12 @@ export interface MapState {
   look: Look;
   /** Open towns whose bonus a great shift would still unlock: a small gold mark by the name. */
   bonusHere: readonly string[];
+  /**
+   * Screen px per map unit at scale 1 (the home screen's fit). The SVG is drawn at that size, so
+   * a redrawn map is never left unsized: an <svg> with only a viewBox lays out as 0 x 0 inside the
+   * absolutely positioned pan/zoom layer, and the map turns to empty sea until the next resize.
+   */
+  px?: number;
 }
 
 export function townPoint(id: string): Pt {
@@ -968,7 +999,9 @@ export function renderMap(st: MapState): string {
         ? `<g class="pips" transform="translate(0 ${f(pipY)})">${[0, 1, 2].map((i) => `<circle class="pip ${i < done ? "on" : ""}" cx="${f((i - 1) * 1.7)}" r="0.55"/>`).join("")}</g>`
         : "";
     const label = t.capital ? t.name.toUpperCase() : t.name;
-    const prize = isOpen && st.bonusHere.includes(t.id) ? `<path class="prize" transform="translate(${f(-r - 1.3)} ${f(-r - 0.6)})" d="M0 -1.25L1 0L0 1.25L-1 0Z"/>` : "";
+    // The bonus diamond sits up and to the left of the node, or to its right when the name is above.
+    const prizeAt = place.side === "above" ? [r + 1.6, -0.2] : [-r - 1.3, -r - 0.6];
+    const prize = isOpen && st.bonusHere.includes(t.id) ? `<path class="prize" transform="translate(${f(prizeAt[0])} ${f(prizeAt[1])})" d="M0 -1.25L1 0L0 1.25L-1 0Z"/>` : "";
     // The marker and its name keep a readable size on screen as the map zooms (see --mk in home.css).
     return `<g class="${classes}" data-town="${t.id}" transform="translate(${t.x} ${t.y})">
       <circle class="hit" r="7.5"/>
@@ -976,7 +1009,7 @@ export function renderMap(st: MapState): string {
         <circle class="halo" r="${f(r + 1.6)}"/>
         ${t.capital ? `<circle class="ring" r="${f(r + 1.2)}"/>` : ""}
         <circle class="node" r="${r}"/>
-        ${t.capital ? `<circle class="core" r="1.1"/>` : ""}
+        <path class="kind" data-region="${t.region}" d="${KITCHEN_GLYPH[t.region]}"/>
         <text class="tname" x="${f(place.dx)}" y="${f(place.dy)}" style="text-anchor:${place.anchor}">${label}</text>
         ${pips}${flag}${lock}${prize}
       </g>
@@ -991,7 +1024,8 @@ export function renderMap(st: MapState): string {
 
   const grad = (id: string, c: string, peak = 1) =>
     `<radialGradient id="${id}"><stop offset="0" stop-color="${c}" stop-opacity="${peak}"/><stop offset="0.35" stop-color="${c}" stop-opacity="${f(peak * 0.8)}"/><stop offset="0.7" stop-color="${c}" stop-opacity="${f(peak * 0.3)}"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient>`;
-  return `<svg class="home-svg" viewBox="${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Road map">
+  const size = st.px && st.px > 0 ? ` width="${VIEW.w * st.px}" height="${VIEW.h * st.px}"` : "";
+  return `<svg class="home-svg" viewBox="${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}"${size} xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Road map">
     <defs>
       <clipPath id="home-island"><path d="${coastPath()}"/></clipPath>
       <clipPath id="home-coast"><path d="${smooth(REGION_SHAPE.coast)}"/></clipPath>

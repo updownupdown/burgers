@@ -2,6 +2,7 @@ import type { CrowdId } from "./business";
 import { CROWD } from "./business";
 import { DIFFICULTY, type Difficulty } from "./difficulty";
 import { BREADS, PROTEINS, TORTILLAS, type Order } from "./types";
+import { cookTime, OVEN_TIME, shiftStretch } from "./pace";
 
 /**
  * The line outside the truck. People arrive over the shift and join the line (or walk past it
@@ -35,7 +36,7 @@ export function joinChance(lineLen: number, popularity: number): number {
 export const LINE_PATIENCE = 45;
 
 export function linePatience(d: Difficulty, crowd: CrowdId): number {
-  return LINE_PATIENCE * DIFFICULTY[d].patience * CROWD[crowd].patience;
+  return LINE_PATIENCE * shiftStretch() * DIFFICULTY[d].patience * CROWD[crowd].patience;
 }
 
 /**
@@ -91,9 +92,11 @@ export const WINDOW_BASE = 40;
 /**
  * How long a customer at the window waits for their order (seconds, before the bench, crowd and
  * pacing scale it): a base, then each layer, extra counted piece, protein and side, and the
- * dish's own work, so the regions feel about equally tight.
+ * dish's own work, so the regions feel about equally tight. The cooking parts (proteins, fries,
+ * a panini's press, half a quesadilla's work) stretch with the cook time `t` (pace.ts); a
+ * flatbread's bake by OVEN_TIME; the hands-on parts stay put.
  */
-export function windowPatience(order: Order): number {
+export function windowPatience(order: Order, t = cookTime()): number {
   const slices = order.layers.reduce((n, l) => n + Math.max(0, (l.count ?? 1) - 1), 0);
   const proteins = order.layers.filter((l) => l.kind === "patty" || PROTEINS.has(l.kind)).length;
   const base = order.layers[0];
@@ -112,11 +115,11 @@ export function windowPatience(order: Order): number {
     WINDOW_BASE +
     order.layers.length * 7 +
     slices * 2 +
-    proteins * 22 +
-    work +
+    proteins * 22 * (base?.kind === "dough" ? 1 : t) +
+    work * (base?.kind === "dough" ? OVEN_TIME : base && BREADS.has(base.kind) ? t : base && TORTILLAS.has(base.kind) && base.folded ? (1 + t) / 2 : 1) +
     (order.slice ? DISH_WORK.cut : 0) +
     (order.garnish ? DISH_WORK.garnish : 0) +
-    (order.fries ? 30 : 0) +
+    (order.fries ? 30 * t : 0) +
     (order.poutine ? 10 : 0) +
     (order.drink ? 9 : 0)
   );

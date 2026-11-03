@@ -5,6 +5,7 @@ import { cookLevel, COOK_SCALE, cookZone, darkSide, DRINK_FILL, friesZone, FRY_Z
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { expectedCustomers, sleep } from "./game/day";
 import { greatShift, townBonus, type BonusId } from "./game/bonus";
+import { cookTime, OVEN_TIME, shiftStretch } from "./game/pace";
 import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, validShift, type ShiftWindow } from "./game/shift";
 import { freshSave, loadSave, passed, passTown, todaysClosing, writeSave, type Closing } from "./game/progress";
 import { eventOn, fountainFor, fryerOf, garnishFor, garnishOf, middleOf, townById, withEvent, type TownEvent } from "./game/stops";
@@ -889,9 +890,13 @@ function updateTrayActs(): void {
     // The desk bell: an empty tray, someone in line and room at the window (not while guided), or
     // a moment after a ring, for a second one.
     const lingering = now < bellLinger[i] && bellRings[i] < 2;
-    const call = (on && room && !s.order && !s.fig && game.line.length > 0 && !(game.tutorial && game.served < 2)) || (on && lingering);
+    // The bell itself stays put while food is carried (it used to blink out on every drag); only
+    // its tap target steps aside so a drop on the tray isn't caught by it.
+    const playing = game.phase === "playing";
+    const bell = (playing && room && !s.order && !s.fig && game.line.length > 0 && !(game.tutorial && game.served < 2)) || (playing && lingering);
+    const call = bell && on;
     callBtn.hidden = !call;
-    trayView.plates[i].showBell(call);
+    trayView.plates[i].showBell(bell);
     if (call) {
       const label = `Ring for the next customer, ${game.line.length} waiting`;
       if (callBtn.getAttribute("aria-label") !== label) callBtn.setAttribute("aria-label", label);
@@ -1400,7 +1405,7 @@ function finishHold(pt: Pointer): void {
           counter.setBasketShell(fryHit.idx, shell);
           Object.assign(b, { loaded: true, down: false, goldenRung: false, cook: 0, amount: 0 });
           sfx.plop();
-          hintOnce("tostada", "Tap the basket to lower it. The tostada is crisp and golden in about 10 seconds.", 3.5);
+          hintOnce("tostada", `Tap the basket to lower it. The tostada is crisp and golden in about ${Math.round(10 * cookTime())} seconds.`, 3.5);
           done = true;
         }
       } else if (comal && under && TORTILLAS.has(under.piece.kind) && (COMAL_FILL.has(payload.piece.kind) || isSauce(payload.piece.kind))) {
@@ -2365,7 +2370,7 @@ function zoneHint(x: number): void {
   const heat = counter.zones[zone];
   if (counter.middle === "comal") {
     if (heat === "warm") hintOnce("comal-warm", "The right end of the comal keeps things warm without cooking them on. Warm tortillas on the hot side, then stand them in the taco rack.", 4);
-    else hintOnce("comal-hot", "Tortillas warm in about 6 seconds: soft, with brown spots, and the meter turns orange and says Warm. Don't leave them till they go hard.", 4);
+    else hintOnce("comal-hot", `Tortillas warm in about ${Math.round(6 * cookTime())} seconds: soft, with brown spots, and the meter turns orange and says Warm. Don't leave them till they go hard.`, 4);
     return;
   }
   if (heat === "off") showHint("That part of the grill is off. Tap its button on the front to heat it.", 2.5);
@@ -3023,7 +3028,7 @@ canvas.addEventListener("pointerdown", (e) => {
       // Zucchini comes out raw (cook below 0) until it's been through the batter.
       startHold(pt, { type: "fries", cook: hit.fry === "zucchini" ? -1 : 0, basket: null, amount: FRIES_SCOOP, fry: hit.fry });
       if (hit.fry === "sweet") hintOnce("sweet", "Sweet potato fries cook faster than plain ones, and their golden window is shorter.", 3.5);
-      else if (hit.fry === "chips") hintOnce("chips", "Tortilla wedges fry into chips in about 8 seconds: drop a scoop in a basket and lower it.", 3.5);
+      else if (hit.fry === "chips") hintOnce("chips", `Tortilla wedges fry into chips in about ${Math.round(8 * cookTime())} seconds: drop a scoop in a basket and lower it.`, 3.5);
       else if (hit.fry === "churros") hintOnce("churros", "Churros fry like fries. Shake sugar on them once they're in the carton.", 3.5);
       else if (hit.fry === "zucchini") hintOnce("zucchini", "Zucchini fritti: drop it in the batter bowl at the back right, pick it up again, then into a basket. Salt them in the carton.", 4);
       else if (hit.fry === "fritters") hintOnce("fritters", "Apple fritters fry like fries. Shake cinnamon sugar on them once they're in the carton.", 3.5);
@@ -4716,7 +4721,8 @@ function startShift(): void {
   game.gentle = difficulty === "chill" && save.day === 1;
   game.shift = validShift(save.shift);
   game.bonus = save.bonus && save.bonuses.includes(save.bonus) ? save.bonus : null;
-  game.shiftLength = shiftSeconds(game.shift, stop().shiftLength);
+  // A slower kitchen (pace.ts) stretches the clock so the same people come over a longer shift.
+  game.shiftLength = shiftSeconds(game.shift, stop().shiftLength) * shiftStretch();
   game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: game.shift, bonus: game.bonus, pacing: game.pacing });
   // The range is refuelled by endShift, not here: a shift quit or reloaded half way doesn't count.
   // Today's local ask, the same one Prep showed (not on the guided first shift).
@@ -4730,9 +4736,11 @@ function startShift(): void {
   applyStop();
   // Maybe a critic in today's line, never the very first customer.
   game.criticAt = has("press") || game.rng() < criticChance(stop().crowd, game.event) ? 1 + Math.floor(game.rng() * Math.max(1, Math.min(game.customers, 8) - 2)) : -1;
-  counter.fryBoost = has("turbo") ? 1.35 : 1;
+  // Cooking takes cookTime() times as long as before build #85 (pace.ts); the oven OVEN_TIME.
+  counter.fryBoost = (has("turbo") ? 1.35 : 1) / cookTime();
   // Hot plate (the old Searing plate): the main counter cooks faster, whatever it is.
-  counter.grillBoost = has("sear") ? 1.25 : 1;
+  counter.grillBoost = (has("sear") ? 1.25 : 1) / cookTime();
+  counter.ovenBoost = (has("sear") ? 1.25 : 1) / OVEN_TIME;
   // Heat lamp: warm holding everywhere (the warm end, the rack, fries, the trays) ages at half the pace.
   counter.holdRate = has("lamp") ? 0.5 : 1;
   // Chill pours to the line by itself and nothing on the grill or in the fryer burns.
@@ -4759,6 +4767,7 @@ function applyStop(): void {
   counter.setMiddle(middle, st.press?.bays ?? 2, !!st.press?.slice || !!st.oven?.board, !!st.comal?.tpress, st.oven?.spots ?? 2);
   counter.setFryerSides(st.poutine !== false && middle !== "press", fryerOf(st));
   setTabArt(ui.tabs[HOME_PAGE], middle === "press" ? "Press" : middle === "comal" ? "Comal" : middle === "oven" ? "Oven" : "Grill");
+  counter.fryerCorn = st.menu.some((r) => r.dish === "tostada");
   counter.setPantry(st.pantry);
   // The fountain pours the area's two local drinks beside the three house ones.
   const drinks = fountainFor(st.region);

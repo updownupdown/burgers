@@ -12,6 +12,7 @@
  *
  *   initMenu(deps)    once, from main.ts
  */
+import { COOK_TIME, COOK_TIMES, cookTime, setCookTime } from "../game/pace";
 import { hapticsOn, hapticsSupported, setHaptics } from "../audio";
 import { buildLabel, CURRENT, reloadTo } from "../update";
 import { icon } from "../ui/icons";
@@ -392,6 +393,12 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
         }
         break;
       }
+      case "cooktime": {
+        const v = Number(btn.dataset.v);
+        setCookTime(v);
+        pickSeg(card, btn, cookNote(v));
+        break;
+      }
       case "sim": {
         const v = btn.dataset.v!;
         d.simulate?.(v === "off" ? null : Number(v));
@@ -425,6 +432,12 @@ const SIM_NOTE: Record<string, string> = {
   "100": "The whole road worked: every town open, every bonus, well known. Your real trip is kept aside.",
 };
 
+/** The dev cook-time dial (pace.ts): what it does, at value `t`. */
+function cookNote(t: number): string {
+  const tag = t === COOK_TIME ? " (the default)" : t === 1 ? " (as before build #85)" : "";
+  return `Cooking takes ${t}x the old time${tag}; patience and the shift clock follow. From the next shift.`;
+}
+
 /** The bottom of Settings: dev mode, and with it the progress simulator. */
 function devHtml(): string {
   const on = devOn();
@@ -436,6 +449,7 @@ function devHtml(): string {
     ${toggle("dev", "wrench", "Dev mode", on, "Testing tools")}
     <div class="menu-dev" ${on ? "" : "hidden"}>
       ${field("sim", "chart", "Simulate progress", SIM_NOTE[cur], [{ v: "off", label: "Off" }, ...SIM_LEVELS.map((l) => ({ v: String(l), label: `${l}%` }))], cur)}
+      ${field("cooktime", "clock", "Cook time", cookNote(cookTime()), COOK_TIMES.map((t) => ({ v: String(t), label: `${t}x` })), String(cookTime()))}
     </div>
   </section>`;
 }

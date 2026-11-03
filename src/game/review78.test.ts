@@ -1,3 +1,4 @@
+import { COOK_TIME, shiftStretch } from "./pace";
 import { describe, expect, it } from "vitest";
 import { askCounts, askFor, asksFor } from "./asks";
 import { BONUSES } from "./bonus";
@@ -117,7 +118,9 @@ describe("window patience follows the work", () => {
   });
   it("leaves a plain classic short of the whole shift", () => {
     const c = orderFromRecipe(2, recipe("pinecrest", "Trailhead Classic"), false, null);
-    expect(windowPatience(c) * DIFFICULTY.balanced.patience).toBeLessThan(150);
+    expect(windowPatience(c, 1) * DIFFICULTY.balanced.patience).toBeLessThan(150);
+    // The slower kitchen (pace.ts) stretches the shift by more than it stretches this order.
+    expect(windowPatience(c, COOK_TIME) * DIFFICULTY.balanced.patience).toBeLessThan(150 * shiftStretch(COOK_TIME));
   });
 });
 

@@ -986,7 +986,7 @@ James's playtest of build #82. Code in `src/main.ts` (Undo, the tray's drag, the
 - **The flatbread close-up.** Spreading sauce or oil on a base opens a close-up over the counter, as the tray's does for burgers.
 - **Turning pies** is most of the way back to before build #71: `NUDGE` gain 1.2, a light grip (breakaway 0.08 after 0.04 s), more coast. The turn arrow goes when the pie leaves its spot.
 - **Meters** are all 68 px (85% of the study's 80) and never shrink when crowded.
-- **Chill**: customers are 1.5x as patient as Balanced (`CHILL_PATIENCE`), drinks pour past the line and spill as on Balanced (the Smart fountain still stops them), and things burn: cooking past over-done runs at half pace (`CHILL_BURN`), on the grill, press, fryer and oven.
+- **Chill**: customers are 1.5x as patient as on the old Chill (2.4 → 3.6, `CHILL_PATIENCE`), drinks pour past the line and spill as on Balanced (the Smart fountain still stops them), and things burn: cooking past over-done runs at half pace (`CHILL_BURN`), on the grill, press, fryer and oven.
 - **Serve** can be swiped up from the pill itself; two chevrons rise out of it.
 - **Calling people.** The header's bell is gone; the header shows how many are in line. An empty tray with people waiting shows a desk bell: a tap rings it and calls the next one to that tray, and it stays 0.4 s for a second ring, which calls one more.
 

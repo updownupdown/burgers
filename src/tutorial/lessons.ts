@@ -173,7 +173,7 @@ function mapSteps(w: CoachWorld): Step[] {
       done: () => okDone("map-pips") || totalShifts(s) >= 3,
       show: () => ({
         title: "A new day",
-        text: "Three shifts here open the road to the next towns. The dots show how many you've done. Each shift counts, good or not.",
+        text: "Three shifts here open the road to the next towns. The dots show how many you've done. A shift counts when at least half your customers are served with an average of 2.5★ or more.",
         ring: rectOf(q(".home-dock .home-pips")),
         ok: "Got it",
       }),

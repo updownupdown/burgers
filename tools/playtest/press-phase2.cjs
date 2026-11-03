@@ -211,7 +211,7 @@ const CHICKEN = {
     const s2 = await pressUntil(t, 1, 0.5);
     console.log('sandwich pressed', s2, 's');
     await openBay(t, 1);
-    // Out of the bay onto the board, cut with the knife (DESIGN §30: tap the knife, tap the
+    // Out of the bay onto the board, cut with the knife (DESIGN §31: tap the knife, tap the
     // panini, slice across in the cut view), then up to the tray.
     const pb = await t.press();
     const [bx, by] = await t.proj(pb.bays[1].plate);

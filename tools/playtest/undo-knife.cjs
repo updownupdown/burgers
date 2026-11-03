@@ -1,4 +1,4 @@
-// After DESIGN §30: undo, names on tap, two ways to sauce and the knife, played with a finger.
+// After DESIGN §31: undo, names on tap, two ways to sauce and the knife, played with a finger.
 // The page runs as a phone (390 x 844, dpr 2, hasTouch, isMobile), every gesture a real CDP touch
 // sequence at a person's pace (see touch.cjs), the clock in real time.
 //   Pinecrest: a tap on a bin only names it; a lettuce dragged onto a tray and undone (flies back to

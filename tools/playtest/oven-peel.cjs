@@ -195,7 +195,7 @@ async function trayBottle(t, kind) {
   await t.trace(full, 12);
   await sleep(300);
 }
-/** Toppings go on with a drag apiece (DESIGN §30: a tap on a pan only names it): onto the pie on the peel, or the active tray. */
+/** Toppings go on with a drag apiece (DESIGN §31: a tap on a pan only names it): onto the pie on the peel, or the active tray. */
 const binToPie = async (t, kind, n) => { for (let i = 0; i < n; i++) await t.drag(await t.hp('bin', { kind }), await t.proj((await t.oven()).peel.at)); };
 const binToTray = async (t, kind) => t.drag(await t.hp('bin', { kind }), await t.plate(await t.ev(() => window.__bv.game.active)));
 const crust = async (t, i) => { const o = await t.oven(); const d = o.spots[i].layers[0]; return d ? `rim ${d.rim.map((c) => c.toFixed(2)).join('/')} yaw ${d.yaw.toFixed(2)}` : 'empty'; };
@@ -467,7 +467,7 @@ const report = [];
     await t.up();
     await sleep(300);
     console.log('  on the board:', JSON.stringify((await t.oven()).rest.layers.map((l) => l.kind)));
-    // The knife (DESIGN §30): tap it, tap the flatbread, then two slices across in the cut view.
+    // The knife (DESIGN §31): tap it, tap the flatbread, then two slices across in the cut view.
     const bd = await t.proj((await t.oven()).rest.at);
     await t.tap(await t.hp('knife'));
     await t.tap(bd);

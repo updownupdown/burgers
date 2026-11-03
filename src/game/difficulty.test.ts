@@ -9,8 +9,8 @@ describe("difficulty", () => {
     expect(DIFFICULTY.chill.sendBack).toBeLessThan(DIFFICULTY.stressful.sendBack);
   });
 
-  it("Chill customers are half again as patient as Balanced ones (after build #82)", () => {
-    expect(DIFFICULTY.chill.patience).toBeCloseTo(DIFFICULTY.balanced.patience * CHILL_PATIENCE, 5);
+  it("Chill customers are half again as patient as on the old Chill (after build #82)", () => {
+    expect(DIFFICULTY.chill.patience).toBeCloseTo(2.4 * CHILL_PATIENCE, 5);
   });
 
   it("sends back once, then accepts unless it's still really wrong", () => {

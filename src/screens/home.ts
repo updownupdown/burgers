@@ -8,10 +8,10 @@ import { icon } from "../ui/icons";
 import { simLevel } from "../game/devmode";
 import { dropBack, pushBack } from "./nav";
 import { townBonus } from "../game/bonus";
-import { readyToBuy } from "../game/garage";
+import { buyBonus, readyToBuy } from "../game/garage";
 import { truckSvg as truckArt } from "./truckart";
 import { dollars } from "./garage";
-import { resultsSheetHtml } from "./day";
+import { openReport } from "./report";
 import { renderMap, roadPath, routePoints, SEA, townPoint, VIEW, LAND_BOX } from "./map";
 import { PanZoom } from "./panzoom";
 import "./home.css";
@@ -21,15 +21,14 @@ import "./home.css";
  * for its sheet (crowd, upcoming events, shifts worked, the drive there). The map has two
  * states (see game/day.ts): in the morning it is daylight and the dock leads to Prep and the
  * shift; in the evening it goes dark, the roads within tonight's range are lit, and the dock
- * leads to the results, a short hop or sleep.
+ * leads to a short hop or sleep, and the dashboard's Results brings back today's report card.
  */
 
 export interface HomeDeps {
   save: Save;
   /** The Prep screen, then the shift, in the current town. */
   startShift(): void;
-  /** Evening: the Closing screen again; any time: Popularity & reviews, today's menu; and sleep. */
-  openResults(): void;
+  /** Popularity & reviews, today's menu, and sleep. (Today's report card is home's own: see report.ts.) */
   openReviews(): void;
   openMenuRef(): void;
   /** The Garage: savings, bonuses and looks. */
@@ -45,7 +44,7 @@ export interface HomeDeps {
   focus?: string | null;
   /** Just slept: play the night passing over the map before handing it over. */
   night?: NightShow | null;
-  /** Just closed: pull back out of the kitchen into the truck, then bring up today's results. */
+  /** Just closed: pull back out of the kitchen into the truck, then bring up today's report card. */
   arrive?: Arrival | null;
   sfx?: { whoosh(): void; coin(): void; tap(): void };
 }
@@ -53,7 +52,7 @@ export interface HomeDeps {
 /**
  * The end of a shift arriving on the evening map (DESIGN.md §30): a picture of the kitchen as it
  * was (the 3D view as a JPEG, w × h CSS px, plus copies of the HUD, rail, counter buttons and the
- * Closed sign) to shrink into the truck. No picture: the results sheet just comes up.
+ * Closed sign) to shrink into the truck. No picture: the report card just comes up.
  */
 export interface Arrival {
   shot: string | null;
@@ -164,7 +163,6 @@ export function refreshHome(): void {
   // The fresh SVG comes sized (renderMapInto); fitting again keeps the view if the layout moved.
   fitMap(true);
   cur.el.querySelector(".home-stats")!.outerHTML = statsHtml(cur.deps.save);
-  cur.el.querySelector(".home-bank")!.outerHTML = bankHtml(cur.deps.save);
   renderDock(cur);
   if (cur.selected) renderSheet(cur, cur.selected);
 }
@@ -177,7 +175,6 @@ function shellHtml(save: Save): string {
         <span class="home-logo" aria-label="Bun Voyage"><img class="mark" src="./logo.svg" alt="" width="30" height="30" /><span class="w1">Bun</span><span class="w2">Voyage</span></span>${save.trips > 0 ? `<span class="bv-eyebrow">Trip ${save.trips + 1}</span>` : ""}${simLevel() !== null ? `<span class="home-dev bv-mono" title="Simulated progress (dev mode, in Settings)">Sim ${simLevel()}%</span>` : ""}
       </div>
       <div class="home-actions">
-        ${bankHtml(save)}
         <button class="bv-btn icon" data-home="howto" aria-label="How to play" title="How to play">${icon("help")}</button>
         <button class="bv-btn icon" data-home="settings" aria-label="Settings" title="Settings">${icon("settings")}</button>
       </div>
@@ -193,33 +190,29 @@ function shellHtml(save: Save): string {
       </div>
       <div class="home-dock bv-light"></div>
       <div class="home-sheet bv-light" hidden></div>
-      <div class="home-results bv-light" role="region" aria-label="Today's results" hidden></div>
     </div>
   </div>`;
 }
 
-/** Savings, one tap from the Garage; a dot when an unlocked bonus is affordable. */
-function bankHtml(save: Save): string {
-  const ready = readyToBuy(save);
-  return `<button class="home-bank" data-home="garage" aria-label="Garage: savings ${dollars(save.bank)}${ready ? `, ${ready} bonus${ready > 1 ? "es" : ""} ready to buy` : ""}">${icon("garage")}<b class="bv-mono">${dollars(save.bank)}</b>${ready ? `<i class="dot"></i>` : ""}</button>`;
-}
-
 /**
- * The dashboard card, one row: the Day tile in coral because it is the one that changes every
- * morning; popularity and rating side by side as one button that opens "Popularity & reviews";
- * and the menu (or, in the evening, today's results).
+ * The dashboard card, one row of three buttons, each with its icon in its small label: popularity
+ * and rating together (they open "Popularity & reviews"); the Garage with the savings, and a dot
+ * when an unlocked bonus is affordable; and today's menu (in the evening, today's report card).
  */
 function statsHtml(save: Save): string {
   const avg = reviewAverage(save.reviewCounts);
+  const rating = avg === null ? "–" : avg.toFixed(1);
+  const ready = readyToBuy(save);
   const evening = save.time === "evening";
   const last = todaysClosing(save);
+  const cell = (ic: string, label: string, value: string, mono = true) => `<span><small>${icon(ic)}${label}</small><b class="${mono ? "bv-mono" : ""}">${value}</b></span>`;
   return `<div class="home-stats bv-light" role="group" aria-label="Your truck">
-    <button class="home-pill" data-home="reviews" aria-label="Popularity ${save.popularity}: see popularity and reviews">${icon("people")}<span><small>Popularity</small><b class="bv-mono">${save.popularity}</b></span></button>
-    <button class="home-pill" data-home="reviews" aria-label="Rating ${avg === null ? "none yet" : avg.toFixed(1)}: see popularity and reviews">${icon("star")}<span><small>Rating</small><b class="bv-mono">${avg === null ? "–" : avg.toFixed(1)}</b></span></button>
+    <button class="home-pill duo" data-home="reviews" aria-label="Popularity ${save.popularity}, rating ${avg === null ? "none yet" : rating}: see popularity and reviews">${cell("people", "Popularity", String(save.popularity))}${cell("star", "Rating", rating)}</button>
+    <button class="home-pill garage" data-home="garage" aria-label="Garage: savings ${dollars(save.bank)}${ready ? `, ${ready} bonus${ready > 1 ? "es" : ""} ready to buy` : ""}">${cell("garage", "Garage", dollars(save.bank))}${ready ? `<i class="dot"></i>` : ""}</button>
     ${
       evening && last
-        ? `<button class="home-pill" data-home="results">${icon("receipt")}<span><small>Today</small><b>Results</b></span></button>`
-        : `<button class="home-pill" data-home="menuref">${icon("food-menu")}<span><small>Today's</small><b>Menu</b></span></button>`
+        ? `<button class="home-pill" data-home="results">${cell("receipt", "Today", "Results", false)}</button>`
+        : `<button class="home-pill" data-home="menuref">${cell("food-menu", "Today's", "Menu", false)}</button>`
     }
   </div>`;
 }
@@ -297,7 +290,7 @@ function fitMap(keepView: boolean, lookAt?: string): void {
   // Zoomed all the way out, the land (not the whole sheet of sea) fills the width, 16 px each side.
   const minScale = Math.min(home, Math.max(0.6, (w - 32) / ((LAND_BOX[2] - LAND_BOX[0]) * m.base)));
   m.pz.resize(VIEW.w * m.base, VIEW.h * m.base, minScale, 5, Math.round(Math.min(w * 0.55, h * 0.4)));
-  const dockH = m.el.querySelector<HTMLElement>(".home-sheet:not([hidden]), .home-results:not([hidden])")?.offsetHeight ?? m.el.querySelector<HTMLElement>(".home-dock")?.offsetHeight ?? 0;
+  const dockH = m.el.querySelector<HTMLElement>(".home-sheet:not([hidden])")?.offsetHeight ?? m.el.querySelector<HTMLElement>(".home-dock")?.offsetHeight ?? 0;
   const at = { x: w / 2, y: Math.max(h * 0.35, (h - dockH) / 2) };
   if (prev) m.pz.centerOn((prev.x / prevBase) * m.base, (prev.y / prevBase) * m.base, m.pz.scale, { x: w / 2, y: h / 2 });
   else {
@@ -331,7 +324,6 @@ function select(m: Mounted, id: string, pan: boolean): void {
   route.setAttribute("d", trip ? trip.path.slice(1).map((b, i) => roadPath(trip.path[i], b)).join(" ") : "");
   renderSheet(m, id);
   m.el.querySelector<HTMLElement>(".home-dock")!.hidden = true;
-  m.el.querySelector<HTMLElement>(".home-results")!.hidden = true;
   if (pan) revealTown(m, id);
 }
 
@@ -527,7 +519,8 @@ function onClick(e: Event): void {
       m.deps.sleep();
       break;
     case "results":
-      m.deps.openResults();
+      m.deps.sfx?.tap();
+      showReport(m, false);
       break;
     case "reviews":
       m.deps.openReviews();
@@ -545,9 +538,6 @@ function onClick(e: Event): void {
       break;
     case "close":
       deselect(m);
-      break;
-    case "results-close":
-      hideResults(m);
       break;
     case "town":
       m.deps.sfx?.tap();
@@ -641,23 +631,18 @@ const ARRIVE_MS = { shrink: 1350, fade: 850, sheet: 1350 };
 
 /**
  * The end of a shift, on the map: the kitchen (a picture of it) shrinks into the truck while the
- * map pulls back from close in, the truck's hatch glows, and today's results rise as a sheet with
- * Sleep on it. Any tap finishes it at once.
+ * map pulls back from close in, the truck's hatch glows, and today's report card comes up over
+ * the evening map (Sleep is on the dock under it). Any tap finishes it at once.
  */
 function playArrive(m: Mounted, a: Arrival): void {
   const s = m.deps.save;
   const last = todaysClosing(s);
   if (!last) return;
-  const sheet = m.el.querySelector<HTMLElement>(".home-results")!;
-  sheet.innerHTML = resultsSheetHtml(last, s);
-  sheet.hidden = false;
-  m.el.querySelector<HTMLElement>(".home-dock")!.hidden = true;
   fitMap(false);
   const truck = m.world.querySelector<SVGGElement>(".home-truck");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (!a.shot || reduce) {
-    sheet.classList.add("in");
-    countUp(sheet);
+    showReport(m, true);
     return;
   }
   // Where the truck sits on screen, in the home element's own coordinates.
@@ -698,8 +683,7 @@ function playArrive(m: Mounted, a: Arrival): void {
     for (const t of timers) clearTimeout(t);
     for (const an of anims) an.cancel();
     over.remove();
-    sheet.classList.add("in");
-    countUp(sheet);
+    showReport(m, true);
     truck?.classList.add("lit");
     timers.push(window.setTimeout(() => truck?.classList.remove("lit"), 2600));
     m.at = performance.now();
@@ -709,24 +693,31 @@ function playArrive(m: Mounted, a: Arrival): void {
   timers.push(window.setTimeout(finish, ARRIVE_MS.sheet));
 }
 
-/** Today's takings on the results sheet count up as it arrives. */
-function countUp(root: HTMLElement): void {
-  for (const b of root.querySelectorAll<HTMLElement>("[data-count]")) {
-    const to = Number(b.dataset.count);
-    const t0 = performance.now();
-    const f = (now: number) => {
-      const k = Math.min(1, (now - t0) / 900);
-      b.textContent = `$${Math.round(to * (1 - (1 - k) ** 3))}`;
-      if (k < 1 && b.isConnected) requestAnimationFrame(f);
-    };
-    requestAnimationFrame(f);
-  }
-}
-
-/** Put today's results away; the dock (with Sleep) is back, and Results in the dashboard still opens them. */
-function hideResults(m: Mounted): void {
-  m.el.querySelector<HTMLElement>(".home-results")!.hidden = true;
-  if (!m.selected) m.el.querySelector<HTMLElement>(".home-dock")!.hidden = false;
+/**
+ * Today's report card (screens/report.ts), over the map. Buying the unlocked bonus on it saves and
+ * updates the Garage button; its links close it and go to Popularity & reviews, the Garage or a town.
+ */
+function showReport(m: Mounted, arrive: boolean): void {
+  const s = m.deps.save;
+  const last = todaysClosing(s);
+  if (!last) return;
+  openReport(
+    last,
+    {
+      save: s,
+      buy: (id) => {
+        if (!buyBonus(s, id)) return false;
+        m.deps.commit();
+        m.deps.sfx?.coin();
+        m.el.querySelector(".home-stats")!.outerHTML = statsHtml(s);
+        return true;
+      },
+      reviews: () => m.deps.openReviews(),
+      garage: () => m.deps.openGarage(),
+      town: (id) => select(m, id, true),
+    },
+    arrive,
+  );
 }
 
 // ---------------------------------------------------------------------------

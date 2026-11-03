@@ -1,5 +1,5 @@
 // The end of a shift (DESIGN.md §30): sundown in the kitchen, the pull-back onto the evening map,
-// the results sheet, Results and back, then Sleep. SKIP=1 taps during the sundown instead.
+// the report card, Continue, Results and back, then Sleep. SKIP=1 taps during the sundown instead.
 // PORT=4173 [TAG=x] node tools/playtest/sundown-shots.cjs  ->  tools/playtest/out/sundown-<tag>-*.png
 const { open, out } = require('./lib.cjs');
 const tag = process.env.TAG || 'now';
@@ -18,13 +18,14 @@ const tag = process.env.TAG || 'now';
   if (process.env.SKIP) {
     await p.waitForTimeout(700); await shot('a-before-tap');
     await p.mouse.click(200, 400); await p.waitForTimeout(300); await shot('b-after-tap');
-    await p.waitForTimeout(800); await shot('c-sheet');
+    await p.waitForTimeout(800); await shot('c-report');
   } else {
     for (let i = 0; i < 14; i++) { await p.waitForTimeout(230); await shot(String(i).padStart(2, '0')); }
-    await p.waitForTimeout(1500); await shot('sheet');
-    await p.click('.home-results [data-home=results]'); await p.waitForTimeout(700); await shot('closing');
-    await p.click('[data-act=evening]'); await p.waitForTimeout(700); await shot('back');
-    await p.click('.home-results [data-home=sleep]'); await p.waitForTimeout(1300); await shot('night');
+    await p.waitForTimeout(1500); await shot('report');
+    await p.click('.report-card [data-rep=continue]'); await p.waitForTimeout(700); await shot('map');
+    await p.click('[data-home=results]'); await p.waitForTimeout(700); await shot('report-again');
+    await p.click('.report-card [data-m=close]'); await p.waitForTimeout(500);
+    await p.click('.home-dock [data-home=sleep]'); await p.waitForTimeout(1300); await shot('night');
     await p.waitForTimeout(3500); await shot('morning');
   }
   console.log(log.join('\n'));

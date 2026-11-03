@@ -511,7 +511,7 @@ export class CounterView {
   grillBoost = 1;
   /** Tostadas are on the menu: a pan of corn tortillas stands on the fryer counter too (set before setPantry). */
   fryerCorn = false;
-  /** The oven's pace (sear and OVEN_TIME, set by main). */
+  /** The oven's pace (sear and the cook time, set by main). */
   ovenBoost = 1;
   /** Warm holding's pace (0.5 with the heat lamp): the warm end, the taco rack, lifted fries and cartons. */
   holdRate = 1;
@@ -1796,13 +1796,29 @@ export class CounterView {
   /** A scoop of ice or one lid (for a cup size): on the counter and in hand. */
   extraMesh(what: "ice" | "lid", size: Size = "M"): THREE.Object3D {
     if (what === "ice") {
+      // The steel scoop with its load (after build #86; it used to be loose cubes in the air): a
+      // round bowl heaped with cubes, the black handle running back toward the finger.
       const g = new THREE.Group();
-      for (let i = 0; i < 3; i++) {
-        const c = mesh(faceted(new THREE.BoxGeometry(0.22, 0.2, 0.22)), "#e8f6fb", { opacity: 0.85 });
-        c.position.set((i - 1) * 0.2, (i % 2) * 0.12, (i % 2) * 0.1);
-        c.rotation.set(i * 0.7, i, 0);
+      const R = 0.34;
+      const bowl = mesh(faceted(new THREE.CylinderGeometry(R, R * 0.86, 0.3, 16, 1, true)), "#d7dedd", { side: THREE.DoubleSide });
+      bowl.position.y = 0.15;
+      g.add(bowl);
+      const floor = mesh(faceted(new THREE.CircleGeometry(R * 0.86, 16).rotateX(-Math.PI / 2)), "#c3cbca");
+      floor.position.y = 0.01;
+      g.add(floor);
+      const handle = mesh(faceted(new THREE.CylinderGeometry(0.055, 0.065, 0.62, 8).rotateX(Math.PI / 2)), "#3a3633");
+      handle.position.set(0, 0.2, R + 0.28);
+      handle.rotation.x = -0.25;
+      g.add(handle);
+      const spots: [number, number, number][] = [[-0.12, 0.3, -0.08], [0.13, 0.28, -0.04], [0, 0.33, 0.12], [-0.05, 0.42, -0.02], [0.14, 0.4, 0.13]];
+      spots.forEach(([x, y, z], i) => {
+        const c = mesh(faceted(new THREE.BoxGeometry(0.17, 0.15, 0.17)), i % 2 ? "#cfeaf4" : "#e8f6fb", { opacity: 0.9 });
+        c.position.set(x, y, z);
+        c.rotation.set(i * 0.7, i * 1.3, i * 0.4);
         g.add(c);
-      }
+      });
+      // Held by the handle: the bowl sits just ahead of the finger.
+      g.children.forEach((c) => (c.position.z -= 0.3));
       return g;
     }
     const r = (CUP_DIMS[size].r + 0.03) * CUP_IN_HAND;

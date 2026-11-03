@@ -5,7 +5,7 @@ import { cookLevel, COOK_SCALE, cookZone, darkSide, DRINK_FILL, friesZone, FRY_Z
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { expectedCustomers, sleep } from "./game/day";
 import { greatShift, townBonus, type BonusId } from "./game/bonus";
-import { cookTime, OVEN_TIME, shiftStretch } from "./game/pace";
+import { cookTime, shiftStretch } from "./game/pace";
 import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, validShift, type ShiftWindow } from "./game/shift";
 import { freshSave, loadSave, passed, passTown, todaysClosing, writeSave, type Closing } from "./game/progress";
 import { eventOn, fountainFor, fryerOf, garnishFor, garnishOf, middleOf, townById, withEvent, type TownEvent } from "./game/stops";
@@ -34,7 +34,6 @@ import { makeFlatbread } from "./render/flatbread";
 import { makePeel, makeSauceLadle, PEEL } from "./render/machines/oven";
 import { flickOf, slideArmed, slidUnder, type Flick } from "./game/peel";
 import { cullSmallHulls, disposeObject, OUTLINE_PX, setOutlinePx, setOutlineViewport } from "./render/materials";
-import { perfReadout } from "./render/perfreadout";
 import { BlobShadows } from "./render/blobs";
 import { playShiftReveal } from "./screens/reveal";
 import { CounterView, CUP_IN_HAND, RACK_SCALE, EMPTY_PACK, STOPS, pageX, type DrinkCup, GRILL_SCALE, GRILLE_ZONE, FLAT_ZONE, HEARTH_Y, HOME_PAGE, PAGES, PEEL_Y, GRILL_TOP, ZONE_START, type GrillItem, type Hit, type PeelTarget, type PieHolder, type PiePlace } from "./scenes/counter";
@@ -52,7 +51,7 @@ import { Dusk } from "./render/dusk";
 import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
-import { closingHtml, renderPrep, reviewsHtml, syncRange, toggleBox, toggleIngredients } from "./screens/day";
+import { renderPrep, reviewsHtml, syncRange, toggleIngredients } from "./screens/day";
 import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, setTabArt, ticketHtml, tortillaMeter } from "./ui";
 import { icon } from "./ui/icons";
 import { esc } from "./screens/modal";
@@ -235,7 +234,8 @@ type Moved =
   | { k: "fries"; p: Extract<Payload, { type: "fries" }>; moved: number; pack?: { fill: number; cook: number; fry: FryKind } }
   | { k: "extra"; what: "ice" | "lid" | "curds" | "gravy"; ref: { ice?: boolean; lid?: boolean; curds?: boolean; gravy?: boolean }; p: Payload }
   | { k: "sauce"; piece: Piece; before: number; kind: SauceKind }
-  | { k: "cut"; pieces: Piece[]; was: { cut: boolean; cutQ?: number; cuts?: number }[] };
+  | { k: "cut"; pieces: Piece[]; was: { cut: boolean; cutQ?: number; cuts?: number }[] }
+  | { k: "salt"; f: { salt?: number }; before: number; sugar: boolean };
 /** The things a move carried, so a stale move takes older moves of the same things with it (undo.ts). */
 function movedKeys(m: Move<Moved>): readonly object[] {
   const w = m.what;
@@ -246,6 +246,8 @@ function movedKeys(m: Move<Moved>): readonly object[] {
       return [w.piece];
     case "cut":
       return w.pieces;
+    case "salt":
+      return [w.f];
     case "drink":
     case "carton":
     case "extra":
@@ -1021,7 +1023,7 @@ type Payload =
   | { type: "garnish"; kind: Garnish }
   | { type: "ice" }
   | { type: "lid"; size: Size }
-  | { type: "empty"; kind: "cup" | "carton"; size: Size; stack: number };
+  | { type: "empty"; kind: "cup" | "carton"; size: Size; stack: number; ice?: boolean };
 
 interface Held {
   payload: Payload;
@@ -1122,6 +1124,7 @@ function payloadVisual(p: Payload, tray = false): THREE.Object3D {
   if (p.type === "empty") {
     const o = p.kind === "cup" ? makeCup(null, false, p.size) : makeCarton(p.size as FriesSize);
     o.scale.multiplyScalar(p.kind === "cup" ? CUP_IN_HAND : SCALE.fries);
+    if (p.kind === "cup" && p.ice) dressCup(o as Parameters<typeof dressCup>[0], { ice: true, lid: false });
     return o;
   }
   if (p.type === "lid") return counter.extraMesh("lid", p.size);
@@ -1165,8 +1168,28 @@ function moveHold(pt: Pointer): void {
     trayView.showGhost(-1, null);
     const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3);
     counter.moveHeld(ndcIn(bands.counter, pt.x, pt.y));
+    iceThroughBin(pt);
     counter.highlightTrash(band === "counter" && counter.overTrash(g));
   }
+}
+
+/**
+ * An empty cup carried over the ice bin scoops its own ice (after build #86): no spoon needed. It
+ * works for a cup from the stack or one picked up off the counter that has nothing in it yet.
+ */
+function iceThroughBin(pt: Pointer): void {
+  const h = pt.held;
+  if (!h || counter.page !== 0) return;
+  const p = h.payload;
+  const empty = p.type === "empty" && p.kind === "cup" && !p.ice;
+  const bare = p.type === "drink" && !p.ice && !p.lid && p.fill < 0.02;
+  if (!empty && !bare) return;
+  if (counter.hit(ndcIn(bands.counter, pt.x, pt.y))?.type !== "ice") return;
+  p.ice = true;
+  dressCup(h.counterObj as Parameters<typeof dressCup>[0], { ice: true, lid: false });
+  dressCup(h.trayObj as Parameters<typeof dressCup>[0], { ice: true, lid: false });
+  sfx.ice();
+  buzz(8);
 }
 
 /** Carrying something over a counter button for a moment switches to that counter, so items can move between counters. */
@@ -1335,6 +1358,7 @@ function finishHold(pt: Pointer): void {
     if (!pt.moved && dur < 450) nameBubble(pt, nameOf(payload));
     else if (!shaker.shakes && shaker.target) showHint(payload.sugar ? `Shake it over the ${counter.orchard ? "fritters" : "churros"} to sugar them.` : "Shake it over the fries to salt them.", 2);
     shaker.target = null;
+    shaker.logged.clear();
     return;
   }
 
@@ -1640,6 +1664,11 @@ function stillThere(m: Move<Moved>): boolean {
       const at = whereFood(w.layers[0].piece);
       return to.at === "trash" ? !at : !!at && samePlace(at, to);
     }
+    case "salt": {
+      if ((w.f.salt ?? 0) <= w.before) return false;
+      if (to.at === "pack") return counter.packs[to.i] === w.f && !!counter.packs[to.i].size;
+      return to.at === "tray" && game.slots[to.slot].plate.fries === w.f;
+    }
     case "cut": {
       const at = whereFood(w.pieces[0]);
       return !!at && samePlace(at, to) && w.pieces.every((p, i) => (p.cuts ?? 0) > (w.was[i].cuts ?? 0) || (!!p.cut && !w.was[i].cut));
@@ -1774,6 +1803,13 @@ function takeBack(m: Move<Moved>): { show: Payload | THREE.Object3D; put: () => 
     const show: Payload = layers.length === 1 && !w.rack ? { type: "piece", piece: layers[0].piece, fromGrill: null } : { type: "stack", layers, rack: w.rack };
     return { show, put: () => putFood(from, layers, !!w.rack) };
   }
+  if (w.k === "salt") {
+    // The salt (or sugar) comes off again, and the shaker flies back to its spot.
+    w.f.salt = w.before;
+    if (to.at === "pack") counter.syncPack(to.i);
+    else if (to.at === "tray") syncTray(to.slot, false);
+    return { show: { type: "salt", sugar: w.sugar }, put: () => {} };
+  }
   if (w.k === "cut") {
     // The halves go back together (or the quarters), and the knife flies back to its spot.
     w.pieces.forEach((p, i) => {
@@ -1816,7 +1852,7 @@ function takeBack(m: Move<Moved>): { show: Payload | THREE.Object3D; put: () => 
       const cup = w.ref as DrinkCup;
       c = { flavor: cup.flavor, fill: cup.fill, size: cup.size, ice: cup.ice, lid: cup.lid };
       counter.removeCup(cup);
-    } else c = pp.type === "drink" ? { flavor: pp.flavor, fill: pp.fill, size: pp.size, ice: pp.ice, lid: pp.lid } : { flavor: null, fill: 0, size: pp.size, ice: false, lid: false };
+    } else c = pp.type === "drink" ? { flavor: pp.flavor, fill: pp.fill, size: pp.size, ice: pp.ice, lid: pp.lid } : { flavor: null, fill: 0, size: pp.size, ice: !!pp.ice, lid: false };
     const put = () => {
       if (from.at === "tray") {
         if (c.flavor) game.slots[from.slot].plate.drink = { flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid };
@@ -1989,6 +2025,8 @@ function supplyWorld(w: Moved): THREE.Vector3 | null {
       return w.what === "lid" ? proxy((h) => h.type === "lids") : proxy((h) => h.type === w.what);
     case "cut":
       return counter.knifePoint();
+    case "salt":
+      return w.sugar ? counter.sugarShaker.getWorldPosition(new THREE.Vector3()) : counter.shakerObj.getWorldPosition(new THREE.Vector3());
   }
 }
 
@@ -2394,19 +2432,19 @@ function topFries(f: { curds?: boolean; gravy?: boolean }, what: "curds" | "grav
  * The salt shaker in hand. Each change of direction (after a short run) is one shake; over fries
  * in a carton, on a pad or on a plate, a shake drops SALT.shake of salt on them.
  */
-const shaker = { shakes: 0, target: null as null | { f: { salt?: number }; sync: () => void }, dirX: 0, dirY: 0, runX: 0, runY: 0, wiggle: 0 };
+const shaker = { shakes: 0, target: null as null | { f: { salt?: number }; sync: () => void; at: Place }, logged: new Set<object>(), dirX: 0, dirY: 0, runX: 0, runY: 0, wiggle: 0 };
 
 /** Fries in a carton under the finger: on a packing pad, or on a plate on the tray. */
 function saltTarget(pt: Pointer): typeof shaker.target {
   const band = bandAt(pt.y);
   if (band === "counter") {
     const pi = counter.friedPackAt(counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3));
-    return pi >= 0 ? { f: counter.packs[pi], sync: () => counter.syncPack(pi) } : null;
+    return pi >= 0 ? { f: counter.packs[pi], sync: () => counter.syncPack(pi), at: { at: "pack", i: pi } } : null;
   }
   if (band === "tray") {
     const slot = trayView.pick(ndcIn(bands.tray, pt.x, pt.y));
     const fries = slot >= 0 ? game.slots[slot].plate.fries : null;
-    return fries ? { f: fries, sync: () => syncTray(slot, false) } : null;
+    return fries ? { f: fries, sync: () => syncTray(slot, false), at: { at: "tray", slot } } : null;
   }
   return null;
 }
@@ -2443,6 +2481,11 @@ function shakeSalt(pt: Pointer, dx: number, dy: number): void {
   }
   const before = f.salt ?? 0;
   if (before >= SALT.max) return void showHint("That's plenty of salt!", 1.2);
+  // One Undo takes back all the salt this shaker put on these fries in this go (after build #86).
+  if (!shaker.logged.has(f)) {
+    shaker.logged.add(f);
+    history.push({ what: { k: "salt", f, before, sugar }, from: SUPPLY, to: shaker.target.at });
+  }
   f.salt = Math.min(SALT.max, before + SALT.shake);
   shaker.shakes++;
   sfx.shake();
@@ -2482,13 +2525,14 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
     }
     counter.dressCupAt(c, payload.type);
     dropped = { place: { at: "cup", x: c.x, z: c.z }, ref: c };
-    sfx.plop();
+    if (payload.type === "ice") sfx.ice();
+    else sfx.plop();
     return true;
   }
   if ((payload.type === "empty" && payload.kind === "cup") || payload.type === "drink") {
     // A cup stands anywhere on the drinks counter; over a drip tray it goes under that nozzle.
     if (counter.page !== 0 || counter.overTrash(g)) return false;
-    const c = payload.type === "drink" ? payload : { flavor: null, fill: 0, size: payload.size, ice: false, lid: false };
+    const c = payload.type === "drink" ? payload : { flavor: null, fill: 0, size: payload.size, ice: !!payload.ice, lid: false };
     const { cup, why } = counter.placeCup({ flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid }, g);
     if (!cup) {
       if (why) showHint(why, 2);
@@ -4468,13 +4512,6 @@ ui.root.addEventListener("click", (e) => {
       showPrep();
       break;
     }
-    case "buy-bonus":
-      if (buyBonus(save, btn!.dataset.v as BonusId)) {
-        writeSave(save);
-        sfx.coin();
-        showClosing();
-      }
-      break;
     case "gar-tab":
       game.garage.tab = btn!.dataset.v === "looks" ? "looks" : "bonuses";
       showGarage();
@@ -4515,17 +4552,8 @@ ui.root.addEventListener("click", (e) => {
         showGarage();
       }
       break;
-    case "closing-box":
-      toggleBox(btn!.dataset.v!);
-      showClosing();
-      break;
     case "open":
       startShift();
-      break;
-    case "evening":
-      // Closing is opened from the evening map (its results sheet or the Results tab): go back to it as it was.
-      if (game.phase === "title") closeOverlay();
-      else showTitle();
       break;
     case "next":
       showTitle();
@@ -4736,11 +4764,11 @@ function startShift(): void {
   applyStop();
   // Maybe a critic in today's line, never the very first customer.
   game.criticAt = has("press") || game.rng() < criticChance(stop().crowd, game.event) ? 1 + Math.floor(game.rng() * Math.max(1, Math.min(game.customers, 8) - 2)) : -1;
-  // Cooking takes cookTime() times as long as before build #85 (pace.ts); the oven OVEN_TIME.
+  // Cooking takes cookTime() times as long as before build #86 (pace.ts), the oven too.
   counter.fryBoost = (has("turbo") ? 1.35 : 1) / cookTime();
   // Hot plate (the old Searing plate): the main counter cooks faster, whatever it is.
   counter.grillBoost = (has("sear") ? 1.25 : 1) / cookTime();
-  counter.ovenBoost = (has("sear") ? 1.25 : 1) / OVEN_TIME;
+  counter.ovenBoost = (has("sear") ? 1.25 : 1) / cookTime();
   // Heat lamp: warm holding everywhere (the warm end, the rack, fries, the trays) ages at half the pace.
   counter.holdRate = has("lamp") ? 0.5 : 1;
   // Chill pours to the line by itself and nothing on the grill or in the fryer burns.
@@ -4835,14 +4863,6 @@ function closeOverlay(fromBack = false): void {
   else refreshHome();
 }
 
-function showClosing(): void {
-  if (!save.last) {
-    showTitle();
-    return;
-  }
-  showOverlay("closing", closingHtml(save.last, save));
-}
-
 /** The Garage: savings spent on bonuses and looks (src/screens/garage.ts). */
 function showGarage(): void {
   const keep = game.overlay === "garage" ? (ui.summary.querySelector<HTMLElement>(".day-scroll")?.scrollTop ?? 0) : 0;
@@ -4899,7 +4919,6 @@ function showTitle(night: NightShow | null = null, arrive: Arrival | null = null
       showPrep();
       screenShownAt = performance.now();
     },
-    openResults: () => showClosing(),
     openReviews: () => showReviews(),
     openGarage: () => showGarage(),
     openMenuRef: () => openMenuRef(withEvent(townById(save.town), eventOn(save.town, save.day))),
@@ -5652,12 +5671,13 @@ function updateStaleUi(): void {
 
 /**
  * Warm holding's bar (after build #78): the tray's staleness bar in small, under a meter on the
- * warm end, in the taco rack, on a lifted basket or a carton. Green while it keeps, amber once it
+ * warm end, in the taco rack, on a lifted basket or a carton. Hidden while it keeps, amber once it
  * starts drying, red near the end. `grace` and `ruin` are that food's seconds.
  */
 function holdBar(held: number | undefined, grace = HOLD_GRACE, ruin = HOLD_RUIN): string {
   const h = held ?? 0;
-  if (h < 0.5) return "";
+  // Only once it starts to dry (after build #86): a green line under fresh food read as a mystery.
+  if (h < grace) return "";
   const left = Math.round(Math.max(0, 1 - h / ruin) * 20) * 5;
   const state = h < grace ? "fresh" : h < (grace + ruin) / 2 ? "drying" : "dry";
   return `<span class="hbar ${state}" role="img" aria-label="${state === "fresh" ? "Keeping" : state === "drying" ? "Drying" : "Gone cold"}"><i style="width:${left}%"></i></span>`;
@@ -5926,15 +5946,12 @@ function updateGrillTags(dt = 0): void {
 }
 
 const clearColor = new THREE.Color("#2a3340");
-// Count draw calls over the whole frame (every band), for dev mode's readout.
-renderer.info.autoReset = false;
 let frameNo = 0;
 // Low quality has no shadow map: soft blobs keep food, cups and cartons grounded instead.
 const counterBlobs = new BlobShadows(counter.scene);
 const trayBlobs = new BlobShadows(trayView.scene);
 function render(): void {
   const H = viewH;
-  renderer.info.reset();
   const low = gfx === "low";
   counterBlobs.update(low, low ? [...counter.grillItems.filter((g) => !g.held).map((g) => g.obj), ...counter.cups.map((c) => c.obj), ...counter.packs.map((p) => p.obj), ...counter.stacks.map((s) => s.obj)] : []);
   trayBlobs.update(low, low ? trayView.plates.flatMap((p) => [p.entries.length ? p.burger : null, p.fries, p.cup]) : []);
@@ -5965,7 +5982,6 @@ function render(): void {
     const r = ladleZoom.rect;
     draw({ x: colX + r.x, y: r.y, w: r.w, h: r.h }, counter.scene, ladleZoom.camera);
   }
-  perfReadout(renderer);
 }
 /** Nothing moves under the pause menu: draw a couple of frames, then stop until something changes. */
 function redrawPaused(): void {

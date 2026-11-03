@@ -1,7 +1,7 @@
 /**
  * Kitchen pace (after build #84, DESIGN §38). Cooking was so quick that one order at a time was the
- * only way to play. Now everything that cooks on heat (grill, comal, press, fryer, tostadas, cheese
- * on the press and in quesadillas) takes COOK_TIME times as long, while hands-on work (taps, drags,
+ * only way to play. Now everything that cooks on heat (grill, comal, press, fryer, tostadas, the
+ * oven, cheese on the press and in quesadillas) takes COOK_TIME times as long, while hands-on work (taps, drags,
  * sauces, pours) stays as it was. The idle time that opens up is where a second and third order
  * fit. The same on every pacing: Chill, Balanced and Stressful differ only in patience and burns.
  *
@@ -10,14 +10,13 @@
  * shiftStretch(), how much longer a typical order takes, so a shift brings the same number of
  * people over a longer, busier stretch.
  *
- * The oven is its own case: James asked for flatbreads to take 1.5x as long (OVEN_TIME), whatever
- * the dial says, since a pie already has plenty of hands-on work.
+ * The oven follows the same dial (after build #86; it was a fixed 1.5x).
  *
  * Dev mode (Settings) can try other values; the choice is saved in this browser only.
  */
-export const COOK_TIME = 2.5;
+/** The default: 2x (James, after build #86; it was 2.5x in build #86). */
+export const COOK_TIME = 2;
 export const COOK_TIMES = [1, 1.5, 2, 2.5, 3] as const;
-export const OVEN_TIME = 1.5;
 const KEY = "bv-cook-time";
 
 /** A typical burger's window patience at the old pace: 91 s of hands-on work and 52 s of cooking. */

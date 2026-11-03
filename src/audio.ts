@@ -269,6 +269,12 @@ export class Sfx {
     if (oil) this.burst(1100 + Math.random() * 300, 0.1, 0.035, "bandpass", 800, 0.03, 1.1);
     else this.burst(520 + Math.random() * 180, 0.16, 0.07, "lowpass", 300, 0.04, 0.8);
   }
+  /** Ice into a cup (from the spoon, or a cup swept through the bin): a few small clinks and a rattle. */
+  ice(): void {
+    if (!this.every("ice", 0.12)) return;
+    for (let i = 0; i < 4; i++) this.tone(2300 + Math.random() * 1400, 0.05, "triangle", 0.035, undefined, i * (0.025 + Math.random() * 0.03));
+    this.burst(3800, 0.14, 0.03, "bandpass", 2600, 0.01, 1.4);
+  }
   /** One shake of the salt shaker. */
   shake(): void {
     this.burst(6000 + Math.random() * 1500, 0.07, 0.08, "highpass");

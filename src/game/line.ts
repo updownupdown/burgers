@@ -2,7 +2,7 @@ import type { CrowdId } from "./business";
 import { CROWD } from "./business";
 import { DIFFICULTY, type Difficulty } from "./difficulty";
 import { BREADS, PROTEINS, TORTILLAS, type Order } from "./types";
-import { cookTime, OVEN_TIME, shiftStretch } from "./pace";
+import { cookTime, shiftStretch } from "./pace";
 
 /**
  * The line outside the truck. People arrive over the shift and join the line (or walk past it
@@ -94,7 +94,7 @@ export const WINDOW_BASE = 40;
  * pacing scale it): a base, then each layer, extra counted piece, protein and side, and the
  * dish's own work, so the regions feel about equally tight. The cooking parts (proteins, fries,
  * a panini's press, half a quesadilla's work) stretch with the cook time `t` (pace.ts); a
- * flatbread's bake by OVEN_TIME; the hands-on parts stay put.
+ * flatbread's bake too; the hands-on parts stay put.
  */
 export function windowPatience(order: Order, t = cookTime()): number {
   const slices = order.layers.reduce((n, l) => n + Math.max(0, (l.count ?? 1) - 1), 0);
@@ -116,7 +116,7 @@ export function windowPatience(order: Order, t = cookTime()): number {
     order.layers.length * 7 +
     slices * 2 +
     proteins * 22 * (base?.kind === "dough" ? 1 : t) +
-    work * (base?.kind === "dough" ? OVEN_TIME : base && BREADS.has(base.kind) ? t : base && TORTILLAS.has(base.kind) && base.folded ? (1 + t) / 2 : 1) +
+    work * (base?.kind === "dough" || (base && BREADS.has(base.kind)) ? t : base && TORTILLAS.has(base.kind) && base.folded ? (1 + t) / 2 : 1) +
     (order.slice ? DISH_WORK.cut : 0) +
     (order.garnish ? DISH_WORK.garnish : 0) +
     (order.fries ? 30 * t : 0) +

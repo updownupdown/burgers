@@ -5,7 +5,7 @@
 //   its pan); a patty moved grill -> tray and undone (back on the grill, still cooking); ketchup the
 //   tap way (tap bottle, tap burger, one stroke), undone; mustard the drag way (no sauce until the
 //   nozzle is in over the bun).
-//   Harbor City: a panini built on the board, cut the tap way (tap knife, tap panini, slice), moved
+//   Harbor City: a panini built on the board, cut the tap way (tap knife, tap panini), moved
 //   to a tray and undone back to the board; a second one cut the drag way (knife dragged onto it).
 //   Port Amber: dough dragged onto the peel, cheese dragged on and undone, then the flatbread on
 //   the board cut in four both ways.
@@ -141,29 +141,15 @@ async function harbor() {
   check(b0 && b0.layers.join() === 'ciabatta,mozzarella,ciabatta', 'panini built on the board', b0);
   await t.shot('h1-panini-on-board');
 
-  // The tap way: tap the knife, tap the panini, slice across.
+  // The tap way (after build #84): tap the knife, tap the panini, and it's cut.
   await t.tap(await t.hp('knife'));
   check((await t.ev(() => window.__bv.knife())).armed, 'a tap lifts the knife');
   await t.shot('h2-knife-lifted', { hint: true });
   await t.tap(await t.proj(b0.at));
-  await sleep(450);
-  let k = await t.ev(() => window.__bv.knife());
-  check(k.view && k.view.how === 'tap' && k.view.need === 1, 'a tap on the panini opens the cut view', k.view);
-  await t.shot('h3-cut-view');
-  const [sx, sy, sw, sh] = k.square;
-  const slice = lineOf(sx + sw * 0.04, sy + sh * 0.52, sx + sw * 0.96, sy + sh * 0.49, 26);
-  await t.down(...slice[0]);
-  await t.path(slice.slice(1, 15), 18);
-  await t.shot('h4-slicing');
-  await t.path(slice.slice(15), 18);
-  await sleep(120);
-  k = await t.ev(() => window.__bv.knife());
-  await t.shot('h5-cut-made');
-  await t.up();
-  await sleep(1000);
+  await sleep(600);
   const cut1 = await t.ev(() => window.__bv.counter.board.layers.map((l) => ({ kind: l.piece.kind, cut: !!l.piece.cut, q: l.piece.cutQ })));
-  check(cut1[0].cut && cut1[2].cut, 'panini cut in half', { made: k.view && k.view.made, cut1 });
-  check(!(await t.ev(() => window.__bv.knife())).view, 'the cut view closes after the cut');
+  check(cut1[0].cut && cut1[2].cut, 'panini cut in half on a tap', cut1);
+  check(!(await t.ev(() => window.__bv.knife())).armed, 'the knife goes back after the cut');
   await t.shot('h6-panini-cut');
 
   // To a tray, then undo: back onto the board.
@@ -181,20 +167,13 @@ async function harbor() {
   const bp = await t.proj(b0.at);
   await t.down(kn[0], kn[1]);
   await sleep(90);
-  await t.move(bp[0] + 22, bp[1] - 2, 380);
-  await sleep(300);
-  k = await t.ev(() => window.__bv.knife());
-  check(k.view && k.view.how === 'drag', 'the knife dragged onto the panini opens the cut view', k.view);
+  await t.move(bp[0] + 6, bp[1] - 2, 380);
+  await sleep(200);
   await t.shot('h9-knife-dragged-in');
-  const [qx, qy, qw, qh] = k.square;
-  await t.path(lineOf(t.at[0], t.at[1], qx + qw * 0.03, qy + qh * 0.5, 20), 18);
-  await sleep(100);
-  k = await t.ev(() => window.__bv.knife());
-  await t.shot('h10-drag-cut-made');
   await t.up();
-  await sleep(900);
+  await sleep(700);
   const cut2 = await t.ev(() => window.__bv.counter.board.layers.map((l) => ({ kind: l.piece.kind, cut: !!l.piece.cut, q: l.piece.cutQ })));
-  check(cut2[0].cut && cut2[2].cut, 'panini cut the drag way', { made: k.view && k.view.made, cut2 });
+  check(cut2[0].cut && cut2[2].cut, 'panini cut the drag way', cut2);
   await t.b.close();
 }
 
@@ -222,56 +201,29 @@ async function portamber() {
   check(o.rest.board && o.rest.layers.length >= 1, 'flatbread on the board', o.rest);
   await t.shot('a3-flatbread-on-board');
 
-  // The tap way: knife, flatbread, two slices.
+  // The tap way: knife, then flatbread: cut in four at once.
   await t.tap(await t.hp('knife'));
   await t.tap(await t.proj(o.rest.at));
-  await sleep(450);
-  let k = await t.ev(() => window.__bv.knife());
-  check(k.view && k.view.need === 2, 'cut view open for a flatbread, two cuts wanted', k.view);
-  await t.shot('a4-cut-view');
-  let [sx, sy, sw, sh] = k.square;
-  await t.down(sx + sw * 0.05, sy + sh * 0.51);
-  await t.path(lineOf(sx + sw * 0.05, sy + sh * 0.51, sx + sw * 0.95, sy + sh * 0.5, 24).slice(1), 18);
-  await t.up();
-  await sleep(250);
-  await t.shot('a5-first-cut');
-  await t.down(sx + sw * 0.5, sy + sh * 0.05);
-  await t.path(lineOf(sx + sw * 0.5, sy + sh * 0.05, sx + sw * 0.52, sy + sh * 0.95, 24).slice(1, 14), 18);
-  await t.shot('a6-second-slice');
-  await t.path(lineOf(sx + sw * 0.5, sy + sh * 0.05, sx + sw * 0.52, sy + sh * 0.95, 24).slice(14), 18);
-  await sleep(100);
-  k = await t.ev(() => window.__bv.knife());
-  await t.shot('a7-in-four');
-  await t.up();
-  await sleep(900);
+  await sleep(600);
   o = await oven();
-  check(o.rest.layers[0].cuts === 2, 'flatbread cut in four the tap way', { cuts: o.rest.layers[0].cuts, made: k.view && k.view.made, q: await t.ev(() => window.__bv.counter.rest.layers[0].piece.cutQ) });
+  check(o.rest.layers[0].cuts === 2, 'flatbread cut in four on a tap', o.rest.layers[0].cuts);
   await t.shot('a8-flatbread-quarters');
+  check(await undo(t, 'a8b-undo-cut'), 'the cut can be undone');
+  o = await oven();
+  check(!o.rest.layers[0].cuts, 'undo took the cut back', o.rest.layers[0].cuts);
 
-  // The drag way, on a fresh one: the knife dragged onto it and on across, then once more.
-  await t.ev(() => { const c = window.__bv.counter; c.rest.layers[0].piece.cuts = 0; c.updatePie(c.rest); });
+  // The drag way: the knife dragged onto it.
   const kn = await t.hp('knife');
   const bp = await t.proj(o.rest.at);
   await t.down(kn[0], kn[1]);
   await sleep(90);
-  await t.move(bp[0] + 40, bp[1] + 30, 420);
-  await sleep(300);
-  k = await t.ev(() => window.__bv.knife());
-  check(k.view && k.view.how === 'drag', 'the knife dragged onto the flatbread opens the cut view', k.view);
-  await t.shot('a9-drag-in');
-  [sx, sy, sw, sh] = k.square;
-  await t.path(lineOf(t.at[0], t.at[1], sx + sw * 0.04, sy + sh * 0.2, 22), 18);
+  await t.move(bp[0] + 10, bp[1] + 6, 420);
+  await sleep(200);
   await t.up();
-  await sleep(250);
-  await t.down(sx + sw * 0.15, sy + sh * 0.1);
-  await t.path(lineOf(sx + sw * 0.15, sy + sh * 0.1, sx + sw * 0.85, sy + sh * 0.92, 24).slice(1), 18);
-  await sleep(100);
-  k = await t.ev(() => window.__bv.knife());
-  await t.shot('a10-drag-second');
-  await t.up();
-  await sleep(900);
+  await sleep(700);
   o = await oven();
-  check(o.rest.layers[0].cuts === 2, 'flatbread cut in four the drag way', { cuts: o.rest.layers[0].cuts, made: k.view && k.view.made });
+  check(o.rest.layers[0].cuts === 2, 'flatbread cut in four the drag way', o.rest.layers[0].cuts);
+  await t.shot('a10-drag-cut');
   await t.b.close();
 }
 

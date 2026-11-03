@@ -164,7 +164,7 @@ const PRESS_LINES = (() => {
   for (let i = 0; i < 5; i++) p.add(faceted(new THREE.BoxGeometry(1.75, 0.006, 0.075)), "#ffffff", { p: [0, 0, -0.52 + i * 0.26], ink: false });
   return bakeShared(p);
 })();
-const CUT_GEO = shareGeometry(faceted(new THREE.BoxGeometry(0.16, 0.014, 1.9)));
+const CUT_GEO = shareGeometry(faceted(new THREE.BoxGeometry(0.055, 0.01, 1.9)));
 
 function makeBread(kind: "ciabatta" | "sourdough", body: THREE.Group): (p: Piece) => void {
   const { body: bg, face: fg } = breadShapes(kind);
@@ -178,10 +178,10 @@ function makeBread(kind: "ciabatta" | "sourdough", body: THREE.Group): (p: Piece
   const lines = new THREE.Mesh(PRESS_LINES.geo, lineMat);
   lines.position.y = b.h + 0.009;
   lines.castShadow = false;
-  // The cut: corner to corner, the crumb and filling showing in the gap between the two halves
-  // (light, edged in the crust's shade) rather than a black stroke.
-  const cut = mesh(CUT_GEO, "#f0d9a6", { ink: true, shadow: false });
-  cut.position.y = b.h + 0.012;
+  // The cut (after build #82): corner to corner, a narrow dark slit sunk into the face, so it
+  // reads as bread taken away (the shadow down into the gap), not a strip laid on top.
+  const cut = mesh(CUT_GEO, "#4a2c16", { ink: false, shadow: false });
+  cut.position.y = b.h + 0.001;
   cut.rotation.y = 0.62;
   body.add(crust, face, detail, lines, cut);
   let key = "";
@@ -317,19 +317,79 @@ export function basilSprig(ink = 0.03): Parts {
   p.add(BASIL_LEAF, "#62bd50", { p: [0.42, 0.07, 0], s: [0.2, 1, 0.2], ink });
   return p;
 }
-/** A rocket leaf lying flat along +x: long and narrow, with deep rounded lobes and a pale rib. */
-export function rocketLeaf(len: number, col: string, ink = 0.024): Parts {
-  const shape = leafOutline(1, (t) => {
-    // Narrow at the stalk, a bigger rounded lobe at the tip, notches between the side lobes.
-    const body = 0.06 + 0.16 * t + (t > 0.72 ? 0.14 * Math.sin(((t - 0.72) / 0.28) * Math.PI) : 0);
-    const lobe = t > 0.15 && t < 0.72 ? 0.55 + 0.45 * Math.abs(Math.sin(t * Math.PI * 5.2)) : 1;
-    return body * lobe * (t > 0.96 ? (1 - t) / 0.04 : 1);
-  }, 40);
+/**
+ * Rocket leaves (after build #82: "not quite recognisable"): the dandelion-like rocket shape, a
+ * bare pale stalk, then a narrow midrib with separate side lobes down each edge (not mirrored:
+ * the two sides alternate and differ in size), cut by deep notches nearly to the rib, the lobes
+ * swept toward the tip, and a big rounded end lobe. Each one curls: the edges cup, the tip lifts
+ * and the blade twists a little. A few cuts, built once; 1 long, pointing along +x.
+ */
+export const ROCKET_VARIANTS = 4;
+function rocketBlade(variant: number): { blade: THREE.BufferGeometry; rib: THREE.BufferGeometry } {
+  const r = rng(301 + variant * 29);
+  const STALK = 0.2;
+  const END = 0.7 + r() * 0.06;
+  const rib = (t: number) => (t < STALK ? 0.016 : 0.024 + 0.02 * ((t - STALK) / (1 - STALK)));
+  // Lobes for one side: n bumps between `from` and END, each a lopsided arch (its peak toward the
+  // tip), sizes growing toward the tip, with a notch back to the rib between each.
+  const side = (from: number, n: number) => {
+    const edges: number[] = [from];
+    for (let j = 1; j <= n; j++) edges.push(from + ((END - from) * (j + (j < n ? (r() - 0.5) * 0.35 : 0))) / n);
+    const lobes = edges.slice(0, -1).map((e, j) => ({ s: e + 0.012, e: edges[j + 1] - 0.012, h: (0.075 + 0.075 * ((j + 1) / n)) * (0.8 + r() * 0.4) }));
+    const endH = 0.15 + r() * 0.04;
+    const endPh = r() * 6;
+    return (t: number): number => {
+      let w = rib(t);
+      for (const l of lobes) if (t > l.s && t < l.e) w += l.h * Math.sin(Math.PI * Math.pow((t - l.s) / (l.e - l.s), 1.6));
+      if (t >= END) {
+        const u = (t - END) / (1 - END);
+        w = Math.max(w * (1 - u), endH * Math.sin(Math.PI * Math.pow(u, 0.75)) * (1 + 0.08 * Math.sin(u * 14 + endPh)));
+      }
+      return w;
+    };
+  };
+  const nTop = 3 + (variant % 2);
+  const nBot = 3 + ((variant >> 1) % 2);
+  const top = side(STALK + 0.02, nTop);
+  const bot = side(STALK + 0.06 + r() * 0.04, nBot);
+  const steps = 40;
+  const pts: THREE.Vector2[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    pts.push(new THREE.Vector2(t, -(i === steps ? 0 : bot(t))));
+  }
+  for (let i = steps - 1; i >= 0; i--) {
+    const t = i / steps;
+    pts.push(new THREE.Vector2(t, top(t)));
+  }
+  const cup = 1.6 + r() * 1.2;
+  const lift = 0.1 + r() * 0.12;
+  const twist = (r() - 0.5) * 0.5;
+  const curl = (g: THREE.BufferGeometry) => {
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      pos.setY(i, pos.getY(i) + cup * z * z + lift * x * x + twist * x * z);
+    }
+    return faceted(g);
+  };
+  const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: 0.02, bevelEnabled: false, curveSegments: 2 });
+  g.rotateX(-Math.PI / 2);
+  const ribGeo = new THREE.BoxGeometry(END + 0.1, 0.008, 0.014, 12, 1, 1).translate((END + 0.1) / 2, 0.024, 0);
+  return { blade: shareGeometry(curl(g)), rib: shareGeometry(curl(ribGeo)) };
+}
+const ROCKET = Array.from({ length: ROCKET_VARIANTS }, (_, v) => rocketBlade(v));
+/** A rocket leaf lying along +x, `len` long: one of ROCKET_VARIANTS cuts, with its pale stalk and rib. */
+export function rocketLeaf(len: number, col: string, ink = 0.024, variant = 0): Parts {
+  const v = ROCKET[((variant % ROCKET_VARIANTS) + ROCKET_VARIANTS) % ROCKET_VARIANTS];
   const p = new Parts();
-  p.add(leafGeo(shape, 0.02, 0.25), col, { s: [len, 1, len], ink });
-  p.add(RIB, "#8dbd6c", { p: [len * 0.42, 0.025, 0], s: [len * 0.75, 1, 0.4], ink: false });
+  p.add(v.blade, col, { s: [len, 1, len], ink });
+  p.add(v.rib, "#9cc27a", { s: [len, 1, len], ink: false });
   return p;
 }
+/** Rocket's dark, slightly blue-green leaf colours (basil is brighter and yellower). */
+export const ROCKET_GREENS = ["#33682a", "#3d7330", "#2b5d23", "#467c34"];
 
 /**
  * Parts for the cold panini fillings, in ingredient units (the bins' heaps use these too):
@@ -362,14 +422,18 @@ export function paniniParts(kind: Kind, ink = 0.03): Parts {
       break;
     }
     case "rocket": {
-      // A loose handful of rocket: long, narrow, dark leaves with deep rounded lobes down each side
-      // and a pale rib (after build #76), so it reads apart from basil's smooth pairs on a stem.
-      const r = rng(31);
+      // A loose handful of rocket: six lobed leaves dropped every which way, overlapping, some
+      // rolled onto an edge, none lined up.
+      const r = rng(37);
       for (let i = 0; i < 6; i++) {
-        const a = i * 2.39996 + 0.4;
-        const rr = Math.sqrt((i + 0.5) / 6) * 0.42;
-        const yaw = a + Math.PI / 2 + (r() - 0.5) * 0.9;
-        p.addParts(rocketLeaf(0.62 + r() * 0.2, ["#3c7a2c", "#4a8a34", "#2f6a25"][i % 3], ink * 0.8), { p: [Math.cos(a) * rr, 0.03 + i * 0.012, Math.sin(a) * rr], r: [(r() - 0.5) * 0.25, yaw, (r() - 0.5) * 0.25] });
+        const a = r() * Math.PI * 2;
+        const rr = 0.04 + r() * 0.22;
+        const len = 0.62 + r() * 0.26;
+        const yaw = r() * Math.PI * 2;
+        // Centre each leaf on its spot (it's built from its stalk end).
+        const x = Math.cos(a) * rr - Math.cos(yaw) * len * 0.5;
+        const z = Math.sin(a) * rr + Math.sin(yaw) * len * 0.5;
+        p.addParts(rocketLeaf(len, ROCKET_GREENS[i % 4], ink * 0.8, i), { p: [x, 0.02 + i * 0.016 + r() * 0.012, z], r: [(r() - 0.5) * 0.6, yaw, (r() - 0.5) * 0.2] });
       }
       break;
     }

@@ -25,7 +25,7 @@
 .hw-kpick button.here small::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: var(--bv-paprika); vertical-align: 1px; }
 
 /* The three tabs, at the bottom where the thumb is. */
-.hw-tabs { flex: none; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--bv-rule); background: var(--bv-paper); padding: 0 6px 2px; }
+.hw-tabs { flex: none; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--bv-rule); background: var(--menu-bg, var(--bv-paper)); padding: 0 6px 2px; }
 .hw-tabs button {
   position: relative; display: grid; justify-items: center; align-content: center; gap: 3px;
   min-height: 56px; color: var(--bv-mute); font: 700 13px/1 var(--bv-font-ui);

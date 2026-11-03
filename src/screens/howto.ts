@@ -203,7 +203,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
       <p class="hw-cap">The round buttons at the edges take you to the next counter. A glowing ring means it needs you. With empty hands you can also swipe along the trash chute.</p>`,
       points: [
         "Three counters: <b>Drinks</b>, the kitchen in the middle, and the <b>Fryer</b>. Customers and trays stay put while you switch.",
-        "People wait in a <b>line</b> outside. When the window is empty the first one steps up alone. Otherwise tap the bell, marked <b>Next</b>, to call one. More at the window earns more, if you can keep up.",
+        "People wait in a <b>line</b> outside. When the window is empty the first one steps up alone. Otherwise ring the <b>bell</b> that stands on an empty tray to call one (twice for two); the number at the top is how many wait. More at the window earns more, if you can keep up.",
         "An order's patience only starts once they've ordered. In the line, the back drifts off first.",
       ],
     },
@@ -363,7 +363,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
       points: [
         `Take a cup of the right size: <b>S, M or L</b> (${price(DRINK_PRICE.S)} to ${price(DRINK_PRICE.L)}). Stand it under a nozzle. You can move a cup any time.`,
         "Add ice from the ice bin unless the ticket says <b>No ice</b>.",
-        "<b>Hold</b> the drink's button to pour. The bar on the left shows the level: let go at <b>Perfect</b>. On Chill it stops at the line by itself.",
+        "<b>Hold</b> the drink's button to pour. The bar on the left shows the level: let go at <b>Perfect</b>.",
         "An overflow leaves a spill. <b>Wipe it</b> before that nozzle takes another cup.",
         "Snap on a <b>lid of the cup's size</b>, then drag the drink up to the tray.",
       ],

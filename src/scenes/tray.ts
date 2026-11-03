@@ -219,6 +219,28 @@ interface StackEntry {
   onLand?: () => void;
 }
 
+/**
+ * A desk bell (after build #82): stands on an empty tray while people wait in line; a tap rings it
+ * and calls the next one up. A dark round base, a brass dome and a plunger on top.
+ */
+function makeDeskBell(): THREE.Group {
+  const g = new THREE.Group();
+  const base = mesh(new THREE.CylinderGeometry(0.46, 0.5, 0.12, 24), "#2f2a26");
+  base.position.y = 0.06;
+  const dome = mesh(new THREE.SphereGeometry(0.4, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), "#e2b13c");
+  dome.position.y = 0.12;
+  const stem = mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.14, 8), "#8a8f96", { ink: false });
+  stem.position.y = 0.58;
+  const knob = mesh(new THREE.SphereGeometry(0.075, 12, 8), "#c9ced4");
+  knob.position.y = 0.66;
+  const shine = mesh(new THREE.SphereGeometry(0.07, 8, 6), "#fff4cf", { ink: false, shadow: false });
+  shine.position.set(-0.17, 0.42, 0.17);
+  shine.scale.set(1, 0.5, 1);
+  g.add(base, dome, stem, knob, shine);
+  g.userData.knob = knob;
+  return g;
+}
+
 export class PlateView {
   group = new THREE.Group();
   burger = new THREE.Group();
@@ -249,6 +271,9 @@ export class PlateView {
    */
   boost = 1;
   private boostNow = 1;
+  /** The desk bell on an empty tray (after build #82), and its ring wobble. */
+  bell = makeDeskBell();
+  private bellRing = 0;
 
   constructor() {
     const trayBody = makeTrayBody(trayStyle());
@@ -265,7 +290,9 @@ export class PlateView {
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.position.y = 0.02;
     this.burger.position.set(DISH_AT.x, 0.13, DISH_AT.z);
-    this.group.add(trayBody, this.dish, this.ring, this.burger, this.friesMark, this.cupMark);
+    this.bell.position.set(0, 0.13, 0);
+    this.bell.visible = false;
+    this.group.add(trayBody, this.dish, this.ring, this.burger, this.friesMark, this.cupMark, this.bell);
     for (let i = 0; i < 4; i++) {
       const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDot(), color: "#fff6e8", transparent: true, opacity: 0, depthWrite: false }));
       m.visible = false;
@@ -497,11 +524,30 @@ export class PlateView {
     this.placeSides();
   }
 
+  /** Show the desk bell (an empty tray with people in line), or hide it. */
+  showBell(on: boolean): void {
+    this.bell.visible = on;
+  }
+  /** The bell was tapped: the plunger dips and the bell shivers. */
+  ringBell(): void {
+    this.bellRing = 1;
+  }
+  /** Where the bell is, world space (for its touch area). */
+  bellPoint(): THREE.Vector3 {
+    return this.bell.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 0.3, 0));
+  }
+
   kick(strength: number): void {
     this.wobbleV += (Math.random() > 0.5 ? 1 : -1) * 2.4 * strength;
   }
 
   update(dt: number): void {
+    if (this.bellRing > 0) {
+      this.bellRing = Math.max(0, this.bellRing - dt * 3);
+      const k = this.bellRing;
+      (this.bell.userData.knob as THREE.Object3D).position.y = 0.66 - 0.06 * Math.min(1, k * 3);
+      this.bell.rotation.z = Math.sin(k * 40) * 0.06 * k;
+    }
     // A tall burger shrinks a little, all at once, so its top stays clear of the receipts; with the
     // receipt folded it grows into the freed wall (boost).
     this.boostNow += (this.boost - this.boostNow) * Math.min(1, dt * 6);
@@ -735,6 +781,30 @@ export class TrayView {
     });
     const spacing = this.plates[1].group.position.x - this.plates[0].group.position.x;
     return bestD < spacing * 0.6 ? best : -1;
+  }
+
+  /**
+   * Which part of a plate a pointer is over (after build #82): the cup, the fries or the main dish,
+   * whichever is nearest of those on it, so a press on a tray lifts the thing under the finger.
+   */
+  partAt(ndc: THREE.Vector2, slot: number): "cup" | "fries" | "main" {
+    const pv = this.plates[slot];
+    pv.group.updateWorldMatrix(true, false);
+    const p = pv.group.worldToLocal(this.groundAt(ndc, 0.3));
+    const cands: { part: "cup" | "fries" | "main"; x: number; z: number }[] = [];
+    if (pv.cup) cands.push({ part: "cup", x: pv.cup.position.x, z: pv.cup.position.z });
+    if (pv.fries) cands.push({ part: "fries", x: pv.fries.position.x, z: pv.fries.position.z });
+    cands.push({ part: "main", x: pv.burger.position.x, z: pv.burger.position.z });
+    let best = cands[cands.length - 1];
+    let bestD = Infinity;
+    for (const c of cands) {
+      const d = Math.hypot(p.x - c.x, p.z - c.z);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    return best.part;
   }
 
   /** Pointer position in a plate's burger-local coordinates, on top of the current stack. */

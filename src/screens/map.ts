@@ -918,6 +918,12 @@ export interface MapState {
   look: Look;
   /** Open towns whose bonus a great shift would still unlock: a small gold mark by the name. */
   bonusHere: readonly string[];
+  /**
+   * Screen px per map unit at scale 1 (the home screen's fit). The SVG is drawn at that size, so
+   * a redrawn map is never left unsized: an <svg> with only a viewBox lays out as 0 x 0 inside the
+   * absolutely positioned pan/zoom layer, and the map turns to empty sea until the next resize.
+   */
+  px?: number;
 }
 
 export function townPoint(id: string): Pt {
@@ -1018,7 +1024,8 @@ export function renderMap(st: MapState): string {
 
   const grad = (id: string, c: string, peak = 1) =>
     `<radialGradient id="${id}"><stop offset="0" stop-color="${c}" stop-opacity="${peak}"/><stop offset="0.35" stop-color="${c}" stop-opacity="${f(peak * 0.8)}"/><stop offset="0.7" stop-color="${c}" stop-opacity="${f(peak * 0.3)}"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient>`;
-  return `<svg class="home-svg" viewBox="${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Road map">
+  const size = st.px && st.px > 0 ? ` width="${VIEW.w * st.px}" height="${VIEW.h * st.px}"` : "";
+  return `<svg class="home-svg" viewBox="${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}"${size} xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Road map">
     <defs>
       <clipPath id="home-island"><path d="${coastPath()}"/></clipPath>
       <clipPath id="home-coast"><path d="${smooth(REGION_SHAPE.coast)}"/></clipPath>

@@ -160,6 +160,9 @@ export function quickSauceStroke(target = 0.2): { x: number; z: number }[] {
   return pts;
 }
 
+/** The even squeeze put on bread on the board or in a press bay (no close-up there): low in the Perfect band. */
+export const BENCH_SAUCE = 0.3;
+
 /**
  * Dragging a bottle up from the caddy, the thumb crosses the near edge of the bun on its way in:
  * no sauce lands until the nozzle has come in over the middle of the bun (within SAUCE_GRACE of its

@@ -161,7 +161,7 @@ export function refreshHome(): void {
   if (!cur) return;
   cur.el.classList.toggle("evening", cur.deps.save.time === "evening");
   renderMapInto(cur);
-  // A fresh SVG has no size until fitMap gives it one; without this the map came back as open sea.
+  // The fresh SVG comes sized (renderMapInto); fitting again keeps the view if the layout moved.
   fitMap(true);
   cur.el.querySelector(".home-stats")!.outerHTML = statsHtml(cur.deps.save);
   cur.el.querySelector(".home-bank")!.outerHTML = bankHtml(cur.deps.save);
@@ -250,7 +250,7 @@ function renderMapInto(m: Mounted): void {
     const b = townBonus(id);
     return b && !s.found.includes(b.id);
   });
-  m.world.innerHTML = renderMap({ town: s.town, unlocked: s.unlocked, shiftsIn: s.shiftsIn, day: s.day, selected: m.selected, night, reach: m.night ? [] : reachable(s), look: s.look, bonusHere });
+  m.world.innerHTML = renderMap({ town: s.town, unlocked: s.unlocked, shiftsIn: s.shiftsIn, day: s.day, selected: m.selected, night, reach: m.night ? [] : reachable(s), look: s.look, bonusHere, px: m.base });
   for (const t of m.world.querySelectorAll<SVGGElement>(".home-town")) t.classList.toggle("sel", t.dataset.town === m.selected);
 }
 

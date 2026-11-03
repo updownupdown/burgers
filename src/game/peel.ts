@@ -153,7 +153,9 @@ export const bladeUnder = (b: XZ, p: XZ, yaw: number, blade: Blade): boolean => 
  * until the tip has been against it `hold` seconds and a push would have turned it `breakaway`
  * radians: a deliberate shove turns it, a quick brush on the way past doesn't. Let go, it keeps only `coast` of its spin, which dies off at `friction` per second.
  */
-export const NUDGE = { gain: 0.9, skin: 0.1, inside: 0.55, breakaway: 0.35, hold: 0.15, coast: 0.15, friction: 9 };
+// After build #82 (James: "turning pizzas is really hard now"): most of the way back to the free
+// spin before build #71 (gain 1.3, no grip, coast 0.4): a livelier push, a wider rim, a light grip.
+export const NUDGE = { gain: 1.2, skin: 0.25, inside: 0.35, breakaway: 0.08, hold: 0.04, coast: 0.35, friction: 7 };
 
 /** The blade's tip (or a corner) is at the rim of a pie centred at `p`, turned `yaw`: where a push sideways turns it. */
 export function atRim(b: XZ, p: XZ, yaw: number, blade: Blade): boolean {

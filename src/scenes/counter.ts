@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { softDot, starTex } from "../render/sprites";
-import { bakeStep, bakeTopping, CHAR_FACE, COMAL_SPEED, cookLevel, COOK_SCALE, DRINK_FILL, flipFaces, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, grillStep, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, rimAngle, rimOf, type Cookable } from "../game/cooking";
+import { bakeStep, bakeTopping, COMAL_SPEED, cookLevel, darkSide, slowPastOver, slowPastOverValue, COOK_SCALE, DRINK_FILL, flipFaces, FRY_RATE, FRY_SPEED, FRY_ZONE, fryPerfect, grillStep, MARK_RATE, MELT_RATE, PRESS_INSIDE, PRESS_MELT, PRESS_RATE, PRESS_SPEED, PRESS_WARM, QUESO_MELT, rimAngle, rimOf, type Cookable } from "../game/cooking";
 import type { DrinkId, FriesSize, Garnish, FryKind, Kind, Layer, Piece, SauceKind, Size } from "../game/types";
 import { BREADS, CUP_SPEED, GRILLABLE, isSauce, OVEN_CHEESE, PRESS_CHEESE, PROTEINS, SCOOPED, TORTILLAS } from "../game/types";
 import { fountainFor, type MiddleCounter } from "../game/stops";
@@ -476,19 +476,6 @@ const HELD_LIFT = 0.9;
 const PUDDLE_GROW = 2;
 
 /**
- * Chill: stop a piece cooking once it's well done (halfway into its "over" band) or a face is
- * about to char, by putting back this frame's heat. It still reads as well done, never burnt.
- */
-function holdBelowBurnt(p: Piece, was: [number, number]): void {
-  const z = COOK_SCALE[p.kind as Cookable];
-  if (!z) return;
-  const cap = (z.over + z.burnt) / 2;
-  if (cookLevel(p) > cap || (MEATS.has(p.kind) && Math.max(p.cook[0], p.cook[1]) >= CHAR_FACE - 0.02)) {
-    p.cook[0] = was[0];
-    p.cook[1] = was[1];
-  }
-}
-/**
  * A sauce bottle's touch box: as wide as the gap between bottles (they're thin, and fingers
  * aren't), a bit deeper and taller than the bottle, so any press on the caddy finds one.
  */
@@ -499,7 +486,6 @@ function bottleBox(caddy: THREE.Object3D): THREE.BoxGeometry {
   const w = Number.isFinite(pitch) ? Math.max(0.55, pitch * 0.98) : 0.8;
   return new THREE.BoxGeometry(w, 1.9, 1.15);
 }
-const MEATS = new Set<string>(["patty", "bacon", "chicken", "veggie"]);
 
 export class CounterView {
   scene = new THREE.Scene();
@@ -524,7 +510,8 @@ export class CounterView {
   /** The Smart fountain bonus (after build #78): a pour it stops at the line also gets its lid. */
   autoLid = false;
   /** Chill: food on the grill holds at well done and fries at dark golden instead of burning. */
-  noBurn = false;
+  /** Chill (after build #82): cooking past over-done runs at this share of its pace (1 = normal). */
+  burnPace = 1;
   grillItems: GrillItem[] = [];
   /** Each grill zone's setting, left to right; the buttons on the griddle's front ledge cycle them. */
   zones: ZoneHeat[] = [...ZONE_START];
@@ -1084,7 +1071,7 @@ export class CounterView {
       if (push) {
         // In contact: the pie holds until it gives, then turns with the blade.
         [dYaw, s.strain] = grip(s.strain, push, s.touch);
-        if (dYaw) s.spin = THREE.MathUtils.clamp(s.spin * 0.5 + (dYaw / Math.max(dt, 1 / 120)) * NUDGE.coast, -3, 3);
+        if (dYaw) s.spin = THREE.MathUtils.clamp(s.spin * 0.5 + (dYaw / Math.max(dt, 1 / 120)) * NUDGE.coast, -5, 5);
         this.nudgeSound += Math.abs(dYaw);
       } else {
         // Let go: the slack comes back out and what little spin it kept dies off on the deck.
@@ -2522,7 +2509,7 @@ export class CounterView {
         }
         const was: [number, number] = [it.piece.cook[0], it.piece.cook[1]];
         grillStep(it.piece, heat, dt);
-        if (this.noBurn) holdBelowBurnt(it.piece, was);
+        slowPastOver(it.piece, was, this.burnPace);
         // The ridged grille sears marks into the face down.
         if (touching && this.middle === "grill" && zi === GRILLE_ZONE && zone === "hot" && it.piece.kind === "patty") {
           const m = (it.piece.marks ??= [0, 0]);
@@ -2566,9 +2553,11 @@ export class CounterView {
             const k = p.kind;
             const before = cookLevel(p);
             if (BREADS.has(k) || PROTEINS.has(k)) {
+              const was: [number, number] = [p.cook[0], p.cook[1]];
               const r = PRESS_RATE * (PRESS_SPEED[k] ?? 0.3) * (PROTEINS.has(k) && sandwich ? PRESS_INSIDE : 1) * this.grillBoost * dt;
               p.cook[0] += r;
               p.cook[1] += r;
+              slowPastOver(p, was, this.burnPace);
               const sc = COOK_SCALE[k as Cookable];
               if (sc && before < sc.done && cookLevel(p) >= sc.done) anyDone = true;
               if (sc && before <= sc.burnt - 0.05 && cookLevel(p) > sc.burnt - 0.05) anyBurning = true;
@@ -2606,7 +2595,7 @@ export class CounterView {
           const before = cookLevel(d);
           const top = Math.max(...d.cook);
           // The hot side running too far ahead of the other scorches it (warned once per run).
-          const scorching = bakeStep(d, dt, this.grillBoost);
+          const scorching = bakeStep(d, dt, this.grillBoost * (darkSide(d) >= COOK_SCALE.dough.over ? this.burnPace : 1));
           if (scorching && !s.warned) {
             s.warned = true;
             anyBurning = true;
@@ -2757,8 +2746,10 @@ export class CounterView {
         if (inOil) {
           const before = cookLevel(sh);
           const r = FRY_RATE * this.fryBoost * FRY_SPEED.tostada * dt;
+          const was: [number, number] = [sh.cook[0], sh.cook[1]];
           sh.cook[0] += r;
           sh.cook[1] += r;
+          slowPastOver(sh, was, this.burnPace);
           const sc = COOK_SCALE.tostada;
           if (before < sc.done && cookLevel(sh) >= sc.done) this.events.done();
           if (before < sc.perfect - 0.04 && cookLevel(sh) >= sc.perfect - 0.04) {
@@ -2783,8 +2774,7 @@ export class CounterView {
         const before = b.cook;
         const zone = FRY_ZONE[b.fry];
         const perfect = fryPerfect(b.fry);
-        b.cook += FRY_RATE * this.fryBoost * FRY_SPEED[b.fry] * dt;
-        if (this.noBurn) b.cook = Math.min(b.cook, (zone.over + zone.burnt) / 2);
+        b.cook = slowPastOverValue(before, b.cook + FRY_RATE * this.fryBoost * FRY_SPEED[b.fry] * dt, zone.over, this.burnPace);
         if (before < zone.done && b.cook >= zone.done) this.events.done();
         if (!b.goldenRung && b.cook >= perfect - 0.04) {
           b.goldenRung = true;

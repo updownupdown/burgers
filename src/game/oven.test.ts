@@ -276,24 +276,24 @@ describe("the peel", () => {
   });
 
   it("a pie holds still until a push is firm enough, then follows it; brushing past doesn't turn it", () => {
-    // A short brush along its front: taken up by the pie's grip on the deck.
+    // A touch along its front: taken up by the pie's light grip on the deck (lighter after build #82).
     let strain = 0;
     let turned = 0;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 1; i++) {
       const [t, s] = grip(strain, nudgeSpin({ x: -0.1 + i * 0.04, z: 0.66 + BLADE.rz }, { x: 0.04, z: 0 }, pie, 0, BLADE));
       [turned, strain] = [turned + t, s];
     }
     expect(turned).toBe(0);
     // A firm push: once it gives, it turns with the blade.
-    for (let i = 3; i < 25; i++) {
+    for (let i = 1; i < 25; i++) {
       const [t, s] = grip(strain, nudgeSpin({ x: -0.1 + i * 0.04, z: 0.66 + BLADE.rz }, { x: 0.04, z: 0 }, pie, 0, BLADE));
       [turned, strain] = [turned + t, s];
     }
     expect(turned).toBeGreaterThan(0.5);
     // Pushing back the other way has to take up the slack first.
-    expect(grip(NUDGE.breakaway, -0.3)[0]).toBe(0);
+    expect(grip(NUDGE.breakaway, -NUDGE.breakaway * 1.5)[0]).toBe(0);
     // A quick brush (the tip against it only a moment) slips along the crust, however hard.
-    expect(grip(0, 1.2, 0.05)).toEqual([0, NUDGE.breakaway]);
+    expect(grip(0, 1.2, NUDGE.hold / 2)).toEqual([0, NUDGE.breakaway]);
     expect(grip(NUDGE.breakaway, 0.5, NUDGE.hold)[0]).toBeCloseTo(0.5, 6);
   });
 

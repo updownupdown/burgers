@@ -303,15 +303,15 @@ function basicsSecs(town: Stop | undefined): Sec[] {
       chip: "Knife",
       icon: "knife",
       title: "The knife",
-      lede: `Knife (${knifeTowns}): tap the knife, then the food, or drag the knife onto it, and draw a slice right across.`,
+      lede: `Knife (${knifeTowns}): tap the knife, then the food, or drag the knife onto it. It cuts straight away.`,
       fig: `<div class="hw-pair">
           <div>${knifeArt()}<p class="hw-cap"><b>Paninis</b>: once, in half.</p></div>
-          <div>${knifeArt(true)}<p class="hw-cap"><b>Flatbreads</b>: twice, for four.</p></div>
+          <div>${knifeArt(true)}<p class="hw-cap"><b>Flatbreads</b>: in four.</p></div>
         </div>`,
       points: [
-        "The food must be on the board. The cut view opens over the counter.",
-        "A slice counts once it goes in one side and out the other. The second cut on a flatbread goes the other way.",
-        "Uncut costs the dish more than a crooked cut. A crooked one costs a little, never much.",
+        "The food must be on the board. A baked flatbread can also be cut on the peel.",
+        "One cut does it: a panini in half, a flatbread in four. Undo takes a cut back.",
+        "Uncut costs the dish.",
         "The ticket shows it: <b>Press › Cut</b> or <b>Bake › Cut 4</b>. A calzone goes out whole.",
       ],
     },
@@ -700,7 +700,7 @@ function kitchenWalks(k: MiddleCounter): Walk[] {
           "Mozzarella ×3, tomato ×3, basil, then the top ciabatta.",
           "<b>Drag down</b> on the tray to lift the sandwich into an open bay. <b>Pull the handle down</b>.",
           "Watch the lid's meter. At golden, <b>swipe the handle up</b>.",
-          `${cut}: drag it onto the board. Tap the knife, then the panini, and <b>draw one slice</b> across.`,
+          `${cut}: drag it onto the board. Tap the knife, then the panini, to <b>cut it in half</b>.`,
           "Drag it up to the tray and <b>serve</b>.",
         ],
         tip: "Without a cut it scores less than with a crooked one.",
@@ -790,7 +790,7 @@ function kitchenWalks(k: MiddleCounter): Walk[] {
         "Drag the peel into the oven by its handle and <b>swipe down</b>.",
         "About halfway, <b>turn it</b> with the peel's tip.",
         `Push the blade in under it and carry it out. In ${board}, swipe down over the board.`,
-        "Tap the knife, then the pie, and slice across. Then once more, the other way, for <b>four</b>.",
+        "Tap the knife, then the pie, to cut it in <b>four</b>.",
         "Lift it with the peel, swipe down over a tray, then add <b>basil</b>.",
       ],
       tip: "Elsewhere it goes straight from the oven to the tray, uncut.",

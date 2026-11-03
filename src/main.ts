@@ -3618,7 +3618,7 @@ function putBase(h: PieHolder, layers: Layer[]): void {
   if (d.forOrder === undefined) d.forOrder = game.slots[game.active]?.order?.id;
   h.layers = layers;
   syncHolder(h);
-  sfx.plop();
+  sfx.topping();
   if (layers.length === 1 && paleSide(d) < 0.05) {
     const o = pieOrder(d);
     const white = o && !o.layers.some((l) => l.kind === "redsauce");
@@ -3637,7 +3637,7 @@ function addToPie(h: PieHolder, piece: Piece): boolean {
   if (baked && !AFTER_OVEN.has(piece.kind)) return showHint("It's been baked. Toppings go on before the oven; basil, rocket and honey after.", 2.5), false;
   ls.push({ piece, offX: 0, offZ: 0 });
   syncHolder(h);
-  sfx.plop();
+  sfx.topping();
   const o = pieOrder(d);
   if (COUNTED.has(piece.kind)) {
     const n = ls.filter((l) => l.piece.kind === piece.kind).length;
@@ -3660,7 +3660,7 @@ function foldPie(h: PieHolder): void {
   d.folded = true;
   h.layers = [...ls];
   syncHolder(h);
-  sfx.flip();
+  sfx.doughFold();
   buzz(15);
   hintOnce("calzone-in", "Folded! Into the oven with it on the peel. A calzone is thick and bakes slower.", 3.5);
 }
@@ -3706,7 +3706,7 @@ function grabPeel(pt: Pointer): void {
   // A pie the blade is already under (one just built on it, or set down there) isn't slid onto it.
   slideArm.clear();
   slideScoop(true);
-  sfx.pop();
+  sfx.peelLift();
   const full = counter.peel.layers.length > 0;
   hintOnce(full ? "peel-launch" : "peel-scoop", full ? "Over a free spot in the oven, swipe down to slide the pie off." : "Push the blade in under a pie to lift it onto the peel (or set it under and swipe up).", 3.5);
 }
@@ -3769,7 +3769,7 @@ function scoopSpot(i: number): void {
   counter.setPeel(layers);
   noteFood(layers, { at: "spot", i }, { at: "peel" });
   justDid(`spot${i}`, "down");
-  sfx.whoosh();
+  sfx.peelScrape();
   buzz(12);
   hintOnce("oven-out", counter.board?.on && !layers[0].piece.folded ? "Out it comes. Set it on the board (swipe down over it) and cut it in four with the knife, then up to a tray." : "Out it comes. Carry it up to a tray and swipe down. Basil, rocket and honey go on there.", 3.5);
 }
@@ -3779,7 +3779,7 @@ function scoopRest(): void {
   counter.setPeel(counter.rest.layers);
   counter.setRest([]);
   justDid("rest", "down");
-  sfx.whoosh();
+  sfx.peelScrape();
   buzz(12);
 }
 
@@ -3850,7 +3850,7 @@ function peelFlick(pt: Pointer, f: Flick): void {
       noteFood(layers, { at: "peel" }, { at: "tray", slot });
       justDid(`slot${slot}`, "up");
       setActive(slot);
-      sfx.plop();
+      sfx.pieDown();
       buzz(12);
       showPeelGhost(slot);
       const after = pieOrder(layers[0].piece)?.layers.some((l) => l.after);
@@ -3860,7 +3860,7 @@ function peelFlick(pt: Pointer, f: Flick): void {
       noteFood(counter.peel.layers, { at: "tray", slot }, { at: "peel" });
       justDid(`slot${slot}`, "down");
       syncTray(slot, false);
-      sfx.whoosh();
+      sfx.peelScrape();
       showPeelGhost(slot);
     }
     return;
@@ -3913,8 +3913,8 @@ function peelFlick(pt: Pointer, f: Flick): void {
     counter.setRest(layers);
     counter.setPeel([]);
     noteFood(layers, { at: "peel" }, restPlace());
-    sfx.plop();
-    if (counter.rest === counter.board && !d.folded && paleSide(d) > 0.2) hintOnce("cut-four", "Now cut it in four: tap the knife, then the flatbread, and slice across it twice.", 3.5);
+    sfx.pieDown();
+    if (counter.rest === counter.board && !d.folded && paleSide(d) > 0.2) hintOnce("cut-four", "Now cut it in four: tap the knife, then the flatbread (or drag the knife onto it).", 3.5);
     return;
   }
   let si = t?.kind === "spot" ? t.idx : -1;
@@ -3933,7 +3933,7 @@ function peelFlick(pt: Pointer, f: Flick): void {
   counter.setSpot(si, layers);
   counter.setPeel([]);
   noteFood(layers, { at: "peel" }, { at: "spot", i: si });
-  sfx.sizzleHit();
+  sfx.pieDown(true);
   buzz(10);
   if (d.folded) hintOnce("oven-calzone", "A calzone is thick and bakes slower. Watch its crust: turn it round with the peel if one side is getting ahead.", 4);
   else hintOnce("oven-turn", "In it goes. The side facing the hot back wall browns faster: watch the crust, and if you like, push the front of the pie sideways with the peel's tip to turn it round. An even bake is best.", 5);
@@ -3989,7 +3989,7 @@ function startLadle(pt: Pointer, kind: SauceKind): void {
   ladle = { kind, obj, last: 0, holder: null, piece: null, before: 0 };
   openLadleZoom(h);
   paintLadle(pt);
-  sfx.pop();
+  sfx.peelLift();
   if (kind === "redsauce") hintOnce("ladle", "Spread it in a spiral from the middle out, to just inside the crust. Watch the bar on the left.", 3.5);
   else hintOnce("oil", "Drizzle it over the base, then add the toppings.", 3);
 }
@@ -4078,7 +4078,7 @@ function paintLadle(pt: Pointer): void {
     st.push(q);
     const now = performance.now();
     if (now - lastSquirt > 90) {
-      sfx.squirt();
+      sfx.sauceSpread(l.kind === "oil");
       lastSquirt = now;
     }
   }
@@ -4102,7 +4102,7 @@ function endLadle(pt: Pointer, cancelled: boolean): void {
     showHint(l.kind === "redsauce" ? "Hold the ladle and spread the sauce over the base." : "Hold the bottle and drizzle it over the base.", 2.5);
   }
   else if (st && l.kind === "redsauce" && sauceCoverage(st, sauceRadius("redsauce")) < LADLE_BAND.lo) hintOnce("ladle-more", "A bit more sauce: right out to the crust.", 2);
-  sfx.pop();
+  if (!cancelled && pt.moved) sfx.topping();
 }
 /** How much of the base the sauce being spread covers, for the level bar. */
 function ladleLevel(): null | { v: number; kind: SauceKind } {
@@ -5311,7 +5311,7 @@ function tick(dt: number): void {
     trayView.update(dt);
     customersView.update(dt, game.active);
   }
-  sfx.setLoops(game.phase === "playing" ? counter.sizzleLevel() : 0, game.phase === "playing" ? counter.bubbleLevel() : 0, counter.pouring());
+  sfx.setLoops(game.phase === "playing" ? counter.sizzleLevel() : 0, game.phase === "playing" ? counter.bubbleLevel() : 0, counter.pouring(), game.phase === "playing" ? counter.ovenLevel() : 0);
   updateUi(dt);
 }
 
@@ -5335,7 +5335,7 @@ counter.events.burning = () => {
   else hintOnce("burning", counter.middle === "press" ? "Smoke means burning! Lift the lid and get it out." : "Smoke means burning! Drag it to the trash can.", 2.5);
 };
 // The peel nudging a pie in the oven round: a soft scrape as it goes.
-counter.events.nudge = () => sfx.whoosh();
+counter.events.nudge = () => sfx.peelScrape();
 
 /** Soda lost to overflows this shift, in whole dollars. */
 /** The pie being made for an order, wherever it is on the oven counter (peel, oven, bench or board), or null. */

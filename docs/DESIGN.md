@@ -993,3 +993,15 @@ James's playtest of build #82. Code in `src/main.ts` (Undo, the tray's drag, the
 - **The map after a drive.** The drive's end redraws the map, and the new drawing had no size until the next resize (it showed as empty sea until the app was left and reopened). `renderMap` now draws at the fitted size (`px`).
 
 Supersedes §31's "cutting is never undone", the header bell (§19, §35's tray call chip) and §35's crowded meters.
+
+## 38. Kitchen pace and the build #84 playtest (build #85)
+
+- **Cook time (pace.ts).** Everything that cooks on heat (grill, comal, press, fryer, tostadas, cheese in the press and quesadillas) takes COOK_TIME = 2.5x as long as before; hands-on work is unchanged. Window patience grows only by its cooking parts (22 s per protein, 30 s fries, a panini's press, half a quesadilla's work, all x T). The shift clock and line patience stretch by F(T) = (91 + 52T) / 143 (1.55 at 2.5x), so a shift brings the same people over a longer time and two or three orders run at once. Same on every pacing. Dev mode has a Cook time dial (1x to 3x, saved per browser). The write-up with the numbers is the "Bun Voyage kitchen timing" doc.
+- **Oven.** Flatbreads bake 1.5x as long (OVEN_TIME), whatever the dial says.
+- **Knife.** No cut view: tap the knife then the food, or drag the knife onto it, and it is cut (a panini in half, a flatbread in four), straight, undoable. A baked flatbread can be cut on the peel.
+- **Pizza by hand.** A baked pie can be dragged off the peel (or the board) to a tray without working the peel. Basil, rocket and honey go on a baked pie on the peel or the bench too.
+- **Oven rail.** Mozzarella and basil sit in the cold rail's front row.
+- **Taco towns.** No churros (Sun Valley); a pan of corn tortillas stands under the chips on the fryer counter wherever tostadas are on.
+- **Bells.** The tray's desk bell stays visible while food is carried; only its tap target steps aside.
+- **Sounds.** The oven has its own quiet set (peel scrape and lift, pie down, topping, fold, sauce spread, a faint oven roar); the grill hiss no longer plays over the oven.
+- **Olive oil** is drawn darker and thicker so it reads on dough. **Help**: the fryer's town list is one column.

@@ -82,7 +82,7 @@ export interface Stop {
   oven?: { spots: number; board: boolean };
   /**
    * What the fryer makes here, the usual side first: fries in the Pines, sweet potato fries too on
-   * the coast from Driftwood, chips (and churros at Sun Valley) in Red Rock. Missing is just fries.
+   * the coast from Driftwood, chips in Red Rock (Sun Valley's churros went in build #85 to make room for tortillas). Missing is just fries.
    */
   fryer?: FryKind[];
 }
@@ -343,7 +343,7 @@ export const STOPS: Stop[] = [
     poutine: false,
     press: { bays: 3, slice: true },
     fryer: ["fries", "sweet"],
-    newThing: "New here: the Veggie Club, a third press bay and the cutting board. Put a pressed panini on the board, tap the knife, then the panini, and draw a slice across to cut it in half.",
+    newThing: "New here: the Veggie Club, a third press bay and the cutting board. Put a pressed panini on the board, tap the knife, then the panini, to cut it in half.",
     customers: 13,
     shiftLength: 210,
     menu: [CAPRESE, AVO_TOAST, TUNA_MELT, CHICKEN_PESTO, VEGGIE_CLUB],
@@ -401,10 +401,10 @@ export const STOPS: Stop[] = [
     pantry: [...DESERT_MID, "egg", "redsalsa"],
     poutine: true,
     comal: { tpress: true },
-    fryer: ["chips", "churros"],
+    fryer: ["chips"],
     customers: 14,
     shiftLength: 220,
-    newThing: "New here: the Breakfast Taco (crack the egg on the comal, flip it once), churros, and the tortilla press: hold it to flatten a fresh tortilla. Customers pay extra for hand-pressed ones.",
+    newThing: "New here: the Breakfast Taco (crack the egg on the comal, flip it once) and the tortilla press: hold it to flatten a fresh tortilla. Customers pay extra for hand-pressed ones.",
     menu: [STREET_TACOS, QUESADILLA, PASTOR_TACOS, BEAN_TOSTADA, BREAKFAST_TACO],
   },
   // ---- Orchard Isle: a short chain across the causeway.
@@ -463,7 +463,7 @@ export const STOPS: Stop[] = [
     fryer: ["fries", "zucchini", "fritters"],
     customers: 14,
     shiftLength: 220,
-    newThing: "New here: the Calzone (fold it on the peel; it bakes slower), a third oven spot and the board: set a flatbread on it with the peel, then tap the knife and the pie and slice across it twice to cut it in four.",
+    newThing: "New here: the Calzone (fold it on the peel; it bakes slower), a third oven spot and the board: set a flatbread on it with the peel, then tap the knife and the pie to cut it in four.",
     menu: [HARVEST_RED, MUSHROOM, FIG_HAM, PEAR_BLUE, CALZONE],
   },
 ];

@@ -9,6 +9,7 @@
  * Each tab (and each kitchen) is its own scroller with sticky jump chips. The drawings are small
  * looping SVGs (howto-art.ts), still under reduced motion. See DESIGN §32.
  */
+import { cookTime } from "../game/pace";
 import "./howto.css";
 import { CROWD } from "../game/business";
 import { RANGE_MI } from "../game/day";
@@ -302,15 +303,15 @@ function basicsSecs(town: Stop | undefined): Sec[] {
       chip: "Knife",
       icon: "knife",
       title: "The knife",
-      lede: `Knife (${knifeTowns}): tap the knife, then the food, or drag the knife onto it, and draw a slice right across.`,
+      lede: `Knife (${knifeTowns}): tap the knife, then the food, or drag the knife onto it. It cuts straight away.`,
       fig: `<div class="hw-pair">
           <div>${knifeArt()}<p class="hw-cap"><b>Paninis</b>: once, in half.</p></div>
-          <div>${knifeArt(true)}<p class="hw-cap"><b>Flatbreads</b>: twice, for four.</p></div>
+          <div>${knifeArt(true)}<p class="hw-cap"><b>Flatbreads</b>: in four.</p></div>
         </div>`,
       points: [
-        "The food must be on the board. The cut view opens over the counter.",
-        "A slice counts once it goes in one side and out the other. The second cut on a flatbread goes the other way.",
-        "Uncut costs the dish more than a crooked cut. A crooked one costs a little, never much.",
+        "The food must be on the board. A baked flatbread can also be cut on the peel.",
+        "One cut does it: a panini in half, a flatbread in four. Undo takes a cut back.",
+        "Uncut costs the dish.",
         "The ticket shows it: <b>Press › Cut</b> or <b>Bake › Cut 4</b>. A calzone goes out whole.",
       ],
     },
@@ -395,10 +396,15 @@ function ticketKey(): string {
 }
 
 /** What the fryer makes, one line each. */
+const sec = (n: number) => Math.round(n * cookTime());
 const FRY_NOTE: Record<FryKind, string> = {
-  fries: "done from about 20 s, perfect near 30.",
+  get fries() {
+    return `done from about ${sec(20)} s, perfect near ${sec(30)}.`;
+  },
   sweet: "faster than fries, with a narrower done band.",
-  chips: "tortilla wedges, golden in about 8 s.",
+  get chips() {
+    return `tortilla wedges, golden in about ${sec(8)} s.`;
+  },
   churros: "a little quicker than fries. Shake sugar on them.",
   zucchini: "drop it in the batter bowl, pick it up again, then fry and salt.",
   fritters: "fry like fries, then cinnamon sugar from the shaker.",
@@ -410,7 +416,7 @@ function fryerSec(town: Stop | undefined): Sec {
   const poutineFrom = STOPS.find((t) => t.poutine && middleOf(t) === "grill")?.name;
   const nachosFrom = STOPS.find((t) => t.poutine && middleOf(t) === "comal")?.name;
   const here = town
-    ? `<div class="hw-key lite ticket" style="display:grid">${kinds
+    ? `<div class="hw-key lite ticket list">${kinds
         .map((k) => `<span><b>${FRY_LABEL[k]}</b>: ${FRY_NOTE[k]}</span>`)
         .join("")}${tostada ? `<span><b>Tostada</b>: a corn tortilla in an empty basket. See the Comal.</span>` : ""}</div>`
     : "";
@@ -608,7 +614,7 @@ function counterSec(k: MiddleCounter): Sec {
       lede: "One long steel plate: hot, hot, then warm at the right end, where the taco rack stands. No buttons.",
       fig: `${comalArt()}<p class="hw-cap">Tortillas warm on the hot side. Tacos are filled in the rack.</p>`,
       points: [
-        "<b>Tortillas</b> are warm in about 6 seconds: soft with brown spots, and the <b>Warm</b> chip. From about 13 they go <b>Hard</b>.",
+        `<b>Tortillas</b> are warm in about ${Math.round(6 * cookTime())} seconds: soft with brown spots, and the <b>Warm</b> chip. From about ${Math.round(13 * cookTime())} they go <b>Hard</b>.`,
         "Drag a warm tortilla by its middle into the <b>taco rack</b>: four slots. A tortilla that's still cold is refused.",
         "In the rack, one drag from the pork or bean well is one scoop into one taco. Other toppings go in once and land on every taco.",
         "Salsa and crema go on at the tray, not in the rack. <b>Drag the rack up to a tray</b>.",
@@ -694,7 +700,7 @@ function kitchenWalks(k: MiddleCounter): Walk[] {
           "Mozzarella ×3, tomato ×3, basil, then the top ciabatta.",
           "<b>Drag down</b> on the tray to lift the sandwich into an open bay. <b>Pull the handle down</b>.",
           "Watch the lid's meter. At golden, <b>swipe the handle up</b>.",
-          `${cut}: drag it onto the board. Tap the knife, then the panini, and <b>draw one slice</b> across.`,
+          `${cut}: drag it onto the board. Tap the knife, then the panini, to <b>cut it in half</b>.`,
           "Drag it up to the tray and <b>serve</b>.",
         ],
         tip: "Without a cut it scores less than with a crooked one.",
@@ -728,7 +734,7 @@ function kitchenWalks(k: MiddleCounter): Walk[] {
         steps: [
           "Pick up a <b>corn tortilla</b> at the comal. Hold it over the Fryer button and the fryer comes up.",
           "Drop it in an <b>empty basket</b>. It becomes a tostada shell.",
-          "<b>Tap the basket</b> to lower it. About 10 s to done. It beeps from perfect: tap again to lift.",
+          `<b>Tap the basket</b> to lower it. About ${sec(10)} s to done. It beeps from perfect: tap again to lift.`,
           "Drag the shell <b>up to a tray</b>.",
           "<b>Beans</b> (one drag, one scoop), <b>lettuce</b>, <b>cheese</b>, in any order.",
           "<b>Crema</b>: tap the bottle, then the tostada, and draw it on. Then <b>serve</b>.",
@@ -784,7 +790,7 @@ function kitchenWalks(k: MiddleCounter): Walk[] {
         "Drag the peel into the oven by its handle and <b>swipe down</b>.",
         "About halfway, <b>turn it</b> with the peel's tip.",
         `Push the blade in under it and carry it out. In ${board}, swipe down over the board.`,
-        "Tap the knife, then the pie, and slice across. Then once more, the other way, for <b>four</b>.",
+        "Tap the knife, then the pie, to cut it in <b>four</b>.",
         "Lift it with the peel, swipe down over a tray, then add <b>basil</b>.",
       ],
       tip: "Elsewhere it goes straight from the oven to the tray, uncut.",

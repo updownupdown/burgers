@@ -70,6 +70,8 @@
 /* The ticket key: a chip or a line as on the ticket, then what it means. */
 .hw-key.ticket { position: static; z-index: auto; background: none; filter: none; padding: 0; overflow: visible; pointer-events: auto; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px 10px; align-items: center; font: 500 13.5px/1.3 var(--bv-font-ui); color: var(--bv-ink-2); width: 100%; }
 .hw-key.ticket::after { display: none; }
+/* A plain one-column list in the ticket key style (the fryer's local items): no dt/dd pairs. */
+.hw-key.ticket.list { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 6px; }
 .hw-key > dt { justify-self: start; display: flex; align-items: center; gap: 3px; font-weight: 700; color: var(--bv-ink); white-space: nowrap; }
 .hw-key > dd { margin: 0; }
 .hw-key .kw { font-size: 11px; }

@@ -59,7 +59,7 @@ describe("Red Rock orders", () => {
     }
   });
 
-  it("scale up: Red Mesa two dishes and chips, Cactus Junction adds pastor, tostadas and nachos, Sun Valley the breakfast taco, eggs, the press and churros", () => {
+  it("scale up: Red Mesa two dishes and chips, Cactus Junction adds pastor, tostadas and nachos, Sun Valley the breakfast taco, eggs and the press (no churros since build #85)", () => {
     expect(townById("redmesa").menu.map((r) => r.name)).toEqual(["Street Tacos", "Quesadilla"]);
     expect(townById("redmesa").poutine).toBe(false);
     const cactus = townById("cactus");
@@ -72,7 +72,7 @@ describe("Red Rock orders", () => {
     expect(sun.pantry).toContain("egg");
     expect(sun.comal).toEqual({ tpress: true });
     expect(cactus.comal).toEqual({ tpress: false });
-    expect(fryerOf(sun)).toEqual(["chips", "churros"]);
+    expect(fryerOf(sun)).toEqual(["chips"]);
   });
 
   it("count the tortillas and a scoop of pork for each taco", () => {
@@ -125,7 +125,7 @@ describe("Red Rock orders", () => {
     expect(adds / qs).toBeGreaterThan(0.3);
   });
 
-  it("want chips in Red Rock, nachos from Cactus Junction and churros only at Sun Valley", () => {
+  it("want chips in Red Rock, nachos from Cactus Junction, and no churros anywhere", () => {
     const rng = seededRng(12);
     const tally = (id: string) => {
       const n = { chips: 0, churros: 0, nachos: 0, fries: 0 };
@@ -147,7 +147,7 @@ describe("Red Rock orders", () => {
     const cactus = tally("cactus");
     expect(cactus.nachos).toBeGreaterThan(5);
     expect(cactus.churros).toBe(0);
-    expect(tally("sunvalley").churros).toBeGreaterThan(20);
+    expect(tally("sunvalley").churros).toBe(0);
   });
 
   it("bring a taco platter to the Rodeo at Cactus Junction", () => {

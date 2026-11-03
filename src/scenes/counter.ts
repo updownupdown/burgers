@@ -202,6 +202,8 @@ const FRYER = {
   shaker: { x: 3.42, z: -0.2 },
   sugar: { x: 3.42, z: 0.85 },
 };
+/** The fryer counter's pan of corn tortillas (tostada towns): under the chips, where Sun Valley's churros were. */
+const FRYER_CORN = { x: -3.35, z: -0.95, s: 0.85 };
 /** The fryer (and its baskets) drawn this much bigger than the model, in the room a smaller potato freezer frees up. */
 const FRYER_SCALE = 1.3;
 /** The salt shaker is drawn bigger than life so it reads as a thing to pick up. */
@@ -226,6 +228,9 @@ const STACK_SHOWN = 10;
 const FOUNTAIN_SCALE = 1.22;
 /** Forward of the back wall, so the fountain's buttons clear the slim backsplash at the top of the view. */
 const FOUNTAIN = { x: 1.1, z: -0.85 };
+/** The oven's commonest toppings, kept in the cold rail's front row. */
+const OVEN_NEAR: Kind[] = ["mozzarella", "basil"];
+
 /** The ice bin is half the fountain model's width. */
 const ICE_WIDTH = 0.5;
 const ICE = { x: -3.25, z: -2.2 };
@@ -504,6 +509,10 @@ export class CounterView {
   fryBoost = 1;
   /** The searing plate bonus: everything on the grill cooks faster. */
   grillBoost = 1;
+  /** Tostadas are on the menu: a pan of corn tortillas stands on the fryer counter too (set before setPantry). */
+  fryerCorn = false;
+  /** The oven's pace (sear and OVEN_TIME, set by main). */
+  ovenBoost = 1;
   /** Warm holding's pace (0.5 with the heat lamp): the warm end, the taco rack, lifted fries and cartons. */
   holdRate = 1;
   autoStopPour = false;
@@ -1384,7 +1393,8 @@ export class CounterView {
       m?.position.copy(this.world(2, x, 0.3, z));
     };
     if (red) {
-      place("chips", both ? F.freezer.z - 0.65 : F.freezer.z);
+      // Where tostadas are on, the corn tortillas (setPantry) take the lower half of this spot.
+      place("chips", both || this.fryerCorn ? F.freezer.z - 0.65 : F.freezer.z);
       place("churros", F.freezer.z + 0.6);
     } else if (isle) {
       // Orchard Isle: fries (and from Larkvale the apple fritter dough) in trays at the freezer's
@@ -2002,7 +2012,10 @@ export class CounterView {
       this.setComalCaddy([]);
     } else if (comal) this.setComalCaddy(kinds.filter(isSauce) as SauceKind[]);
     const hot = usable.filter(back).slice(0, 5);
-    const cold = usable.filter((k) => !back(k)).slice(0, press || comal ? 8 : 6);
+    let cold = usable.filter((k) => !back(k)).slice(0, press || comal ? 8 : 6);
+    // At the oven (after build #84) the cheese and basil every pie wants sit in the front row, nearest
+    // the thumb and the bench, so the commonest drags are the shortest.
+    if (oven) cold = [...cold.filter((k) => !OVEN_NEAR.includes(k)), ...OVEN_NEAR.filter((k) => cold.includes(k))];
     const group = new THREE.Group();
     this.bins = [];
     const fill = (rail: ReturnType<typeof makeColdRail>, at: { x: number; z: number }) => {
@@ -2021,6 +2034,17 @@ export class CounterView {
     // as many as the pantry fills, so a small first menu no longer shows a row of empty pans.
     const rows = Math.max(press || comal ? 3 : 1, Math.ceil(cold.length / 2));
     fill(makeColdRail({ cols: 2, rows, kinds: cold }), { x: SIDE_PANS.x, z: SIDE_BACK_Z + (rows * 1.27 + 0.4) / 2 });
+    // Where tostadas are on (after build #84), a pan of corn tortillas stands on the fryer counter
+    // too, under the chips, so a shell no longer has to be fetched from the comal.
+    if (comal && this.fryerCorn && kinds.includes("corn")) {
+      const rail = makeColdRail({ cols: 1, rows: 1, kinds: ["corn"] });
+      rail.scale.setScalar(FRYER_CORN.s);
+      rail.position.copy(this.world(2, FRYER_CORN.x, 0, FRYER_CORN.z));
+      group.add(rail);
+      const { pans, pan } = rail.userData.spots;
+      const p = pans[0];
+      this.proxy(new THREE.BoxGeometry(pan.w * FRYER_CORN.s + 0.1, 0.9, pan.d * FRYER_CORN.s + 0.1), this.world(2, FRYER_CORN.x + p.x * FRYER_CORN.s, p.y * FRYER_CORN.s - 0.2, FRYER_CORN.z + p.z * FRYER_CORN.s), { type: "bin", kind: "corn" });
+    }
     this.pantry = group;
     this.scene.add(group);
   }
@@ -2410,8 +2434,15 @@ export class CounterView {
   sizzleLevel(): number {
     const on = this.grillItems.filter((g) => !g.held && !g.below && g.flipT < 0);
     const pressing = this.middle === "press" ? this.bays.filter((b) => b.closed && b.layers.length).length : 0;
-    const baking = this.middle === "oven" ? this.ovenSpots.filter((s, i) => i < this.ovenCount && s.layers.length).length : 0;
-    return on.filter((g) => this.heatOf(g) === "hot").length * 0.35 + on.filter((g) => this.heatOf(g) === "warm").length * 0.08 + pressing * 0.3 + baking * 0.12;
+    // Pies in the oven don't sizzle (playtest #84: a grill's hiss over the oven was grating); see ovenLevel.
+    return on.filter((g) => this.heatOf(g) === "hot").length * 0.35 + on.filter((g) => this.heatOf(g) === "warm").length * 0.08 + pressing * 0.3;
+  }
+
+  /** The deck oven's faint roar and crackle, 0..1: a little for a lit oven, more with pies in it. */
+  ovenLevel(): number {
+    if (this.middle !== "oven") return 0;
+    const baking = this.ovenSpots.filter((s, i) => i < this.ovenCount && s.layers.length).length;
+    return Math.min(1, 0.25 + baking * 0.25);
   }
 
   /** Which grill zone a page-local x is over (nearest at the ends). */
@@ -2595,12 +2626,12 @@ export class CounterView {
           const before = cookLevel(d);
           const top = Math.max(...d.cook);
           // The hot side running too far ahead of the other scorches it (warned once per run).
-          const scorching = bakeStep(d, dt, this.grillBoost * (darkSide(d) >= COOK_SCALE.dough.over ? this.burnPace : 1));
+          const scorching = bakeStep(d, dt, this.ovenBoost * (darkSide(d) >= COOK_SCALE.dough.over ? this.burnPace : 1));
           if (scorching && !s.warned) {
             s.warned = true;
             anyBurning = true;
           }
-          for (const l of s.layers.slice(1)) bakeTopping(l.piece, dt, OVEN_CHEESE.has(l.piece.kind), this.grillBoost);
+          for (const l of s.layers.slice(1)) bakeTopping(l.piece, dt, OVEN_CHEESE.has(l.piece.kind), this.ovenBoost);
           const sc = COOK_SCALE.dough;
           if (before < sc.done && cookLevel(d) >= sc.done) anyDone = true;
           if (top <= sc.burnt - 0.05 && Math.max(...d.cook) > sc.burnt - 0.05) anyBurning = true;

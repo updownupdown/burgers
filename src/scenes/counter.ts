@@ -202,8 +202,8 @@ const FRYER = {
   shaker: { x: 3.42, z: -0.2 },
   sugar: { x: 3.42, z: 0.85 },
 };
-/** The fryer counter's pan of corn tortillas (tostada towns): front right, beside the packing pads, a little smaller. */
-const FRYER_CORN = { x: 3.52, z: 1.6, s: 0.72 };
+/** The fryer counter's pan of corn tortillas (tostada towns): under the chips, where Sun Valley's churros were. */
+const FRYER_CORN = { x: -3.35, z: -0.95, s: 0.85 };
 /** The fryer (and its baskets) drawn this much bigger than the model, in the room a smaller potato freezer frees up. */
 const FRYER_SCALE = 1.3;
 /** The salt shaker is drawn bigger than life so it reads as a thing to pick up. */
@@ -1393,7 +1393,8 @@ export class CounterView {
       m?.position.copy(this.world(2, x, 0.3, z));
     };
     if (red) {
-      place("chips", both ? F.freezer.z - 0.65 : F.freezer.z);
+      // Where tostadas are on, the corn tortillas (setPantry) take the lower half of this spot.
+      place("chips", both || this.fryerCorn ? F.freezer.z - 0.65 : F.freezer.z);
       place("churros", F.freezer.z + 0.6);
     } else if (isle) {
       // Orchard Isle: fries (and from Larkvale the apple fritter dough) in trays at the freezer's
@@ -2034,7 +2035,7 @@ export class CounterView {
     const rows = Math.max(press || comal ? 3 : 1, Math.ceil(cold.length / 2));
     fill(makeColdRail({ cols: 2, rows, kinds: cold }), { x: SIDE_PANS.x, z: SIDE_BACK_Z + (rows * 1.27 + 0.4) / 2 });
     // Where tostadas are on (after build #84), a pan of corn tortillas stands on the fryer counter
-    // too, in the front right corner, so a shell no longer has to be fetched from the comal.
+    // too, under the chips, so a shell no longer has to be fetched from the comal.
     if (comal && this.fryerCorn && kinds.includes("corn")) {
       const rail = makeColdRail({ cols: 1, rows: 1, kinds: ["corn"] });
       rail.scale.setScalar(FRYER_CORN.s);

@@ -4765,9 +4765,9 @@ function applyStop(): void {
   // The coast's middle counter is the panini press; everywhere else, the grill.
   const middle = middleOf(st);
   counter.setMiddle(middle, st.press?.bays ?? 2, !!st.press?.slice || !!st.oven?.board, !!st.comal?.tpress, st.oven?.spots ?? 2);
+  counter.fryerCorn = st.menu.some((r) => r.dish === "tostada");
   counter.setFryerSides(st.poutine !== false && middle !== "press", fryerOf(st));
   setTabArt(ui.tabs[HOME_PAGE], middle === "press" ? "Press" : middle === "comal" ? "Comal" : middle === "oven" ? "Oven" : "Grill");
-  counter.fryerCorn = st.menu.some((r) => r.dish === "tostada");
   counter.setPantry(st.pantry);
   // The fountain pours the area's two local drinks beside the three house ones.
   const drinks = fountainFor(st.region);

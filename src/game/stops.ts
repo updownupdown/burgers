@@ -82,7 +82,7 @@ export interface Stop {
   oven?: { spots: number; board: boolean };
   /**
    * What the fryer makes here, the usual side first: fries in the Pines, sweet potato fries too on
-   * the coast from Driftwood, chips (and churros at Sun Valley) in Red Rock. Missing is just fries.
+   * the coast from Driftwood, chips in Red Rock (Sun Valley's churros went in build #85 to make room for tortillas). Missing is just fries.
    */
   fryer?: FryKind[];
 }
@@ -401,10 +401,10 @@ export const STOPS: Stop[] = [
     pantry: [...DESERT_MID, "egg", "redsalsa"],
     poutine: true,
     comal: { tpress: true },
-    fryer: ["chips", "churros"],
+    fryer: ["chips"],
     customers: 14,
     shiftLength: 220,
-    newThing: "New here: the Breakfast Taco (crack the egg on the comal, flip it once), churros, and the tortilla press: hold it to flatten a fresh tortilla. Customers pay extra for hand-pressed ones.",
+    newThing: "New here: the Breakfast Taco (crack the egg on the comal, flip it once) and the tortilla press: hold it to flatten a fresh tortilla. Customers pay extra for hand-pressed ones.",
     menu: [STREET_TACOS, QUESADILLA, PASTOR_TACOS, BEAN_TOSTADA, BREAKFAST_TACO],
   },
   // ---- Orchard Isle: a short chain across the causeway.

@@ -6,6 +6,11 @@ export class Sfx {
   private sizzle: { gain: GainNode } | null = null;
   private bubble: { gain: GainNode } | null = null;
   private pourLoop: { gain: GainNode } | null = null;
+  /** The deck oven's low roar, under everything (the oven counter only). */
+  private ovenLoop: { gain: GainNode } | null = null;
+  private crackleAt = 0;
+  /** When each rate-limited sound last played (ctx time), by name. */
+  private last: Record<string, number> = {};
   muted = false;
 
   /** Silence everything while the page is hidden; the next tap resumes it. */
@@ -33,6 +38,7 @@ export class Sfx {
     this.sizzle = this.loop("bandpass", 4200, 0.6);
     this.bubble = this.loop("lowpass", 500, 1, 7);
     this.pourLoop = this.loop("bandpass", 900, 2);
+    this.ovenLoop = this.loop("lowpass", 240, 0.7);
   }
 
   setMuted(m: boolean): void {
@@ -70,13 +76,32 @@ export class Sfx {
     return { gain };
   }
 
-  /** Continuous levels, 0..1, updated every frame. */
-  setLoops(sizzle: number, bubble: number, pour: number): void {
+  /**
+   * Continuous levels, 0..1, updated every frame. `oven` (pies baking in the deck oven) is a faint
+   * low roar with the odd soft crackle of wood, well under the grill's sizzle.
+   */
+  setLoops(sizzle: number, bubble: number, pour: number, oven = 0): void {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     this.sizzle?.gain.gain.setTargetAtTime(Math.min(1, sizzle) * 0.22, t, 0.1);
     this.bubble?.gain.gain.setTargetAtTime(Math.min(1, bubble) * 0.35, t, 0.15);
     this.pourLoop?.gain.gain.setTargetAtTime(pour * 0.3, t, 0.04);
+    const o = Math.min(1, Math.max(0, oven));
+    this.ovenLoop?.gain.gain.setTargetAtTime(o * 0.06, t, 0.6);
+    if (o > 0 && t >= this.crackleAt) {
+      // A crackle now and then: a tiny, dull tick, more often the more that's baking.
+      if (this.crackleAt) this.burst(1800 + Math.random() * 1600, 0.012 + Math.random() * 0.02, (0.008 + Math.random() * 0.014) * (0.5 + o * 0.5), "bandpass");
+      this.crackleAt = t + 0.25 + (Math.random() * 1.6) / (0.4 + o);
+    } else if (o === 0) this.crackleAt = 0;
+  }
+
+  /** True (and noted) if `key` last played at least `gap` seconds ago: for sounds fired by drags. */
+  private every(key: string, gap: number): boolean {
+    if (!this.ctx) return false;
+    const t = this.ctx.currentTime;
+    if (t - (this.last[key] ?? -Infinity) < gap) return false;
+    this.last[key] = t;
+    return true;
   }
 
   private tone(freq: number, dur: number, type: OscillatorType = "sine", vol = 0.3, slideTo?: number, delay = 0): void {
@@ -96,7 +121,8 @@ export class Sfx {
     o.stop(t + dur + 0.05);
   }
 
-  private burst(freq: number, dur: number, vol = 0.3, type: BiquadFilterType = "bandpass", slideTo?: number): void {
+  /** Filtered noise. `attack` (s) eases it in instead of starting at full level (scrapes, smears). */
+  private burst(freq: number, dur: number, vol = 0.3, type: BiquadFilterType = "bandpass", slideTo?: number, attack = 0, q = 1.5): void {
     if (!this.ctx) return;
     const ctx = this.ctx;
     const t = ctx.currentTime;
@@ -106,10 +132,13 @@ export class Sfx {
     f.type = type;
     f.frequency.setValueAtTime(freq, t);
     if (slideTo) f.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
-    f.Q.value = 1.5;
+    f.Q.value = q;
     const g = ctx.createGain();
-    g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    if (attack > 0) {
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + attack);
+    } else g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(dur, attack + 0.01));
     src.connect(f).connect(g).connect(this.master);
     src.start(t, Math.random());
     src.stop(t + dur + 0.05);
@@ -197,6 +226,48 @@ export class Sfx {
   tick(): void {
     this.tone(1250, 0.05, "triangle", 0.07, 900);
     this.burst(3200, 0.03, 0.05, "bandpass");
+  }
+  /*
+   * The deck oven's family (playtest #84: the pizza sounds were "pretty annoying"; now subtle and
+   * natural). All quiet, low and soft-edged: wood on stone and dough, never a cartoon whoosh, pop
+   * or squirt.
+   */
+  /** The wooden peel sliding in under a pie, or pushing one round on the deck: a soft, dry scrape. */
+  peelScrape(): void {
+    if (!this.every("peelScrape", 0.14)) return;
+    const f = 520 + Math.random() * 260;
+    this.burst(f, 0.22 + Math.random() * 0.08, 0.065, "bandpass", f * 0.7, 0.05, 0.9);
+    // A little grit on top, much quieter.
+    this.burst(2600 + Math.random() * 800, 0.12, 0.012, "bandpass", undefined, 0.03, 1.2);
+  }
+  /** Picking up the peel, the ladle or the oil bottle: a quiet knock of wood. */
+  peelLift(): void {
+    this.tone(340 + Math.random() * 40, 0.05, "triangle", 0.045, 260);
+    this.burst(1500, 0.025, 0.012, "bandpass");
+  }
+  /** A pie set down (bench, board, tray, or the oven's stone deck): a soft, dull thunk. */
+  pieDown(onStone = false): void {
+    this.tone(105 + Math.random() * 15, 0.13, "sine", 0.11, 62);
+    this.burst(420, 0.07, 0.035, "lowpass", 180, 0.004, 0.7);
+    if (onStone) this.burst(900, 0.14, 0.014, "bandpass", 600, 0.02, 0.9);
+  }
+  /** A topping (or a fresh base) laid on a pie: a soft pat. */
+  topping(): void {
+    this.burst(650 + Math.random() * 250, 0.06, 0.04, "lowpass", 260, 0.004, 0.7);
+    this.tone(170 + Math.random() * 30, 0.06, "sine", 0.06, 120);
+  }
+  /** Folding a calzone: a soft flump of dough. */
+  doughFold(): void {
+    this.burst(700, 0.22, 0.11, "lowpass", 220, 0.03, 0.7);
+  }
+  /**
+   * Spreading tomato sauce with the ladle (or drizzling oil): a soft, wet smear, rate-limited and far
+   * quieter than the ketchup squirt. Oil is thinner and quieter still.
+   */
+  sauceSpread(oil = false): void {
+    if (!this.every("sauceSpread", 0.16)) return;
+    if (oil) this.burst(1100 + Math.random() * 300, 0.1, 0.035, "bandpass", 800, 0.03, 1.1);
+    else this.burst(520 + Math.random() * 180, 0.16, 0.07, "lowpass", 300, 0.04, 0.8);
   }
   /** One shake of the salt shaker. */
   shake(): void {

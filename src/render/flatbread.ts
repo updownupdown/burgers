@@ -248,20 +248,31 @@ function sauceParts(stroke: { x: number; z: number }[], color: string, radius: n
   return p;
 }
 /** A thin drizzle (olive oil, honey) along a stroke, as a tube. */
-function drizzle(stroke: { x: number; z: number }[], color: string, y: number, opacity = 1): THREE.Mesh | null {
+function drizzle(stroke: { x: number; z: number }[], color: string, y: number, opacity = 1, radius = SAUCE_RADIUS * 0.75, dx = 0, dz = 0): THREE.Mesh | null {
   const rx = PIE.rx * INNER;
   const rz = PIE.rz * INNER;
   const pts = stroke.map((q) => {
     const r = Math.hypot(q.x, q.z);
     const k = r > 0.95 ? 0.95 / r : 1;
-    return new THREE.Vector3(q.x * k * rx, y, q.z * k * rz);
+    return new THREE.Vector3(q.x * k * rx + dx, y, q.z * k * rz + dz);
   });
   if (pts.length < 2) return null;
-  const tube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), Math.min(200, pts.length * 3), SAUCE_RADIUS * 0.75, 5, false);
+  const tube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), Math.min(200, pts.length * 3), radius, 5, false);
   tube.scale(1, 0.5, 1);
   const m = new THREE.Mesh(tube, toon(color, opacity < 1 ? { opacity } : {}));
   m.castShadow = false;
   return m;
+}
+
+/** Olive oil as three tubes: a wide soaked edge, the golden-green body, and a glint on top. */
+const OIL_COLORS = { edge: "#8a6f12", body: "#dcbc22", glint: "#fffbe0" };
+function oilDrizzle(stroke: { x: number; z: number }[], y: number): THREE.Mesh[] {
+  return [
+    drizzle(stroke, OIL_COLORS.edge, y - 0.01, 1, SAUCE_RADIUS * 1.5),
+    drizzle(stroke, OIL_COLORS.body, y, 1, SAUCE_RADIUS * 0.95),
+    // Above the body's crown (tubes are squashed to half height), nudged toward the light.
+    drizzle(stroke, OIL_COLORS.glint, y + SAUCE_RADIUS * 0.5, 1, SAUCE_RADIUS * 0.18, -0.02, -0.025),
+  ].filter((m): m is THREE.Mesh => !!m);
 }
 
 export interface FlatbreadObject extends THREE.Group {
@@ -364,8 +375,15 @@ export function makeFlatbread(pieces: Piece[], o: { topScale?: number } = {}): F
         }
         return;
       }
-      if (p.kind === "oil" || p.kind === "honey") {
-        const m = p.stroke ? drizzle(p.stroke, p.kind === "oil" ? "#d6c64a" : "#eaa22a", p.kind === "oil" ? y0 + 0.02 : FLATBREAD_TOP - 0.02, p.kind === "oil" ? 0.75 : 1) : null;
+      if (p.kind === "oil") {
+        // Olive oil (playtest #84: "impossible to see" as a pale gold line on pale dough): a soaked,
+        // darker olive edge where it wets the dough, a rich golden-green body, and a thin pale glint
+        // along the top so it still reads as glossy oil rather than a sauce.
+        if (p.stroke) for (const m of oilDrizzle(p.stroke, y0 + 0.02)) tops.add(m);
+        return;
+      }
+      if (p.kind === "honey") {
+        const m = p.stroke ? drizzle(p.stroke, "#eaa22a", FLATBREAD_TOP - 0.02) : null;
         if (m) tops.add(m);
         return;
       }

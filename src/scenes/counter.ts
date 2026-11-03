@@ -1071,7 +1071,7 @@ export class CounterView {
       if (push) {
         // In contact: the pie holds until it gives, then turns with the blade.
         [dYaw, s.strain] = grip(s.strain, push, s.touch);
-        if (dYaw) s.spin = THREE.MathUtils.clamp(s.spin * 0.5 + (dYaw / Math.max(dt, 1 / 120)) * NUDGE.coast, -3, 3);
+        if (dYaw) s.spin = THREE.MathUtils.clamp(s.spin * 0.5 + (dYaw / Math.max(dt, 1 / 120)) * NUDGE.coast, -5, 5);
         this.nudgeSound += Math.abs(dYaw);
       } else {
         // Let go: the slack comes back out and what little spin it kept dies off on the deck.

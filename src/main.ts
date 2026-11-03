@@ -4211,15 +4211,66 @@ function startLadle(pt: Pointer, kind: SauceKind): void {
   const obj = kind === "redsauce" ? makeSauceLadle() : counter.sauceBottle(kind);
   counter.setHeld(obj);
   ladle = { kind, obj, last: 0, holder: null, piece: null, before: 0 };
+  openLadleZoom(h);
   paintLadle(pt);
   sfx.pop();
   if (kind === "redsauce") hintOnce("ladle", "Spread it in a spiral from the middle out, to just inside the crust. Watch the bar on the left.", 3.5);
   else hintOnce("oil", "Drizzle it over the base, then add the toppings.", 3);
 }
+/**
+ * The flatbread close-up (after build #82): while sauce or oil goes on a base, the counter is seen
+ * from above in a square over it, as burgers and paninis get at the tray, so the spread is easy to
+ * see. The finger in the square spreads on the base under it.
+ */
+const ladleZoom = new CutZoom();
+let ladleZoomOn = false;
+const ladleDim = document.createElement("div");
+ladleDim.className = "cut-ui";
+ladleDim.hidden = true;
+ui.root.appendChild(ladleDim);
+function ladleFinal(): Rect {
+  const w = bands.counter.w;
+  const side = Math.round(Math.min(w - 12, bands.counter.h * 0.92, viewH * 0.5));
+  const y = Math.round(bands.counter.y + Math.max(6, (bands.counter.h - side) * 0.35));
+  return { x: Math.round((w - side) / 2), y, w: side, h: side };
+}
+function openLadleZoom(h: PieHolder): void {
+  const food = h.food;
+  if (!food) return;
+  const box = new THREE.Box3().setFromObject(food);
+  const size = box.getSize(new THREE.Vector3());
+  const centre = box.getCenter(new THREE.Vector3());
+  centre.y = box.max.y;
+  const reach = Math.max(size.x, size.z) / 2;
+  const a = screenOf("counter", centre.clone().add(new THREE.Vector3(-reach, 0, 0)));
+  const b = screenOf("counter", centre.clone().add(new THREE.Vector3(reach, 0, 0)));
+  const mid = screenOf("counter", centre);
+  const side = Math.max(20, b.x - a.x);
+  ladleZoom.frame(centre, reach, { x: mid.x - side / 2, y: mid.y - side / 2, w: side, h: side });
+  ladleZoomOn = true;
+}
+function updateLadleZoom(dt: number): void {
+  if (ladleZoomOn && (!ladle || game.phase !== "playing")) ladleZoomOn = false;
+  ladleZoom.update(dt, ladleZoomOn ? 1 : 0, ladleFinal());
+  const k = ladleZoom.eased;
+  ladleDim.hidden = !(k > 0.05 && game.phase === "playing");
+  if (ladleDim.hidden) return;
+  const r = ladleZoom.rect;
+  Object.assign(ladleDim.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
+  ladleDim.style.setProperty("--dim", (0.6 * k).toFixed(3));
+}
+/** Where the nozzle is on the counter: through the close-up when the finger's in it. */
+function ladleGround(x: number, y: number): THREE.Vector3 {
+  const r = ladleZoom.rect;
+  if (ladleZoomOn && ladleZoom.eased > 0.85 && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return ladleZoom.point(x, y).setY(PEEL_Y + 0.12);
+  return counter.groundPoint(ndcIn(bands.counter, x, y), PEEL_Y + 0.12);
+}
 function paintLadle(pt: Pointer): void {
   const l = ladle;
   if (!l) return;
-  const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y - NOZZLE_UP), PEEL_Y + 0.12);
+  // While the close-up eases in, the finger isn't over the base it will see yet.
+  if (ladleZoomOn && ladleZoom.eased < 0.85) return;
+  const g = ladleGround(pt.x, pt.y - NOZZLE_UP);
   l.obj.visible = bandAt(pt.y) === "counter";
   l.obj.position.copy(g).add(new THREE.Vector3(0, l.kind === "redsauce" ? 0.0 : 0.25, 0));
   if (bandAt(pt.y) !== "counter") return;
@@ -5622,6 +5673,7 @@ function updateUi(dt = 0): void {
   updateAskChip();
   updateSauce(dt);
   updateCut(dt);
+  updateLadleZoom(dt);
   updateFly(dt);
   updateEgg(dt);
   // While a finger carries something (or a thing flies back) the button keeps its look.
@@ -6002,7 +6054,11 @@ function updateOvenTags(): void {
     }
     const d = on && i < counter.ovenCount ? s.layers[0]?.piece : undefined;
     el.hidden = !d || d.kind !== "dough";
-    if (el.hidden || !d) return;
+    // The turn arrow goes with the pie (after build #82 it could linger once the pie was taken out).
+    if (el.hidden || !d) {
+      if (turnCues[i]) turnCues[i].hidden = true;
+      return;
+    }
     // Uneven (after build #78): the meter splits into the pale side and the dark side, and a turn
     // arrow sits on the pale edge of the pie, the side to nudge round to the back wall.
     const uneven = darkSide(d) - paleSide(d) > LEOPARD_EVEN && darkSide(d) < COOK_SCALE.dough.over;
@@ -6132,6 +6188,10 @@ function render(): void {
   if (cutZoom.visible) {
     const r = cutZoom.rect;
     draw({ x: colX + r.x, y: r.y, w: r.w, h: r.h }, counter.scene, cutZoom.camera);
+  }
+  if (ladleZoom.visible) {
+    const r = ladleZoom.rect;
+    draw({ x: colX + r.x, y: r.y, w: r.w, h: r.h }, counter.scene, ladleZoom.camera);
   }
   perfReadout(renderer);
 }

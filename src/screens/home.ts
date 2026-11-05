@@ -805,7 +805,11 @@ function playNight(m: Mounted, n: NightShow): void {
   later(NIGHT_MS.dawn, dawn);
   later(NIGHT_MS.out, () => box.classList.add("out"));
   later(NIGHT_MS.end, finish);
-  box.addEventListener("click", finish);
+  // A tap skips to the morning, but not the second half of the double tap on Sleep that started it.
+  const shownAt = performance.now();
+  box.addEventListener("click", () => {
+    if (performance.now() - shownAt > 400) finish();
+  });
   // Leaving the map mid-transition (back, a screen over it) just ends it.
   const stop = new MutationObserver(() => {
     if (!m.el.isConnected) {

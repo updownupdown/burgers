@@ -362,9 +362,11 @@ function pipsHtml(done: number, need: number): string {
 
 function shiftsLine(save: Save, t: Stop): string {
   const n = save.shiftsIn[t.id] ?? 0;
-  if (!t.roads.length) return n ? `${n} shift${n === 1 ? "" : "s"} here` : t.id === FINAL_TOWN ? "Last stop of the trip" : "A side road: nothing further opens from here";
+  // Short enough for the dock beside Prep & Open at 320px (the town sheet says more).
+  if (!t.roads.length) return `<span class="t">${n ? `${n} shift${n === 1 ? "" : "s"} here` : t.id === FINAL_TOWN ? "Last stop of the trip" : "A side road"}</span>`;
   const { done, need } = unlockProgress(save.shiftsIn, t.id);
-  return done >= need ? `${pipsHtml(done, need)}<span class="t">roads open</span>` : `${pipsHtml(done, need)}<span class="t">${done}/${need} shifts to open the road</span>`;
+  const left = need - done;
+  return done >= need ? `${pipsHtml(done, need)}<span class="t">roads open</span>` : `${pipsHtml(done, need)}<span class="t">${left} more shift${left === 1 ? "" : "s"}</span>`;
 }
 
 function renderDock(m: Mounted): void {
@@ -380,7 +382,7 @@ function renderDock(m: Mounted): void {
       <button class="home-dock-info" data-home="here" aria-label="About ${esc(here.name)}">
         <span class="bv-eyebrow home-dayline">${icon(evening ? "moon" : "sun")}Day ${s.day} · ${evening ? "Evening in" : "Morning in"}</span>
         <b>${esc(here.name)}</b>
-        <span class="bv-caption">${evening ? esc(today) : ev ? `${icon("flag")}${esc(ev.name)} today` : shiftsLine(s, here)}</span>
+        <span class="bv-caption">${evening ? esc(today) : ev ? `${icon("flag")}<span class="t">${esc(ev.name)} today</span>` : shiftsLine(s, here)}</span>
       </button>
       ${
         evening

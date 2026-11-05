@@ -126,6 +126,10 @@
 @media (max-width: 379px) {
   .day-top .where b { font-size: 20px; }
 }
+/* "Popularity & reviews" whole at 320px. */
+@media (max-width: 349px) {
+  .day-top .where b { font-size: 18px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .day-screen *, .day-screen *::before { transition: none !important; animation: none !important; }
 }

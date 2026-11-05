@@ -47,4 +47,12 @@ describe("fame", () => {
     expect(wordOfMouth([3, 1], 4, 3)).toBe(-3);
     expect(wordOfMouth(new Array(40).fill(5), 0, 0)).toBe(6);
   });
+
+  it("with the Guest book doubles the good word, not the day's net", () => {
+    // Six happy, two walk-outs: +2 -1 plain; the book makes the happy +4, so +3 (it used to give +2).
+    expect(wordOfMouth([5, 5, 4, 4, 5, 4], 2, 0, 100, 2)).toBe(3);
+    // A bad day still gets the happy customers' word doubled (it used to give nothing extra).
+    expect(wordOfMouth([5, 5, 5], 4, 0, 100, 2)).toBe(0);
+    expect(wordOfMouth([5, 5, 5], 4, 0, 100)).toBe(-1);
+  });
 });

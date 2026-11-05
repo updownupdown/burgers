@@ -5045,8 +5045,8 @@ function endShift(arrive: Arrival): void {
   const popBefore = game.popStart;
   // Popularity: yesterday's fades a touch, then word of mouth and the press move it.
   // The guest book doubles the good word; apology cookies keep walk-outs from costing any.
-  const word = wordOfMouth(game.stars, has("cookies") ? 0 : game.lost, has("cookies") ? 0 : game.leftLine, save.popularity);
-  save.popularity = fadePopularity(save.popularity) + (word > 0 && has("guestbook") ? word * 2 : word) + (game.press?.pop ?? 0);
+  const word = wordOfMouth(game.stars, has("cookies") ? 0 : game.lost, has("cookies") ? 0 : game.leftLine, save.popularity, has("guestbook") ? 2 : 1);
+  save.popularity = fadePopularity(save.popularity) + word + (game.press?.pop ?? 0);
   save.popularity = Math.max(10, Math.min(100, save.popularity));
   if (game.gentle) save.popularity = Math.max(popBefore, save.popularity);
   customersView.setLine([]);

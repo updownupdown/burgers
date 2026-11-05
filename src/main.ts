@@ -532,6 +532,8 @@ function setActive(i: number): void {
 function clearSlot(i: number): void {
   const s = game.slots[i];
   history.forgetTray(i);
+  // A sauce close-up open on this tray closes: there's no burger left under it.
+  if (sauceDrag?.slot === i) closeSauce();
   s.order = null;
   s.plate = emptyPlate();
   s.fig = null;
@@ -2800,6 +2802,7 @@ function paintSauce(pt: Pointer): void {
   const q = r > 1 ? { x: raw.x / r, z: raw.z / r } : raw;
   const layers = game.slots[slot].plate.layers;
   let top = layers[layers.length - 1];
+  if (!top) return;
   // Carrying on with the same sauce keeps drawing the same squiggle rather than adding a layer.
   if (top.piece.kind !== s.kind || !top.piece.stroke) {
     const p = newPiece(s.kind);

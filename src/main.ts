@@ -1317,6 +1317,10 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
       showHint("This tray already has fries.", 2);
       return false;
     }
+    if (payload.fill < 0.02) {
+      showHint("Fill it first!", 1.5);
+      return false;
+    }
     const { cook, size, fill, salt, curds, gravy, held } = payload;
     s.plate.fries = { cook, size, fill, salt, curds, gravy, held: held ?? 0, ...(payload.fry && payload.fry !== "fries" ? { fry: payload.fry } : {}) };
     dropped = { place: { at: "tray", slot }, ref: s.plate.fries };
@@ -1370,6 +1374,11 @@ function finishHold(pt: Pointer): void {
   if (!pt.moved && dur < 450 && (from.at === "supply" || payload.type === "drink")) {
     nameBubble(pt, nameOf(payload));
     if (payload.type === "drink") restorePayload(payload);
+    return;
+  }
+  if (!pt.moved && dur < 450 && payload.type === "carton" && payload.pack >= 0 && payload.fill < 0.02) {
+    restorePayload(payload);
+    showHint("Drag fries from the basket into the carton.", 2);
     return;
   }
 
@@ -3094,11 +3103,12 @@ canvas.addEventListener("pointerdown", (e) => {
     else if (hit.type === "garnish" && counter.garnish) startHold(pt, { type: "garnish", kind: counter.garnish });
     else if (hit.type === "pack") {
       const p = counter.packs[hit.idx];
-      if (p.size && p.fill > 0) {
+      // An empty carton lifts off too, so one of the wrong size can go in the trash.
+      if (p.size) {
         startHold(pt, { type: "carton", size: p.size, cook: p.cook, fill: p.fill, pack: hit.idx, salt: p.salt, curds: p.curds, gravy: p.gravy, fry: p.fry, held: p.held });
         Object.assign(p, EMPTY_PACK);
         counter.syncPack(hit.idx);
-      } else showHint(p.size ? "Drag fries from the basket into the carton." : "Grab a carton from the stacks, front left.", 2);
+      } else showHint("Grab a carton from the stacks, front left.", 2);
     }
     else if (hit.type === "basket") pt.mode = "basket";
     else if (hit.type === "shaker" || hit.type === "curds" || hit.type === "gravy") {

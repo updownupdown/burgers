@@ -11,6 +11,7 @@ import { townBonus } from "../game/bonus";
 import { buyBonus, readyToBuy } from "../game/garage";
 import { truckSvg as truckArt } from "./truckart";
 import { dollars } from "./garage";
+import { modalClosedAt } from "./modal";
 import { openReport } from "./report";
 import { renderMap, roadPath, routePoints, SEA, townPoint, VIEW, LAND_BOX } from "./map";
 import { PanZoom } from "./panzoom";
@@ -161,6 +162,8 @@ export const homeBusy = (): boolean => !!cur && (cur.driving || cur.night || !!c
 /** Redraw the numbers and the dock after the save changed elsewhere. */
 export function refreshHome(): void {
   if (!cur) return;
+  // Prep or a screen over the map just closed: its button's double tap shouldn't press one here.
+  cur.at = performance.now();
   cur.el.classList.toggle("evening", cur.deps.save.time === "evening");
   renderMapInto(cur);
   // The fresh SVG comes sized (renderMapInto); fitting again keeps the view if the layout moved.
@@ -507,7 +510,7 @@ function onClick(e: Event): void {
     m.arriving();
     return;
   }
-  if (performance.now() - m.at < 450 || m.night) return;
+  if (performance.now() - Math.max(m.at, modalClosedAt()) < 450 || m.night) return;
   const act = btn.dataset.home!;
   const s = m.deps.save;
   switch (act) {

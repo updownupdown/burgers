@@ -45,6 +45,15 @@ describe("town bests (review #78 B8)", () => {
   });
 });
 
+describe("a new trip", () => {
+  it("clears the regulars' good visits along with popularity", () => {
+    const s: Save = { ...freshSave(), popularity: 70, regulars: { pinecrest: 3 } };
+    // main.ts starts a new trip this way.
+    Object.assign(s, freshSave(), { tutorialDone: s.tutorialDone, trips: s.trips, best: s.best });
+    expect(s.regulars).toEqual({});
+  });
+});
+
 describe("an unreadable save (review #78 B12)", () => {
   const store = new Map<string, string>();
   afterEach(() => {

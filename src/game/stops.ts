@@ -614,3 +614,31 @@ export function withEvent(t: Stop, e: TownEvent | null): Stop {
     menu: e.special ? [...t.menu, e.special] : t.menu,
   };
 }
+
+/**
+ * A town with the kit the cook has already learned further along its road (James, after build
+ * #87): once a shift has been worked in a town with the cutting board, the tortilla press or a
+ * third oven spot, the earlier towns cooking on the same middle counter get it too. Menus,
+ * fryer sides and drinks stay the town's own; only the tools carry back. `worked` is shifts
+ * worked per town (save.shiftsIn).
+ */
+export function withLearned(t: Stop, worked: Readonly<Record<string, number>>): Stop {
+  const mid = middleOf(t);
+  const learned = STOPS.filter((o) => o.id !== t.id && (worked[o.id] ?? 0) > 0 && middleOf(o) === mid);
+  if (!learned.length) return t;
+  const out: Stop = { ...t };
+  if (t.press) {
+    out.press = {
+      bays: Math.max(t.press.bays, ...learned.map((o) => o.press!.bays)),
+      slice: t.press.slice || learned.some((o) => o.press!.slice),
+    };
+  }
+  if (t.comal) out.comal = { tpress: t.comal.tpress || learned.some((o) => o.comal!.tpress) };
+  if (t.oven) {
+    out.oven = {
+      spots: Math.max(t.oven.spots, ...learned.map((o) => o.oven!.spots)),
+      board: t.oven.board || learned.some((o) => o.oven!.board),
+    };
+  }
+  return out;
+}

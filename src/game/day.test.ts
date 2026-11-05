@@ -50,7 +50,7 @@ describe("who turns up", () => {
   it("keeps the crowd on Chill, packs more in on Stressful, and the sandwich board pulls more", () => {
     expect(expectedCustomers({ ...base, popularity: 70, pacing: "chill" })).toBe(expectedCustomers({ ...base, popularity: 70 }));
     expect(expectedCustomers({ ...base, popularity: 70, pacing: "stressful" })).toBeGreaterThan(expectedCustomers({ ...base, popularity: 70 }));
-    expect(expectedCustomers({ ...base, popularity: 70, bonus: "board" })).toBeGreaterThan(expectedCustomers({ ...base, popularity: 70 }));
+    expect(expectedCustomers({ ...base, popularity: 70, bonuses: ["board"] })).toBeGreaterThan(expectedCustomers({ ...base, popularity: 70 }));
   });
 });
 

@@ -1,5 +1,5 @@
 import { CROWD, MIN_MENU, menuFor } from "../game/business";
-import { BONUSES, bonusById, GREAT, townBonus } from "../game/bonus";
+import { BONUSES, bonusById, GREAT, MAX_PICKS, townBonus, validPicks } from "../game/bonus";
 import { expectedCustomers } from "../game/day";
 import { DIFFICULTIES, DIFFICULTY, type Difficulty } from "../game/difficulty";
 import { criticChance, type PressPiece } from "../game/press";
@@ -20,7 +20,7 @@ import "./day.css";
  * - **Prep & Open**, before opening: one scrolling page around one big number, the people to
  *   expect and who they are, beside what draws them. Under it: the shift window on the day's lunch
  *   curve with a two-thumb slider, the menu one burger a row (a chevron opens its recipe), pacing,
- *   and the one bonus to bring. Everything here is fixed once the window opens.
+ *   and up to three bonuses to bring. Everything here is fixed once the window opens.
  * - After the shift, the report card on the evening map lives in report.ts.
  * - **Popularity & reviews**, reached from the map: popularity, the rating and its breakdown by
  *   stars, and the critics' clippings.
@@ -135,12 +135,12 @@ export function prepHtml(p: PrepInput): string {
   const ev = eventOn(stop.id, save.day);
   const crowd = CROWD[stop.crowd];
   const w = save.shift;
-  const bonus = save.bonus && save.bonuses.includes(save.bonus) ? save.bonus : null;
-  const input = { stop, popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: w, bonus, pacing };
+  const picks = validPicks(save.picks, save.bonuses);
+  const input = { stop, popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: w, bonuses: picks, pacing };
   const rating = reviewAverage(save.reviewCounts);
   const expect = expectedCustomers(input);
   const menu = menuFor(stop, save.hidden);
-  const critic = bonus === "press" ? 1 : criticChance(stop.crowd, ev);
+  const critic = picks.includes("press") ? 1 : criticChance(stop.crowd, ev);
 
   const rows = stop.menu
     .map((r) => {
@@ -171,8 +171,8 @@ export function prepHtml(p: PrepInput): string {
   const bonusBody = owned.length
     ? `<div class="prep-bonuses">${owned
         .map(
-          (b) => `<button class="prep-bonus" data-act="prep-bonus" data-v="${b.id}" aria-pressed="${b.id === bonus}">
-          <span class="ic">${icon(b.icon)}</span><b>${esc(b.name)}</b><small>${esc(b.text)}</small><span class="tick">${b.id === bonus ? icon("check") : ""}</span></button>`,
+          (b) => `<button class="prep-bonus" data-act="prep-bonus" data-v="${b.id}" aria-pressed="${picks.includes(b.id)}">
+          <span class="ic">${icon(b.icon)}</span><b>${esc(b.name)}</b><small>${esc(b.text)}</small><span class="tick">${picks.includes(b.id) ? icon("check") : ""}</span></button>`,
         )
         .join("")}</div>`
     : `<span class="day-hint">No bonuses yet. Each town has one: a great shift there unlocks it, then it's bought in the Garage.</span>`;
@@ -219,13 +219,13 @@ export function prepHtml(p: PrepInput): string {
       ${askHtml(stop, menu, save.day, expect)}
 
       <section class="prep-sec prep-card">
-        <h3 class="prep-h">${icon("sparkle")}Bonus</h3>
+        <h3 class="prep-h">${icon("sparkle")}Bonuses${owned.length > 1 ? `<span>Pick up to ${MAX_PICKS}</span>` : ""}</h3>
         ${bonusBody}
         ${hereLine}
       </section>
     </div>
     <footer class="day-foot">
-      <div class="sum"><span class="bv-eyebrow">${bonus ? esc(bonusById(bonus)!.name) : "No bonus"}</span><b>~${expect} customers</b></div>
+      <div class="sum"><span class="bv-eyebrow">${picks.length === 1 ? esc(bonusById(picks[0])!.name) : picks.length ? `${picks.length} bonuses` : "No bonus"}</span><b>~${expect} customers</b></div>
       <button class="bv-btn primary lg" data-act="open">${icon("bell")}Open</button>
     </footer>
   </div>`;

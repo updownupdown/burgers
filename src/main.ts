@@ -1652,7 +1652,7 @@ function noteFood(layers: Layer[], from: Place, to: Place): void {
 const restPlace = (): Place => (counter.rest === counter.board ? { at: "board" } : { at: "bench" });
 
 /** The drink or carton a move left, as it is now. */
-type CupData = { flavor: DrinkId | null; fill: number; size: Size; ice: boolean; lid: boolean };
+type CupData = { flavor: DrinkId | null; fill: number; size: Size; ice: boolean; lid: boolean; garnish?: Garnish };
 type CartonData = { size: FriesSize; cook: number; fill: number; salt: number; curds: boolean; gravy: boolean; fry: FryKind; held?: number };
 
 /** Is the moved thing still where the move put it? */
@@ -1845,17 +1845,17 @@ function takeBack(m: Move<Moved>): { show: Payload | THREE.Object3D; put: () => 
     const pp = w.p as Extract<Payload, { type: "drink" | "empty" }>;
     if (to.at === "tray") {
       const d = game.slots[to.slot].plate.drink!;
-      c = { flavor: d.flavor, fill: d.fill, size: d.size, ice: !!d.ice, lid: !!d.lid };
+      c = { flavor: d.flavor, fill: d.fill, size: d.size, ice: !!d.ice, lid: !!d.lid, ...(d.garnish ? { garnish: d.garnish } : {}) };
       game.slots[to.slot].plate.drink = null;
       syncTray(to.slot, false);
     } else if (to.at === "cup") {
       const cup = w.ref as DrinkCup;
       c = { flavor: cup.flavor, fill: cup.fill, size: cup.size, ice: cup.ice, lid: cup.lid };
       counter.removeCup(cup);
-    } else c = pp.type === "drink" ? { flavor: pp.flavor, fill: pp.fill, size: pp.size, ice: pp.ice, lid: pp.lid } : { flavor: null, fill: 0, size: pp.size, ice: !!pp.ice, lid: false };
+    } else c = pp.type === "drink" ? { flavor: pp.flavor, fill: pp.fill, size: pp.size, ice: pp.ice, lid: pp.lid, ...(pp.garnish ? { garnish: pp.garnish } : {}) } : { flavor: null, fill: 0, size: pp.size, ice: !!pp.ice, lid: false };
     const put = () => {
       if (from.at === "tray") {
-        if (c.flavor) game.slots[from.slot].plate.drink = { flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid };
+        if (c.flavor) game.slots[from.slot].plate.drink = { flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid, ...(c.garnish ? { garnish: c.garnish } : {}) };
         syncTray(from.slot, true);
       } else if (from.at === "cup") counter.placeCup(c, new THREE.Vector3(from.x, 0.3, from.z));
     };

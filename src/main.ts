@@ -2929,11 +2929,14 @@ function updateSauce(dt: number): void {
   }
 }
 
-/** A card (the pause menu) just closed: the second tap of a double tap on Resume isn't a kitchen tap. */
-const afterCard = () => performance.now() - modalClosedAt() < 400;
+/**
+ * A card (the pause menu) just closed, or Prep's Open just started the shift: the second tap of a
+ * double tap on Resume or Open isn't a kitchen tap.
+ */
+const afterCard = (e: Event) => e.timeStamp - Math.max(modalClosedAt(), screenShownAt) < 400;
 
 canvas.addEventListener("pointerdown", (e) => {
-  if (game.phase !== "playing" || ptr || afterCard()) return;
+  if (game.phase !== "playing" || ptr || afterCard(e)) return;
   sfx.unlock();
   try {
     canvas.setPointerCapture(e.pointerId);
@@ -4334,9 +4337,9 @@ ui.tabs.forEach((t, i) => {
   };
   t.addEventListener("pointerup", end);
   t.addEventListener("pointercancel", end);
-  t.addEventListener("click", () => {
+  t.addEventListener("click", (e) => {
     if (swiped) return void (swiped = false);
-    if (afterCard()) return;
+    if (afterCard(e)) return;
     sfx.unlock();
     if (!counter.inHand) goToPage(i);
   });
@@ -4789,6 +4792,7 @@ function startShift(): void {
   ui.title.hidden = true;
   closeAll();
   ui.summary.hidden = true;
+  screenShownAt = performance.now();
 }
 
 /** Dress the truck for the current stop: scenery, pantry bins and HUD label. */

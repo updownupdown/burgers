@@ -18,7 +18,7 @@ const save = (town, bonuses = []) => ({
     await enterShift(p);
     if (bonus) {
       // Pick the bonus on Prep if enterShift skipped past it: the game remembers the last pick.
-      await p.evaluate((id) => { const g = window.__bv.game; if (g.bonus !== undefined) g.bonus = id; }, bonus);
+      await p.evaluate((id) => { const g = window.__bv.game; if (g.bonuses !== undefined) g.bonuses = id ? [id] : []; }, bonus);
     }
     await p.evaluate(() => window.__bv.manual(true));
     await step(p, 2);
@@ -36,7 +36,7 @@ const save = (town, bonuses = []) => ({
       labels: [...document.querySelectorAll('[data-r="dlabel"]')].map((e) => e.textContent),
       line: window.__bv.game.line.length,
       peek: !document.querySelector('[data-r="peek"]').hidden,
-      bonus: window.__bv.game.bonus,
+      bonus: window.__bv.game.bonuses,
     }));
     console.log(town, JSON.stringify(info));
     await b.close();

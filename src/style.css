@@ -221,10 +221,7 @@ html, body {
 .ticket .name { display: flex; align-items: baseline; gap: 2px; min-width: 0; }
 .ticket .name .l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 17px/1.05 var(--bv-font-serif); letter-spacing: 0; }
 .ticket .name .ast { font: 800 16px/1 var(--bv-font-ui); color: var(--t-mod); flex: none; }
-.ticket .name .plus { margin-left: auto; padding-left: 4px; display: inline-flex; gap: 1px; align-self: center; flex: none; }
-.ticket .name .plus .ic { width: 13px; height: 10px; }
 /* A town's regular: their name before the dish (after build #78). */
-.ticket .name .reg { flex: none; margin-right: 4px; font: 800 11px/1.3 var(--bv-font-ui); color: #fff7f2; background: var(--bv-olive); border-radius: 4px; padding: 0 5px 1px; align-self: center; }
 /* The tip coin: whole while the customer looks calm, half once sad, gone once angry. */
 .ticket .pat .tipc { flex: none; width: 14px; height: 14px; border-radius: 50%; display: grid; place-items: center; font: 800 9px/1 var(--bv-font-mono); font-style: normal; color: #6b4a07; background: #e9c25a; box-shadow: inset 0 0 0 1px rgb(107 74 7 / 0.55); transition: background 0.3s, opacity 0.3s; }
 .ticket .pat .tipc.half { background: linear-gradient(90deg, #e9c25a 50%, rgb(42 38 34 / 0.08) 50%); }
@@ -338,13 +335,26 @@ html, body {
 .ticket.stub .bar { min-width: 0; }
 .ticket.stub .name { flex-wrap: wrap; }
 .ticket.stub .name .l { font-size: 14px; letter-spacing: -0.01em; line-height: 1.05; white-space: normal; overflow-wrap: normal; }
-.ticket.stub .name .plus { margin-left: 2px; padding-left: 0; }
 .ticket .pp { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 3px; }
 .ticket .pp .dpill { min-width: 0; font-size: 12px; padding: 0 6px 1px; }
 .ticket .pp .x { font: 700 12px var(--bv-font-mono); }
 /* A stub's exceptions under its name: "NO Pickles", "ADD Bacon". */
 .ticket .ex { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; color: var(--t-mod); font: 700 11.5px/1.15 var(--bv-font-ui); }
 .ticket .ex li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; min-height: 0; padding: 0; margin: 0; }
+/* A stub's sides (after build #87): size and flavour, enough to make them without opening the ticket. */
+.ticket .sc { list-style: none; margin: 1px 0 0; padding: 0; display: grid; gap: 2px; font: 700 11.5px/1.15 var(--bv-font-ui); }
+.ticket .sc li { display: flex; align-items: center; gap: 3px; min-height: 0; padding: 0; margin: 0; white-space: nowrap; overflow: hidden; }
+.ticket .sc .ic { width: 13px; height: 10px; }
+.ticket .sc .sz { font-size: 10px; padding: 0 2px; line-height: 1.15; }
+.ticket .sc .dn { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ticket .sc .kw { flex: none; color: var(--t-mod); font-size: 10px; }
+.ticket .sc li.done { color: var(--t-done); }
+.ticket .sc li.wrong { color: var(--t-wrong); }
+/* In a narrow stub the ice note drops under the drink, and the size box tightens up. */
+.ticket.stub .sc li { flex-wrap: wrap; gap: 1px 2px; }
+.ticket.stub .sc .kw { flex-basis: 100%; padding-left: 15px; }
+.ticket.stub .sc .sz { padding: 0 1px; }
+.ticket.stub .sc .dn { flex: 1 1 0; }
 .ticket .left { margin-top: 2px; font: 600 12px/1 var(--bv-font-mono); color: var(--bv-ink-2); }
 .ticket .left b { color: var(--bv-ink); }
 /* A list that still has to scroll fades out at the top, where the finished end of the burger is. */

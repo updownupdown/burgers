@@ -488,7 +488,7 @@ function tripSecs(): Sec[] {
       title: "The day",
       lede: "Prep in the morning, a lunch shift, then the evening on the map.",
       points: [
-        "<b>Prep & Open</b>: who to expect, the menu, the shift's hours, the pacing and one bonus.",
+        "<b>Prep & Open</b>: who to expect, the menu, the shift's hours, the pacing and up to three bonuses.",
         "A longer <b>menu</b> brings more people and more kinds of order. Hide recipes to keep it simple.",
         "Drag the <b>shift</b> slider to open early or close late. Lunch peaks from noon to one. A shift is at least four hours.",
         "At sundown the <b>Closed</b> sign goes up. The results come up over the evening map, then <b>Sleep</b> starts tomorrow.",
@@ -550,7 +550,7 @@ function tripSecs(): Sec[] {
       points: [
         "On the map, tap your <b>savings</b> (the garage button by Help) to open the Garage.",
         "A great shift unlocks that town's bonus. Then it's for sale here.",
-        "Bring <b>one bonus</b> per shift, picked on Prep & Open.",
+        "Bring <b>up to three bonuses</b> per shift, picked on Prep & Open.",
         "Looks for the truck show on the map and at night.",
       ],
     },

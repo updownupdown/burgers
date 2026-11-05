@@ -5217,6 +5217,8 @@ function tick(dt: number): void {
     }
     // If nobody's about, don't make the player wait for the next arrival.
     if (!game.slots.some((s) => s.order) && !game.line.length && game.nextSpawn > game.time + 2 && !guiding) game.nextSpawn = game.time + 2;
+    // Everyone expected has been and gone but the rush hasn't come yet: bring it on now.
+    if (r && r.left === RUSH.people && game.spawned >= game.customers && !game.slots.some((s) => s.order) && !game.line.length && r.next > game.time + 2 && !guiding) r.next = game.time + 2;
 
     // The line: patience drains slowest at the front, where they're nearly there.
     for (let k = game.line.length - 1; k >= 0; k--) {
@@ -5326,7 +5328,9 @@ function tick(dt: number): void {
       }
     }
 
-    const doneSpawning = game.time >= game.shiftLength || game.spawned >= game.customers;
+    // A rush still to come keeps the shift open (it adds its own people on top of the day's count).
+    const rushDue = !!game.rush && game.rush.left > 0 && game.rush.at < game.shiftLength;
+    const doneSpawning = game.time >= game.shiftLength || (game.spawned >= game.customers && !rushDue);
     if (doneSpawning && !game.line.length && game.slots.every((s) => !s.order && !s.fig)) startSundown();
   }
   if (game.phase === "sundown") stepSundown(dt);

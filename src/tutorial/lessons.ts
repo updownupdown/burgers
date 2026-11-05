@@ -137,7 +137,8 @@ function mapSteps(w: CoachWorld): Step[] {
       done: () => w.phase() === "playing" || totalShifts(s) > 0,
       show: () => ({
         title: "Prep & Open",
-        text: "Who's coming, today's menu and the pacing. You're on Chill: patient customers, never a rush. Tap Open when you're ready.",
+        // The welcome card may have turned Chill off: say what the card actually shows.
+        text: `Who's coming, today's menu and the pacing. ${q(".prep [data-act=prep-pace][data-v=chill]")?.getAttribute("aria-pressed") === "false" ? "Pick Chill for patient customers and never a rush." : "You're on Chill: patient customers, never a rush."} Tap Open when you're ready.`,
         gesture: tapOn(q(".prep [data-act=open]")),
         ring: rectOf(q(".prep .prep-sec .bv-seg")),
       }),

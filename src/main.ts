@@ -1552,7 +1552,7 @@ function restorePayload(payload: Payload): void {
     if (fromPlate !== undefined && flavor) {
       game.slots[fromPlate].plate.drink = { flavor, fill, size, ice, lid, ...(garnish ? { garnish } : {}) };
       syncTray(fromPlate, false);
-    } else if (from) counter.placeCup({ flavor, fill, size, ice, lid }, new THREE.Vector3(from.x, 0.3, from.z));
+    } else if (from) counter.placeCup({ flavor, fill, size, ice, lid }, new THREE.Vector3(from.x, 0.3, from.z), true);
   }
   if (payload.type === "carton") {
     const { size, cook, fill, salt, curds, gravy, fromPlate } = payload;
@@ -1859,7 +1859,7 @@ function takeBack(m: Move<Moved>): { show: Payload | THREE.Object3D; put: () => 
       if (from.at === "tray") {
         if (c.flavor) game.slots[from.slot].plate.drink = { flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid, ...(c.garnish ? { garnish: c.garnish } : {}) };
         syncTray(from.slot, true);
-      } else if (from.at === "cup") counter.placeCup(c, new THREE.Vector3(from.x, 0.3, from.z));
+      } else if (from.at === "cup") counter.placeCup(c, new THREE.Vector3(from.x, 0.3, from.z), true);
     };
     return { show: { type: "drink", ...c, from: null }, put };
   }

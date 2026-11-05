@@ -4766,7 +4766,9 @@ function startShift(): void {
   ui.bell.hidden = false;
   applyStop();
   // Maybe a critic in today's line, never the very first customer.
-  game.criticAt = has("press") || game.rng() < criticChance(stop().crowd, game.event) ? 1 + Math.floor(game.rng() * Math.max(1, Math.min(game.customers, 8) - 2)) : -1;
+  // The Press pass promises one: the second to order, since people who walk past or give up in line
+  // never order and a later place could go unfilled on a small day.
+  game.criticAt = has("press") ? 1 : game.rng() < criticChance(stop().crowd, game.event) ? 1 + Math.floor(game.rng() * Math.max(1, Math.min(game.customers, 8) - 2)) : -1;
   // Cooking takes cookTime() times as long as before build #86 (pace.ts), the oven too.
   counter.fryBoost = (has("turbo") ? 1.35 : 1) / cookTime();
   // Hot plate (the old Searing plate): the main counter cooks faster, whatever it is.

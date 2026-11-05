@@ -217,6 +217,8 @@ const game = {
   /** Which customer (by arrival order) is a food critic today, or -1; and what they wrote. */
   criticAt: -1,
   press: null as PressPiece | null,
+  /** Popularity when the window opened, for the report card (a regular won mid-shift moves it). */
+  popStart: 0,
   /** Which screen is up over the map, so its buttons redraw the right one. */
   overlay: null as null | "closing" | "reviews" | "garage",
   garage: { ...GARAGE_START } as GarageView,
@@ -4743,6 +4745,7 @@ function startShift(): void {
     bellAt: 0,
     emptySince: 0,
     press: null,
+    popStart: save.popularity,
   });
   // Prep's choices are fixed for the whole shift: pacing, the window and the bonus.
   game.pacing = difficulty;
@@ -5038,7 +5041,8 @@ function endShift(arrive: Arrival): void {
   // The shift fills the day; the evening follows, and only sleeping turns the day (see game/day.ts).
   save.time = "evening";
   save.driven = 0;
-  const popBefore = save.popularity;
+  // From where it stood when the window opened, so a regular's +5 during the shift shows in today's change.
+  const popBefore = game.popStart;
   // Popularity: yesterday's fades a touch, then word of mouth and the press move it.
   // The guest book doubles the good word; apology cookies keep walk-outs from costing any.
   const word = wordOfMouth(game.stars, has("cookies") ? 0 : game.lost, has("cookies") ? 0 : game.leftLine, save.popularity);

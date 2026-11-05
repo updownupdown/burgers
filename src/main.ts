@@ -63,7 +63,7 @@ import { devOn, simulate, type SimLevel } from "./game/devmode";
 import { coachOn, coachShowing, coachState, setCoachOn, skipLessonsFor, startCoach } from "./tutorial/coach";
 import { lessons } from "./tutorial/lessons";
 import { showWelcome, welcomeDue } from "./tutorial/welcome";
-import { modalOpen } from "./screens/modal";
+import { modalClosedAt, modalOpen } from "./screens/modal";
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -2929,8 +2929,11 @@ function updateSauce(dt: number): void {
   }
 }
 
+/** A card (the pause menu) just closed: the second tap of a double tap on Resume isn't a kitchen tap. */
+const afterCard = () => performance.now() - modalClosedAt() < 400;
+
 canvas.addEventListener("pointerdown", (e) => {
-  if (game.phase !== "playing" || ptr) return;
+  if (game.phase !== "playing" || ptr || afterCard()) return;
   sfx.unlock();
   try {
     canvas.setPointerCapture(e.pointerId);
@@ -4333,6 +4336,7 @@ ui.tabs.forEach((t, i) => {
   t.addEventListener("pointercancel", end);
   t.addEventListener("click", () => {
     if (swiped) return void (swiped = false);
+    if (afterCard()) return;
     sfx.unlock();
     if (!counter.inHand) goToPage(i);
   });

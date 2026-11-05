@@ -46,7 +46,7 @@ import { makeKnife } from "./render/knife";
 import { makeEgg, type EggStage } from "./render/egg";
 import "./ui/components.css";
 import "./style.css";
-import { mountHome, refreshHome, type Arrival, type NightShow } from "./screens/home";
+import { homeBusy, mountHome, refreshHome, type Arrival, type NightShow } from "./screens/home";
 import { Dusk } from "./render/dusk";
 import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
@@ -5122,24 +5122,36 @@ function endShift(arrive: Arrival): void {
   // The results land on the evening map, as a sheet, after the view pulls back out of the truck.
   showTitle(null, arrive);
   if (unlocked) setTimeout(() => sfx.coin(), arrive.shot ? 1900 : 400);
-  // A pending update waits until the player leaves this screen (see showTitle).
+  // A pending update waits until the player leaves the report card (see showTitle and reloadWhenIdle).
   if (game.pendingUpdate) {
     ui.updateText.textContent = `Build #${game.pendingUpdate.build} will load when you continue.`;
     ui.update.hidden = false;
+    reloadWhenIdle(game.pendingUpdate);
   }
 }
 
 // ---------------------------------------------------------------------------
 // Updates
 
+/**
+ * On the map, reload onto a new build once nothing is open over it: not while the report card,
+ * Prep, a screen or a card is up, nor while the map plays the pull-back, a drive or the night.
+ */
+function reloadWhenIdle(v: VersionInfo): void {
+  setTimeout(() => {
+    if (game.phase !== "title" || game.pendingUpdate !== v) return;
+    if (modalOpen() || prepOpen || game.overlay || homeBusy()) reloadWhenIdle(v);
+    else reloadTo(v.build);
+  }, 1200);
+}
+
 const checkNow = startUpdateChecks((v) => {
   game.pendingUpdate = v;
   if (game.phase === "title") {
-    ui.updateText.textContent = `Updating to build #${v.build}…`;
+    const busy = modalOpen() || prepOpen || game.overlay || homeBusy();
+    ui.updateText.textContent = busy ? `Build #${v.build} will load when you continue.` : `Updating to build #${v.build}…`;
     ui.update.hidden = false;
-    setTimeout(() => {
-      if (game.phase === "title") reloadTo(v.build);
-    }, 1200);
+    reloadWhenIdle(v);
   } else if (game.phase === "summary") {
     ui.updateText.textContent = `Build #${v.build} will load when you continue.`;
     ui.update.hidden = false;

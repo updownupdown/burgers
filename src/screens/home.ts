@@ -155,6 +155,9 @@ export function unmountHome(): void {
   if (m.root.contains(m.el)) m.el.remove();
 }
 
+/** True while the map is playing something (the pull-back, a drive, the night passing). */
+export const homeBusy = (): boolean => !!cur && (cur.driving || cur.night || !!cur.arriving);
+
 /** Redraw the numbers and the dock after the save changed elsewhere. */
 export function refreshHome(): void {
   if (!cur) return;

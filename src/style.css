@@ -248,6 +248,7 @@ html, body {
 .ticket .mb { flex: none; display: inline-grid; place-items: center; font: 800 11.5px/1.15 var(--bv-font-ui); font-style: normal; border-radius: 4px; padding: 0 4px 1px; background: var(--mb-bg); color: var(--mb-fg); }
 .ticket .mb.toast { --mb-bg: #f3dcb2; --mb-fg: #774611; }
 .ticket .mb.cut { --mb-bg: #dfe6e6; --mb-fg: #3a4547; }
+.ticket .mb.cut.opt { background: transparent; box-shadow: inset 0 0 0 1px currentColor; opacity: 0.75; }
 .ticket .mb.cold { --mb-bg: #d9eedf; --mb-fg: #2d6340; }
 .ticket .mb.melt { --mb-bg: #f9e7a1; --mb-fg: #6b5200; }
 .ticket .mb.grill { --mb-bg: #ead2c1; --mb-fg: #5c3420; }

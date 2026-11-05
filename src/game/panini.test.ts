@@ -60,7 +60,7 @@ describe("panini orders", () => {
     expect(coast("gullpoint").menu.map((r) => r.name)).toContain("Tuna Melt");
     expect(coast("driftwood").menu.map((r) => r.name)).toContain("Chicken Pesto");
     expect(coast("harbor").menu.map((r) => r.name)).toContain("Veggie Club");
-    expect(coast("saltwater").press).toEqual({ bays: 3, slice: false });
+    expect(coast("saltwater").press).toEqual({ bays: 3, slice: true });
     expect(coast("harbor").press).toEqual({ bays: 3, slice: true });
     expect(coast("saltwater").fryer).toBeUndefined();
     expect(coast("driftwood").fryer).toEqual(["fries", "sweet"]);
@@ -89,7 +89,7 @@ describe("panini orders", () => {
     expect(toast.layers[toast.layers.length - 1].kind).toBe("redonion");
   });
 
-  it("go out cut in half at Harbor City only, never the open-faced toast", () => {
+  it("may be cut in half in every press town, never the open-faced toast", () => {
     const rng = seededRng(5);
     let cut = 0;
     for (let i = 0; i < 200; i++) {
@@ -97,8 +97,6 @@ describe("panini orders", () => {
       if (!o.layers.length) continue;
       expect(!!o.slice).toBe(o.name !== "Avocado Toast");
       if (o.slice) cut++;
-      const g = makeOrder(i, rng, 0.6, coast("gullpoint"));
-      expect(g.slice).toBeFalsy();
     }
     expect(cut).toBeGreaterThan(50);
   });
@@ -184,14 +182,14 @@ describe("panini scoring", () => {
     expect(r.score).toBeLessThan(90);
   });
 
-  it("wants it cut in half at Harbor City", () => {
+  it("doesn't need cutting in half", () => {
     const o = { ...caprese, slice: true };
     const p = perfect(o);
     expect(scorePlate(o, p).score).toBe(100);
     for (const l of p.layers) l.piece.cut = false;
     const r = scorePlate(o, p);
-    expect(r.notes).toContain("wanted it cut in half");
-    expect(r.score).toBeLessThan(100);
+    expect(r.notes).not.toContain("wanted it cut in half");
+    expect(r.score).toBe(100);
   });
 
   it("scores sweet potato fries on their own, narrower band, and notices a mix-up", () => {

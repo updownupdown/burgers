@@ -108,7 +108,7 @@ describe("Orchard Isle orders", () => {
     expect(names("applecross")).toEqual(["Harvest Red", "Mushroom"]);
     expect(names("larkvale")).toEqual(["Harvest Red", "Mushroom", "Fig & Ham", "Pear & Blue"]);
     expect(names("portamber")).toContain("Calzone");
-    expect(townById("applecross").oven).toEqual({ spots: 2, board: false });
+    expect(townById("applecross").oven).toEqual({ spots: 2, board: true });
     expect(townById("portamber").oven).toEqual({ spots: 3, board: true });
     expect(fryerOf(townById("applecross"))).not.toContain("fritters");
     expect(fryerOf(townById("larkvale"))).toContain("fritters");
@@ -140,8 +140,8 @@ describe("Orchard Isle orders", () => {
         // Nothing that goes in the oven comes after something that goes on after it.
         const firstAfter = o.layers.findIndex((l) => l.after);
         if (firstAfter >= 0) expect(o.layers.slice(firstAfter).every((l) => AFTER_OVEN.has(l.kind))).toBe(true);
-        // Port Amber cuts its flatbreads in four (never a calzone).
-        expect(!!o.slice).toBe(id === "portamber" && !o.layers[0].folded);
+        // Every oven town has the board: a flatbread may be cut in four (never a calzone).
+        expect(!!o.slice).toBe(!o.layers[0].folded);
       }
     }
   });
@@ -397,16 +397,16 @@ describe("calzones and the board", () => {
     expect(scorePlate(red, plateOf([...shut.pie, ...shut.after])).notes).toContain("didn't want it folded");
   });
 
-  it("Port Amber wants its flatbreads cut in four", () => {
+  it("cutting a flatbread in four is optional", () => {
     const order = { ...orderFromRecipe(1, recipe("portamber", "Harvest Red"), false, null), slice: true };
     const { pie, after } = build(order);
     bake(pie, 21, [10]);
     const plate = plateOf([...pie, ...after]);
-    expect(scorePlate(order, plate).notes).toContain("wanted it cut in four");
-    pie[0].piece.cuts = 1;
-    expect(scorePlate(order, plate).notes).toContain("only cut in half");
+    expect(scorePlate(order, plate).score).toBe(100);
+    expect(scorePlate(order, plate).touches).not.toContain("Clean cut");
     pie[0].piece.cuts = 2;
     expect(scorePlate(order, plate).score).toBe(100);
+    expect(scorePlate(order, plate).touches).toContain("Clean cut");
   });
 });
 

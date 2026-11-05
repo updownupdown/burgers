@@ -5409,12 +5409,12 @@ function tick(dt: number): void {
     if (counter.middle === "oven") {
       const o = game.slots[game.active]?.order;
       if (o?.layers[0]?.folded) hintOnce("calzone-order", "A calzone: build it on the peel, then drag the dough's edge across the middle to fold it, then into the oven.", 4.5);
-      else if (o?.slice) hintOnce("slice-pie", "Port Amber cuts its flatbreads in four: after the oven, set it on the board with the peel and cut it twice with the knife.", 4.5);
+      else if (o?.slice) hintOnce("slice-pie", "Cutting is optional: after the oven, set the flatbread on the board with the peel and cut it twice with the knife. A clean cut adds to the tip.", 4.5);
       else if (o?.layers.some((l) => l.after)) hintOnce("after-order", "Basil, rocket and honey go on after the oven, once the flatbread is on the tray.", 4);
     } else if (counter.middle === "press") {
       const o = game.slots[game.active]?.order;
       if (o?.layers.some((l) => l.kind === "chicken" || l.kind === "veggie")) hintOnce("press-first", "The patty in this one goes in the press on its own first. Then build the sandwich and press it again.", 4.5);
-      else if (o?.slice) hintOnce("slice-order", "Harbor City cuts its paninis: after pressing, put it on the board and cut it with the knife.", 4.5);
+      else if (o?.slice) hintOnce("slice-order", "Cutting is optional: put a pressed panini on the board and cut it with the knife. A clean cut adds to the tip.", 4.5);
     } else if (counter.middle === "comal") {
       const base = game.slots[game.active]?.order?.layers[0];
       if (base && TORTILLAS.has(base.kind) && !base.folded) hintOnce("taco-order", "Tacos: warm the tortillas on the hot side, stand them in the rack on the warm end and fill them there, then drag the rack up to the tray.", 4.5);
@@ -5556,8 +5556,11 @@ function updateUi(dt = 0): void {
     const pieShown = !s.plate.layers.length && counter.middle === "oven" ? piesFor(order.id) : null;
     // At the comal the active ticket also ticks off the tacos being filled in the rack.
     const rackShown = focused && counter.middle === "comal" && counter.rack.layers.length && (!s.plate.layers.length || isTacoRun(s.plate.layers)) ? [...s.plate.layers, ...counter.rack.layers] : null;
-    const plate = pieShown ? { ...s.plate, layers: pieShown } : rackShown ? { ...s.plate, layers: rackShown } : s.plate;
-    const key = `${order.id}|${focused}|${mode}|${t.style.width}|${plate.layers.map((l) => l.piece.kind).join(",")}|${s.plate.fries ? `${s.plate.fries.size}${+!!s.plate.fries.salt}${+!!s.plate.fries.curds}${+!!s.plate.fries.gravy}` : ""}|${s.plate.drink ? `${s.plate.drink.flavor}${s.plate.drink.size}${+!!s.plate.drink.ice}${+!!s.plate.drink.lid}` : ""}`;
+    // At the press, bay i makes tray i's panini: while it's in the bay, the ticket ticks off what's in it (James, after build #87).
+    const bay = counter.middle === "press" && !s.plate.layers.length && i < counter.bayCount ? counter.bays[i] : null;
+    const bayShown = bay?.layers.length ? bay.layers : null;
+    const plate = pieShown ? { ...s.plate, layers: pieShown } : rackShown ? { ...s.plate, layers: rackShown } : bayShown ? { ...s.plate, layers: bayShown } : s.plate;
+    const key = `${order.id}|${focused}|${mode}|${t.style.width}|${plate.layers.map((l) => l.piece.kind).join(",")}|${bayShown ? bayShown.map((l) => l.piece.cook.map((c) => Math.round(c * 8)).join("")).join(",") : ""}|${s.plate.fries ? `${s.plate.fries.size}${+!!s.plate.fries.salt}${+!!s.plate.fries.curds}${+!!s.plate.fries.gravy}` : ""}|${s.plate.drink ? `${s.plate.drink.flavor}${s.plate.drink.size}${+!!s.plate.drink.ice}${+!!s.plate.drink.lid}` : ""}`;
     if (key !== s.ticketKey || !t.dataset.fit) {
       t.classList.toggle("active", focused);
       t.classList.toggle("stub", mode === "stub");

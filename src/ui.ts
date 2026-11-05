@@ -397,10 +397,10 @@ export function dishOf(order: Order): Dish {
  */
 export function methodOf(order: Order): { cls: string; text: string }[] {
   const dish = dishOf(order);
-  if (dish === "panini") return [{ cls: "toast", text: "Press" }, ...(order.slice ? [{ cls: "cut", text: "Cut" }] : [])];
+  if (dish === "panini") return [{ cls: "toast", text: "Press" }, ...(order.slice ? [{ cls: "cut opt", text: "Cut?" }] : [])];
   if (dish === "quesadilla") return [{ cls: "fold", text: "Fold" }, { cls: "flip", text: "Flip" }];
   if (dish === "flatbread" || dish === "calzone")
-    return [...(dish === "calzone" ? [{ cls: "fold", text: "Fold" }] : []), { cls: "toast", text: "Bake" }, ...(order.slice ? [{ cls: "cut", text: "Cut 4" }] : [])];
+    return [...(dish === "calzone" ? [{ cls: "fold", text: "Fold" }] : []), { cls: "toast", text: "Bake" }, ...(order.slice ? [{ cls: "cut opt", text: "Cut 4?" }] : [])];
   return [];
 }
 /** The method line: the dish's steps as chips, in order, above the build. */

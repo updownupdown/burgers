@@ -181,7 +181,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
   const here = town ? middleOf(town) : "grill";
   const cook = { grill: "Cook", press: "Press", comal: "Warm", oven: "Bake" }[here];
   const cookIc = { grill: "grill", press: "panini", comal: "flame", oven: "flame" }[here];
-  const knifeTowns = and(townsWhere((t) => !!t.press?.slice || !!t.oven?.board));
+  const knifeTowns = "at every press and oven";
   const counted = countedFor(town);
   const count = (k: Kind) => STANDARD_COUNT[k] ?? 1;
   const ex = CLASSIC();
@@ -303,7 +303,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
       chip: "Knife",
       icon: "knife",
       title: "The knife",
-      lede: `Knife (${knifeTowns}): tap the knife, then the food, or drag the knife onto it. It cuts straight away.`,
+      lede: `Knife (${knifeTowns}): tap the knife, then the food, or drag the knife onto it. It cuts straight away. Cutting is optional.`,
       fig: `<div class="hw-pair">
           <div>${knifeArt()}<p class="hw-cap"><b>Paninis</b>: once, in half.</p></div>
           <div>${knifeArt(true)}<p class="hw-cap"><b>Flatbreads</b>: in four.</p></div>
@@ -311,7 +311,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
       points: [
         "The food must be on the board. A baked flatbread can also be cut on the peel.",
         "One cut does it: a panini in half, a flatbread in four. Undo takes a cut back.",
-        "Uncut costs the dish.",
+        "Uncut costs nothing; a <b>clean cut</b> adds to the tip.",
         "The ticket shows it: <b>Press › Cut</b> or <b>Bake › Cut 4</b>. A calzone goes out whole.",
       ],
     },
@@ -599,7 +599,7 @@ function counterSec(k: MiddleCounter): Sec {
         "Cheese inside melts while it's shut, and a little oozes out at the front when it has.",
         "<b>Chicken and veggie patties</b> are pressed on their own first, until their meter says done.",
         "The <b>tuna well</b>: one drag is one scoop.",
-        `In <b>${and(townsWhere((t) => !!t.press?.slice))}</b>: a third bay and the board. Paninis are cut in half with the knife (see Basics).`,
+        "The <b>board</b> is out at every press: a panini can be cut in half with the knife for a bit more tip (see Basics).",
       ],
     };
   }
@@ -624,7 +624,6 @@ function counterSec(k: MiddleCounter): Sec {
       ],
     };
   }
-  const board = and(townsWhere((t) => !!t.oven?.board));
   return {
     id: "counter",
     chip: "The oven",
@@ -641,7 +640,7 @@ function counterSec(k: MiddleCounter): Sec {
       "To lift a pie, <b>push the blade in under it</b>, or set it under and flick up.",
       "The meter shows the <b>palest side</b>. Turned about halfway, a pie bakes evenly, with <b>leopard spots</b>: a small bonus.",
       "Swipe down over the <b>bench</b> to set a pie aside. <b>Basil, rocket and honey</b> go on after, at the tray.",
-      `In <b>${board}</b>: a third spot and the board in the bench's place, for cutting flatbreads in four.`,
+      `The <b>board</b> stands in the bench's place, for cutting flatbreads in four if you like (a clean cut adds to the tip). In <b>${and(townsWhere((t) => (t.oven?.spots ?? 0) > 2))}</b>: a third spot.`,
     ],
   };
 }
@@ -686,24 +685,23 @@ function kitchenWalks(k: MiddleCounter): Walk[] {
   if (k === "press") {
     const cap = recipe("Caprese");
     const avo = recipe("Avocado Toast");
-    const cut = and(townsWhere((t) => !!t.press?.slice));
     return [
       {
         id: "caprese",
         chip: "Caprese",
         recipe: cap,
         slice: true,
-        where: `${whereOn(cap.name)}. Cut in ${cut}`,
+        where: whereOn(cap.name),
         art: knifeArt(),
         steps: [
           "On a tray: <b>ciabatta</b>, then <b>pesto</b>. Tap the bottle, then the bread, and draw it on.",
           "Mozzarella ×3, tomato ×3, basil, then the top ciabatta.",
           "<b>Drag down</b> on the tray to lift the sandwich into an open bay. <b>Pull the handle down</b>.",
           "Watch the lid's meter. At golden, <b>swipe the handle up</b>.",
-          `${cut}: drag it onto the board. Tap the knife, then the panini, to <b>cut it in half</b>.`,
+          "If you like, drag it onto the board. Tap the knife, then the panini, to <b>cut it in half</b>.",
           "Drag it up to the tray and <b>serve</b>.",
         ],
-        tip: "Without a cut it scores less than with a crooked one.",
+        tip: "A clean cut adds a little to the tip; uncut is fine.",
       },
       {
         id: "avocado",
@@ -774,14 +772,13 @@ function kitchenWalks(k: MiddleCounter): Walk[] {
   }
   const red = recipe("Harvest Red");
   const cz = recipe("Calzone");
-  const board = and(townsWhere((t) => !!t.oven?.board));
   return [
     {
       id: "harvest",
       chip: "Harvest Red",
       recipe: red,
       slice: true,
-      where: `${whereOn(red.name)}. Cut in four in ${board}`,
+      where: whereOn(red.name),
       art: peelArt(),
       steps: [
         "Drag the dough onto the peel.",
@@ -789,8 +786,8 @@ function kitchenWalks(k: MiddleCounter): Walk[] {
         "<b>Mozzarella ×4</b>.",
         "Drag the peel into the oven by its handle and <b>swipe down</b>.",
         "About halfway, <b>turn it</b> with the peel's tip.",
-        `Push the blade in under it and carry it out. In ${board}, swipe down over the board.`,
-        "Tap the knife, then the pie, to cut it in <b>four</b>.",
+        "Push the blade in under it and carry it out. To cut it, swipe down over the board.",
+        "Tap the knife, then the pie, to cut it in <b>four</b> (optional, for a bit more tip).",
         "Lift it with the peel, swipe down over a tray, then add <b>basil</b>.",
       ],
       tip: "Elsewhere it goes straight from the oven to the tray, uncut.",

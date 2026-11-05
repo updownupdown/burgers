@@ -81,7 +81,7 @@ export function dishTips(r: Recipe, town: Pick<Stop, "press" | "comal" | "oven">
       t.push(`Press only the ${lower(r.layers[0])}, then top it cold: ${list(r.layers.slice(1).map(lower))}.`);
     } else {
       t.push("Build it on a tray, drag it down into a bay and press until golden.");
-      if (town.press?.slice) t.push("Cut it in half on the board before it goes up.");
+      if (town.press?.slice) t.push("Cut it in half on the board if you like: a clean cut adds to the tip.");
     }
   } else if (r.dish === "tacos") {
     const tort = r.layers.find((k) => TORTILLAS.has(k)) ?? "corn";
@@ -104,7 +104,7 @@ export function dishTips(r: Recipe, town: Pick<Stop, "press" | "comal" | "oven">
     else if (r.layers.includes("oil")) t.push("Olive oil, not sauce: drag it from the bottle.");
     t.push("Turn it with the peel's tip about halfway, for an even bake and leopard spots.");
     if (after.length) t.push(`${cap(list(after.map(lower)))} ${after.length > 1 ? "go" : "goes"} on at the tray, after the oven.`);
-    if (r.pie === "flatbread" && town.oven?.board) t.push("Cut it in four on the board: one slice, then one the other way.");
+    if (r.pie === "flatbread" && town.oven?.board) t.push("Cut it in four on the board if you like: a clean cut adds to the tip.");
   } else {
     const patties = r.layers.filter((k) => k === "patty").length;
     if (r.smash) t.push("Press and hold a fresh patty to smash it thin. It cooks fast.");

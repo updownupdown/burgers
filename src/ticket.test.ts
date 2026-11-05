@@ -71,7 +71,7 @@ describe("method line and step chips (after build #76)", () => {
   it("presses a panini whole, and cuts it where there's a board; only a protein is pressed first", () => {
     const o = orderFromRecipe(1, recipe("harbor", "Chicken Pesto"), false, null);
     o.slice = true;
-    expect(how(o)).toBe("Press›Cut");
+    expect(how(o)).toBe("Press›Cut?");
     expect(chips(o, "Ciabatta")).toEqual([]);
     expect(chips(o, "Chicken")).toEqual(["Press first"]);
     expect(html(o)).not.toContain(">Melt<");
@@ -89,7 +89,7 @@ describe("method line and step chips (after build #76)", () => {
   it("bakes a flatbread (cut in four at Port Amber) and folds a calzone first", () => {
     const fb = orderFromRecipe(1, recipe("portamber", "Harvest Red"), false, null);
     fb.slice = true;
-    expect(how(fb)).toBe("Bake›Cut 4");
+    expect(how(fb)).toBe("Bake›Cut 4?");
     expect(how(orderFromRecipe(2, recipe("portamber", "Calzone"), false, null))).toBe("Fold›Bake");
   });
   it("keeps a burger's steps on its own lines: Melt on the cheese over the patty", () => {

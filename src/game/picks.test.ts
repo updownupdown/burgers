@@ -29,21 +29,28 @@ describe("up to three bonuses a shift (after build #87)", () => {
   });
 });
 
-describe("tools learned down the road carry back (after build #87)", () => {
-  it("brings Harbor City's board back to Saltwater Bay once Harbor City has been worked", () => {
+describe("what's learned down the road carries back (after build #87)", () => {
+  it("puts later recipes on an earlier town's menu, with their bins, once that town has been worked", () => {
     const salt = townById("saltwater");
-    expect(withLearned(salt, {}).press?.slice).toBe(false);
-    expect(withLearned(salt, { harbor: 1 }).press?.slice).toBe(true);
+    expect(withLearned(salt, {}).menu).toBe(salt.menu);
+    const s = withLearned(salt, { harbor: 1 });
+    expect(s.menu.map((r) => r.name)).toContain("Veggie Club");
+    expect(s.pantry).toContain("veggie");
+    expect(s.fryer).toBe(salt.fryer);
   });
-  it("brings the tortilla press and Port Amber's third spot and board back", () => {
+  it("brings the tortilla press and Port Amber's third spot back", () => {
     expect(withLearned(townById("redmesa"), { sunvalley: 2 }).comal?.tpress).toBe(true);
     expect(withLearned(townById("applecross"), { portamber: 1 }).oven).toEqual({ spots: 3, board: true });
   });
-  it("leaves the menu and fryer alone, and other counters' tools out", () => {
-    const salt = townById("saltwater");
-    const s = withLearned(salt, { harbor: 1, driftwood: 1, portamber: 1 });
-    expect(s.menu).toBe(salt.menu);
-    expect(s.fryer).toBe(salt.fryer);
-    expect(s.oven).toBeUndefined();
+  it("keeps other counters' recipes and tools out", () => {
+    const pine = townById("pinecrest");
+    const p = withLearned(pine, { harbor: 1, portamber: 1 });
+    expect(p.menu).toBe(pine.menu);
+    expect(p.press).toBeUndefined();
+    expect(p.oven).toBeUndefined();
+  });
+  it("gives every press and oven town the board", () => {
+    expect(townById("saltwater").press?.slice).toBe(true);
+    expect(townById("applecross").oven?.board).toBe(true);
   });
 });

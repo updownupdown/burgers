@@ -1,4 +1,4 @@
-import { CROOKED, cutFactor } from "./knife";
+import { CROOKED } from "./knife";
 import { avgCook, bunToast, CHAR_FACE, cookLevel, COOK_SCALE, cookZone, friesQuality, friesZone, FRY_ZONE, isFlipped, isMelted, DRINK_FILL, MARKED, paleSide, darkSide, pattyDoneness, SALT } from "./cooking";
 import { DRINK_PRICE, FRIES_PRICE } from "./menu";
 import type { Drink, ExpectedLayer, Fries, Kind, Layer, Order, Piece, Plate } from "./types";
@@ -482,28 +482,8 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
     quality = 0.5 * (sum / weights) + 0.5 * worst;
   }
 
-  // Harbor City cuts its paninis in half on the board; Port Amber cuts its flatbreads in four.
-  if (order.slice && exp.length) {
-    const top = plate.layers[plate.layers.length - 1]?.piece;
-    const base = plate.layers[0]?.piece;
-    if (base?.kind === "dough") {
-      const cuts = base.cuts ?? 0;
-      if (cuts < 2) {
-        quality *= cuts ? 0.94 : 0.88;
-        notes.push(cuts ? "only cut in half" : "wanted it cut in four");
-      } else {
-        // The knife (DESIGN §31): a crooked cut costs a little.
-        quality *= cutFactor(base.cutQ);
-        if ((base.cutQ ?? 1) < CROOKED) notes.push("cut a bit crooked");
-      }
-    } else if (top && BREADS.has(top.kind) && !top.cut) {
-      quality *= 0.88;
-      notes.push("wanted it cut in half");
-    } else if (top && BREADS.has(top.kind)) {
-      quality *= cutFactor(top.cutQ);
-      if ((top.cutQ ?? 1) < CROOKED) notes.push("cut a bit crooked");
-    }
-  }
+  // Cutting is optional (James, after build #87): every press and oven town has the board, an uncut
+  // or crooked one costs nothing, and a clean cut adds a little to the tip (the "Clean cut" touch).
 
   let presentation = 0;
   // Counted toppings are spread around the burger on purpose; the rest should sit straight.

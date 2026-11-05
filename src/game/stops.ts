@@ -68,7 +68,7 @@ export interface Stop {
   poutine: boolean;
   /**
    * The middle counter is a panini press here instead of the grill (the Sunny Coast): how many
-   * clamshell bays, and whether the cutting board is out for slicing (Harbor City).
+   * clamshell bays, and whether the cutting board is out for slicing (every press town since build #89; cutting is optional).
    */
   press?: { bays: number; slice: boolean };
   /**
@@ -77,7 +77,7 @@ export interface Stop {
   comal?: { tpress: boolean };
   /**
    * The middle counter is a hearth oven here (Orchard Isle): how many pies it holds, and whether
-   * the board is out for cutting them in four (Port Amber).
+   * the board is out for cutting them in four (every oven town since build #89; cutting is optional).
    */
   oven?: { spots: number; board: boolean };
   /**
@@ -285,7 +285,7 @@ export const STOPS: Stop[] = [
     roads: ["gullpoint"],
     pantry: COAST_FIRST,
     poutine: false,
-    press: { bays: 3, slice: false },
+    press: { bays: 3, slice: true },
     customers: 10,
     shiftLength: 190,
     newThing: "New here: the panini press. Build the sandwich in a bay (or on the tray), pull the handle down, and swipe it up to lift the lid when the meter is golden.",
@@ -303,7 +303,7 @@ export const STOPS: Stop[] = [
     roads: ["driftwood"],
     pantry: [...COAST_FIRST, "tuna", "cheddar", "redonion"],
     poutine: false,
-    press: { bays: 3, slice: false },
+    press: { bays: 3, slice: true },
     newThing: "New here: the Tuna Melt. Tap the tuna well for a scoop. Sourdough browns faster than ciabatta, so it comes out sooner.",
     customers: 11,
     shiftLength: 190,
@@ -321,7 +321,7 @@ export const STOPS: Stop[] = [
     roads: ["harbor"],
     pantry: [...COAST_FIRST, "tuna", "cheddar", "redonion", "chicken"],
     poutine: false,
-    press: { bays: 3, slice: false },
+    press: { bays: 3, slice: true },
     fryer: ["fries", "sweet"],
     newThing: "New here: Chicken Pesto (press the chicken on its own first, then the whole sandwich) and sweet potato fries, which cook fast.",
     customers: 12,
@@ -343,7 +343,7 @@ export const STOPS: Stop[] = [
     poutine: false,
     press: { bays: 3, slice: true },
     fryer: ["fries", "sweet"],
-    newThing: "New here: the Veggie Club, a third press bay and the cutting board. Put a pressed panini on the board, tap the knife, then the panini, to cut it in half.",
+    newThing: "New here: the Veggie Club, its veggie patty pressed first.",
     customers: 13,
     shiftLength: 210,
     menu: [CAPRESE, AVO_TOAST, TUNA_MELT, CHICKEN_PESTO, VEGGIE_CLUB],
@@ -420,7 +420,7 @@ export const STOPS: Stop[] = [
     roads: ["larkvale"],
     pantry: ORCHARD_FIRST,
     poutine: false,
-    oven: { spots: 2, board: false },
+    oven: { spots: 2, board: true },
     fryer: ["fries", "zucchini"],
     customers: 11,
     shiftLength: 200,
@@ -439,7 +439,7 @@ export const STOPS: Stop[] = [
     roads: ["portamber"],
     pantry: ORCHARD_MID,
     poutine: false,
-    oven: { spots: 2, board: false },
+    oven: { spots: 2, board: true },
     fryer: ["fries", "zucchini", "fritters"],
     customers: 12,
     shiftLength: 210,
@@ -463,7 +463,7 @@ export const STOPS: Stop[] = [
     fryer: ["fries", "zucchini", "fritters"],
     customers: 14,
     shiftLength: 220,
-    newThing: "New here: the Calzone (fold it on the peel; it bakes slower), a third oven spot and the board: set a flatbread on it with the peel, then tap the knife and the pie to cut it in four.",
+    newThing: "New here: the Calzone (fold it on the peel; it bakes slower), and a third oven spot.",
     menu: [HARVEST_RED, MUSHROOM, FIG_HAM, PEAR_BLUE, CALZONE],
   },
 ];
@@ -616,17 +616,27 @@ export function withEvent(t: Stop, e: TownEvent | null): Stop {
 }
 
 /**
- * A town with the kit the cook has already learned further along its road (James, after build
- * #87): once a shift has been worked in a town with the cutting board, the tortilla press or a
- * third oven spot, the earlier towns cooking on the same middle counter get it too. Menus,
- * fryer sides and drinks stay the town's own; only the tools carry back. `worked` is shifts
- * worked per town (save.shiftsIn).
+ * A town with what the cook has already learned further along its road (James, after build #87):
+ * once a shift has been worked in a town, the other towns cooking on the same middle counter get
+ * its recipes (and the pantry bins they need), its tortilla press, and its bays or oven spots.
+ * Recipes still roll out town by town along the map; once learned they're on the menu anywhere
+ * that counter cooks (Prep can still take them off). Fryer sides and drinks stay the town's own.
+ * `worked` is shifts worked per town (save.shiftsIn).
  */
 export function withLearned(t: Stop, worked: Readonly<Record<string, number>>): Stop {
   const mid = middleOf(t);
   const learned = STOPS.filter((o) => o.id !== t.id && (worked[o.id] ?? 0) > 0 && middleOf(o) === mid);
   if (!learned.length) return t;
   const out: Stop = { ...t };
+  const menu = [...t.menu];
+  for (const o of learned) for (const r of o.menu) if (!menu.some((m) => m.name === r.name)) menu.push(r);
+  if (menu.length > t.menu.length) {
+    out.menu = menu;
+    // The bins: the fullest pantry among them (so the layout is one the counter was drawn for), plus anything still missing.
+    const pantry = [t, ...learned].reduce((a, b) => (b.pantry.length > a.pantry.length ? b : a)).pantry.slice();
+    for (const o of [t, ...learned]) for (const k of o.pantry) if (!pantry.includes(k)) pantry.push(k);
+    out.pantry = pantry;
+  }
   if (t.press) {
     out.press = {
       bays: Math.max(t.press.bays, ...learned.map((o) => o.press!.bays)),

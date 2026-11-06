@@ -707,10 +707,11 @@ html, body {
 .stats dt { color: var(--bv-mute); font-weight: 600; padding: 5px 0; border-bottom: 1px dotted var(--bv-rule); }
 .stats dd { margin: 0; font: 500 14px var(--bv-font-mono); text-align: right; font-variant-numeric: tabular-nums; padding: 5px 0; border-bottom: 1px dotted var(--bv-rule); }
 
+/* On the page, over the game column: above the screens, the cards (.menu-host) and the coach. */
 .update {
-  position: absolute;
-  left: 10px;
-  right: 10px;
+  position: fixed;
+  left: calc(var(--gx) + 10px);
+  width: calc(var(--gw) - 20px);
   top: calc(var(--safe-t) + 46px);
   background: var(--bv-ink);
   color: var(--bv-paper);
@@ -722,11 +723,11 @@ html, body {
   font: 700 14px var(--bv-font-ui);
   pointer-events: auto;
   box-shadow: var(--bv-shadow-2);
-  z-index: 5;
+  z-index: 45;
 }
 .update[hidden] { display: none; }
 .update span { flex: 1; }
-.update button { border: 1px solid var(--bv-paper); border-radius: var(--bv-r-sm); min-height: 32px; padding: 0 10px; background: var(--bv-paper); color: var(--bv-ink); font: 700 13px var(--bv-font-ui); }
+.update button { cursor: pointer; border: 1px solid var(--bv-paper); border-radius: var(--bv-r-sm); min-height: 32px; padding: 0 10px; background: var(--bv-paper); color: var(--bv-ink); font: 700 13px var(--bv-font-ui); }
 .update button.later { background: transparent; color: var(--bv-paper); border-color: rgb(255 255 255 / 0.35); }
 
 @media (prefers-reduced-motion: reduce) {

@@ -4745,13 +4745,14 @@ ui.root.addEventListener("click", (e) => {
       writeSave(save);
       showTitle();
       break;
-    case "update-now":
-      if (game.pendingUpdate) reloadTo(game.pendingUpdate.build, true);
-      break;
-    case "update-later":
-      ui.update.hidden = true;
-      break;
   }
+});
+
+// The update notice sits outside the game's layer (see buildUi), so it has its own buttons' handler.
+ui.update.addEventListener("click", (e) => {
+  const act = (e.target as HTMLElement).closest<HTMLElement>("[data-act]")?.dataset.act;
+  if (act === "update-now" && game.pendingUpdate) reloadTo(game.pendingUpdate.build, true);
+  else if (act === "update-later") ui.update.hidden = true;
 });
 
 // The game menu (src/screens/menu.ts). In a shift it pauses; closing it resumes.

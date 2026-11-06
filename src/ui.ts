@@ -138,6 +138,12 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   `;
   const q = (r: string) => root.querySelector<HTMLElement>(`[data-r="${r}"]`)!;
   const tabs = [...root.querySelectorAll<HTMLButtonElement>('[data-r="tab"]')];
+  // The update notice lives on the page itself, not in the game's layer, so it shows over open
+  // cards and screens too (they sit in their own layers above the game's). Its buttons are wired
+  // up in main.ts.
+  const update = q("update");
+  const updateText = q("updateText");
+  document.body.appendChild(update);
   return {
     root,
     timer: q("timer"),
@@ -159,8 +165,8 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     bellLabel: q("bellLabel"),
     title: q("title"),
     summary: q("summary"),
-    update: q("update"),
-    updateText: q("updateText"),
+    update,
+    updateText,
   };
 }
 

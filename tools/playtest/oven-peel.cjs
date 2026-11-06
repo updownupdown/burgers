@@ -467,14 +467,10 @@ const report = [];
     await t.up();
     await sleep(300);
     console.log('  on the board:', JSON.stringify((await t.oven()).rest.layers.map((l) => l.kind)));
-    // The knife (DESIGN §31): tap it, tap the flatbread, then two slices across in the cut view.
+    // The knife (DESIGN §38): no cut view any more; tap the knife, then the flatbread, and it's in four.
     const bd = await t.proj((await t.oven()).rest.at);
     await t.tap(await t.hp('knife'));
     await t.tap(bd);
-    await sleep(450);
-    const [sx, sy, sw, sh] = (await t.ev(() => window.__bv.knife())).square;
-    await t.trace(line(sx + sw * 0.05, sy + sh * 0.5 + jit(6), sx + sw * 0.95, sy + sh * 0.5 + jit(6), 18), 16);
-    await t.trace(line(sx + sw * 0.5 + jit(6), sy + sh * 0.05, sx + sw * 0.5 + jit(6), sy + sh * 0.95, 18), 16);
     await sleep(900);
     console.log('  cuts', (await t.oven()).rest.layers[0]?.cuts, 'cutQ', await t.ev(() => window.__bv.counter.rest.layers[0]?.piece.cutQ));
     await t.shot('board-cut-in-four');

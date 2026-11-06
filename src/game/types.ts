@@ -208,6 +208,8 @@ export interface Order {
   ice?: boolean | null;
   /** A food critic: their verdict goes in the paper. */
   critic?: boolean;
+  /** The first time this dish is ordered on the trip: it comes plain, and they're half again as patient. */
+  firstTime?: boolean;
   /** A poutine meal: a large carton of fries with curds and gravy, and no burger. (Nachos in Red Rock: chips, jalapeños and queso.) */
   poutine?: boolean;
   /** The side is sweet potato fries, chips or churros rather than plain fries. */

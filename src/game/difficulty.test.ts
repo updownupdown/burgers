@@ -1,16 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { CHILL_PATIENCE, DIFFICULTY, verdict } from "./difficulty";
+import { DIFFICULTY, verdict } from "./difficulty";
 
 describe("difficulty", () => {
   it("gets calmer from stressful to chill", () => {
     expect(DIFFICULTY.chill.patience).toBeGreaterThan(DIFFICULTY.balanced.patience);
     expect(DIFFICULTY.balanced.patience).toBeGreaterThan(DIFFICULTY.stressful.patience);
-    expect(DIFFICULTY.chill.spawnGap).toBeGreaterThan(DIFFICULTY.stressful.spawnGap);
+    expect(DIFFICULTY.chill.crowd).toBeLessThan(DIFFICULTY.balanced.crowd);
+    expect(DIFFICULTY.balanced.crowd).toBeLessThan(DIFFICULTY.stressful.crowd);
     expect(DIFFICULTY.chill.sendBack).toBeLessThan(DIFFICULTY.stressful.sendBack);
   });
 
-  it("Chill customers are half again as patient as on the old Chill (after build #82)", () => {
-    expect(DIFFICULTY.chill.patience).toBeCloseTo(2.4 * CHILL_PATIENCE, 5);
+  it("each tier changes something you notice (difficulty study)", () => {
+    const { chill: r, balanced: s, stressful: b } = DIFFICULTY;
+    expect([r.label, s.label, b.label]).toEqual(["Relaxed", "Steady", "Busy"]);
+    // Three at the window everywhere: two made Relaxed serve fewer people than Steady.
+    expect([r.window, s.window, b.window]).toEqual([3, 3, 3]);
+    // Ready alerts on Relaxed and Steady (James), not on Busy.
+    expect([r.alerts, s.alerts, b.alerts]).toEqual([true, true, false]);
+    // The harder tier pays better.
+    expect(b.tips).toBeGreaterThan(s.tips);
+    expect(s.tips).toBeGreaterThan(r.tips);
+    expect(r.small).toBeLessThan(1);
+    expect(r.hold).toBeGreaterThan(1);
   });
 
   it("sends back once, then accepts unless it's still really wrong", () => {

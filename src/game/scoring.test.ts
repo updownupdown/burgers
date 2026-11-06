@@ -4,7 +4,7 @@ import { pieceFor, popularityChange } from "./press";
 import { applyMods, makeOrder, orderFromRecipe, seededRng, sidesOrder } from "./menu";
 import { EVENTS, eventOn, nextDay, STOPS, townById, withEvent } from "./stops";
 import { passed } from "./progress";
-import { alignLayers, BENCH_SAUCE, layerQuality, payout, quickSauceStroke, SAUCE_BAND, sauceCoverage, sauceVerdict, scorePlate } from "./scoring";
+import { alignLayers, BENCH_SAUCE, layerQuality, payout, quickSauceStroke, SAUCE_BAND, sauceCoverage, sauceVerdict, scorePlate, setSmallSlips } from "./scoring";
 import { FRIES_PERFECT, FRIES_ZONE, FRY_RATE } from "./cooking";
 import type { Kind, Layer, Order, Piece, Plate } from "./types";
 import { BREADS, DONENESS_TARGET, isSauce, newPiece, PROTEINS } from "./types";
@@ -118,6 +118,24 @@ describe("scorePlate", () => {
     const p = perfectPlate();
     for (const l of p.layers) l.offX = 0.35;
     expect(scorePlate(classic, p).notes).toContain("messy stack");
+  });
+
+  it("forgives small slips by half on Relaxed, never a wrong drink", () => {
+    const order: Order = { ...classic, fries: true, drink: "cola" };
+    const plate = perfectPlate();
+    plate.fries = { cook: FRIES_PERFECT, size: "S", fill: 1, salt: 0 };
+    plate.drink = { flavor: "cola", fill: 0.9, size: "M" };
+    const full = scorePlate(order, plate).score;
+    setSmallSlips(0.5);
+    try {
+      const soft = scorePlate(order, plate).score;
+      expect(soft).toBeGreaterThan(full);
+      expect(soft).toBeLessThan(100);
+      plate.drink = { flavor: "pine", fill: 0.9, size: "M", lid: true };
+      expect(scorePlate(order, plate).notes).toContain("wrong drink");
+    } finally {
+      setSmallSlips(1);
+    }
   });
 
   it("checks sides", () => {

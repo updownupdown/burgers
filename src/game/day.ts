@@ -3,7 +3,7 @@ import { bonusCrowd, type BonusId } from "./bonus";
 import { DIFFICULTY, type Difficulty } from "./difficulty";
 import { popularityTraffic } from "./press";
 import { crowdShare, DEFAULT_SHIFT, type ShiftWindow } from "./shift";
-import type { Stop } from "./stops";
+import { STOPS, type Stop } from "./stops";
 import { MILES_PER_UNIT } from "./travel";
 
 /**
@@ -60,8 +60,26 @@ export interface CrowdInput {
   hidden: readonly string[];
   shift?: ShiftWindow;
   bonuses?: readonly BonusId[];
-  /** Stressful packs people closer, so more come; Chill spaces them out but doesn't cut the crowd. */
+  /** Relaxed brings fewer people, Busy more (DifficultySpec.crowd). */
   pacing?: Difficulty;
+  /** Shifts already passed in this town's region (regionShifts): word takes a few days to reach a new region. */
+  regionShifts?: number;
+}
+
+/**
+ * A new region's first shifts bring fewer people (difficulty study): popularity carries over from
+ * the last region, so without this a region's first town met a brand-new kitchen with about 1.75x
+ * Pinecrest's first crowd. The first passed shift there brings 0.6 of the crowd, then 0.75, then 0.9.
+ */
+export const NEW_REGION = [0.6, 0.75, 0.9];
+export function newRegionCrowd(regionShifts: number): number {
+  return NEW_REGION[Math.max(0, Math.floor(regionShifts))] ?? 1;
+}
+
+/** Shifts passed in any town of `stop`'s region (the first region never counts as new: the truck is new there anyway). */
+export function regionShifts(shiftsIn: Record<string, number>, stop: Stop): number {
+  if (stop.region === STOPS[0].region) return 99;
+  return STOPS.filter((t) => t.region === stop.region).reduce((n, t) => n + (shiftsIn[t.id] ?? 0), 0);
 }
 
 /**
@@ -77,15 +95,11 @@ export function expectedCustomers(p: CrowdInput): number {
     ratingFactor(p.rating) *
     menuFactor(menu) *
     crowdShare(p.shift ?? DEFAULT_SHIFT) *
-    bonusCrowd(p.bonuses ?? []) /
-    pacingCrowd(p.pacing ?? "balanced");
-  return Math.max(3, Math.round(n));
+    bonusCrowd(p.bonuses ?? []) *
+    newRegionCrowd(p.regionShifts ?? 99);
+  // Relaxed brings fewer, but never fewer than six where six or more would come (after build #78 a
+  // new truck on the easy tier saw only four and wondered where everyone was).
+  const k = DIFFICULTY[p.pacing ?? "balanced"].crowd;
+  return Math.max(3, Math.round(k < 1 ? Math.max(Math.min(n, 6), n * k) : n * k));
 }
 
-/**
- * Pacing's divisor on the crowd: Stressful's shorter gaps bring more people; Chill's longer gaps
- * don't cut the count (after build #78 a new truck on Chill saw only four customers).
- */
-export function pacingCrowd(d: Difficulty): number {
-  return Math.min(1, DIFFICULTY[d].spawnGap / DIFFICULTY.balanced.spawnGap);
-}

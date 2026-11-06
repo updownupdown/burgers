@@ -1,5 +1,6 @@
 import { CROWD } from "../game/business";
-import { expectedCustomers, rangeUnits } from "../game/day";
+import { expectedCustomers, rangeUnits, regionShifts } from "../game/day";
+import { savedPacing } from "../game/difficulty";
 import { todaysClosing, type Save } from "../game/progress";
 import { ratingPull, reviewAverage } from "../game/reviews";
 import { EVENTS, eventOn, FINAL_TOWN, nextDay, STOPS, townById, withEvent, type Stop } from "../game/stops";
@@ -150,6 +151,8 @@ export function unmountHome(): void {
   if (!m) return;
   cur = null;
   if (m.selected) dropBack("sheet");
+  // Taken over mid pull-back: the shift's guard has nothing left to hold for.
+  if (m.arriving) dropBack("shift");
   m.observer.disconnect();
   window.removeEventListener("resize", m.onResize);
   m.pz.destroy();
@@ -506,7 +509,7 @@ function renderSheet(m: Mounted, id: string): void {
     <div class="home-facts">
       <div><span class="bv-eyebrow">Shifts here</span><b>${t.roads.length ? pipsHtml(unlockProgress(s.shiftsIn, id).done, SHIFTS_TO_UNLOCK) : ""}${s.shiftsIn[id] ?? 0}</b></div>
       <div><span class="bv-eyebrow">Best shift</span><b>${best !== undefined ? `${icon("star")}${best.toFixed(1)}` : "–"}</b></div>
-      <div><span class="bv-eyebrow">${trip ? "From here" : "Customers"}</span><b>${trip ? `${miles(trip.distance)} mi` : `${icon("people")}~${expectedCustomers({ stop: withEvent(t, ev), popularity: s.popularity, rating: ratingPull(s.reviewCounts), hidden: s.hidden, shift: s.shift })}`}</b></div>
+      <div><span class="bv-eyebrow">${trip ? "From here" : "Customers"}</span><b>${trip ? `${miles(trip.distance)} mi` : `${icon("people")}~${expectedCustomers({ stop: withEvent(t, ev), popularity: s.popularity, rating: ratingPull(s.reviewCounts), hidden: s.hidden, shift: s.shift, pacing: savedPacing() ?? (s.tutorialDone ? "balanced" : "chill"), regionShifts: regionShifts(s.shiftsIn, t) })}`}</b></div>
     </div>
     ${bonusRow(s, id)}
     ${open && t.newThing && !(s.shiftsIn[id] ?? 0) ? `<div class="bv-callout new">${icon("new")}<span>${esc(t.newThing)}</span></div>` : ""}
@@ -674,7 +677,10 @@ const ARRIVE_MS = { shrink: 1350, fade: 850, sheet: 1350 };
 function playArrive(m: Mounted, a: Arrival): void {
   const s = m.deps.save;
   const last = todaysClosing(s);
-  if (!last) return;
+  if (!last) {
+    dropBack("shift");
+    return;
+  }
   fitMap(false);
   const truck = m.world.querySelector<SVGGElement>(".home-truck");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -737,6 +743,9 @@ function playArrive(m: Mounted, a: Arrival): void {
 function showReport(m: Mounted, arrive: boolean): void {
   const s = m.deps.save;
   const last = todaysClosing(s);
+  // Straight after a shift the shift's Back guard has held through the pull-back; the card takes
+  // over from it here, in the same tick, so the page never loses its catch on Back.
+  if (arrive) dropBack("shift");
   if (!last) return;
   openReport(
     last,

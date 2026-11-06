@@ -3,7 +3,7 @@
  * only way to play. Now everything that cooks on heat (grill, comal, press, fryer, tostadas, the
  * oven, cheese on the press and in quesadillas) takes COOK_TIME times as long, while hands-on work (taps, drags,
  * sauces, pours) stays as it was. The idle time that opens up is where a second and third order
- * fit. The same on every pacing: Chill, Balanced and Stressful differ only in patience and burns.
+ * fit. The same on every pacing (Relaxed, Steady and Busy differ in crowd, patience, help and pickiness).
  *
  * To keep the day the same size, the parts of a customer's patience that are cooking grow by the
  * same factor (line.ts windowPatience), and the shift clock and the line's patience stretch by

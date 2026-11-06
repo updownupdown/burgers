@@ -18,7 +18,7 @@ export interface ScoreResult {
   perks: string[];
   /** Something a customer would hand back whatever the score: a raw or burnt layer, a missing layer, a forgotten or wrong side. */
   faulty: boolean;
-  /** A whole ordered item left off the tray (the burger, the fries or the drink), as its note. Always sent back once, even on Chill. */
+  /** A whole ordered item left off the tray (the burger, the fries or the drink), as its note. Always sent back once, even on Relaxed. */
   missing: string | null;
   /**
    * Chef's touches (after build #78): crafted extras that each add to the tip, shown as stamps on
@@ -29,6 +29,18 @@ export interface ScoreResult {
 
 /** Dollars each chef's touch adds to the tip. Hand-pressed tortillas were already worth $2. */
 export const TOUCH_TIP: Record<string, number> = { "Perfect sauce": 1, "Grill marks": 1, "Leopard spots": 1, "Hand-pressed": 2, "Clean cut": 1, "Perfect salt": 1, "Garnish": 1 };
+
+/**
+ * Small slips' share of their usual penalty (difficulty study): 1 normally, 0.5 on Relaxed, set when
+ * a shift opens. It covers salt, the lid, ice, the garnish, one piece short, a messy stack and how
+ * much sauce went on; never a missing layer, a wrong drink, raw or burnt food, or a wrong size.
+ */
+let smallSlips = 1;
+export function setSmallSlips(share: number): void {
+  smallSlips = Math.max(0, Math.min(1, share));
+}
+/** A small slip's quality `q` (0..1), softened by the shift's share. */
+export const small = (q: number): number => 1 - (1 - q) * smallSlips;
 
 /** Salt this close to the Perfect line counts as a chef's touch. */
 export const SALT_TOUCH = 0.1;
@@ -96,7 +108,10 @@ export function collapseCounted(layers: Layer[]): (Layer & { count: number })[] 
 /** A counted layer against what was ordered: short is skimpy; one or two over is generous; more is a mess. */
 export function countQuality(want: number, got: number, kind: string): [number, string | null] {
   const label = KIND_LABEL[kind as keyof typeof KIND_LABEL].toLowerCase();
-  if (got < want) return [Math.max(0.3, 1 - (0.5 * (want - got)) / want), `skimpy on the ${label}`];
+  if (got < want) {
+    const q = Math.max(0.3, 1 - (0.5 * (want - got)) / want);
+    return [want - got === 1 ? small(q) : q, `skimpy on the ${label}`];
+  }
   if (got > want + 2) return [0.8, `way too many ${label}`];
   return [1, null];
 }
@@ -294,7 +309,9 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
     case "redsauce":
     case "oil":
     case "honey": {
-      const { q, word } = sauceVerdict(sauceCoverage(piece.stroke, sauceRadius(exp.kind)), exp.kind);
+      const v = sauceVerdict(sauceCoverage(piece.stroke, sauceRadius(exp.kind)), exp.kind);
+      const q = small(v.q);
+      const word = v.word;
       const name = exp.kind === "redsauce" ? "sauce" : KIND_LABEL[exp.kind].toLowerCase();
       if (exp.after && (piece.cook[0] ?? 0) > 0.1) return [Math.min(q, 0.6), `${name} went in the oven`];
       if (word === "stingy") return [q, `stingy with the ${name}`];
@@ -312,7 +329,9 @@ export function layerQuality(exp: ExpectedLayer, piece: Piece): [number, string 
     case "redsalsa":
     case "greensalsa":
     case "crema": {
-      const { q, word } = sauceVerdict(sauceCoverage(piece.stroke));
+      const v = sauceVerdict(sauceCoverage(piece.stroke));
+      const q = small(v.q);
+      const word = v.word;
       const name = KIND_LABEL[exp.kind].toLowerCase();
       if (word === "stingy") return [q, `stingy with the ${name}`];
       if (word === "drowning") return [q, `drowning in ${name}`];
@@ -406,8 +425,12 @@ export function leopard(piece: Piece): boolean {
   const dark = darkSide(piece);
   return pale >= sc.done && dark < sc.over && dark - pale <= LEOPARD_EVEN;
 }
-/** Mushrooms on a flatbread want a long bake: roasted from here (OVEN_ROAST, about 24 s in the oven). */
-export const MUSHROOM_ROAST = 1;
+/**
+ * Mushrooms on a flatbread want a long bake: roasted from here (OVEN_ROAST, about 20 s in the oven at
+ * the old pace, 40 s at 2x). It was 1 (48 s at 2x), past the crust's Perfect line, so a pie pulled
+ * at Perfect came out "mushrooms a bit pale".
+ */
+export const MUSHROOM_ROAST = 0.85;
 
 export function scorePlate(order: Order, plate: Plate): ScoreResult {
   const notes: string[] = [];
@@ -490,7 +513,7 @@ export function scorePlate(order: Order, plate: Plate): ScoreResult {
   const centred = plate.layers.filter((l) => !COUNTED.has(l.piece.kind));
   if (centred.length) {
     const avgOff = centred.reduce((s, l) => s + Math.hypot(l.offX, l.offZ), 0) / centred.length;
-    presentation = clamp01(1 - avgOff / 0.3);
+    presentation = small(clamp01(1 - avgOff / 0.3));
     if (presentation < 0.4) notes.push("messy stack");
   }
 
@@ -644,13 +667,13 @@ function friesScore(order: Order, fries: Fries, notes: string[]): number {
     const salt = fries.salt ?? 0;
     const what = SUGARED.has(fry) ? "sugar" : "salt";
     if (salt <= 0) {
-      q *= 0.85;
+      q *= small(0.85);
       notes.push(`${word} needed ${what}`);
     } else if (salt < SALT.low) {
-      q *= 0.93;
+      q *= small(0.93);
       notes.push(`${word} could use more ${what}`);
     } else if (salt > SALT.high) {
-      q *= 0.8;
+      q *= small(0.8);
       notes.push(SUGARED.has(fry) ? `${word} too sugary` : `${word} too salty`);
     }
     if (fries.curds || fries.gravy) q *= 0.8;
@@ -672,20 +695,20 @@ function drinkScore(order: Order, d: Drink, notes: string[]): number {
     notes.push(`wanted a ${SIZE_LABEL[order.drinkSize].toLowerCase()} drink`);
   }
   if (order.ice === true && !d.ice) {
-    q *= 0.7;
+    q *= small(0.7);
     notes.push("forgot the ice");
   } else if (order.ice === false && d.ice) {
-    q *= 0.6;
+    q *= small(0.6);
     notes.push("asked for no ice");
   }
   // The local drink comes with its garnish (Coast cucumber, Red Rock lime, Isle apple).
   if (order.garnish && !d.garnish) {
-    q *= 0.9;
+    q *= small(0.9);
     notes.push(`no ${order.garnish} on the drink`);
   }
   // A drink handed over without a lid is a drink about to be spilled.
   if (!d.lid) {
-    q *= 0.8;
+    q *= small(0.8);
     notes.push("no lid");
   }
   return q;

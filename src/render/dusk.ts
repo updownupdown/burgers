@@ -32,7 +32,7 @@ export class Dusk {
   private bgs: { scene: THREE.Scene; color: THREE.Color }[] = [];
   private sky: { scene: THREE.Scene; orig: THREE.Texture; fog: THREE.Color | null; tex: THREE.CanvasTexture; canvas: HTMLCanvasElement } | null = null;
   private clear: { target: THREE.Color; orig: THREE.Color } | null = null;
-  /** How far toward dusk the kitchen is now. */
+  /** How far toward dusk the kitchen is now (the window's own k, which can run ahead: golden hour). */
   k = 0;
 
   /** Start a sundown over these scenes; `clear` is the renderer's clear colour, warmed in place. */
@@ -63,13 +63,13 @@ export class Dusk {
     });
   }
 
-  /** Blend to k (0..1). */
-  set(k: number): void {
-    this.k = k;
+  /** Blend to k (0..1); the window can be further along than the counters (`win`, default k). */
+  set(k: number, winK = k): void {
+    this.k = winK;
     for (const l of this.lights) {
-      const t = k * l.k;
-      const i0 = l.light.userData.duskI as number;
       const win = l.k === 1;
+      const t = win ? winK : k * l.k;
+      const i0 = l.light.userData.duskI as number;
       const mood = win ? WINDOW : COUNTER;
       if (l.light instanceof THREE.HemisphereLight) {
         l.light.color.copy(l.color).lerp(new THREE.Color(mood.hemi), t);
@@ -90,11 +90,11 @@ export class Dusk {
       x.drawImage(s.orig.image as HTMLCanvasElement, 0, 0);
       const g = x.createLinearGradient(0, 0, 0, h);
       SKY.forEach((c, i) => g.addColorStop(i / (SKY.length - 1), c));
-      x.globalAlpha = k;
+      x.globalAlpha = winK;
       x.fillStyle = g;
       x.fillRect(0, 0, s.canvas.width, h);
       s.tex.needsUpdate = true;
-      if (s.fog && s.scene.fog) s.scene.fog.color.copy(s.fog).lerp(FOG, k);
+      if (s.fog && s.scene.fog) s.scene.fog.color.copy(s.fog).lerp(FOG, winK);
     }
   }
 

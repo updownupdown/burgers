@@ -5122,7 +5122,37 @@ function showTitle(night: NightShow | null = null, arrive: Arrival | null = null
  */
 const SUNDOWN = { light: 1.5, sign: 0.25, out: 1.75 };
 const dusk = new Dusk();
-let sundown: { t: number; sign: HTMLElement; dropped: boolean; reduce: boolean } | null = null;
+let sundown: { t: number; sign: HTMLElement; dropped: boolean; reduce: boolean; k0: number } | null = null;
+
+/**
+ * Golden hour (DESIGN §45): over the last part of the shift the window alone drifts part way toward
+ * the sundown mood, so time visibly passes before the Closed sign. The counters keep their daylight,
+ * so food stays readable. The sundown then carries on from where the window already is.
+ */
+const GOLD = { from: 0.55, max: 0.4 };
+const gold = new Dusk();
+let goldOn = false;
+function stepGold(): void {
+  if (game.phase !== "playing") {
+    // Paused keeps the light; anything else (the map, a new shift) is back to noon.
+    if (goldOn && game.phase !== "paused" && game.phase !== "sundown") resetGold();
+    return;
+  }
+  if (game.shiftLength <= 0) return;
+  const p = game.time / game.shiftLength;
+  const k = Math.min(1, Math.max(0, (p - GOLD.from) / (1 - GOLD.from))) * GOLD.max;
+  if (k <= 0) return;
+  if (!goldOn) {
+    gold.begin([], customersView.scene, new THREE.Color());
+    goldOn = true;
+  }
+  // The sky is redrawn on each set: only when the light has moved enough to see.
+  if (Math.abs(k - gold.k) > 0.002) gold.set(k);
+}
+function resetGold(): void {
+  gold.reset();
+  goldOn = false;
+}
 
 function startSundown(): void {
   cancelPointer();
@@ -5133,7 +5163,10 @@ function startSundown(): void {
     s.bubble?.remove();
     s.bubble = null;
   }
+  const k0 = goldOn ? gold.k : 0;
+  resetGold();
   dusk.begin([counter.scene, trayView.scene], customersView.scene, clearColor);
+  dusk.set(0, k0);
   const sign = document.createElement("div");
   sign.className = "closed-sign";
   sign.setAttribute("role", "status");
@@ -5144,7 +5177,7 @@ function startSundown(): void {
   const hud = ui.root.querySelector<HTMLElement>(".hud")?.getBoundingClientRect().bottom ?? 0;
   sign.style.top = `${Math.max(r.y + 26, hud + 22)}px`;
   ui.root.appendChild(sign);
-  sundown = { t: 0, sign, dropped: false, reduce: matchMedia("(prefers-reduced-motion: reduce)").matches };
+  sundown = { t: 0, sign, dropped: false, reduce: matchMedia("(prefers-reduced-motion: reduce)").matches, k0 };
 }
 
 function stepSundown(dt: number): void {
@@ -5152,7 +5185,9 @@ function stepSundown(dt: number): void {
   if (!sd) return;
   sd.t += dt;
   const k = Math.min(1, sd.t / (sd.reduce ? 0.3 : SUNDOWN.light));
-  dusk.set(k * k * (3 - 2 * k));
+  // The window carries on from where golden hour left it; the counters start from daylight.
+  const s = k * k * (3 - 2 * k);
+  dusk.set(s, sd.k0 + (1 - sd.k0) * s);
   if (!sd.dropped && sd.t >= SUNDOWN.sign) {
     sd.dropped = true;
     sd.sign.classList.add("drop");
@@ -5191,6 +5226,7 @@ function endSundownLeftovers(): void {
   sundown?.sign.remove();
   sundown = null;
   dusk.reset();
+  resetGold();
   ui.root.querySelectorAll(".closed-sign").forEach((e) => e.remove());
 }
 
@@ -5519,6 +5555,7 @@ function tick(dt: number): void {
     counter.update(game.phase === "playing" ? dt : 0);
     trayView.update(dt);
     customersView.update(dt, game.active);
+    stepGold();
   }
   sfx.setLoops(game.phase === "playing" ? counter.sizzleLevel() : 0, game.phase === "playing" ? counter.bubbleLevel() : 0, counter.pouring(), game.phase === "playing" ? counter.ovenLevel() : 0);
   updateUi(dt);

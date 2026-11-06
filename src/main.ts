@@ -3,16 +3,16 @@ import { CABIN } from "./render/cabin";
 import { buzz, Sfx } from "./audio";
 import { cookLevel, COOK_SCALE, cookZone, darkSide, DRINK_FILL, friesZone, FRY_ZONE, isMelted, paleSide, SALT, setFolded, type Cookable } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
-import { expectedCustomers, sleep } from "./game/day";
+import { expectedCustomers, regionShifts, sleep } from "./game/day";
 import { greatShift, togglePick, townBonus, validPicks, type BonusId } from "./game/bonus";
 import { cookTime, shiftStretch } from "./game/pace";
 import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, validShift, type ShiftWindow } from "./game/shift";
 import { freshSave, loadSave, passed, passTown, todaysClosing, writeSave, type Closing } from "./game/progress";
 import { eventOn, fountainFor, fryerOf, garnishFor, garnishOf, middleOf, townById, withEvent, withLearned, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
-import { CHILL_BURN, DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
+import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
 import { joinChance, lineDrain, linePatience, MAX_LINE, RUSH, rushAt, WINDOW, windowPatience, wordOfMouth } from "./game/line";
-import { FRIES_HOLD, HOLD_GRACE, HOLD_RUIN, LADLE_BAND, LEOPARD_EVEN, payout, SAUCE_BAND, sauceCoverage, sauceGate, sauceVerdict, scorePlate, TOUCH_TIP, touchTip, type SauceWord } from "./game/scoring";
+import { FRIES_HOLD, HOLD_GRACE, HOLD_RUIN, LADLE_BAND, LEOPARD_EVEN, payout, SAUCE_BAND, sauceCoverage, sauceGate, sauceVerdict, scorePlate, setSmallSlips, TOUCH_TIP, touchTip, type SauceWord } from "./game/scoring";
 import { History, samePlace, type Move, type Place } from "./game/undo";
 import { CROWD, menuFor } from "./game/business";
 import { askCounts, askFor, served as askServed, type Ask } from "./game/asks";
@@ -93,8 +93,9 @@ try {
   // ignore
 }
 /**
- * Chill, Balanced or Stressful (src/game/difficulty.ts), picked on Prep. A new player starts on
- * Chill (the welcome card says so); a trip already under way that never picked keeps Balanced.
+ * Relaxed, Steady or Busy (ids chill, balanced, stressful; src/game/difficulty.ts), picked on Prep.
+ * A new player starts on Relaxed (the welcome card says so); a trip already under way that never
+ * picked keeps Steady.
  */
 let difficulty: Difficulty = "balanced";
 let pickedPacing = false;
@@ -171,7 +172,7 @@ const game = {
   orderSeq: 1,
   active: 0,
   tutorial: true,
-  /** The trip's first day on Chill: nothing scores under four stars and only happy customers review. */
+  /** The trip's first day on Relaxed: nothing scores under four stars and only happy customers review. */
   gentle: false,
   town: save.town,
   /** Town highlighted on the map. */
@@ -213,6 +214,8 @@ const game = {
   /** Play time of today's window in seconds (see shift.ts). */
   shiftLength: 180,
   bonuses: [] as BonusId[],
+  /** How far into its complexity a ticket may go in this town: 0.5 on its first shift, 0.75, then 1. */
+  townEase: 1,
   /** Which customer (by arrival order) is a food critic today, or -1; and what they wrote. */
   criticAt: -1,
   press: null as PressPiece | null,
@@ -266,7 +269,7 @@ function criticVerdict(stars: number, notes: string[]): void {
 
 /**
  * Whether this customer leaves a review: the delighted and the angry far more often than the
- * merely fed, critics always (game/reviews.ts). The first Chill day only keeps the happy ones.
+ * merely fed, critics always (game/reviews.ts). The first Relaxed day only keeps the happy ones.
  */
 function maybeReview(stars: number, critic: boolean): boolean {
   if (game.gentle && stars < 4) return false;
@@ -425,11 +428,15 @@ function spawnCustomer(slotIdx: number, seed: number, early?: Order): void {
   s.sentBack = null;
   s.kept = { fries: null, drink: null };
   // Window patience follows the work the order takes: its layers, sides and the dish's own steps (line.ts).
-  s.maxPatience = windowPatience(order) * (has("bench") ? 1.3 : 1) * CROWD[stop().crowd].patience * DIFFICULTY[game.pacing].patience;
+  s.maxPatience = windowPatience(order) * (has("bench") ? 1.3 : 1) * CROWD[stop().crowd].patience * DIFFICULTY[game.pacing].patience * (order.firstTime ? 1.5 : 1);
+  // Patience is sized to the order's own work, but under load the wait comes from the orders ahead
+  // (difficulty study): a quarter of what each order already at the window has left, up to a minute.
+  const ahead = game.slots.reduce((n, o, k) => (k !== slotIdx && o.order && !o.leaving ? n + o.patience : n), 0);
+  s.maxPatience += Math.min(60, 0.25 * ahead);
   if (devOn()) console.debug(`[patience] #${order.id} ${order.name}: ${s.maxPatience.toFixed(0)} s`);
-  // Guided orders wait as long as it takes.
-  if (lesson >= 0) s.maxPatience = 900;
   s.patience = s.maxPatience;
+  // Guided orders wait as long as it takes: their bar stops at half (see the window loop), so the
+  // bar and the tip coin read as they will later without anyone walking out.
   s.leaving = false;
   if (game.ordered === game.criticAt && !game.tutorial) {
     order.critic = true;
@@ -447,13 +454,25 @@ const GUIDED = 3;
 
 /** A fresh order, as hard as this point in the shift. */
 function nextOrder(): Order {
-  const level = Math.min(1, game.time / game.shiftLength);
-  // The town's regular is the shift's third customer, with the order they always have.
-  if (!game.tutorial && !game.regularCame && game.ordered >= REGULAR_AT) {
+  // Tickets grow more involved with the orders taken, not the clock (difficulty study): when the line
+  // keeps the window open past closing, the late tickets no longer all come at full complexity.
+  // A town's first shifts ease off (game.townEase).
+  const level = Math.min(1, game.ordered / Math.max(1, game.customers - 1)) * game.townEase;
+  // The town's regular is the shift's third customer, with the order they always have (from a
+  // town's second shift on: the first shift there has enough that's new).
+  if (!game.tutorial && !game.regularCame && game.ordered >= REGULAR_AT && game.townEase >= 0.75) {
     game.regularCame = true;
     return regularOrder(game.orderSeq++, shopStop());
   }
-  const order = makeOrder(game.orderSeq++, game.rng, level, shopStop());
+  let order = makeOrder(game.orderSeq++, game.rng, level, shopStop());
+  // A dish never served well before comes plain the first time: no changes, no sides.
+  if (!game.tutorial && !(save.known[order.name] ?? 0) && order.layers.length) {
+    const recipe = shopStop().menu.find((m) => m.name === order.name);
+    if (recipe) {
+      order = { ...orderFromRecipe(order.id, recipe, false, null, [], order.friesSize, order.drinkSize), firstTime: true };
+      hintOnce(`first-${order.name}`, `A first ${order.name}! It comes plain this time: the recipe is in Today's Menu.`, 4);
+    }
+  }
   // The area's local drinks come with its garnish (after build #78; none in the Pines).
   const garnish = garnishFor(shopStop().region, order.drink);
   if (garnish) {
@@ -615,7 +634,7 @@ function serve(i: number): void {
   const plate: Plate = { ...s.plate, fries: s.plate.fries ?? s.kept.fries, drink: s.plate.drink ?? s.kept.drink };
   const r = scorePlate(s.order, plate);
   let call = s.lesson === 0 || s.lesson === 1 ? "accept" : verdict(r.score, game.pacing, !!s.sentBack, r.faulty, !!r.missing);
-  // The first day on Chill never turns anyone away: a really wrong order comes back once for changes, then it's taken.
+  // The first day on Relaxed never turns anyone away: a really wrong order comes back once for changes, then it's taken.
   if (game.gentle && call === "refuse") call = s.sentBack ? "accept" : "sendBack";
   // ...and anything taken that day is worth at least four stars.
   if (game.gentle && r.stars < 4) r.stars = 4;
@@ -631,7 +650,8 @@ function serve(i: number): void {
   const meal = has("combo") && s.order.layers.length > 0 && !!s.order.fries && !!s.order.drink;
   // Chef's touches (perfect sauce, grill marks, a clean cut, hand-pressed tortillas...) add a dollar or two each.
   const touches = r.stars >= 4 ? r.touches : [];
-  const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1) * (meal ? 1.5 : 1) * CROWD[stop().crowd].tips) + touchTip(touches, r.stars);
+  // Busy tips a third more; an order put right after a send-back tips half (so getting it right first time pays).
+  const tip = Math.round(baseTip * (has("tipjar") ? 1.3 : 1) * (meal ? 1.5 : 1) * CROWD[stop().crowd].tips * DIFFICULTY[game.pacing].tips * (s.sentBack ? 0.5 : 1)) + touchTip(touches, r.stars);
   game.money += pay;
   game.tips += tip;
   game.served++;
@@ -683,7 +703,7 @@ function sendBack(i: number, note: string): void {
   s.sentBack = note;
   const took = takeFreebies(s);
   // Asking for a fix buys a little time.
-  s.patience = Math.min(s.maxPatience, s.patience + s.maxPatience * 0.2);
+  s.patience = Math.min(s.maxPatience, s.patience + s.maxPatience * DIFFICULTY[game.pacing].refund);
   s.ticketKey = "";
   syncTray(i, true);
   trayView.plates[i].kick(0.5);
@@ -1288,6 +1308,19 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
       let n = 0;
       for (let i = s.plate.layers.length - 1; i >= 0 && s.plate.layers[i].piece.kind === p.kind; i--) n++;
       const want = s.order.layers.find((e) => e.kind === p.kind)?.count;
+      // Relaxed's helpers: the first of a counted topping brings the rest of the ticket's count with
+      // it (not tortillas or scoops, which are tacos and fillings of their own). Undo takes them all.
+      if (DIFFICULTY[game.pacing].helpers && want && n === 1 && want > 1 && !TORTILLAS.has(p.kind) && !SCOOPED.has(p.kind)) {
+        const all: Layer[] = [l];
+        for (let k = 1; k < want; k++) {
+          const more = landing(s.plate.layers, { ...structuredClone(p), uid: newPiece(p.kind).uid }, spread);
+          s.plate.layers.push(more);
+          all.push(more);
+        }
+        bundled = { lead: p, layers: all };
+        n = want;
+        syncTray(slot, true);
+      }
       if (want) showHint(`${KIND_LABEL[p.kind]} ${n} of ${want}${n > want ? ": generous!" : ""}`, 1.2);
     }
     return true;
@@ -1650,12 +1683,16 @@ function whereFood(p: Piece): Place | null {
   return bi >= 0 ? { at: "basket", i: bi } : null;
 }
 
+/** A counted topping that went on as the ticket's whole count (Relaxed): Undo carries them all back. */
+let bundled: { lead: Piece; layers: Layer[] } | null = null;
+
 /** A drop landed: note it, so Undo can carry it back. */
 function noteMove(p: Payload, from: Place, binned: boolean): void {
   const d = dropped;
   dropped = null;
   if (p.type === "piece" || p.type === "stack") {
-    const layers = p.type === "piece" ? [{ piece: p.piece, offX: 0, offZ: 0 }] : p.layers;
+    const layers = p.type === "piece" ? (bundled?.lead === p.piece ? bundled.layers : [{ piece: p.piece, offX: 0, offZ: 0 }]) : p.layers;
+    bundled = null;
     const to = binned ? TRASH : whereFood(layers[0].piece);
     if (to) history.push({ what: { k: "food", layers: [...layers], rack: p.type === "stack" && !!p.rack }, from, to });
     return;
@@ -4947,10 +4984,14 @@ function startShift(): void {
   game.bonuses = validPicks(save.picks, save.bonuses);
   // A slower kitchen (pace.ts) stretches the clock so the same people come over a longer shift.
   game.shiftLength = shiftSeconds(game.shift, stop().shiftLength) * shiftStretch();
-  game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: game.shift, bonuses: game.bonuses, pacing: game.pacing });
+  // A new region's first shifts bring a smaller crowd (day.ts newRegionCrowd).
+  game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: game.shift, bonuses: game.bonuses, pacing: game.pacing, regionShifts: regionShifts(save.shiftsIn, stop()) });
+  // A town's first shift is simpler (fewer changes and sides), then a little more, then as usual.
+  game.townEase = [0.5, 0.75, 1][Math.min(2, save.shiftsIn[game.town] ?? 0)];
   // The range is refuelled by endShift, not here: a shift quit or reloaded half way doesn't count.
   // Today's local ask, the same one Prep showed (not on the guided first shift).
-  game.ask = game.tutorial ? null : askFor(stop(), menuFor(stop(), save.hidden), save.day, game.customers);
+  // Not on a town's first shift either: one new thing at a time.
+  game.ask = game.tutorial || !save.shiftsIn[game.town] ? null : askFor(stop(), menuFor(stop(), save.hidden), save.day, game.customers);
   game.askCount = 0;
   game.regularCame = false;
   // A rush at capitals and on event days (not on the guided first shift).
@@ -4967,13 +5008,17 @@ function startShift(): void {
   // Hot plate (the old Searing plate): the main counter cooks faster, whatever it is.
   counter.grillBoost = (has("sear") ? 1.25 : 1) / cookTime();
   counter.ovenBoost = (has("sear") ? 1.25 : 1) / cookTime();
-  // Heat lamp: warm holding everywhere (the warm end, the rack, fries, the trays) ages at half the pace.
-  counter.holdRate = has("lamp") ? 0.5 : 1;
-  // Chill pours to the line by itself and nothing on the grill or in the fryer burns.
-  counter.autoStopPour = has("autostop");
-  counter.autoLid = has("autostop");
-  // Chill (after build #82): things still burn, at half the pace once over-done.
-  counter.burnPace = game.pacing === "chill" ? CHILL_BURN : 1;
+  // Heat lamp: warm holding everywhere (the warm end, the rack, fries, the trays) ages at half the
+  // pace. Relaxed keeps food longer too (DifficultySpec.hold), so the hold bars and the stars agree.
+  const spec = DIFFICULTY[game.pacing];
+  counter.holdRate = (has("lamp") ? 0.5 : 1) / spec.hold;
+  // The Smart fountain, and Relaxed's helpers: the pour stops at the line and the lid goes on.
+  counter.autoStopPour = has("autostop") || spec.helpers;
+  counter.autoLid = has("autostop") || spec.helpers;
+  // Relaxed: things still burn, at half the pace once over-done.
+  counter.burnPace = spec.burn;
+  // Relaxed: small slips cost half (scoring.ts).
+  setSmallSlips(spec.small);
   counter.setPage(HOME_PAGE);
   playShiftReveal();
   const intro = game.event
@@ -5353,6 +5398,7 @@ function endShift(arrive: Arrival): void {
     shiftsHere: save.shiftsIn?.[here.id] ?? 0,
     press: game.press,
     great,
+    pacing: game.pacing,
     unlocked,
     usedBonus: [...game.bonuses],
     bank: save.bank,
@@ -5473,7 +5519,8 @@ function tick(dt: number): void {
     for (let k = game.line.length - 1; k >= 0; k--) {
       const w = game.line[k];
       // While the guided clock stands still, nobody in line loses patience either.
-      if (!guiding) w.patience -= dt * lineDrain(k);
+      // The Comfy bench: the line sits down, and nobody in it gives up (only their mood shows the wait).
+      if (!guiding) w.patience = Math.max(has("bench") ? 1 : 0, w.patience - dt * lineDrain(k));
       if (w.patience <= 0) {
         game.line.splice(k, 1);
         game.leftLine++;
@@ -5490,8 +5537,9 @@ function tick(dt: number): void {
       void ui.bell.offsetWidth;
       ui.bell.classList.add("ring");
       sfx.bell();
-    } else if (game.pacing === "chill" && !game.tutorial && game.line[0] && game.line[0].patience < game.line[0].maxPatience * 0.6 && callNext()) {
-      // On Chill nobody gives up in line: if they've waited a while and there's room, the bell rings for them.
+    } else if (!game.tutorial && game.line[0] && game.line[0].patience < game.line[0].maxPatience * 0.6 && game.slots.filter((s) => s.order || s.fig).length < DIFFICULTY[game.pacing].autoCall && callNext()) {
+      // On Relaxed nobody gives up in line: if they've waited a while and fewer than two are at the
+      // window, the bell rings for them (the third is the player's call).
       ui.bell.classList.remove("ring");
       void ui.bell.offsetWidth;
       ui.bell.classList.add("ring");
@@ -5502,12 +5550,13 @@ function tick(dt: number): void {
 
     game.slots.forEach((s, i) => {
       if (!s.order || s.leaving) return;
-      s.patience -= dt;
+      // A guided order's bar moves like any other, but stops at half: the full tip stays theirs.
+      s.patience = s.lesson >= 0 ? Math.max(s.maxPatience * 0.5, s.patience - dt) : s.patience - dt;
       if (s.fig) s.fig.setMood(patienceMood(s.patience / s.maxPatience));
       if (s.patience <= 0) {
         game.lost++;
         if (s.order.critic) criticVerdict(1, []);
-        // A walk-out is furious, and as likely as anyone to say so (not on the first Chill day).
+        // A walk-out is furious, and as likely as anyone to say so (not on the first Relaxed day).
         const reviewed = maybeReview(1, !!s.order.critic);
         sfx.grumble();
         customerLeaves(i, 1, "Too slow! I'm off.", reviewed);
@@ -5604,8 +5653,16 @@ counter.events.spill = () => {
   showHint("It's overflowing! Let go, and wipe up the mess.", 2.5);
 };
 // Kitchen timer (bonus): a soft tick when anything on the grill or in the fryer reaches done.
-counter.events.done = () => {
-  if (game.phase === "playing" && has("timer")) sfx.tick();
+// Ready alerts (Relaxed and Steady, difficulty study): the same tick, and a word, when it's done on
+// a counter you aren't looking at; the counter's button lamp lights too (see updateHud).
+counter.events.done = (page) => {
+  if (game.phase !== "playing") return;
+  const away = page !== counter.page && DIFFICULTY[game.pacing].alerts;
+  if (has("timer") || away) sfx.tick();
+  if (away && page === HOME_PAGE) {
+    const where = counter.middle === "press" ? "in the press" : counter.middle === "oven" ? "in the oven" : counter.middle === "comal" ? "on the comal" : "on the grill";
+    showHint(`Ready ${where}! ${counter.page < HOME_PAGE ? "→" : "←"}`, 2);
+  }
 };
 counter.events.burning = () => {
   const where = counter.middle === "press" ? "in the press" : counter.middle === "oven" ? "in the oven" : "on the grill";
@@ -5780,7 +5837,15 @@ function updateUi(dt = 0): void {
   const pies = counter.middle === "oven" ? counter.ovenSpots.slice(0, counter.ovenCount).map((s) => s.layers[0]?.piece).filter((d): d is Piece => d?.kind === "dough") : [];
   const ovenReady = pies.some((d) => cookZone("dough", paleSide(d)) === "done");
   const ovenBurning = pies.some((d) => darkSide(d) > COOK_SCALE.dough.over);
-  const dots = [false, grillBurning || ovenBurning || ovenReady, friesReady || friesBurning];
+  // Ready alerts: the middle counter's lamp also lights for food done on the grill, comal or press.
+  const grillReady =
+    DIFFICULTY[game.pacing].alerts &&
+    (counter.grillItems.some((g) => !g.below && !g.held && g.piece.kind in COOK_SCALE && cookZone(g.piece.kind as Cookable, cookLevel(g.piece)) === "done") ||
+      counter.bays.some((b, i) => {
+        const r = i < counter.bayCount && b.closed ? counter.bayReading(b) : null;
+        return !!r && r.kind in COOK_SCALE && cookZone(r.kind as Cookable, cookLevel(r)) === "done";
+      }));
+  const dots = [false, grillBurning || ovenBurning || ovenReady || grillReady, friesReady || friesBurning];
   const hot = [false, grillBurning || ovenBurning, friesBurning];
   ui.tabs.forEach((t, i) => {
     const lamp = hot[i] ? "coral" : dots[i] ? "amber" : "off";
@@ -6330,7 +6395,7 @@ startCoach(
 );
 skipLessonsFor(save.tutorialDone);
 
-// A brand-new player: say hello, and that tutorial mode and Chill pacing are on (both can be switched off here).
+// A brand-new player: say hello, and that tutorial mode and Relaxed pacing are on (both can be switched off here).
 if (welcomeDue(save)) {
   showWelcome({
     pacing: difficulty,

@@ -1,5 +1,6 @@
 import { CROWD } from "../game/business";
-import { expectedCustomers, rangeUnits } from "../game/day";
+import { expectedCustomers, rangeUnits, regionShifts } from "../game/day";
+import { savedPacing } from "../game/difficulty";
 import { todaysClosing, type Save } from "../game/progress";
 import { ratingPull, reviewAverage } from "../game/reviews";
 import { EVENTS, eventOn, FINAL_TOWN, nextDay, STOPS, townById, withEvent, type Stop } from "../game/stops";
@@ -506,7 +507,7 @@ function renderSheet(m: Mounted, id: string): void {
     <div class="home-facts">
       <div><span class="bv-eyebrow">Shifts here</span><b>${t.roads.length ? pipsHtml(unlockProgress(s.shiftsIn, id).done, SHIFTS_TO_UNLOCK) : ""}${s.shiftsIn[id] ?? 0}</b></div>
       <div><span class="bv-eyebrow">Best shift</span><b>${best !== undefined ? `${icon("star")}${best.toFixed(1)}` : "–"}</b></div>
-      <div><span class="bv-eyebrow">${trip ? "From here" : "Customers"}</span><b>${trip ? `${miles(trip.distance)} mi` : `${icon("people")}~${expectedCustomers({ stop: withEvent(t, ev), popularity: s.popularity, rating: ratingPull(s.reviewCounts), hidden: s.hidden, shift: s.shift })}`}</b></div>
+      <div><span class="bv-eyebrow">${trip ? "From here" : "Customers"}</span><b>${trip ? `${miles(trip.distance)} mi` : `${icon("people")}~${expectedCustomers({ stop: withEvent(t, ev), popularity: s.popularity, rating: ratingPull(s.reviewCounts), hidden: s.hidden, shift: s.shift, pacing: savedPacing() ?? (s.tutorialDone ? "balanced" : "chill"), regionShifts: regionShifts(s.shiftsIn, t) })}`}</b></div>
     </div>
     ${bonusRow(s, id)}
     ${open && t.newThing && !(s.shiftsIn[id] ?? 0) ? `<div class="bv-callout new">${icon("new")}<span>${esc(t.newThing)}</span></div>` : ""}

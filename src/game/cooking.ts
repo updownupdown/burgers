@@ -112,7 +112,7 @@ export const OVEN_FOLDED = 0.75;
 export const RIM_SEGS = 8;
 /** Seconds a side can sit past its band before it counts as scorched. */
 export const SCORCHED = 1;
-/** On a pie in the oven: cheese melts (melted at 0.5, about 6 s); other toppings roast. Mushrooms want a long bake (roasted at 1, about 24 s). */
+/** On a pie in the oven: cheese melts (melted at 0.5, about 6 s); other toppings roast. Mushrooms want a long bake (roasted at MUSHROOM_ROAST, about 20 s at the old pace). */
 export const OVEN_MELT = 0.09;
 export const OVEN_ROAST = 0.042;
 /**
@@ -196,7 +196,7 @@ export function grillStep(p: Piece, heat: number, dt: number): void {
 }
 
 /**
- * Slow the part of this frame's cooking that went past over-done to `pace` of its speed (Chill:
+ * Slow the part of this frame's cooking that went past over-done to `pace` of its speed (Relaxed:
  * burning takes twice as long, after build #82). `was` is the faces before the frame.
  */
 export function slowPastOver(p: Piece, was: readonly [number, number], pace: number): void {

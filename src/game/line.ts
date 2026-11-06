@@ -13,8 +13,8 @@ import { cookTime, shiftStretch } from "./pace";
  * willing they are to wait.
  */
 
-/** How many customers the bell may bring to the window at once. */
-export const WINDOW: Record<Difficulty, number> = { chill: 2, balanced: 3, stressful: 3 };
+/** How many customers the bell may bring to the window at once (three on every tier since the difficulty study). */
+export const WINDOW = Object.fromEntries(Object.entries(DIFFICULTY).map(([k, v]) => [k, v.window])) as Record<Difficulty, number>;
 
 /** Nobody joins a line longer than this. */
 export const MAX_LINE = 6;
@@ -22,13 +22,16 @@ export const MAX_LINE = 6;
 /**
  * Chance a passer-by joins a line already `lineLen` long, given how well known the truck is.
  * An empty line is always joined. Each person already waiting puts off an unknown truck's
- * customers (about 40% join behind one person, 17% behind two), while a famous truck's line
+ * customers (at least 75% join behind one person, 17% behind two), while a famous truck's line
  * is part of the attraction.
  */
 export function joinChance(lineLen: number, popularity: number): number {
   if (lineLen <= 0) return 1;
   if (lineLen >= MAX_LINE) return 0;
   const known = 0.35 + 0.65 * clamp01(popularity / 100);
+  // One person waiting puts few off, however new the truck (difficulty study: a fresh truck's first
+  // shift lost two of six to a one-person line and read as "where is everyone").
+  if (lineLen === 1) return Math.max(0.75, known);
   return Math.pow(known, lineLen);
 }
 
@@ -85,7 +88,17 @@ function clamp01(x: number): number {
  * quesadilla is warmed, filled, folded, melted and flipped; a flatbread bakes; a calzone folds and
  * bakes slower; a panini is pressed. Burgers (smash included) need nothing extra.
  */
-export const DISH_WORK = { quesadilla: 45, flatbread: 30, calzone: 40, panini: 20, cut: 8, garnish: 4 };
+export const DISH_WORK = { quesadilla: 45, flatbread: 30, calzone: 40, panini: 20, cut: 8, garnish: 4, tacos: 10 };
+
+/**
+ * Heat the formula used to miss (difficulty study): seconds of window patience, each times the cook
+ * time. An egg beside a patty cooks while the patty does, but on a taco it is the slowest thing on
+ * the comal; pineapple chars on its own; a tostada shell fries; each taco's tortilla warms; bacon crisps.
+ */
+export const EXTRA_HEAT = { egg: 22, pineapple: 12, bacon: 8, tostada: 14, tortilla: 6 };
+
+/** Orders with no main (fries, a drink, poutine) still wait behind the meals ahead of them. */
+export const SIDES_FLOOR = 40;
 
 /** Base window patience, before layers, sides and the dish's work (was 50 for every dish). */
 export const WINDOW_BASE = 40;
@@ -112,8 +125,20 @@ export function windowPatience(order: Order, t = cookTime()): number {
         : BREADS.has(base.kind)
           ? DISH_WORK.panini
           : 0;
+  const has = (k: string) => order.layers.some((l) => l.kind === k);
+  const burger = !!base && base.kind === "bun";
+  const tacos = !!base && TORTILLAS.has(base.kind) && !base.folded;
+  const heat =
+    (has("egg") && !burger ? EXTRA_HEAT.egg : 0) +
+    (has("pineapple") ? EXTRA_HEAT.pineapple : 0) +
+    (has("bacon") ? EXTRA_HEAT.bacon : 0) +
+    (base?.kind === "tostada" ? EXTRA_HEAT.tostada : 0) +
+    (tacos ? EXTRA_HEAT.tortilla * (base.count ?? 1) : 0);
   return (
     WINDOW_BASE +
+    (order.layers.length === 0 ? SIDES_FLOOR : 0) +
+    (tacos ? DISH_WORK.tacos : 0) +
+    heat * t +
     order.layers.length * 7 +
     slices * 2 +
     proteins * 22 * (base?.kind === "dough" ? 1 : t) +

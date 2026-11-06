@@ -110,6 +110,8 @@ export interface Closing {
   /** Savings after the takings went in. */
   bank: number;
   shift: ShiftWindow;
+  /** The shift's pacing: a great shift on Busy gets its own line on the report card. */
+  pacing?: "chill" | "balanced" | "stressful";
 }
 
 const KEY = "bv-save-v1";

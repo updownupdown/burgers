@@ -51,7 +51,9 @@ export function verdictLine(c: Closing): string {
     : c.outcome === "failed"
       ? `${town.name} wasn't impressed. Serve at least half the customers with a ${PASS_STARS}★ average to count the day.`
       : c.great
-        ? `A great shift. ${town.name} will be talking about this for weeks.`
+        ? c.pacing === "stressful"
+          ? `A great shift on Busy! ${town.name} will be talking about this for weeks.`
+          : `A great shift. ${town.name} will be talking about this for weeks.`
         : avg >= 3.5
           ? "Solid shift. Everyone left full."
           : "A rough day at the grill, but you made it.";

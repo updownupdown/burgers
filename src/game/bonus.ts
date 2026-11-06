@@ -40,8 +40,8 @@ export interface Bonus {
 
 /** In road order: the town that unlocks each, and its price. */
 export const BONUSES: Bonus[] = [
-  { id: "bench", town: "pinecrest", price: 40, name: "Comfy bench", text: "Customers wait 30% longer, in line and at the window.", best: "Learning the ropes", icon: "people" },
-  { id: "autostop", town: "elkpass", price: 70, name: "Smart fountain", text: "Drinks stop pouring at the line and get their lid by themselves.", best: "Thirsty crowds", icon: "drink" },
+  { id: "bench", town: "pinecrest", price: 40, name: "Comfy bench", text: "Customers wait 30% longer at the window, and nobody in line gives up.", best: "Learning the ropes", icon: "people" },
+  { id: "autostop", town: "elkpass", price: 70, name: "Smart fountain", text: "Drinks stop pouring at the line and get their lid by themselves (Relaxed does this anyway).", best: "Thirsty crowds", icon: "drink" },
   { id: "steady", town: "cedarfalls", price: 90, name: "Steady hands", text: "Tossed toppings land neatly.", best: "Tall burgers", icon: "burger" },
   { id: "lamp", town: "summit", price: 140, name: "Heat lamp", text: "Warm holding: the warm end, the taco rack, lifted fries and the trays keep food fresh twice as long.", best: "Cooking ahead", icon: "flame" },
   { id: "cookies", town: "saltwater", price: 180, name: "Apology cookies", text: "Walk-outs don't cost popularity today.", best: "Busy, stressful days", icon: "heart" },

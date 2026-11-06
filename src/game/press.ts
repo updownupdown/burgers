@@ -85,9 +85,10 @@ export function fadePopularity(pop: number): number {
 
 /**
  * More people come to a truck they've heard of: about half the town's trade for a truck nobody
- * knows (popularity 10), the usual trade around 65, and 1.3x for a famous one. A new truck
- * starts quiet on purpose, so the first shifts teach the kitchen before the line gets long.
+ * knows (popularity 10), the usual trade around 75, and 1.15x for a famous one (flatter at the
+ * top since the difficulty study, so success brings a bigger line, not a wall; it was 1.3x). A new
+ * truck starts quiet on purpose, so the first shifts teach the kitchen before the line gets long.
  */
 export function popularityTraffic(pop: number): number {
-  return 0.45 + 0.85 * Math.min(100, Math.max(0, pop)) / 100;
+  return 0.5 + 0.65 * Math.min(100, Math.max(0, pop)) / 100;
 }

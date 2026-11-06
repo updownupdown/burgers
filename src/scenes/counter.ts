@@ -455,7 +455,8 @@ export interface CounterEvents {
   spill: () => void;
   burning: () => void;
   /** Something cooking just reached its done zone (the Kitchen timer bonus ticks). */
-  done: () => void;
+  /** Something on counter `page` (1 the middle, 2 the fryer) just reached done. */
+  done: (page: number) => void;
   /** The peel is nudging a pie round (for a soft scrape, at most every so often). */
   nudge: () => void;
 }
@@ -520,8 +521,7 @@ export class CounterView {
   autoStopPour = false;
   /** The Smart fountain bonus (after build #78): a pour it stops at the line also gets its lid. */
   autoLid = false;
-  /** Chill: food on the grill holds at well done and fries at dark golden instead of burning. */
-  /** Chill (after build #82): cooking past over-done runs at this share of its pace (1 = normal). */
+  /** Relaxed (after build #82): cooking past over-done runs at this share of its pace (1 = normal). */
   burnPace = 1;
   grillItems: GrillItem[] = [];
   /** Each grill zone's setting, left to right; the buttons on the griddle's front ledge cycle them. */
@@ -614,7 +614,7 @@ export class CounterView {
   private oilRings: THREE.Mesh[] = [];
   private held: THREE.Object3D | null = null;
   private time = 0;
-  events: CounterEvents = { golden: () => {}, beep: () => {}, spill: () => {}, burning: () => {}, done: () => {}, nudge: () => {} };
+  events: CounterEvents = { golden: () => {}, beep: () => {}, spill: () => {}, burning: () => {}, done: (_page: number) => {}, nudge: () => {} };
   /** The shadow-casting light, so the graphics setting can soften or disable it. */
   sun: THREE.DirectionalLight;
 
@@ -2698,7 +2698,7 @@ export class CounterView {
       this.updatePie(r);
     }
     if (anyBurning) this.events.burning();
-    if (anyDone) this.events.done();
+    if (anyDone) this.events.done(1);
 
     // Smoke: puffs drift up from cooking items (and closed press bays); darker when burning.
     const active = this.grillItems.filter((g) => !g.held && !g.below && g.flipT < 0 && this.heatOf(g) === "hot");
@@ -2817,7 +2817,7 @@ export class CounterView {
           sh.cook[1] += r;
           slowPastOver(sh, was, this.burnPace);
           const sc = COOK_SCALE.tostada;
-          if (before < sc.done && cookLevel(sh) >= sc.done) this.events.done();
+          if (before < sc.done && cookLevel(sh) >= sc.done) this.events.done(2);
           if (before < sc.perfect - 0.04 && cookLevel(sh) >= sc.perfect - 0.04) {
             this.events.golden();
             this.sparkle(b.obj.getWorldPosition(new THREE.Vector3()));
@@ -2841,7 +2841,7 @@ export class CounterView {
         const zone = FRY_ZONE[b.fry];
         const perfect = fryPerfect(b.fry);
         b.cook = slowPastOverValue(before, b.cook + FRY_RATE * this.fryBoost * FRY_SPEED[b.fry] * dt, zone.over, this.burnPace);
-        if (before < zone.done && b.cook >= zone.done) this.events.done();
+        if (before < zone.done && b.cook >= zone.done) this.events.done(2);
         if (!b.goldenRung && b.cook >= perfect - 0.04) {
           b.goldenRung = true;
           this.events.golden();

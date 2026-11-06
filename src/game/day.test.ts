@@ -5,7 +5,7 @@ import { fadePopularity } from "./press";
 import { buyBonus, buyLook, readyToBuy, wearLook } from "./garage";
 import { DEFAULT_LOOK, LOOKS, SLOTS } from "./looks";
 import { roadOrder } from "./devmode";
-import { expectedCustomers, RANGE_MI, rangeUnits, sleep } from "./day";
+import { expectedCustomers, NEW_REGION, RANGE_MI, rangeUnits, regionShifts, sleep } from "./day";
 import { migrateSave, freshSave, START_POPULARITY } from "./progress";
 import { arrivalGap, clockAt, crowdShare, DEFAULT_SHIFT, shiftSeconds, validShift } from "./shift";
 import { distance } from "./travel";
@@ -35,7 +35,7 @@ describe("who turns up", () => {
     const first = expectedCustomers(base);
     expect(first).toBeGreaterThanOrEqual(5);
     expect(first).toBeLessThan(stop.customers);
-    expect(expectedCustomers({ ...base, popularity: 90, rating: 4.8 })).toBeGreaterThan(stop.customers);
+    expect(expectedCustomers({ ...base, popularity: 100, rating: 4.8 })).toBeGreaterThan(stop.customers);
   });
 
   it("brings fewer people to a short menu and more to a long window", () => {
@@ -47,10 +47,19 @@ describe("who turns up", () => {
     expect(expectedCustomers({ ...base, popularity: 70, shift: { start: 12, end: 13 } })).toBeLessThan(all);
   });
 
-  it("keeps the crowd on Chill, packs more in on Stressful, and the sandwich board pulls more", () => {
-    expect(expectedCustomers({ ...base, popularity: 70, pacing: "chill" })).toBe(expectedCustomers({ ...base, popularity: 70 }));
+  it("brings fewer on Relaxed, packs more in on Busy, and the sandwich board pulls more", () => {
+    expect(expectedCustomers({ ...base, popularity: 70, pacing: "chill" })).toBeLessThan(expectedCustomers({ ...base, popularity: 70 }));
     expect(expectedCustomers({ ...base, popularity: 70, pacing: "stressful" })).toBeGreaterThan(expectedCustomers({ ...base, popularity: 70 }));
     expect(expectedCustomers({ ...base, popularity: 70, bonuses: ["board"] })).toBeGreaterThan(expectedCustomers({ ...base, popularity: 70 }));
+  });
+
+  it("brings a smaller crowd to a new region's first shifts, never to the first region", () => {
+    const bay = townById("saltwater");
+    const full = expectedCustomers({ ...base, stop: bay, popularity: 50 });
+    const first = expectedCustomers({ ...base, stop: bay, popularity: 50, regionShifts: regionShifts({}, bay) });
+    expect(first).toBeLessThan(full);
+    expect(expectedCustomers({ ...base, stop: bay, popularity: 50, regionShifts: 3 })).toBe(full);
+    expect(regionShifts({}, townById("pinecrest"))).toBeGreaterThanOrEqual(NEW_REGION.length);
   });
 });
 

@@ -1,12 +1,12 @@
 import { CROWD, MIN_MENU, menuFor } from "../game/business";
 import { BONUSES, bonusById, GREAT, MAX_PICKS, townBonus, validPicks } from "../game/bonus";
-import { expectedCustomers } from "../game/day";
+import { expectedCustomers, newRegionCrowd, regionShifts } from "../game/day";
 import { DIFFICULTIES, DIFFICULTY, type Difficulty } from "../game/difficulty";
 import { criticChance, type PressPiece } from "../game/press";
 import type { Save } from "../game/progress";
 import { ratingPull, reviewAverage, reviewTotal, REVIEW_CHANCE } from "../game/reviews";
 import { clockLabel, FIRST_HOUR, hourRate, LAST_HOUR, MIN_SHIFT, shiftHours, type ShiftWindow } from "../game/shift";
-import { eventOn, type Recipe, type Stop } from "../game/stops";
+import { eventOn, REGIONS, type Recipe, type Stop } from "../game/stops";
 import { askFor } from "../game/asks";
 import { icon } from "../ui/icons";
 import { buildLine, methodTags, stackArt } from "./menuref";
@@ -136,7 +136,9 @@ export function prepHtml(p: PrepInput): string {
   const crowd = CROWD[stop.crowd];
   const w = save.shift;
   const picks = validPicks(save.picks, save.bonuses);
-  const input = { stop, popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: w, bonuses: picks, pacing };
+  const fresh = regionShifts(save.shiftsIn, stop);
+  const input = { stop, popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: w, bonuses: picks, pacing, regionShifts: fresh };
+  const region = REGIONS.find((r) => r.id === stop.region);
   const rating = reviewAverage(save.reviewCounts);
   const expect = expectedCustomers(input);
   const menu = menuFor(stop, save.hidden);
@@ -194,6 +196,7 @@ export function prepHtml(p: PrepInput): string {
           <li>${icon("star")}<span>Rating</span><b class="bv-mono">${rating === null ? "–" : rating.toFixed(1)}</b></li>
           <li>${icon("critic")}<span>Critic</span><b>${critic >= 1 ? "Booked" : critic >= 0.5 ? "Likely" : critic >= 0.25 ? "Possible" : "Unlikely"}</b></li>
         </ul>
+        ${newRegionCrowd(fresh) < 1 ? `<div class="bv-callout">${icon("people")}<span>Word hasn't reached ${esc(region?.name ?? "these parts")} yet, so it's a quieter day while you find your feet.</span></div>` : ""}
         ${ev ? `<div class="bv-callout">${icon("flag")}<span><b>${esc(ev.name)}.</b> ${esc(ev.blurb)}${ev.special ? ` Special: ${esc(ev.special.name)}.` : ""}</span></div>` : ""}
       </section>
 
@@ -216,7 +219,7 @@ export function prepHtml(p: PrepInput): string {
         <div class="prep-rows">${rows}</div>
       </section>
 
-      ${askHtml(stop, menu, save.day, expect)}
+      ${askHtml(stop, menu, save.day, expect, !!save.shiftsIn[stop.id])}
 
       <section class="prep-sec prep-card">
         <h3 class="prep-h">${icon("sparkle")}Bonuses${owned.length > 1 ? `<span>Pick up to ${MAX_PICKS}</span>` : ""}</h3>
@@ -256,7 +259,9 @@ export function renderPrep(host: HTMLElement, p: PrepInput, again: boolean): voi
 }
 
 /** Today's local ask (game/asks.ts): optional, a little extra money, and the shift counts as two. */
-function askHtml(stop: Stop, menu: readonly Recipe[], day: number, expect: number): string {
+function askHtml(stop: Stop, menu: readonly Recipe[], day: number, expect: number, beenBefore: boolean): string {
+  // No local ask on a town's first shift (one new thing at a time; main.ts startShift agrees).
+  if (!beenBefore) return "";
   const a = askFor(stop, menu, day, expect);
   return `<section class="prep-sec prep-card prep-ask">
         <h3 class="prep-h">${icon("flag")}Local ask <span class="prep-shift-label bv-mono">+${money(a.reward)}</span></h3>

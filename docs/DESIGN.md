@@ -1,4 +1,4 @@
-# Burger game: design doc (draft 1)
+# Bun Voyage: design doc
 
 Status: **confirmed by James on 2026-10-30.** Theme: Bun Voyage (food truck road
 trip). Art: toon-shaded 3D generated in code (pixelation possible later). Stack:
@@ -10,6 +10,38 @@ and stacking burgers (and later other grilled sandwiches). It runs in the
 browser first and is wrapped as an Android app later. Galaxy Burger was the
 genre reference; this game shares the genre, not the name, theme, characters,
 art or UI.
+
+---
+
+## Current rules (read this first)
+
+This doc is a history: sections 1 to 52 record each decision as it was made, and later sections overrule earlier ones. This summary is the game as it stands after §52. Where it and a numbered section disagree, the later section wins and this summary needs fixing.
+
+**Content is frozen** (scope review, 2026-11-06). No new towns, regions, counters, dishes, ingredients, fryer kinds, drinks, garnishes, bonuses, look slots, events, crowd types or ask kinds. Make what exists more distinct instead. No new one-shot hints: teaching goes into the coach. Cut for good: heat dial, grill scraping, chores, the raccoon, a menu editor, critic characters, a fourth counter, dessert, the corn steam well, churros, any economy beyond savings, endless modes beyond trip 2, online anything.
+
+**The day** (about 6 minutes). Morning map, Prep & Open, the shift, sundown and pull-back, the report card on the evening map, an optional drive, Sleep. A drive to any open town never costs a day (§51). Days pass only by sleeping, so events keep their fixed days.
+
+**Prep & Open** opens folded: expected crowd (with event, new-region and "New here" notes), Pacing and Shift (Lunch 11 to 3, or Full day 10 to 4 at 1.5x the length), the local ask, the bonuses brought last time, Open. "Change menu or bonuses" unfolds the menu (the town's signature dish first) and the full bonus list (§51, §50).
+
+**The shift.** Three counters: Drinks, the region's middle counter, Fryer. Middle counters: grill (Pines), panini press (Sunny Coast), comal (Red Rock), deck oven (Orchard Isle) (§24). A shift plays the town's `shiftLength` (180 to 220 s) x 1.36, then stays open until the window and line are empty ("N left to serve"). Customers queue outside; the bell calls them to one of three trays; the order is built on the tray and served. Recipes and tools learned in a town go to every town on that counter (§41).
+
+**Scoring.** Each order scores 0 to 100 from layers, cooking and presentation; 5 stars from 90, 4 from 70, 3 from 57, 2 from 45 (`scoring.ts`). Everyone shows an opinion face; some leave a review (§27). A shift passes at 2.5 stars average with half the crowd served. A great shift is 4.4 stars, 85% served and at least six served (or 80% of a small expected crowd) (`bonus.ts`).
+
+**Pacing** (§47, §51). Relaxed / Steady / Busy (ids chill / balanced / stressful). Relaxed is the default from the welcome card; three great Relaxed shifts in a row offer Steady once (§49). On every tier: ready alerts, and one drag lays a counted topping's whole count. A region's first three passed shifts after the Pines bring 0.6 / 0.75 / 0.9 of the crowd; a town's first shifts and a dish's first order come simpler.
+
+**The road.** 14 towns in 4 regions (Pines 4, Coast 4, Red Rock 3, Orchard Isle 3). Three passed shifts in a town open its roads; a great shift or a met local ask counts as two. Elk Pass is a spur that opens nothing. Port Amber is the last stop: its first pass queues the **Last night of the trip** festival shift, which ends on the trip card, a drive-off and credits, then Start trip 2 or Keep touring (§50).
+
+**Each town has** a crowd type, a signature dish (1.8x as often there), a local ask drawn from its own shortlist, a regular (name tag and "usual" ticket when at the window; +5 popularity on the third good visit), a bonus, and in 7 towns an event on fixed days (§50, §51).
+
+**Goals and money.** Takings (orders and tips minus giveaways and spills) go into savings. A great shift in a town unlocks its bonus, bought with savings; up to three come into a shift (14 bonuses, $4,210). The Garage sells 36 truck looks in 7 slots: about $15,300 for everything but the three absurd items ($10k to $15k, trip-2 goals). Each town has up to 5 postcard stamps (road, great, regular, event, 5 stars), shown on the map and collected in the postcard book with a 5-star row per dish (§50). Popularity (10 to 100, global) and rating drive the crowd. There is no other currency and nothing is lost but savings.
+
+**A new trip** keeps looks, stamps, the book, five-star dish counts, town bests and tutorial progress; it resets savings, bonuses, popularity, reviews, the road and regulars. After a finish, the next lap starts at popularity 40 with every crowd x1.2, and its stamps are gold (§50).
+
+**Teaching** (§26, §48, §49). Tutorial mode is on by default. The coach's thumb guides the first shift at the grill (three orders, the third with fries) and the first order at the press, comal and oven, with the clock held. Map lessons arrive one at a time. Lead tips ("New here", an event) own the tip lane for 6 s; action tips wait for the action; the ? button replays the last tip. How to Play is per region with animated walkthroughs.
+
+**Device and access** (§52). Fonts are bundled. Graphics start on Standard and step down once on slow frames. Save codes copy and paste a trip in Settings. Effects and Ambience (a generated bed per region) have separate switches; there is no music. Text size Normal / Large (all UI type is rem); Hand Right / Left mirrors the top bar; urgent lamps and red hold bars carry a shape as well as a colour. Reduced motion is honoured throughout. The phone's Back button works on every screen (`src/screens/nav.ts`).
+
+**Platform.** Web first (GitHub Pages from `main`, PWA with a build-stamped service worker). Android later through Capacitor; under Capacitor the web update paths turn off. Free or one-off price, no ads, no paid looks.
 
 ---
 
@@ -1122,6 +1154,74 @@ The study (doc "Bun Voyage difficulty curve study", reports in project files dif
 - **Fame** (`popularityTraffic`) is 0.5 + 0.65 x popularity: the same at the start, 1.15x at 100 (was 1.3x).
 - **Fixes.** `spawnGap` (never spaced arrivals) is gone. The Comfy bench also stops anyone in line giving up. An order put right after a send-back tips half. One person in line puts off at most a quarter of passers-by. Guided first orders use normal patience whose bar stops at half (was a fixed 900 s). Mushrooms on a pie roast at 0.85 (were pale at the crust's Perfect line). §26's note that Chill stops pours is now true again, on Relaxed.
 
+## 48. Teaching the press, comal and oven
+
+From the scope review (pick-list row 1). The grill's guided first shift (§26) now has a sequel at each later kitchen: the first order at the panini press, the comal and the deck oven is talked through by the coach. Code in `src/game/guided.ts` (when, and which dish), `src/tutorial/counters.ts` (the steps), `src/tutorial/coach.ts` (the `dragSwipe` gesture), `src/main.ts` (`game.guide`). Checked by `src/game/guided.test.ts` and `tools/playtest/kitchen-coach-bot.cjs`.
+
+- **When.** Tutorial mode on, at a press, comal or oven town, and that kitchen's lesson (`guided-press`, `guided-comal`, `guided-oven` in `bv-coach`) not yet learned. Only on the first shift at that kitchen (in any of its towns), unless the lessons are replaying (tutorial mode switched back on, which clears what was learned and the grill's guided shift too). Players whose grill lessons are done get it the same way. A trip under way before tutorial mode existed counts it as learned, like every other lesson.
+- **The order.** The shift's first customer orders the kitchen's first dish, plain, no sides: a Caprese at the press, Street Tacos at the comal, a Harvest Red at the oven (the menu's first dish if that one was taken off). The clock and the line stand still until it is served; its patience bar stops at half and it is always taken, as with the grill's guided orders. Nobody else comes until it is served. Serving it marks the lesson learned, and the clock starts.
+- **The steps.** A card first ("A new kitchen... follow the thumb one move at a time", Let's cook), then one gesture per step, read from what is on the counter right now, so a player who does things in another order gets the right next move:
+  - **Press:** a ciabatta into the open bay; tap the pesto bottle, tap the bread, draw it on in the close-up; each counted filling dragged on until the ticket has them all ("Mozzarella ×3"; since §51 the first drag brings the whole count on every tier); the top bread; swipe the handle down; watch the lid's meter (golden at the band, cheese melted); swipe the handle up; drag the panini to the tray; Serve. Built on the tray instead, it goes on there and then asks for the drag down into a bay. A wrong layer points at Undo.
+  - **Comal:** one corn tortilla per taco onto a free place on the hot side; watch the meters; each warm tortilla by its middle into the rack (one going hard comes first, urgent); a scoop of pork per taco; onion and cilantro once (over every taco); a lime wedge; drag the rack up to the tray; Serve.
+  - **Oven:** dough onto the peel; press the ladle in the pot and keep the finger down while the close-up opens, then spiral the sauce out to the crust; mozzarella up to the count; the peel's handle carried until the pie is over the ringed free spot, then flicked down; watch the crust's meter; the empty blade pushed straight in under the pie (letting go brings the peel home with it); the peel carried over the tray and flicked down; basil at the tray; Serve. Turning the pie is left out and named on the closing card.
+- **After.** A last card ("Your kitchen now") says the clock runs from here and where the other dishes are explained; it goes with Got it.
+- **The coach's new gesture.** `dragSwipe`: press, carry to a point, then flick on before letting go (the trail bends round the corner). The peel needs it, since letting go of the peel sends it home.
+- The region's "New here" line leads the tip lane (§49) and shows on Prep; while the coach's card is up the tips stay hidden as before.
+
+## 49. Teaching fixes after the scope review
+
+From the scope review of build #93 (pick-list rows 6, 11, 14 and 20). The rules as they stand:
+
+**The tip lane** (`src/game/hintlane.ts`). One lane of black tips under the HUD, with three kinds of tip:
+
+- **Lead tips** own the lane for their 6 s: an event's intro, and a town's "New here" line until a shift there has been passed. On an event day in a new town both show, the event first. Tips that come up meanwhile wait (at most three, the oldest plain one dropped first) and show after, unless they waited more than 15 s; a quick reaction under 2.5 s ("That tray is empty!") is about that moment and is dropped.
+- **Action tips** stay until the action happens or 10 s: the press handle down and up, fold, flip a quesadilla, the peel in and under, cut and the knife, crack the egg and bin the shells, lower the basket, fries into the carton, the lid, the pour, sauce on, Serve (`ACTION_TIPS` maps each tip to its action; main.ts calls `acted()` where the action happens). A passing one-liner ("Ham 2 of 3") can show over one, which comes back after if it's still waiting.
+- **Plain tips** show at once for their own seconds, as before.
+- **Last tip.** Once a tip has been up in a shift, a small round ? button sits at the right end of the tip lane, just under the HUD, whenever no tip or coach card is up (the HUD row itself is full at 320 px). A tap shows the last tip worth rereading (2.5 s or longer) again for 6 s.
+
+**New here, with the clock stopped.** Prep shows the town's "New here" line as a callout under the crowd (beside the event's, on an event day) until a shift there has been passed, as the town sheet already did.
+
+**The coach.**
+
+- The first "A new town!" lesson points at the newly opened, unworked town with the most roads on: Cedar Falls, not the Elk Pass spur.
+- "Treat the truck" (the Garage) is a one-time OK card at the top, ringing the Garage button, and only while no town sheet is open, so it never covers Prep & Open.
+- The selected tray is described as "the tray with the dark ring around it" (lessons and How to Play), since the ring is slate (§46).
+- **Guided order 3 brings small fries.** The fries lesson starts them first ("they take the longest"), then once they're frying sends the player back to build the burger while they cook, steps aside while they fry, and calls them back when golden (urgent). The coach-off walkthrough says to start the fries too.
+- **Work ahead.** The first time two orders are at the window, once the ticket lessons are done and the player is at the grill: an OK card, "start the next patty now, while you finish this one; park done food on the warm end", ringing the warm end.
+
+**The local ask** only says the shift counts as two toward opening the roads where a road is still to open (`roadsAhead`): not at Port Amber or Elk Pass, nor in a town whose roads are all open. The same goes for its "done" tip.
+
+**A nudge off Relaxed.** Great shifts in a row on Relaxed are counted (`save.paceNudge`, optional; a shift that isn't great, or on another pacing, resets it). At three, if the pacing is still Relaxed and it has never been offered, the report card shows one line: "You're making this look easy. Try Steady tomorrow: more customers and full tips." Its button sets tomorrow's pacing to Steady (as Prep would) and the line says so. It's offered once per save. Steady's blurb now says what it gives: the full lunch crowd, more customers than Relaxed and full tips, patient, sending back only what's clearly off.
+
+## 50. The end of the trip, stamps and the postcard book
+
+The scope review after build #93 (rows 2, 3, 4 and 13) found the trip ended on one row of a report card, the map showed nothing of how you did anywhere, the looks were priced for several trips and a new trip deleted them, and towns on the same counter had started to look alike. This section is how those work now. Code: `game/finale.ts`, `game/stamps.ts`, `game/identity.ts`, `game/tripstate.ts`, `screens/finale.ts`, `screens/postcards.ts`.
+
+**The last night of the trip.**
+- The first pass at Port Amber finishes the road. The report card's road row says "Road done": from tomorrow Port Amber throws a festival for the last night of the trip. `save.finale = { from: day + 1, done: false }`.
+- From that day Port Amber holds the **Last night of the trip** (`FINALE` in stops.ts, outside `EVENTS`): a party crowd, 1.5x the people, 40 s longer, and a special, Harbor Lights (oil, mozzarella, ham, pear and fig, honey after the oven; $16). It stays on until it is worked, so a player who drives off first finds it when they come back. The dock, the town's calendar, Prep and the map's flag show it like any event.
+- That shift ends on the **trip card** instead of the report card: trip number and day, days on the road, shifts worked (`save.worked`), stamps, the best order of the trip (`save.tripBest`, its score and town), regulars won, bonuses found, savings, every town worked with its best shift, and the truck as it looks now (truckart.ts, at night). "Report" opens the night's own report card over it.
+- **Drive off** pulls the map out to the island, draws every road between two towns worked this trip in gold, and the truck leaves Port Amber along the ferry line and fades out (about 3.6 s; a tap or Back ends it). Then the **credits**, a short roll over the night sky, and the choice: **Start trip 2** (asks once more: a new trip can't be undone) or **Keep touring** (every town stays open; the next trip is in Settings).
+- Back and × on the trip card skip the drive to the credits; Back, × or the scrim on the credits mean Keep touring. With reduced motion the drive and the roll are skipped (the trail is drawn, the credits stand still and scroll). The evening's Results brings the trip card back with Close only.
+- Saves from before this: a truck that has passed Port Amber is still on that trip and gets the last night offered there; one that started over after reaching it is on trip 2.
+
+**A new trip and the lap after a finish.**
+- A new trip (the credits or Settings) keeps the looks and what the truck wears, the postcard book, the five-star dish counts, town bests, trips finished and tutorial progress. Savings, bonuses, popularity, reviews, the road and the regulars start again.
+- `save.tripNo` counts laps. A new trip after Port Amber has been passed is the next lap; starting over before that is the same lap again. On lap 2 and after: popularity starts at 40 (not 25), every town's crowd is x1.2 (`tripState.crowd` in `expectedCustomers`), and stamps earned come in gold. Busy already pays 1.3x tips (§47). The map header shows "Trip N" from lap 2 (it used to count finishes).
+
+**Stamps and the postcard book.**
+- Five stamps per town: **Road** (three good shifts there, the roads open), **Great** (a great shift, which finds the town's bonus), **Regular** (the regular served well three times), **Event** (a passed shift on the town's event day; Port Amber's is the last night), **5 stars** (a passed shift averaging 4.8★ or more). Towns without an event have four, so the book has 64.
+- Stamps are stamped at the end of every shift from the trip's progress everywhere, plus that shift's event and five-star stamps (`stampShift`). Each is 1 (earned) or 2 (gold, earned on a later lap); gold is never lost. Old saves get their book seeded from what they show (road, great, regular, a town best of 4.8★).
+- On the map, each stamp earned in a town is a small square under it (under the pips while they show), red or gold. The town sheet shows its stamps in a row that opens the book at its page, and the report card has a Stamps row when a shift added or gilded one.
+- The **postcard book** opens from the book button in the map header: a count of stamps, gold and dishes, a key to the five stamps, then one postcard per town by region (name, crowd, signature dish, the stamp row, best shift, the regular's name; towns not reached yet are pale), then one row per dish, the event specials and Harbor Lights included, with five dots for serving it at five stars five times (`save.fives`, kept by a new trip). Back closes it.
+
+**The Garage, priced for a trip.** Everything but three items comes to about $15,300: everyday looks $50 to $900 (most under $500), the searchlights and the balloon the two grand ones at $3,000 and $4,000. The gold leaf ($12,000), the hot tub ($10,000) and the airship ($15,000) are absurd on purpose, goals for a second lap now that looks are kept. Looks already owned stay owned; nothing is refunded.
+
+**Town identity.**
+- Each town has a **signature dish** (`SIGNATURE`): Trailhead Classic, Summit Smash, Campfire Melt, Lumberjack Stack; Caprese, Tuna Melt, Chicken Pesto, Veggie Club; Street Tacos, Pastor Tacos, Breakfast Taco; Harvest Red, Fig & Ham, Calzone. It leads Prep's menu with a Signature tag, the town sheet and its postcard name it, and it is ordered 1.8x as often there (`pickRecipe`).
+- Each town's **local ask** comes from its own shortlist of the nine kinds (`TOWN_ASKS`), kept to what its kitchen and menu can do that day: commuter and party towns ask for speed, foodie towns for the finish (clean cuts at Harbor City and Port Amber, hand-pressed tortillas at Sun Valley), the oven towns for leopard spots, the grill towns for grill marks. A town that can do none of its list falls back to everything it can.
+- How to Play's Garage page says what stamps are and what the end of the road brings.
+
 ## 51. A shorter Prep and fewer chores
 
 After the scope review of build #93 (pick-list rows 5, 7, 8, 9, 10, 12 and 19). Prep had grown into a long form before every five-minute shift, a few rules cost taps or days without giving a decision, and two systems (regulars, people walking past) worked out of sight. Code: `src/screens/day.ts` (Prep), `src/game/shift.ts`, `src/game/travel.ts`, `src/game/bonus.ts`, `src/game/difficulty.ts`, `src/ui/regulars.ts`, and the Bonuses, Sauce, Ready alerts and Closing parts of `src/main.ts`. Playtest: `tools/playtest/prep51.cjs`.
@@ -1166,73 +1266,6 @@ The crowd formula is unchanged: a full day is just a longer window on the same c
 - While Closing, the HUD clock says "N left to serve" (everyone at the window and in line; "N left" under 360 px), and "Closing" once nobody is left.
 - The report card's Orders row adds "N walked past the line" (people who never joined because the line was long or they hadn't heard of the truck), after any who walked out or left the line.
 
-## 49. Teaching fixes after the scope review
-
-From the scope review of build #93 (pick-list rows 6, 11, 14 and 20). The rules as they stand:
-
-**The tip lane** (`src/game/hintlane.ts`). One lane of black tips under the HUD, with three kinds of tip:
-
-- **Lead tips** own the lane for their 6 s: an event's intro, and a town's "New here" line until a shift there has been passed. On an event day in a new town both show, the event first. Tips that come up meanwhile wait (at most three, the oldest plain one dropped first) and show after, unless they waited more than 15 s; a quick reaction under 2.5 s ("That tray is empty!") is about that moment and is dropped.
-- **Action tips** stay until the action happens or 10 s: the press handle down and up, fold, flip a quesadilla, the peel in and under, cut and the knife, crack the egg and bin the shells, lower the basket, fries into the carton, the lid, the pour, sauce on, Serve (`ACTION_TIPS` maps each tip to its action; main.ts calls `acted()` where the action happens). A passing one-liner ("Ham 2 of 3") can show over one, which comes back after if it's still waiting.
-- **Plain tips** show at once for their own seconds, as before.
-- **Last tip.** Once a tip has been up in a shift, a small round ? button sits at the right end of the tip lane, just under the HUD, whenever no tip or coach card is up (the HUD row itself is full at 320 px). A tap shows the last tip worth rereading (2.5 s or longer) again for 6 s.
-
-**New here, with the clock stopped.** Prep shows the town's "New here" line as a callout under the crowd (beside the event's, on an event day) until a shift there has been passed, as the town sheet already did.
-
-**The coach.**
-
-- The first "A new town!" lesson points at the newly opened, unworked town with the most roads on: Cedar Falls, not the Elk Pass spur.
-- "Treat the truck" (the Garage) is a one-time OK card at the top, ringing the Garage button, and only while no town sheet is open, so it never covers Prep & Open.
-- The selected tray is described as "the tray with the dark ring around it" (lessons and How to Play), since the ring is slate (§46).
-- **Guided order 3 brings small fries.** The fries lesson starts them first ("they take the longest"), then once they're frying sends the player back to build the burger while they cook, steps aside while they fry, and calls them back when golden (urgent). The coach-off walkthrough says to start the fries too.
-- **Work ahead.** The first time two orders are at the window, once the ticket lessons are done and the player is at the grill: an OK card, "start the next patty now, while you finish this one; park done food on the warm end", ringing the warm end.
-
-**The local ask** only says the shift counts as two toward opening the roads where a road is still to open (`roadsAhead`): not at Port Amber or Elk Pass, nor in a town whose roads are all open. The same goes for its "done" tip.
-
-**A nudge off Relaxed.** Great shifts in a row on Relaxed are counted (`save.paceNudge`, optional; a shift that isn't great, or on another pacing, resets it). At three, if the pacing is still Relaxed and it has never been offered, the report card shows one line: "You're making this look easy. Try Steady tomorrow: more customers and full tips." Its button sets tomorrow's pacing to Steady (as Prep would) and the line says so. It's offered once per save. Steady's blurb now says what it gives: the full lunch crowd, more customers than Relaxed and full tips, patient, sending back only what's clearly off.
-
-## 48. Teaching the press, comal and oven
-
-From the scope review (pick-list row 1). The grill's guided first shift (§26) now has a sequel at each later kitchen: the first order at the panini press, the comal and the deck oven is talked through by the coach. Code in `src/game/guided.ts` (when, and which dish), `src/tutorial/counters.ts` (the steps), `src/tutorial/coach.ts` (the `dragSwipe` gesture), `src/main.ts` (`game.guide`). Checked by `src/game/guided.test.ts` and `tools/playtest/kitchen-coach-bot.cjs`.
-
-- **When.** Tutorial mode on, at a press, comal or oven town, and that kitchen's lesson (`guided-press`, `guided-comal`, `guided-oven` in `bv-coach`) not yet learned. Only on the first shift at that kitchen (in any of its towns), unless the lessons are replaying (tutorial mode switched back on, which clears what was learned and the grill's guided shift too). Players whose grill lessons are done get it the same way. A trip under way before tutorial mode existed counts it as learned, like every other lesson.
-- **The order.** The shift's first customer orders the kitchen's first dish, plain, no sides: a Caprese at the press, Street Tacos at the comal, a Harvest Red at the oven (the menu's first dish if that one was taken off). The clock and the line stand still until it is served; its patience bar stops at half and it is always taken, as with the grill's guided orders. Nobody else comes until it is served. Serving it marks the lesson learned, and the clock starts.
-- **The steps.** A card first ("A new kitchen... follow the thumb one move at a time", Let's cook), then one gesture per step, read from what is on the counter right now, so a player who does things in another order gets the right next move:
-  - **Press:** a ciabatta into the open bay; tap the pesto bottle, tap the bread, draw it on in the close-up; each counted filling dragged on until the ticket has them all ("Mozzarella ×3 ... 1 of 3"; on Relaxed the first drag brings the whole count); the top bread; swipe the handle down; watch the lid's meter (golden at the band, cheese melted); swipe the handle up; drag the panini to the tray; Serve. Built on the tray instead, it goes on there and then asks for the drag down into a bay. A wrong layer points at Undo.
-  - **Comal:** one corn tortilla per taco onto a free place on the hot side; watch the meters; each warm tortilla by its middle into the rack (one going hard comes first, urgent); a scoop of pork per taco; onion and cilantro once (over every taco); a lime wedge; drag the rack up to the tray; Serve.
-  - **Oven:** dough onto the peel; press the ladle in the pot and keep the finger down while the close-up opens, then spiral the sauce out to the crust; mozzarella up to the count; the peel's handle carried until the pie is over the ringed free spot, then flicked down; watch the crust's meter; the empty blade pushed straight in under the pie (letting go brings the peel home with it); the peel carried over the tray and flicked down; basil at the tray; Serve. Turning the pie is left out and named on the closing card.
-- **After.** A last card ("Your kitchen now") says the clock runs from here and where the other dishes are explained; it goes with Got it.
-- **The coach's new gesture.** `dragSwipe`: press, carry to a point, then flick on before letting go (the trail bends round the corner). The peel needs it, since letting go of the peel sends it home.
-- The region's six-second "New here" hint is unchanged; while the coach's card is up the tips stay hidden as before.
-
-## 50. The end of the trip, stamps and the postcard book
-
-The scope review after build #93 (rows 2, 3, 4 and 13) found the trip ended on one row of a report card, the map showed nothing of how you did anywhere, the looks were priced for several trips and a new trip deleted them, and towns on the same counter had started to look alike. This section is how those work now. Code: `game/finale.ts`, `game/stamps.ts`, `game/identity.ts`, `game/tripstate.ts`, `screens/finale.ts`, `screens/postcards.ts`.
-
-**The last night of the trip.**
-- The first pass at Port Amber finishes the road. The report card's road row says "Road done": from tomorrow Port Amber throws a festival for the last night of the trip. `save.finale = { from: day + 1, done: false }`.
-- From that day Port Amber holds the **Last night of the trip** (`FINALE` in stops.ts, outside `EVENTS`): a party crowd, 1.5x the people, 40 s longer, and a special, Harbor Lights (oil, mozzarella, ham, pear and fig, honey after the oven; $16). It stays on until it is worked, so a player who drives off first finds it when they come back. The dock, the town's calendar, Prep and the map's flag show it like any event.
-- That shift ends on the **trip card** instead of the report card: trip number and day, days on the road, shifts worked (`save.worked`), stamps, the best order of the trip (`save.tripBest`, its score and town), regulars won, bonuses found, savings, every town worked with its best shift, and the truck as it looks now (truckart.ts, at night). "Report" opens the night's own report card over it.
-- **Drive off** pulls the map out to the island, draws every road between two towns worked this trip in gold, and the truck leaves Port Amber along the ferry line and fades out (about 3.6 s; a tap or Back ends it). Then the **credits**, a short roll over the night sky, and the choice: **Start trip 2** (asks once more: a new trip can't be undone) or **Keep touring** (every town stays open; the next trip is in Settings).
-- Back and × on the trip card skip the drive to the credits; Back, × or the scrim on the credits mean Keep touring. With reduced motion the drive and the roll are skipped (the trail is drawn, the credits stand still and scroll). The evening's Results brings the trip card back with Close only.
-- Saves from before this: a truck that has passed Port Amber is still on that trip and gets the last night offered there; one that started over after reaching it is on trip 2.
-
-**A new trip and the lap after a finish.**
-- A new trip (the credits or Settings) keeps the looks and what the truck wears, the postcard book, the five-star dish counts, town bests, trips finished and tutorial progress. Savings, bonuses, popularity, reviews, the road and the regulars start again.
-- `save.tripNo` counts laps. A new trip after Port Amber has been passed is the next lap; starting over before that is the same lap again. On lap 2 and after: popularity starts at 40 (not 25), every town's crowd is x1.2 (`tripState.crowd` in `expectedCustomers`), and stamps earned come in gold. Busy already pays 1.3x tips (§47). The map header shows "Trip N" from lap 2 (it used to count finishes).
-
-**Stamps and the postcard book.**
-- Five stamps per town: **Road** (three good shifts there, the roads open), **Great** (a great shift, which finds the town's bonus), **Regular** (the regular served well three times), **Event** (a passed shift on the town's event day; Port Amber's is the last night), **5 stars** (a passed shift averaging 4.8★ or more). Towns without an event have four, so the book has 64.
-- Stamps are stamped at the end of every shift from the trip's progress everywhere, plus that shift's event and five-star stamps (`stampShift`). Each is 1 (earned) or 2 (gold, earned on a later lap); gold is never lost. Old saves get their book seeded from what they show (road, great, regular, a town best of 4.8★).
-- On the map, each stamp earned in a town is a small square under it (under the pips while they show), red or gold. The town sheet shows its stamps in a row that opens the book at its page, and the report card has a Stamps row when a shift added or gilded one.
-- The **postcard book** opens from the book button in the map header: a count of stamps, gold and dishes, a key to the five stamps, then one postcard per town by region (name, crowd, signature dish, the stamp row, best shift, the regular's name; towns not reached yet are pale), then one row per dish, the event specials and Harbor Lights included, with five dots for serving it at five stars five times (`save.fives`, kept by a new trip). Back closes it.
-
-**The Garage, priced for a trip.** Everything but three items comes to about $15,300: everyday looks $50 to $900 (most under $500), the searchlights and the balloon the two grand ones at $3,000 and $4,000. The gold leaf ($12,000), the hot tub ($10,000) and the airship ($15,000) are absurd on purpose, goals for a second lap now that looks are kept. Looks already owned stay owned; nothing is refunded.
-
-**Town identity.**
-- Each town has a **signature dish** (`SIGNATURE`): Trailhead Classic, Summit Smash, Campfire Melt, Lumberjack Stack; Caprese, Tuna Melt, Chicken Pesto, Veggie Club; Street Tacos, Pastor Tacos, Breakfast Taco; Harvest Red, Fig & Ham, Calzone. It leads Prep's menu with a Signature tag, the town sheet and its postcard name it, and it is ordered 1.8x as often there (`pickRecipe`).
-- Each town's **local ask** comes from its own shortlist of the nine kinds (`TOWN_ASKS`), kept to what its kitchen and menu can do that day: commuter and party towns ask for speed, foodie towns for the finish (clean cuts at Harbor City and Port Amber, hand-pressed tortillas at Sun Valley), the oven towns for leopard spots, the grill towns for grill marks. A town that can do none of its list falls back to everything it can.
-- How to Play's Garage page says what stamps are and what the end of the road brings.
 ## 52. Saves, Android readiness, sound and access
 
 From the scope review of build #93 (pick-list rows 15 to 18 and part of 21). No music: that stays a later asset job.

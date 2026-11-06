@@ -9,6 +9,7 @@ import type { Difficulty } from "../game/difficulty";
  */
 import "./menu.css";
 import type { Stop } from "../game/stops";
+import type { Save } from "../game/progress";
 import type { VersionInfo } from "../update";
 import { dropBack, pushBack } from "./nav";
 import { icon } from "../ui/icons";
@@ -30,8 +31,12 @@ export interface MenuDeps {
   poutine?(): number | null;
   /** Small line under the menu title, e.g. "Day 4 · Pinecrest". */
   subtitle?(): string;
+  /** Effects: every cooking and UI sound. */
   sound(): boolean;
   setSound(on: boolean): void;
+  /** The region's ambient bed (src/ambience.ts), apart from the effects. */
+  ambience?(): boolean;
+  setAmbience?(on: boolean): void;
   difficulty(): Difficulty;
   setDifficulty(d: Difficulty): void;
   gfx(): GfxLevel;
@@ -53,6 +58,10 @@ export interface MenuDeps {
   /** Tutorial mode was switched back on: the next shift is talked through again. */
   /** Tutorial mode switched in Settings: on replays the guided first shift, off skips it. */
   setTutorial?(on: boolean): void;
+  /** The trip as a save code, for Settings → Copy save code (game/savecode.ts). */
+  saveCode?(): string;
+  /** Replace the trip with one pasted as a code (checked and confirmed already). */
+  loadTrip?(s: Save): void;
   /** Dev mode: swap in a simulated trip at 0, 50 or 100% of the road, or bring the real one back (null). */
   simulate?(level: number | null): void;
 }

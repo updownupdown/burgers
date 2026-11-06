@@ -1,6 +1,7 @@
 import type { DrinkId, ExpectedLayer, FriesSize, FryKind, Kind, Modifier, Order, Size } from "./types";
 import { AFTER_OVEN, BREADS, COUNTED, DRINK_LABEL, extraCount, FRY_LABEL, OVEN_CHEESE, PRESS_CHEESE, PROTEINS, SAUCES } from "./types";
 import { fountainFor, fryerOf, recipeCount, type Recipe, type Stop } from "./stops";
+import { SIGNATURE_WEIGHT, signatureOf } from "./identity";
 
 export const FRIES_PRICE: Record<FriesSize, number> = { S: 2, M: 3, L: 4 };
 export const DRINK_PRICE: Record<Size, number> = { S: 1, M: 2, L: 3 };
@@ -281,8 +282,9 @@ export function recipeWeight(r: Recipe, level: number): number {
   return w;
 }
 
-export function pickRecipe(menu: readonly Recipe[], level: number, rng: Rng): Recipe {
-  const ws = menu.map((r) => recipeWeight(r, level));
+export function pickRecipe(menu: readonly Recipe[], level: number, rng: Rng, signature: string | null = null): Recipe {
+  // The town's signature dish (identity.ts) is ordered more there.
+  const ws = menu.map((r) => recipeWeight(r, level) * (r.name === signature ? SIGNATURE_WEIGHT : 1));
   let t = rng() * ws.reduce((a, b) => a + b, 0);
   for (let i = 0; i < menu.length; i++) {
     t -= ws[i];
@@ -301,7 +303,7 @@ export function makeOrder(id: number, rng: Rng, level: number, stop: Stop): Orde
   // Towns without poutine still roll for it, so the rest of the order stream stays the same.
   if (level >= 0.15 && rng() < POUTINE_CHANCE && stop.poutine) return poutineOrder(id, rng, level, drinks, fryer[0]);
   if (level >= 0.15 && rng() < SIDES_ONLY_CHANCE) return sidesOrder(id, rng, drinks, fryer);
-  const recipe = pickRecipe(stop.menu, level, rng);
+  const recipe = pickRecipe(stop.menu, level, rng, signatureOf(stop.id));
   const fries = rng() < 0.25 + level * 0.4;
   const drink = rng() < 0.2 + level * 0.5 ? anyDrink(drinks, rng) : null;
   // Modifiers keep tickets short: a known recipe plus "no pickles" rather than a new list.

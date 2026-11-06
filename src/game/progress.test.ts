@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { freshSave, loadSave, migrateSave, todaysClosing, type Closing, type Save } from "./progress";
 import { applyTrip, planTrip } from "./travel";
-import { rangeUnits } from "./day";
 import { STOPS } from "./stops";
 
 /** A Closing for today's shift in `town`, enough for the checks here. */
@@ -18,9 +17,9 @@ describe("today's results after an evening hop (review #78 B4)", () => {
   it("keeps today's Closing wherever the truck is that evening", () => {
     const s: Save = { ...freshSave(), town: home.id, day: 3, time: "evening", unlocked: [home.id, next.id] };
     s.last = closing(home.id, 3);
-    const trip = planTrip(s.town, next.id, s.unlocked, { time: s.time, range: rangeUnits(), driven: s.driven })!;
-    expect(trip.when).toBe("now");
+    const trip = planTrip(s.town, next.id, s.unlocked)!;
     applyTrip(s, trip);
+    expect(s.time).toBe("evening");
     expect(s.town).toBe(next.id);
     expect(todaysClosing(s)).toBe(s.last);
     // And a reload keeps it too.

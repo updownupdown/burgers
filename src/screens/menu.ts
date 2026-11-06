@@ -29,6 +29,9 @@ import { middleOf, type MiddleCounter, type Stop } from "../game/stops";
 const MIDDLE_LABEL: Record<MiddleCounter, string> = { grill: "Grill", press: "Press", comal: "Comal", oven: "Oven" };
 import { devOn, setDevOn, SIM_LEVELS, simLevel } from "../game/devmode";
 import { coachOn, setCoachOn } from "../tutorial/coach";
+import { handedness, setHand, setTextSize, textSize, type Hand, type TextSize } from "../a11y";
+import { isNative } from "../platform";
+import { bindSaveCode, bindShiftLog, saveCodeHtml, shiftLogHtml } from "./settings-extra";
 
 export type { GfxLevel, MenuDeps } from "./modal";
 export { openHowTo } from "./howto";
@@ -36,8 +39,8 @@ export { openMenuRef } from "./menuref";
 
 
 const GFX: { id: GfxLevel; label: string; blurb: string }[] = [
-  { id: "low", label: "Low", blurb: "No shadows, for older or slower phones." },
-  { id: "standard", label: "Standard", blurb: "Hard shadows. A little lighter on the battery." },
+  { id: "low", label: "Low", blurb: "No shadows and rougher edges, for older or slower phones. Edges change from the next start." },
+  { id: "standard", label: "Standard", blurb: "Hard shadows. Lighter on the battery. New installs start here." },
   { id: "high", label: "High", blurb: "Soft shadows. Looks its best." },
 ];
 
@@ -110,7 +113,7 @@ export function openMenu(over: Partial<MenuDeps> = {}): void {
       <div class="menu-body menu-scroll menu-general">
         ${row("menuref", "food-menu", "Menu", `${esc(town.name)} · ${town.menu.length} burgers, sides and drinks`)}
         <h3 class="menu-h">${icon("truck")}Bun Voyage</h3>
-        ${row("settings", "settings", "Settings", "Sound, graphics, the app")}
+        ${row("settings", "settings", "Settings", "Sound, graphics, text, your trip")}
         ${row("howto", "help", "How to Play", "Your kitchen step by step, the fryer, drinks, the road")}
         <p class="menu-build bv-mono">${esc(buildLabel())}</p>
       </div>`,
@@ -305,20 +308,24 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
       <div class="menu-body menu-scroll menu-general menu-groups">
         <section class="menu-group">
           <h3 class="menu-h">${icon("phone")}Device</h3>
-          ${toggle("sound", d.sound() ? "sound-on" : "sound-off", "Sound", d.sound())}
+          ${toggle("sound", d.sound() ? "sound-on" : "sound-off", "Effects", d.sound(), "Cooking, bells and taps")}
+          ${d.ambience ? toggle("ambience", "wave", "Ambience", d.ambience(), "The sound of each place, on the map and under the cooking") : ""}
           ${hapticsSupported() ? toggle("haptics", "vibrate", "Vibration", hapticsOn(), "A buzz on flips, dings and burns") : ""}
           ${field("gfx", "sparkle", "Graphics", GFX.find((g) => g.id === gfx)!.blurb, GFX.map((g) => ({ v: g.id, label: g.label })), gfx)}
+          ${field("text", "text-size", "Text size", TEXT.find((t) => t.id === textSize())!.blurb, TEXT.map((t) => ({ v: t.id, label: t.label })), textSize())}
+          ${field("hand", "hand", "Hand", HAND.find((h) => h.id === handedness())!.blurb, HAND.map((h) => ({ v: h.id, label: h.label })), handedness())}
         </section>
+        ${d.saveCode && d.loadTrip ? saveCodeHtml(inShift) : ""}
         <section class="menu-group">
           <h3 class="menu-h">${icon("sparkle")}Learning</h3>
           ${toggle("tutorial", "help", "Tutorial mode", coachOn(), "A see-through thumb shows each new move. Turning it on plays the lessons again.")}
         </section>
         <section class="menu-group">
           <h3 class="menu-h">${icon("truck")}App</h3>
-          ${row("update", "update", "Check for updates", "", "")}
+          ${isNative() ? "" : row("update", "update", "Check for updates", "", "")}
           ${d.canInstall() ? row("install", "pin", "Install the app", "Add Bun Voyage to your home screen and play offline", "") : ""}
-          ${row("newtrip", "flag", "Start a new trip", "Back to the first town with an empty garage.", "", 'data-tone="danger"')}
-          ${confirmBox("newtrip", `${inShift ? "End this shift and start over?" : "Start over?"} Savings, bonuses, looks, popularity and reviews all reset. Town bests are kept.`, "Start over")}
+          ${row("newtrip", "flag", "Start a new trip", "Back to the first town. Looks and stamps come with you.", "", 'data-tone="danger"')}
+          ${confirmBox("newtrip", `${inShift ? "End this shift and start over?" : "Start over?"} Savings, bonuses, popularity and reviews reset. Looks, stamps, the postcard book and town bests are kept.`, "Start over")}
         </section>
         ${inShift || !d.simulate ? "" : devHtml()}
         <p class="menu-build bv-mono" ${inShift || !d.simulate ? "" : 'data-m="build"'}>${esc(buildLabel())}</p>
@@ -334,9 +341,12 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
       } else if (!show) c.hidden = true;
     });
 
+  const saveCode = d.saveCode && d.loadTrip ? bindSaveCode(card, { saveCode: d.saveCode, loadTrip: (s) => (closeAllModals(), d.loadTrip!(s)) }) : () => false;
+  const shiftLog = bindShiftLog(card);
   card.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-m]");
     if (!btn || !card.contains(btn)) return;
+    if (saveCode(btn.dataset.m!) || shiftLog(btn.dataset.m!)) return;
     switch (btn.dataset.m!) {
       case "close":
         popModal();
@@ -356,6 +366,26 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
         d.setSound(on);
         setToggle(btn, on);
         btn.querySelector(".lead")!.innerHTML = icon(on ? "sound-on" : "sound-off");
+        break;
+      }
+      case "ambience": {
+        const on = !d.ambience?.();
+        d.setAmbience?.(on);
+        setToggle(btn, on);
+        break;
+      }
+      case "text": {
+        const v = btn.dataset.v as TextSize;
+        setTextSize(v);
+        pickSeg(card, btn, TEXT.find((t) => t.id === v)!.blurb);
+        // The game lays itself out again at the new size.
+        window.dispatchEvent(new Event("resize"));
+        break;
+      }
+      case "hand": {
+        const v = btn.dataset.v as Hand;
+        setHand(v);
+        pickSeg(card, btn, HAND.find((h) => h.id === v)!.blurb);
         break;
       }
       case "tutorial": {
@@ -425,6 +455,15 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
   });
 }
 
+const TEXT: { id: TextSize; label: string; blurb: string }[] = [
+  { id: "normal", label: "Normal", blurb: "Text at its usual size." },
+  { id: "large", label: "Large", blurb: "All text a size up, tickets and tips too." },
+];
+const HAND: { id: Hand; label: string; blurb: string }[] = [
+  { id: "right", label: "Right", blurb: "Undo on the left of the top bar, Pause on the right." },
+  { id: "left", label: "Left", blurb: "Pause on the left of the top bar, Undo on the right." },
+];
+
 const SIM_NOTE: Record<string, string> = {
   off: "Playing your real trip.",
   "0": "A fresh trip: the first town, nothing earned yet. Your real trip is kept aside.",
@@ -450,6 +489,7 @@ function devHtml(): string {
     <div class="menu-dev" ${on ? "" : "hidden"}>
       ${field("sim", "chart", "Simulate progress", SIM_NOTE[cur], [{ v: "off", label: "Off" }, ...SIM_LEVELS.map((l) => ({ v: String(l), label: `${l}%` }))], cur)}
       ${field("cooktime", "clock", "Cook time", cookNote(cookTime()), COOK_TIMES.map((t) => ({ v: String(t), label: `${t}x` })), String(cookTime()))}
+      ${shiftLogHtml()}
     </div>
   </section>`;
 }

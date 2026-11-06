@@ -1,0 +1,24 @@
+/* A town's regular (DESIGN §51): a name tag over their bean, and their name on the ticket. */
+.regular-tag {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, -100%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  padding: 3px 9px 4px 7px;
+  border-radius: var(--bv-r-pill);
+  background: var(--bv-paper, #f6f1e7);
+  color: var(--bv-ink, #2a2622);
+  border: 1.5px solid var(--bv-ink, #2a2622);
+  font: 800 0.75rem/1.1 var(--bv-font-ui);
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.18);
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  animation: pop 0.25s ease-out;
+}
+.regular-tag[hidden] { display: none; }
+.regular-tag .bv-icon { flex: none; font-size: 0.75rem; color: var(--bv-paprika, #d9553a); }
+.ticket .tk-regular { flex: none; font: 800 0.6875rem/1 var(--bv-font-ui); font-style: normal; background: var(--bv-paprika-soft, #f6d9cf); color: var(--bv-ink, #2a2622); border: 1px solid var(--bv-paprika, #d9553a); border-radius: 4px; padding: 2px 5px 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

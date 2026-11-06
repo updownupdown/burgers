@@ -1,7 +1,7 @@
 // The map dock never cuts off text (DESIGN §46): every town at 320, 360 and 390 px, morning and evening,
 // and on its event day, checks the town's name and the line under it for overflow and prints PASS/FAIL. With OUT= it also
 // saves one sheet per width of every town's dock (`<OUT>dock-<w>.png`).
-// PORT=4191 [OUT=dir/] node tools/playtest/dock-fit.cjs
+// PORT=4191 [OUT=dir/] [TEXT=large] node tools/playtest/dock-fit.cjs
 const { chromium } = require('playwright');
 const TOWNS = ['pinecrest', 'elkpass', 'cedarfalls', 'summit', 'saltwater', 'gullpoint', 'driftwood', 'harbor', 'redmesa', 'cactus', 'sunvalley', 'applecross', 'larkvale', 'portamber'];
 // Each town's event day (stops.ts EVENTS): the dock's line reads the event's name then.
@@ -12,6 +12,7 @@ const out = process.env.OUT;
   let fails = 0;
   for (const w of [320, 360, 390]) {
     const p = await (await b.newContext({ viewport: { width: w, height: 760 }, deviceScaleFactor: 2 })).newPage();
+    if (process.env.TEXT) await p.addInitScript((t) => localStorage.setItem('bv-text', t), process.env.TEXT); // TEXT=large: DESIGN §52
     await p.goto('http://localhost:' + (process.env.PORT || 4173) + '/');
     const shots = [];
     for (const town of TOWNS) {

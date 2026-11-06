@@ -1,9 +1,11 @@
 /**
- * When the window is open. The player picks a window of whole clock hours on the Prep screen;
- * the default is the lunch rush, 11:00 to 15:00, and a shift is at least four hours. People arrive
- * along a lunch curve, busiest from noon to one and quiet at either end, so an early start warms
- * up gently and a late close winds down. A town's `shiftLength` is the play time of the default
- * four hours; every hour of the window plays for a quarter of it.
+ * When the window is open. Since DESIGN §51 Prep offers two shifts: **Lunch**, 11:00 to 15:00
+ * (the default), or a **Full day**, 10:00 to 16:00, which plays half as long again and brings
+ * everyone who comes by in those six hours. People arrive along a lunch curve, busiest from noon
+ * to one and quiet at either end, so the full day's extra hours add fewer people than the lunch
+ * hours do (`crowdShare`, about 1.24x). A town's `shiftLength` is the play time of the four lunch
+ * hours; every hour of the window plays for a quarter of it. The save keeps the window itself
+ * (`ShiftWindow`), so the clock and the crowd still read it.
  */
 
 export interface ShiftWindow {
@@ -13,6 +15,9 @@ export interface ShiftWindow {
 }
 
 export const DEFAULT_SHIFT: ShiftWindow = { start: 11, end: 15 };
+/** The two shifts Prep offers. */
+export type ShiftKind = "lunch" | "full";
+export const SHIFTS: Record<ShiftKind, ShiftWindow> = { lunch: DEFAULT_SHIFT, full: { start: 10, end: 16 } };
 /** The shortest shift, in hours. */
 export const MIN_SHIFT = 4;
 /** The earliest opening and the latest closing. */
@@ -26,13 +31,18 @@ export function hourRate(hour: number): number {
   return HOUR_RATE[Math.floor(hour)] ?? 0.25;
 }
 
-/** A saved window made valid: whole hours inside the day, at least MIN_SHIFT hours long. */
+/** Which of the two shifts a window is nearest: five hours or more is a full day. */
+export function shiftKind(w: Partial<ShiftWindow> | null | undefined): ShiftKind {
+  if (!w || typeof w.start !== "number" || typeof w.end !== "number") return "lunch";
+  return w.end - w.start >= 5 ? "full" : "lunch";
+}
+
+/**
+ * A saved window made one of the two shifts (an old save's slider window goes to the nearest:
+ * five hours or more is a full day, anything shorter is lunch).
+ */
 export function validShift(w: Partial<ShiftWindow> | null | undefined): ShiftWindow {
-  let start = Math.round(w?.start ?? DEFAULT_SHIFT.start);
-  let end = Math.round(w?.end ?? DEFAULT_SHIFT.end);
-  start = Math.max(FIRST_HOUR, Math.min(LAST_HOUR - MIN_SHIFT, start));
-  end = Math.max(start + MIN_SHIFT, Math.min(LAST_HOUR, end));
-  return { start, end };
+  return { ...SHIFTS[shiftKind(w)] };
 }
 
 export function shiftHours(w: ShiftWindow): number {

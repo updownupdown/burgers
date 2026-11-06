@@ -6,8 +6,10 @@ import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { expectedCustomers, regionShifts, sleep } from "./game/day";
 import { greatShift, togglePick, townBonus, validPicks, type BonusId } from "./game/bonus";
 import { cookTime, shiftStretch } from "./game/pace";
-import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, validShift, type ShiftWindow } from "./game/shift";
-import { freshSave, loadSave, passed, passTown, todaysClosing, writeSave, type Closing } from "./game/progress";
+import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, SHIFTS, validShift, type ShiftWindow } from "./game/shift";
+import { loadSave, passed, passTown, todaysClosing, writeSave, type Closing } from "./game/progress";
+import { finishFinale, noteShift, queueFinale, startNewTrip, syncTrip } from "./game/finale";
+import { noteFive, stampShift } from "./game/stamps";
 import { eventOn, fountainFor, fryerOf, garnishFor, garnishOf, middleOf, townById, withEvent, withLearned, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
@@ -23,6 +25,7 @@ import type { DrinkId, FriesSize, FryKind, Garnish, Layer, Order, Piece, Plate, 
 import { GARNISH_LABEL } from "./game/types";
 import { makeGarnish } from "./render/models/garnish";
 import { countRegular, REGULAR_AT, REGULAR_GOAL, REGULAR_POP, regularOrder } from "./game/regulars";
+import { RegularTags } from "./ui/regulars";
 import { AFTER_OVEN, BREADS, COMAL_FILL, COUNTED, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, FRY_LABEL, fryOf, GRILLABLE, isSauce, KIND_LABEL, newPiece, pressable, PROTEINS, sauceRadius, SCOOPED, SIZE_LABEL, SUGARED, TORTILLAS, unfoldTortilla } from "./game/types";
 import { SCALE } from "./render/units";
 import { dressCup } from "./render/cup";
@@ -51,7 +54,7 @@ import { Dusk } from "./render/dusk";
 import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
-import { renderPrep, reviewsHtml, syncRange, toggleIngredients } from "./screens/day";
+import { renderPrep, reviewsHtml, toggleIngredients, togglePrepFold } from "./screens/day";
 import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, setTabArt, ticketHtml, tortillaMeter } from "./ui";
 import { icon } from "./ui/icons";
 import { DRINK_TINT } from "./render/machines";
@@ -59,39 +62,53 @@ import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type Ve
 import { closeAll, initMenu, openHowTo, openMenu, openMenuRef, openSettings } from "./screens/menu";
 import { dropBack, pushBack } from "./screens/nav";
 import { devOn, simulate, type SimLevel } from "./game/devmode";
-import { coachOn, coachShowing, coachState, setCoachOn, skipLessonsFor, startCoach } from "./tutorial/coach";
+import { coachOn, coachShowing, coachState, isLearned, markLearned, setCoachOn, skipLessonsFor, startCoach } from "./tutorial/coach";
+import { guidedKey, guidedKitchen, guidedRecipe, type NewKitchen } from "./game/guided";
 import { lessons } from "./tutorial/lessons";
+import { ACTION_TIPS, HintLane, type TipOpts } from "./game/hintlane";
+import { newHere, offerSteady, relaxedStreak, roadsAhead } from "./game/teaching";
 import { showWelcome, welcomeDue } from "./tutorial/welcome";
 import { modalClosedAt, modalOpen } from "./screens/modal";
+// Platform: saves, graphics probe, ambience, text size and hand, shift log (DESIGN §52).
+import { autoStepped, FrameWatch, markAutoStepped, stepDown, storedGfx, type Gfx } from "./perf";
+import { botQuiet, keepStorage } from "./platform";
+import { toast } from "./ui/toast";
+import { addToLog, logEntry } from "./game/shiftlog";
+import { Ambience, AMBIENCE_LEVEL } from "./ambience";
+import { applyAccess } from "./a11y";
+import { encodeSave } from "./game/savecode";
+
+applyAccess();
 
 // ---------------------------------------------------------------------------
 // Setup
 
 const canvas = document.getElementById("gl") as HTMLCanvasElement;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+// Low draws without MSAA; the renderer is made once, so a change to or from Low shows from the next start.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: storedGfx() !== "low" });
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.setScissorTest(true);
 
 const sfx = new Sfx();
+/** The region's ambient bed, on the map and under the kitchen (src/ambience.ts). */
+const ambience = new Ambience(() => sfx.context());
+// Any first tap unlocks audio, so the map's ambience starts with it (and iOS gets resumed after a call).
+window.addEventListener("pointerdown", () => sfx.unlock(), { capture: true });
 const customersView = new CustomersView();
 const trayView = new TrayView();
 const counter = new CounterView();
 
 /**
  * Graphics tiers change only cost, never the look: high = soft shadows, standard = hard
- * shadows, low = no shadows and a 1x pixel ratio for slower phones.
+ * shadows, low = no shadows, no MSAA and a 1x pixel ratio for slower phones. New installs start
+ * on Standard, and a slow first shift steps down once (src/perf.ts).
  */
-type Gfx = "high" | "standard" | "low";
-let gfx: Gfx = "high";
+let gfx: Gfx = storedGfx();
 /** Frames drawn since the game paused (see frame()). */
 let pausedDraws = 0;
-try {
-  const saved = localStorage.getItem("bv-gfx");
-  if (saved === "high" || saved === "standard" || saved === "low") gfx = saved;
-} catch {
-  // ignore
-}
+/** Watches frame times in a shift for the one automatic step down. */
+const frameWatch = new FrameWatch(autoStepped() || botQuiet());
 /**
  * Relaxed, Steady or Busy (ids chill, balanced, stressful; src/game/difficulty.ts), picked on Prep.
  * A new player starts on Relaxed (the welcome card says so); a trip already under way that never
@@ -122,6 +139,8 @@ function applyGfx(level: Gfx): void {
 const ui = buildUi(document.getElementById("ui")!, PAGES);
 
 const save = loadSave();
+// Port Amber's last night and a lap's bigger crowd follow the save (game/finale.ts).
+syncTrip(save);
 if (!pickedPacing && !save.tutorialDone) difficulty = "chill";
 /** The town being worked: its event today and the tools learned further down its road. */
 const stop = () => withEvent(withLearned(townById(game.town), save.shiftsIn), game.event);
@@ -164,7 +183,7 @@ const game = {
   served: 0,
   lost: 0,
   stars: [] as number[],
-  best: null as { name: string; score: number } | null,
+  best: null as { name: string; score: number; dish?: string } | null,
   spawned: 0,
   /** Customers who have reached the window and ordered. */
   ordered: 0,
@@ -172,6 +191,9 @@ const game = {
   orderSeq: 1,
   active: 0,
   tutorial: true,
+  /** The new kitchen whose first order the coach is guiding this shift (game/guided.ts, DESIGN §48), and the one it has just taught. */
+  guide: null as NewKitchen | null,
+  guided: null as NewKitchen | null,
   /** The trip's first day on Relaxed: nothing scores under four stars and only happy customers review. */
   gentle: false,
   town: save.town,
@@ -306,6 +328,8 @@ const bands = { customers: { x: 0, y: 0, w: 0, h: 0 } as Rect, tray: {} as Rect,
 let colX = 0;
 /** Where the order rail sits in the customers band (CSS px from the top). */
 let railTop = 100;
+/** The town's regular's name tag over their head (ui/regulars.ts). */
+const regularTags = new RegularTags(ui.root);
 /** Where the receipts were last placed, so they're only moved when focus or the orders change. */
 let ticketsAt = "";
 /** The focused order's ticket is opened out. Tapping it folds it back; tapping a stub opens that one. */
@@ -376,12 +400,15 @@ function layout(): void {
     b.style.top = `${railY - 6}px`;
     b.style.maxWidth = `${slotW - 8}px`;
   });
+  // The regular's name tag sits where bubbles go, over their head (DESIGN §51).
+  regularTags.place(w, railY * 0.58);
   ticketsAt = "";
   // Tips have one lane, just under the HUD over the customers, clear of the receipts and the
   // counter you're working on (the local ask is a flag in the HUD, so nothing else sits there).
   const hudEl = ui.root.querySelector<HTMLElement>(".hud");
   const hudBottom = hudEl?.offsetHeight ? hudEl.offsetTop + hudEl.offsetHeight : hudH;
   ui.hint.style.top = `${hudBottom + 6}px`;
+  ui.tipBtn.style.top = `${hudBottom + 8}px`;
   // Turned sideways mid-shift: pause behind the "turn your phone" overlay.
   if (W > H && H < 500 && game.phase === "playing") {
     cancelPointer();
@@ -414,14 +441,20 @@ function spawnCustomer(slotIdx: number, seed: number, early?: Order): void {
   const s = game.slots[slotIdx];
   let order = early ?? nextOrder();
   // The first shift's guided orders (tutorial/lessons.ts): the simplest burger, then the same with a
-  // small drink (so the counters get swiped), then once more on its own.
+  // small drink (so the counters get swiped), then with small fries (the fryer lesson: two timers at once).
   const lesson = game.tutorial && game.ordered < GUIDED ? game.ordered : -1;
   if (lesson >= 0) {
     const drink = lesson === 1 ? fountainFor(stop().region)[0] : null;
-    order = orderFromRecipe(order.id, stop().menu[0], false, drink, [], "S", "S");
+    order = orderFromRecipe(order.id, stop().menu[0], lesson === 2, drink, [], "S", "S");
     if (drink) order.ice = null;
   }
   s.lesson = lesson;
+  // A new kitchen's guided first order (DESIGN §48): its simplest dish, plain, no sides.
+  const firstDish = game.guide && game.ordered === 0 ? guidedRecipe(shopStop().menu, game.guide) : null;
+  if (firstDish) {
+    order = orderFromRecipe(order.id, firstDish, false, null, [], "S", "S");
+    s.lesson = 0;
+  }
   s.order = order;
   // The plate is kept: the slot was free, so anything on it was put there ahead for whoever steps up
   // (served, refused and walked-out trays are cleared when they leave).
@@ -502,6 +535,11 @@ function callNext(prefer = -1): boolean {
   return true;
 }
 
+/** The Comfy bench (DESIGN §51): a call made by hand brings one more up with it, if there's room. */
+function benchCall(): void {
+  if (has("bench")) callNext();
+}
+
 /**
  * A tap on an empty tray calls the next person to it (after build #78): the bell is in the hardest
  * spot to reach with a thumb, the trays are not. The header bell still works.
@@ -512,6 +550,7 @@ function callToTray(i: number): void {
   const atWindow = game.slots.filter((s) => s.order || s.fig).length;
   if (atWindow >= WINDOW[game.pacing]) return void hintOnce("bell-full", `No room at the window: ${WINDOW[game.pacing]} at a time on ${DIFFICULTY[game.pacing].label}. Serve someone first.`, 3.5);
   if (!callNext(i)) return;
+  benchCall();
   ui.bell.classList.remove("ring");
   void ui.bell.offsetWidth;
   ui.bell.classList.add("ring");
@@ -542,6 +581,7 @@ function ringBell(): void {
     return;
   }
   if (callNext()) {
+    benchCall();
     coachCounts.bell++;
     hintOnce("bell-called", "Next! More people at the window means more money, if you can keep up.", 3.5);
   }
@@ -599,7 +639,7 @@ function noteServed(order: Order, r: { stars: number; touches: string[] }, patie
   if (!askMet()) showHint(`Local ask ${game.askCount}/${a.need}: ${a.text}`, 3);
   if (askMet()) {
     game.money += a.reward;
-    showHint(`Local ask done: ${a.text}. +$${a.reward}, and today counts as two shifts here.`, 4);
+    showHint(`Local ask done: ${a.text}. +$${a.reward}${roadsAhead(stop(), save.unlocked) ? ", and today counts as two shifts here" : ""}.`, 4);
     setTimeout(() => sfx.coin(), 700);
   }
 }
@@ -632,6 +672,7 @@ function serve(i: number): void {
     showHint("That tray is empty!", 1.5);
     return;
   }
+  acted("serve");
   // Serving can't be undone: whatever was put on this tray stays put (even if it comes back).
   finishFly();
   history.forgetTray(i);
@@ -662,10 +703,13 @@ function serve(i: number): void {
   game.served++;
   game.stars.push(r.stars);
   if (r.stars >= 4) {
-    save.known[s.order.name] = (save.known[s.order.name] ?? 0) + 1;
+    // The first good serve of a dish is all `known` needs: after it, that dish comes with changes and sides.
+    if (!save.known[s.order.name]) save.known[s.order.name] = 1;
+    // Five-star dishes fill their row in the postcard book (game/stamps.ts).
+    if (s.order.layers.length) noteFive(save, s.order.name, r.stars);
     writeSave(save);
   }
-  if (!game.best || r.score > game.best.score) game.best = { name: `#${s.order.id} ${s.order.name} (${r.score}%)`, score: r.score };
+  if (!game.best || r.score > game.best.score) game.best = { name: `#${s.order.id} ${s.order.name} (${r.score}%)`, score: r.score, dish: s.order.name };
   // Everyone shows a face; only something specific (missing, wrong, especially quick or good) gets words.
   const say = opinionLine({ stars: r.stars, missing: r.missing, notes: r.notes, perks: r.perks, patience: s.patience / s.maxPatience }, game.rng);
   customerLeaves(i, r.stars, say, reviewed, r.stars === 4 && !r.missing && r.notes.length > 0);
@@ -681,6 +725,12 @@ function serve(i: number): void {
   if (game.tutorial && s.lesson === 1) {
     save.tutorialDone = true;
     writeSave(save);
+  }
+  // A new kitchen's guided order served: learned, and the clock starts.
+  if (game.guide && s.lesson === 0) {
+    markLearned(guidedKey(game.guide));
+    game.guided = game.guide;
+    game.guide = null;
   }
   s.lesson = -1;
 }
@@ -971,16 +1021,29 @@ function syncTray(i: number, animate: boolean): void {
 // ---------------------------------------------------------------------------
 // Hints
 
-let hintUntil = 0;
-let hintText = "";
+/** The tip lane's rules (game/hintlane.ts): lead tips, action tips that wait, the last tip again. */
+const lane = new HintLane();
+/**
+ * The lane's own clock: seconds of shift play (frames are capped, so a stall while the kitchen
+ * loads or a pause doesn't eat a tip's time).
+ */
+let laneClock = 0;
+const laneNow = () => laneClock;
 /** A tip the player closed: it stays hidden until a different one comes up. */
 let hintDismissed = "";
 
 function dismissHint(): void {
   hintDismissed = ui.hintText.textContent ?? "";
-  if (hintText === hintDismissed) hintUntil = 0;
+  if (lane.text(laneNow()) === hintDismissed) lane.dismiss(laneNow());
   ui.hint.hidden = true;
 }
+// The HUD's last-tip button shows the last tip again.
+ui.tipBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (game.phase !== "playing") return;
+  hintDismissed = "";
+  lane.recall(laneNow());
+});
 // Close a tip with its X, or flick it away sideways or up.
 ui.hintClose.addEventListener("click", (e) => {
   e.stopPropagation();
@@ -1013,15 +1076,20 @@ ui.hintClose.addEventListener("click", (e) => {
   ui.hint.addEventListener("pointerup", end);
   ui.hint.addEventListener("pointercancel", end);
 }
-function showHint(text: string, seconds = 3): void {
-  hintText = text;
+function showHint(text: string, seconds = 3, opts?: TipOpts): void {
   if (text === hintDismissed) hintDismissed = "";
-  hintUntil = performance.now() + seconds * 1000;
+  lane.show(text, seconds, laneNow(), opts);
 }
+/** A one-time tip. One that asks for an action (ACTION_TIPS) stays until it's done, or 10 s. */
 function hintOnce(key: string, text: string, seconds = 4): void {
   if (game.hintsShown.has(key)) return;
   game.hintsShown.add(key);
-  showHint(text, seconds);
+  const until = ACTION_TIPS[key];
+  showHint(text, seconds, until ? { until } : undefined);
+}
+/** The player did `tag` (ACTION_TIPS): a tip waiting for it goes. */
+function acted(tag: string): void {
+  lane.done(tag, laneNow());
 }
 
 /** The old text walkthrough of the first burger, for when tutorial mode (the thumb) is off. */
@@ -1031,6 +1099,10 @@ function tutorialHint(): string | null {
   if (!s) return null;
   const layers = s.plate.layers;
   const pattyOnGrill = counter.grillItems.find((g) => g.piece.kind === "patty");
+  const fries = !!s.order?.fries && !s.plate.fries;
+  // The fryer's own tips (scoop, lower, carton) take it from there.
+  if (fries && counter.page === 2) return null;
+  if (fries && !counter.baskets.some((b) => b.loaded)) return "This one wants small fries. Start them first: tap the fryer button on the right.";
   if (counter.page !== HOME_PAGE) return "Tap the grill button at the edge of the counter to go back.";
   if (layers.length === 0) return "Drag a bun up onto the plate on the tray.";
   const hasPatty = layers.some((l) => l.piece.kind === "patty");
@@ -1042,6 +1114,7 @@ function tutorialHint(): string | null {
     return "A bit past done. Grab it now, before it burns.";
   }
   if (layers[layers.length - 1].piece.kind !== "bun" || layers.length < 3) return "Add the top bun.";
+  if (fries) return "Now the fries: tap the fryer button on the right.";
   return "Tap Serve (or swipe the tray up) to hand it to the customer!";
 }
 
@@ -1313,9 +1386,10 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
       let n = 0;
       for (let i = s.plate.layers.length - 1; i >= 0 && s.plate.layers[i].piece.kind === p.kind; i--) n++;
       const want = s.order.layers.find((e) => e.kind === p.kind)?.count;
-      // Relaxed's helpers: the first of a counted topping brings the rest of the ticket's count with
-      // it (not tortillas or scoops, which are tacos and fillings of their own). Undo takes them all.
-      if (DIFFICULTY[game.pacing].helpers && want && n === 1 && want > 1 && !TORTILLAS.has(p.kind) && !SCOOPED.has(p.kind)) {
+      // The first of a counted topping brings the rest of the ticket's count with it, on every tier
+      // (DESIGN §51; not tortillas or scoops, which are tacos and fillings of their own). Undo takes
+      // them all; a drag after that adds one more.
+      if (want && n === 1 && want > 1 && !TORTILLAS.has(p.kind) && !SCOOPED.has(p.kind)) {
         const all: Layer[] = [l];
         for (let k = 1; k < want; k++) {
           const more = landing(s.plate.layers, { ...structuredClone(p), uid: newPiece(p.kind).uid }, spread);
@@ -1688,7 +1762,7 @@ function whereFood(p: Piece): Place | null {
   return bi >= 0 ? { at: "basket", i: bi } : null;
 }
 
-/** A counted topping that went on as the ticket's whole count (Relaxed): Undo carries them all back. */
+/** A counted topping that went on as the ticket's whole count (every tier): Undo carries them all back. */
 let bundled: { lead: Piece; layers: Layer[] } | null = null;
 
 /** A drop landed: note it, so Undo can carry it back. */
@@ -2342,6 +2416,7 @@ function releaseEgg(pt: Pointer, dt: number, cancelled: boolean): void {
   const justPicked = pt.hit?.type === "bin" && pt.hit.kind === "egg" && !pt.moved;
   if (justPicked) return;
   if (counter.overTrash(counter.groundPoint(ndc, 0.3))) {
+    if (e.stage === "shells") acted("shells");
     dropEggHand();
     sfx.thud();
     buzz(20);
@@ -2392,6 +2467,7 @@ function releaseEgg(pt: Pointer, dt: number, cancelled: boolean): void {
   counter.addGrillItem(newPiece("egg"), over.x, over.z);
   sfx.sizzleHit();
   setEggStage("shells");
+  acted("egg-crack");
   if (inOne) showHint("Clean crack!", 1.2);
   hintOnce("egg-shells", "Now drop the shells in the trash, along the front edge.", 3);
   zoneHint(over.x);
@@ -2594,6 +2670,7 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
       return false;
     }
     counter.dressCupAt(c, payload.type);
+    if (payload.type === "lid") acted("lid");
     dropped = { place: { at: "cup", x: c.x, z: c.z }, ref: c };
     if (payload.type === "ice") sfx.ice();
     else sfx.plop();
@@ -2657,6 +2734,7 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
     p.held = p.fill > 0 ? Math.max(p.held, payload.held ?? 0) : (payload.held ?? 0);
     p.fill = Math.min(1, p.fill + moved / portion);
     counter.syncPack(pi);
+    acted("pack");
     sfx.plop();
     // Whatever didn't fit stays in the basket for the next carton.
     const left = payload.amount - moved;
@@ -2869,6 +2947,7 @@ function paintBench(pt: Pointer): void {
   const last = stroke[stroke.length - 1];
   if (!last || Math.hypot(q.x - last.x, q.z - last.z) > 0.06) {
     stroke.push(q);
+    if (steadySauceFull(stroke)) return;
     setBench(b, ls);
     s.lastPaint = performance.now();
     if (s.lastPaint - lastSquirt > 70) {
@@ -2969,6 +3048,17 @@ function sauceMove(pt: Pointer): void {
   }
 }
 
+/**
+ * Steady hands (DESIGN §51): once a squeeze is just right, the bottle stops. True (and the point
+ * just added taken back off) when this point would have pushed it past the Perfect band.
+ */
+function steadySauceFull(stroke: { x: number; z: number }[]): boolean {
+  if (!has("steady") || sauceCoverage(stroke) <= SAUCE_BAND.hi) return false;
+  stroke.pop();
+  hintOnce("steady-sauce", "Steady hands: that's just right. The bottle stops there.", 2.5);
+  return true;
+}
+
 /** Squeeze a line where the nozzle is, if it's over the burger (and, dragged in, once it's come in over the middle). */
 function paintSauce(pt: Pointer): void {
   const s = sauceDrag!;
@@ -3005,6 +3095,7 @@ function paintSauce(pt: Pointer): void {
   const last = stroke[stroke.length - 1];
   if (!last || Math.hypot(q.x - top.offX - last.x, q.z - top.offZ - last.z) > 0.06) {
     stroke.push({ x: q.x - top.offX, z: q.z - top.offZ });
+    if (steadySauceFull(stroke)) return;
     syncTray(slot, false);
     s.lastPaint = performance.now();
     if (s.lastPaint - lastSquirt > 70) {
@@ -3040,6 +3131,7 @@ function closeSauce(): void {
   if (s.piece && (s.piece.stroke?.length ?? 0) > s.before) {
     const to = whereFood(s.piece);
     if (to) history.push({ what: { k: "sauce", piece: s.piece, before: s.before, kind: s.kind }, from: SUPPLY, to });
+    acted("sauce-on");
   }
   counter.liftSauce(null);
   if (s.bench) benchZoomOn = false;
@@ -3344,6 +3436,7 @@ canvas.addEventListener("pointerdown", (e) => {
         if (c.flavor !== t.flavor) counter.setCupFlavor(c, t.flavor);
         pt.mode = "pour";
         t.pouring = true;
+        acted("pour");
       }
     } else if (hit.type === "cup") {
       // Pick any cup up, full or empty, to move it or take it to the tray.
@@ -3626,6 +3719,7 @@ function foldMove(pt: Pointer, it: GrillItem): boolean {
   if (along < -R * 0.2) {
     // Folding keeps the meter where it was (the half that goes over brings its cooked face up).
     setFolded(it.piece, true);
+    acted("fold");
     // The half moon lies on the side the finger went, its crease across the drag.
     it.piece.foldYaw = Math.atan2(-ux, -uz);
     pt.foldFrom = undefined;
@@ -3647,6 +3741,7 @@ function foldMove(pt: Pointer, it: GrillItem): boolean {
 function closeBay(i: number): void {
   const b = counter.bays[i];
   counter.setLid(i, true);
+  acted("press-close");
   sfx.thud();
   if (b.layers.length) sfx.sizzleHit();
   buzz(18);
@@ -3674,6 +3769,7 @@ function tryCloseBay(i: number): void {
 /** Lift a press bay's lid. */
 function openBay(i: number): void {
   counter.setLid(i, false);
+  acted("press-open");
   sfx.whoosh();
   if (counter.bays[i].layers.length) hintOnce("press-out", "Drag it out of the bay to the tray.", 2.5);
 }
@@ -3746,6 +3842,7 @@ function cutNow(at: { x: number; y: number }): boolean {
     counter.setBoard([...h.layers]);
   }
   history.push({ what: { k: "cut", pieces: c.pieces, was }, from: { at: "knife" }, to: h === counter.peel ? { at: "peel" } : { at: "board" } });
+  acted("cut");
   sfx.flip();
   buzz(25);
   nameBubble(at, c.round ? "In four" : "Cut in half", 1100);
@@ -3915,6 +4012,7 @@ function foldPie(h: PieHolder): void {
   const d = ls[0]?.piece;
   if (!d) return;
   d.folded = true;
+  acted("fold");
   h.layers = [...ls];
   syncHolder(h);
   sfx.doughFold();
@@ -4013,6 +4111,7 @@ function slideScoop(init: boolean): void {
     if (!init && armed && !counter.peel.layers.length && slidUnder(b, place, PEEL)) {
       slideArm.set(key, false);
       take();
+      acted("peel-lift");
       return;
     }
     slideArm.set(key, armed);
@@ -4024,6 +4123,7 @@ function scoopSpot(i: number): void {
   const layers = counter.ovenSpots[i].layers;
   counter.setSpot(i, []);
   counter.setPeel(layers);
+  acted("peel-lift");
   noteFood(layers, { at: "spot", i }, { at: "peel" });
   justDid(`spot${i}`, "down");
   sfx.peelScrape();
@@ -4189,6 +4289,7 @@ function peelFlick(pt: Pointer, f: Flick): void {
   act(`spot${si}`);
   counter.setSpot(si, layers);
   counter.setPeel([]);
+  acted("peel-launch");
   noteFood(layers, { at: "peel" }, { at: "spot", i: si });
   sfx.pieDown(true);
   buzz(10);
@@ -4397,6 +4498,7 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
         if (flickUp || dt < 400) {
           const it = pt.hit.item;
           if (counter.flip(it)) {
+            acted("flip");
             sfx.flip();
             buzz(15);
             hintOnce("flip-done", it.piece.kind === "egg" ? "Flipped: over easy. Leave it sunny side up for orders that want it." : "Nice flip! Flipping cooks it evenly.", 2);
@@ -4413,6 +4515,7 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
         if (!b.loaded) showHint(counter.redRock ? "Drag tortilla wedges into the basket, or a corn tortilla to fry a tostada." : "Drag frozen fries into the basket.", 2);
         else if (!pt.moved || flickUp) {
           b.down = !b.down;
+          if (b.down) acted("basket-down");
           if (b.down) sfx.sizzleHit();
           else sfx.whoosh();
           if (b.down) hintOnce("fries-ding", "Watch the meter on the fryer: it beeps at perfect until you lift the basket.", 3.5);
@@ -4681,22 +4784,6 @@ function fitTicket(t: HTMLElement, render: (level: number) => string, levels = 5
 // Screens
 
 let screenShownAt = 0;
-// The shift window's two-thumb slider on Prep: follow the drag, then keep the window when let go.
-ui.root.addEventListener("input", (e) => {
-  const el = e.target as HTMLInputElement;
-  const end = el.dataset?.range as "start" | "end" | undefined;
-  if (!end || !prepOpen) return;
-  syncRange(ui.summary, end);
-});
-ui.root.addEventListener("change", (e) => {
-  const el = e.target as HTMLInputElement;
-  const end = el.dataset?.range as "start" | "end" | undefined;
-  if (!end || !prepOpen) return;
-  save.shift = validShift(syncRange(ui.summary, end));
-  writeSave(save);
-  showPrep();
-});
-
 ui.root.addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-act]");
   const act = btn?.dataset.act;
@@ -4742,6 +4829,19 @@ ui.root.addEventListener("click", (e) => {
     }
     case "prep-ing":
       toggleIngredients();
+      showPrep();
+      break;
+    // Lunch or Full day (DESIGN §51): kept in the save as the window itself.
+    case "prep-shift": {
+      const v = btn!.dataset.v;
+      if (v !== "lunch" && v !== "full") break;
+      save.shift = { ...SHIFTS[v] };
+      writeSave(save);
+      showPrep();
+      break;
+    }
+    case "prep-fold":
+      togglePrepFold(save.day, save.town);
       showPrep();
       break;
     case "prep-bonus": {
@@ -4810,10 +4910,7 @@ ui.root.addEventListener("click", (e) => {
         btn!.textContent = "Tap again to start over (towns and bonuses reset)";
         break;
       }
-      Object.assign(save, freshSave(), { tutorialDone: save.tutorialDone, trips: save.trips, best: save.best });
-      game.mapSel = save.town;
-      writeSave(save);
-      showTitle();
+      newTrip();
       break;
   }
 });
@@ -4833,6 +4930,16 @@ initMenu({
   subtitle: () => `Day ${save.day}`,
   counter: () => (counter.page === 0 ? "drinks" : counter.page === 2 ? "fryer" : "middle"),
   sound: () => !sfx.muted,
+  ambience: () => ambience.on,
+  setAmbience: (on) => {
+    sfx.unlock();
+    ambience.setOn(on);
+    try {
+      localStorage.setItem("bv-ambience", on ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  },
   setSound: (on) => {
     sfx.unlock();
     sfx.setMuted(!on);
@@ -4897,17 +5004,31 @@ initMenu({
   },
   simulate: (level) => {
     simulate(save, level === null ? null : (level as SimLevel));
+    syncTrip(save);
     game.mapSel = save.town;
     writeSave(save);
     if (game.phase === "title") showTitle();
   },
-  newTrip: () => {
-    Object.assign(save, freshSave(), { tutorialDone: save.tutorialDone, trips: save.trips, best: save.best });
+  newTrip: () => newTrip(),
+  saveCode: () => encodeSave(save),
+  loadTrip: (s) => {
+    // A pasted trip replaces this one whole (Settings has checked and confirmed it). Only from the map.
+    for (const k of Object.keys(save)) delete (save as unknown as Record<string, unknown>)[k];
+    Object.assign(save, s);
     game.mapSel = save.town;
     writeSave(save);
     showTitle();
+    toast("Trip loaded.", 3);
   },
 });
+
+/** Start a new trip (game/finale.ts): looks, stamps and the postcard book are kept; after a finish it's the next lap. */
+function newTrip(): void {
+  startNewTrip(save);
+  game.mapSel = save.town;
+  writeSave(save);
+  showTitle();
+}
 
 ui.menuBtn.addEventListener("click", () => {
   if (game.phase === "playing") {
@@ -4922,6 +5043,7 @@ try {
   if (localStorage.getItem("bv-muted") === "1") {
     sfx.setMuted(true);
   }
+  if (localStorage.getItem("bv-ambience") === "0") ambience.setOn(false);
 } catch {
   // ignore
 }
@@ -4938,6 +5060,7 @@ function shiftGuard(): void {
 
 function startShift(): void {
   cancelPointer();
+  frameWatch.reset();
   resetHands();
   endSundownLeftovers();
   for (const k of ["prep", "overlay"]) dropBack(k);
@@ -4974,6 +5097,9 @@ function startShift(): void {
     active: 0,
     // The guided shift's lessons are the grill's: anywhere else a replayed tutorial is a normal shift.
     tutorial: !save.tutorialDone && middleOf(stop()) === "grill",
+    // The press, comal and oven each guide their first order instead (DESIGN §48).
+    guide: guidedKitchen({ middle: middleOf(stop()), coach: coachOn(), learned: isLearned, shiftsIn: save.shiftsIn, replay: !save.tutorialDone }),
+    guided: null,
     comped: 0,
     reviews: [],
     line: [],
@@ -4996,7 +5122,6 @@ function startShift(): void {
   game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: game.shift, bonuses: game.bonuses, pacing: game.pacing, regionShifts: regionShifts(save.shiftsIn, stop()) });
   // A town's first shift is simpler (fewer changes and sides), then a little more, then as usual.
   game.townEase = [0.5, 0.75, 1][Math.min(2, save.shiftsIn[game.town] ?? 0)];
-  // The range is refuelled by endShift, not here: a shift quit or reloaded half way doesn't count.
   // Today's local ask, the same one Prep showed (not on the guided first shift).
   // Not on a town's first shift either: one new thing at a time.
   game.ask = game.tutorial || !save.shiftsIn[game.town] ? null : askFor(stop(), menuFor(stop(), save.hidden), save.day, game.customers);
@@ -5021,18 +5146,25 @@ function startShift(): void {
   const spec = DIFFICULTY[game.pacing];
   counter.holdRate = (has("lamp") ? 0.5 : 1) / spec.hold;
   // The Smart fountain, and Relaxed's helpers: the pour stops at the line and the lid goes on.
+  // The fountain also pours twice as fast, so it helps on Relaxed too (DESIGN §51).
   counter.autoStopPour = has("autostop") || spec.helpers;
   counter.autoLid = has("autostop") || spec.helpers;
-  // Relaxed: things still burn, at half the pace once over-done.
-  counter.burnPace = spec.burn;
+  counter.pourBoost = has("autostop") ? 2 : 1;
+  // Relaxed: things still burn, at half the pace once over-done. The Kitchen timer halves it again.
+  counter.burnPace = spec.burn * (has("timer") ? 0.5 : 1);
   // Relaxed: small slips cost half (scoring.ts).
   setSmallSlips(spec.small);
   counter.setPage(HOME_PAGE);
   playShiftReveal();
-  const intro = game.event
-    ? `${game.event.name} today! ${game.event.blurb}${game.event.special ? ` Special: ${game.event.special.name}.` : ""}`
-    : stop().newThing;
-  if (intro && !game.tutorial) showHint(intro, 6);
+  // The event and a new kitchen's "New here" lead the tip lane for their 6 s each, both on an event
+  // day in a new town; the first order's tips wait behind them (game/hintlane.ts). Prep and the town
+  // sheet say "New here" too, with the clock stopped.
+  lane.clear();
+  const intros = [
+    game.event ? `${game.event.name} today! ${game.event.blurb}${game.event.special ? ` Special: ${game.event.special.name}.` : ""}` : null,
+    newHere(stop(), save.shiftsIn),
+  ];
+  if (!game.tutorial) for (const t of intros) if (t) showHint(t, 6, { lead: true });
   ui.title.hidden = true;
   closeAll();
   ui.summary.hidden = true;
@@ -5191,6 +5323,15 @@ function showTitle(night: NightShow | null = null, arrive: Arrival | null = null
     },
     openSettings: () => openSettings(),
     openHowTo: () => openHowTo(),
+    setPacing: (d) => {
+      difficulty = d;
+      try {
+        localStorage.setItem("bv-difficulty", d);
+      } catch {
+        // Storage can be unavailable; the pick still holds for this session.
+      }
+    },
+    newTrip: () => newTrip(),
     sfx: { whoosh: () => sfx.whoosh(), coin: () => sfx.coin(), tap: () => sfx.unlock() },
   });
   game.mapSel = save.town;
@@ -5246,7 +5387,7 @@ function startSundown(): void {
   // The shift's Back guard stays up through the sundown and the pull-back (it does nothing once
   // play has stopped), so Back can't leave the page before the report card is up to catch it.
   game.phase = "sundown";
-  hintUntil = 0;
+  lane.clear();
   for (const s of game.slots) {
     s.bubble?.remove();
     s.bubble = null;
@@ -5330,6 +5471,7 @@ window.addEventListener(
 function endShift(arrive: Arrival): void {
   cancelPointer();
   resetHands();
+  const overrun = game.time - game.shiftLength;
   game.phase = "summary";
   // The shift fills the day; the evening follows, and only sleeping turns the day (see game/day.ts).
   save.time = "evening";
@@ -5367,6 +5509,11 @@ function endShift(arrive: Arrival): void {
   save.bank += takings;
   // A great shift unlocks this town's bonus, for sale in the Garage from now on.
   const great = !game.tutorial && greatShift(game.stars, game.served, game.served + game.lost, game.customers);
+  // Three great shifts in a row on Relaxed: the report card offers Steady for tomorrow, once.
+  const nudge = save.paceNudge ?? { streak: 0, offered: false };
+  const streak = relaxedStreak(nudge.streak, game.pacing, great);
+  const steady = offerSteady(streak, nudge.offered) && difficulty === "chill";
+  save.paceNudge = { streak, offered: nudge.offered || steady };
   let unlocked: BonusId | null = null;
   const tb = townBonus(here.id);
   if (great && tb && !save.found.includes(tb.id)) {
@@ -5380,6 +5527,14 @@ function endShift(arrive: Arrival): void {
     if (great || askMet()) passTown(save, here.id);
     if (lastStop) save.trips++;
   }
+  // The end of the trip (game/finale.ts): the road's done, so Port Amber holds the last night from
+  // tomorrow; and that night, once worked, ends on the trip card.
+  const finale = game.event?.id === "finale";
+  if (lastStop) queueFinale(save);
+  if (finale) finishFinale(save);
+  noteShift(save, game.best && game.best.dish ? { name: game.best.dish, score: game.best.score } : null, here.id);
+  // Postcard stamps (game/stamps.ts), gold on a later trip.
+  const stamped = stampShift(save, { town: here.id, ok, event: !!game.event, avg });
   const opened = save.unlocked.filter((id) => !before.includes(id)).map(townById);
   // Point the map at the next new town so "Back to the map" leads somewhere.
   if (opened.length) game.mapSel = opened[0].id;
@@ -5408,14 +5563,19 @@ function endShift(arrive: Arrival): void {
     press: game.press,
     great,
     pacing: game.pacing,
+    steady,
     unlocked,
     usedBonus: [...game.bonuses],
     bank: save.bank,
     shift: game.shift,
+    finale: finale || undefined,
+    stamped: stamped.length ? stamped : undefined,
   };
   save.last = closing;
   save.tutorialDone = true;
   writeSave(save);
+  addToLog(logEntry({ day: closing.day, town: here.id, tier: game.pacing, crowd: game.customers, served: game.served, walked: game.walkedPast, left: game.lost + game.leftLine, stars: game.stars, takings, overrun }));
+  void keepStorage();
   ui.title.hidden = false;
   // The results land on the evening map, as a sheet, after the view pulls back out of the truck.
   showTitle(null, arrive);
@@ -5479,10 +5639,12 @@ let guideGap = 0;
 
 function tick(dt: number): void {
   if (game.phase === "playing") {
+    laneClock += dt;
     // The first shift's guided orders (tutorial/lessons.ts): the clock waits while the first two are
     // talked through, and people come one at a time. The first customer; once they're served, the
     // next; and once that burger is under way, one more waits in line so the bell gets rung.
-    const guiding = game.tutorial && game.served < 2;
+    // A new kitchen's guided first order (DESIGN §48) holds the clock the same way, until it's served.
+    const guiding = (game.tutorial && game.served < 2) || (!!game.guide && game.served < 1);
     if (!(guiding && game.ordered >= 1)) game.time += dt;
     let due = game.time >= game.nextSpawn;
     if (guiding && game.ordered >= 1) {
@@ -5662,11 +5824,11 @@ counter.events.spill = () => {
   showHint("It's overflowing! Let go, and wipe up the mess.", 2.5);
 };
 // Kitchen timer (bonus): a soft tick when anything on the grill or in the fryer reaches done.
-// Ready alerts (Relaxed and Steady, difficulty study): the same tick, and a word, when it's done on
-// a counter you aren't looking at; the counter's button lamp lights too (see updateHud).
+// Ready alerts (every tier since DESIGN §51): the same tick, and a word, when it's done on a
+// counter you aren't looking at; the counter's button lamp lights too (see updateHud).
 counter.events.done = (page) => {
   if (game.phase !== "playing") return;
-  const away = page !== counter.page && DIFFICULTY[game.pacing].alerts;
+  const away = page !== counter.page;
   if (has("timer") || away) sfx.tick();
   if (away && page === HOME_PAGE) {
     const where = counter.middle === "press" ? "in the press" : counter.middle === "oven" ? "in the oven" : counter.middle === "comal" ? "on the comal" : "on the grill";
@@ -5698,7 +5860,10 @@ function updateUi(dt = 0): void {
   updateTrayActs();
   const len = game.shiftLength;
   const left = Math.max(0, len - game.time);
-  const tText = game.phase === "sundown" ? "Closed" : left > 0 ? clockLabel(clockAt(game.time, game.shift, len)) : "Closing";
+  // Closing (DESIGN §51): the clock says how many are still to serve, at the window and in line
+  // ("3 left" on a phone under 360 px, where the longer words would run into the money).
+  const toServe = game.line.length + game.slots.filter((s) => s.order && !s.leaving).length;
+  const tText = game.phase === "sundown" ? "Closed" : left > 0 ? clockLabel(clockAt(game.time, game.shift, len)) : toServe > 0 ? `${toServe} left${innerWidth < 360 ? "" : " to serve"}` : "Closing";
   if (tText !== lastTimerText) {
     ui.timer.textContent = tText;
     ui.timer.classList.toggle("closing", left <= 0 && game.phase !== "sundown");
@@ -5725,6 +5890,7 @@ function updateUi(dt = 0): void {
     const t = ui.tickets[i];
     const show = !!s.order && !s.leaving && game.phase !== "title";
     t.hidden = !show;
+    regularTags.sync(i, show && !s.bubble ? (s.order?.regular ?? null) : null);
     const back = ui.sentBack[i];
     const note = show && s.sentBack ? `Sent back: ${capitalise(s.sentBack)}` : "";
     back.hidden = !note;
@@ -5848,7 +6014,6 @@ function updateUi(dt = 0): void {
   const ovenBurning = pies.some((d) => darkSide(d) > COOK_SCALE.dough.over);
   // Ready alerts: the middle counter's lamp also lights for food done on the grill, comal or press.
   const grillReady =
-    DIFFICULTY[game.pacing].alerts &&
     (counter.grillItems.some((g) => !g.below && !g.held && g.piece.kind in COOK_SCALE && cookZone(g.piece.kind as Cookable, cookLevel(g.piece)) === "done") ||
       counter.bays.some((b, i) => {
         const r = i < counter.bayCount && b.closed ? counter.bayReading(b) : null;
@@ -5872,8 +6037,7 @@ function updateUi(dt = 0): void {
   });
 
   const tut = tutorialHint();
-  const now = performance.now();
-  const text = now < hintUntil ? hintText : tut;
+  const text = lane.text(laneNow()) ?? tut;
   // The tutorial's card says it better while it's up.
   const show = !!text && text !== hintDismissed && game.phase === "playing" && !coachShowing();
   if (show && ui.hintText.textContent !== text) {
@@ -5881,6 +6045,9 @@ function updateUi(dt = 0): void {
     ui.hint.style.transform = "";
   }
   ui.hint.hidden = !show;
+  // The last-tip button sits at the right end of the tip lane while the lane is empty.
+  const tipBtn = game.phase === "playing" && !!lane.last && !show && !coachShowing();
+  if (ui.tipBtn.hidden === tipBtn) ui.tipBtn.hidden = !tipBtn;
 }
 
 /**
@@ -6330,13 +6497,32 @@ function redrawPaused(): void {
   pausedDraws = 0;
 }
 
+/** Frames kept running slow in a shift: one level down, once per install, with a toast. */
+function stepGfxDown(): void {
+  markAutoStepped();
+  const to = stepDown(gfx);
+  if (!to) return;
+  applyGfx(to);
+  layout();
+  try {
+    localStorage.setItem("bv-gfx", to);
+  } catch {
+    // ignore
+  }
+  toast(`Graphics set to ${to === "low" ? "Low" : "Standard"} to keep things smooth. Settings can change it back.`, 5);
+}
+
 let last = performance.now();
 /** Automation can freeze the loop and drive time itself (see __bv below). */
 let manualClock = false;
 function frame(now: number): void {
   const dt = Math.min(0.05, (now - last) / 1000);
+  const frameMs = now - last;
   last = now;
+  if (!manualClock && frameWatch.sample(frameMs, game.phase === "playing" && !game.tutorial && !coachState())) stepGfxDown();
   if (!manualClock) {
+    const inKitchen = game.phase === "playing" || game.phase === "paused" || game.phase === "sundown";
+    ambience.update(inKitchen ? stop().region : townById(save.town).region, game.phase === "paused" ? AMBIENCE_LEVEL.paused : inKitchen ? AMBIENCE_LEVEL.kitchen : AMBIENCE_LEVEL.map);
     tick(dt);
     // The home screen covers the truck completely, so skip drawing it there and save battery;
     // paused, the picture under the menu is still, so it's drawn twice and then left.
@@ -6398,6 +6584,17 @@ startCoach(
       holding: () => !!counter.inHand || !!eggHand || ptr?.mode === "held",
       windowCap: () => WINDOW[game.pacing],
       counts: coachCounts,
+      // The counter close-up (press sauce, the oven's ladle) opens over ladleFinal() (DESIGN §48 lessons).
+      closeUp: () => {
+        if (!(benchZoomOn && benchZoom.eased > 0.85) && !(ladleZoomOn && ladleZoom.eased > 0.85)) return null;
+        const f = ladleFinal();
+        return { x: colX + f.x + f.w / 2, y: f.y + f.h / 2, r: f.w / 2 };
+      },
+      closeUpFinal: () => {
+        const f = ladleFinal();
+        return { x: colX + f.x + f.w / 2, y: f.y + f.h / 2, r: f.w / 2 };
+      },
+      ladling: () => !!ladle,
     },
   }),
   { paused: () => modalOpen() || (game.phase === "playing" && document.hidden) },
@@ -6439,6 +6636,8 @@ window.addEventListener("blur", cancelPointer);
 // Debug/automation hook for playtesting in a headless browser.
 (window as unknown as { __bv: unknown }).__bv = {
   game,
+  ambience,
+  frameWatch,
   counter,
   trayView,
   bands,

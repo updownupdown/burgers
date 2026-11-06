@@ -26,28 +26,28 @@
 .day-screen .bv-mono { font-family: var(--bv-font-mono); font-weight: 500; font-variant-numeric: tabular-nums; }
 .day-screen .bv-chip.pill { border-radius: var(--bv-r-pill); }
 
-.day-count { margin: 0; font-size: 13px; font-weight: 700; color: var(--bv-mute); }
+.day-count { margin: 0; font-size: 0.8125rem; font-weight: 700; color: var(--bv-mute); }
 
 .day-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; overscroll-behavior: contain; }
 .day-scroll > * { flex-shrink: 0; }
 .day-foot { display: flex; align-items: center; gap: 10px; padding: 10px 14px calc(var(--safe-b) + 12px); border-top: 1px solid var(--bv-rule); background: var(--bv-paper); box-shadow: 0 -6px 14px rgb(42 38 34 / 0.06); }
 .day-foot .sum { display: grid; line-height: 1.1; min-width: 0; flex: 1; }
 /* Words in Hanken, only the number in mono ("~9 customers"). */
-.day-foot .sum b { font-family: var(--bv-font-ui); font-weight: 700; font-size: 20px; white-space: nowrap; }
+.day-foot .sum b { font-family: var(--bv-font-ui); font-weight: 700; font-size: 1.25rem; white-space: nowrap; }
 .day-foot .sum b .bv-mono { font-weight: 500; }
 .day-foot .bv-btn.lg { min-width: 140px; }
-.day-hint { font-size: 12.5px; font-weight: 600; color: var(--bv-ink-2); line-height: 1.4; }
+.day-hint { font-size: 0.7813rem; font-weight: 600; color: var(--bv-ink-2); line-height: 1.4; }
 .day-hint b { color: var(--bv-ink); }
-.day-note { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--bv-ink-2); }
-.day-note .bv-icon { color: var(--bv-paprika); font-size: 16px; flex: none; margin-top: 1px; }
-.day-build { font: 500 12px var(--bv-font-mono); color: var(--bv-mute); text-align: center; margin: 4px 0 0; }
+.day-note { display: flex; gap: 8px; align-items: flex-start; font-size: 0.8125rem; color: var(--bv-ink-2); }
+.day-note .bv-icon { color: var(--bv-paprika); font-size: 1rem; flex: none; margin-top: 1px; }
+.day-build { font: 500 0.75rem var(--bv-font-mono); color: var(--bv-mute); text-align: center; margin: 4px 0 0; }
 
 /* ---- prep fields ---------------------------------------------------------------------- */
 .day-field { display: grid; gap: 6px; }
 .day-field .bv-eyebrow { display: flex; justify-content: space-between; align-items: center; }
-.day-field .bv-eyebrow .bv-icon { font-size: 13px; margin-right: 4px; vertical-align: -2px; }
-.day-crowd { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--bv-ink-2); line-height: 1.4; }
-.day-crowd .bv-icon { font-size: 18px; color: var(--bv-ink); flex: none; margin-top: 1px; }
+.day-field .bv-eyebrow .bv-icon { font-size: 0.8125rem; margin-right: 4px; vertical-align: -2px; }
+.day-crowd { display: flex; gap: 10px; align-items: flex-start; font-size: 0.8125rem; color: var(--bv-ink-2); line-height: 1.4; }
+.day-crowd .bv-icon { font-size: 1.125rem; color: var(--bv-ink); flex: none; margin-top: 1px; }
 .day-crowd b { color: var(--bv-ink); }
 
 /* menu rows */
@@ -55,61 +55,61 @@
 /* the ledger receipt */
 .day-ledger { position: relative; background: var(--bv-paper-2); border: 1px solid var(--bv-rule-2); border-radius: var(--bv-r-sm); padding: 12px 12px 10px; }
 .day-ledger h4 { margin: 0 0 6px; display: flex; justify-content: space-between; align-items: baseline; font-size: var(--bv-fs-xs); font-weight: 700; letter-spacing: var(--bv-track); text-transform: uppercase; color: var(--bv-mute); }
-.day-ledger dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; margin: 0; font-size: 13.5px; }
+.day-ledger dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; margin: 0; font-size: 0.8438rem; }
 .day-ledger dt, .day-ledger dd { padding: 5px 4px; border-bottom: 1px dotted var(--bv-rule-2); margin: 0; }
 .day-ledger dt { color: var(--bv-ink-2); font-weight: 600; display: grid; gap: 1px; }
-.day-ledger dt small { font-size: 11px; color: var(--bv-mute); font-weight: 600; }
+.day-ledger dt small { font-size: 0.6875rem; color: var(--bv-mute); font-weight: 600; }
 .day-ledger dd { text-align: right; font-family: var(--bv-font-mono); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--bv-ink); }
-.day-ledger dt.sub, .day-ledger dd.sub { padding-top: 0; color: var(--bv-olive); font-size: 12.5px; }
+.day-ledger dt.sub, .day-ledger dd.sub { padding-top: 0; color: var(--bv-olive); font-size: 0.7813rem; }
 .day-ledger dt.neg, .day-ledger dd.neg { color: var(--bv-ink-2); }
-.day-ledger dt.tot, .day-ledger dd.tot { border-bottom: 0; border-top: 1.5px solid var(--bv-ink); padding-top: 8px; font-weight: 800; color: var(--bv-ink); font-size: 15px; }
-.day-ledger dd.tot { font-size: 17px; }
+.day-ledger dt.tot, .day-ledger dd.tot { border-bottom: 0; border-top: 1.5px solid var(--bv-ink); padding-top: 8px; font-weight: 800; color: var(--bv-ink); font-size: 0.9375rem; }
+.day-ledger dd.tot { font-size: 1.0625rem; }
 .day-ledger .foot { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: var(--bv-fs-sm); color: var(--bv-mute); font-weight: 600; }
 .day-ledger .foot b { color: var(--bv-ink); }
 
 /* ---- stars and clippings (the reviews screen and the report card) ---------------------- */
-.day-stars { letter-spacing: 2px; color: var(--bv-amber); font-size: 12px; white-space: nowrap; }
+.day-stars { letter-spacing: 2px; color: var(--bv-amber); font-size: 0.75rem; white-space: nowrap; }
 .day-stars .off { opacity: 0.3; }
 .day-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .day-kpis.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .day-kpi { background: var(--bv-paper-2); border-radius: var(--bv-r-lg); padding: 8px 10px; display: grid; gap: 2px; line-height: 1.1; min-width: 0; }
-.day-kpi .bv-eyebrow { font-size: 10px; }
-.day-kpi b { font-family: var(--bv-font-mono); font-weight: 500; font-size: 18px; white-space: nowrap; }
-.day-kpi b .st { color: var(--bv-amber); font-size: 13px; }
+.day-kpi .bv-eyebrow { font-size: 0.625rem; }
+.day-kpi b { font-family: var(--bv-font-mono); font-weight: 500; font-size: 1.125rem; white-space: nowrap; }
+.day-kpi b .st { color: var(--bv-amber); font-size: 0.8125rem; }
 .day-kpi b.up { color: var(--bv-olive); }
 .day-kpi b.dn { color: var(--bv-paprika); }
-.day-kpi small { font-size: 11px; color: var(--bv-mute); line-height: 1.3; }
+.day-kpi small { font-size: 0.6875rem; color: var(--bv-mute); line-height: 1.3; }
 /* What every customer thought: a face per opinion with its count. */
 .day-ops { display: flex; flex-wrap: wrap; gap: 6px; }
-.day-ops > span { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px 4px 5px; border-radius: var(--bv-r-pill); background: var(--bv-paper-2); font-size: 13px; }
+.day-ops > span { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px 4px 5px; border-radius: var(--bv-r-pill); background: var(--bv-paper-2); font-size: 0.8125rem; }
 .day-ops > span.zero { opacity: 0.45; }
 .day-ops .op-face { width: 20px; height: 20px; }
 .day-ops b { font-weight: 500; }
 .day-sub { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font: 700 var(--bv-fs-sm) / 1.2 var(--bv-font-ui); letter-spacing: var(--bv-track); text-transform: uppercase; color: var(--bv-mute); }
-.day-sub .bv-icon { font-size: 15px; color: var(--bv-ink); }
+.day-sub .bv-icon { font-size: 0.9375rem; color: var(--bv-ink); }
 /* Reviews by stars: five bars, 5★ on top. */
 .day-bars { display: grid; gap: 5px; }
 .day-bars .row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 34px; align-items: center; gap: 8px; }
-.day-bars .lbl { font-size: 13px; color: var(--bv-ink-2); white-space: nowrap; }
+.day-bars .lbl { font-size: 0.8125rem; color: var(--bv-ink-2); white-space: nowrap; }
 .day-bars .lbl i { font-style: normal; color: var(--bv-amber); margin-left: 1px; }
 .day-bars .bar { height: 10px; border-radius: 5px; background: var(--bv-paper-3); overflow: hidden; }
 .day-bars .bar i { display: block; height: 100%; min-width: 0; border-radius: 5px; background: var(--bv-amber); }
-.day-bars b { font: 500 13px var(--bv-font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.day-bars b { font: 500 0.8125rem var(--bv-font-mono); text-align: right; font-variant-numeric: tabular-nums; }
 .day-card { display: grid; gap: 10px; padding: 12px; border-radius: var(--bv-r-lg); background: var(--bv-paper-2); }
 .day-card-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.day-card-h > b { font-size: 15px; font-weight: 700; }
+.day-card-h > b { font-size: 0.9375rem; font-weight: 700; }
 .day-avg { display: inline-flex; align-items: center; gap: 6px; }
-.day-avg .day-stars { font-size: 15px; letter-spacing: 1px; }
-.day-avg .bv-mono { font-size: 14px; }
-.day-road { display: grid; gap: 8px; font-size: 13.5px; color: var(--bv-ink-2); }
+.day-avg .day-stars { font-size: 0.9375rem; letter-spacing: 1px; }
+.day-avg .bv-mono { font-size: 0.875rem; }
+.day-road { display: grid; gap: 8px; font-size: 0.8438rem; color: var(--bv-ink-2); }
 .day-road b { color: var(--bv-ink); }
 .day-pips { display: flex; gap: 5px; }
 .day-pips i { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--bv-ink); display: block; }
 .day-pips i.on { background: var(--bv-ink); }
 .day-pips i.new { background: var(--bv-paprika); border-color: var(--bv-paprika); }
 .day-press { display: grid; gap: 4px; padding: 10px 12px; border-radius: var(--bv-r-md); background: var(--bv-amber-soft); border-left: 3px solid var(--bv-amber); }
-.day-press b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 19px; line-height: 1.1; }
-.day-press q { font-size: 13.5px; color: var(--bv-ink-2); quotes: "“" "”"; }
+.day-press b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 1.1875rem; line-height: 1.1; }
+.day-press q { font-size: 0.8438rem; color: var(--bv-ink-2); quotes: "“" "”"; }
 .day-press small { font-size: var(--bv-fs-sm); color: var(--bv-mute); font-weight: 700; }
 
 /* ---- reviews ------------------------------------------------------------------------------- */
@@ -122,8 +122,8 @@
 @media (prefers-reduced-motion: reduce) {
   .day-screen *, .day-screen *::before { transition: none !important; animation: none !important; }
 }
-.day-kpi .bv-eyebrow .bv-icon { font-size: 12px; vertical-align: -0.15em; margin-right: 4px; color: var(--bv-amber); }
-.day-kpi b small.of { font-size: 12px; color: var(--bv-mute); margin-left: 2px; }
+.day-kpi .bv-eyebrow .bv-icon { font-size: 0.75rem; vertical-align: -0.15em; margin-right: 4px; color: var(--bv-amber); }
+.day-kpi b small.of { font-size: 0.75rem; color: var(--bv-mute); margin-left: 2px; }
 
 /* ---- Prep & Open ------------------------------------------------------------------------ */
 /* Prep: who to expect on the left, what draws them stacked on the right. */
@@ -131,50 +131,50 @@
 .prep-expect { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 14px; align-items: center; padding: 14px; border-radius: var(--bv-r-lg); background: var(--bv-paper-2); }
 .prep-expect .l { display: grid; gap: 4px; justify-items: start; }
 .prep-expect .big { display: flex; align-items: baseline; gap: 8px; }
-.prep-expect .big b { font-size: 46px; line-height: 1; letter-spacing: -0.02em; }
-.prep-expect .big span { font-size: 15px; color: var(--bv-ink-2); }
-.prep-expect .crowd { margin-top: 2px; font-size: 13px; background: var(--bv-paper); }
-.prep-expect .r { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 1px solid var(--bv-rule-2); display: grid; gap: 7px; font-size: 13px; color: var(--bv-ink-2); }
+.prep-expect .big b { font-size: 2.875rem; line-height: 1; letter-spacing: -0.02em; }
+.prep-expect .big span { font-size: 0.9375rem; color: var(--bv-ink-2); }
+.prep-expect .crowd { margin-top: 2px; font-size: 0.8125rem; background: var(--bv-paper); }
+.prep-expect .r { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 1px solid var(--bv-rule-2); display: grid; gap: 7px; font-size: 0.8125rem; color: var(--bv-ink-2); }
 .prep-expect .r li { display: grid; grid-template-columns: 16px auto auto; align-items: center; column-gap: 6px; }
-.prep-expect .r .bv-icon { font-size: 15px; color: var(--bv-mute); }
+.prep-expect .r .bv-icon { font-size: 0.9375rem; color: var(--bv-mute); }
 .prep-expect .r b { justify-self: end; padding-left: 8px; color: var(--bv-ink); font-weight: 700; }
-.prep-expect .bv-callout { grid-column: 1 / -1; font-size: 13px; }
+.prep-expect .bv-callout { grid-column: 1 / -1; font-size: 0.8125rem; }
 .prep-sec { display: grid; gap: 10px; }
-.prep-h { margin: 0; display: flex; align-items: center; gap: 7px; font-size: 16px; font-weight: 700; }
-.prep-h .bv-icon { font-size: 18px; }
-.prep-h span { margin-left: auto; font-size: 12.5px; font-weight: 600; color: var(--bv-mute); }
-.prep-h .prep-shift-label { font-size: 14px; color: var(--bv-ink); }
+.prep-h { margin: 0; display: flex; align-items: center; gap: 7px; font-size: 1rem; font-weight: 700; }
+.prep-h .bv-icon { font-size: 1.125rem; }
+.prep-h span { margin-left: auto; font-size: 0.7813rem; font-weight: 600; color: var(--bv-mute); }
+.prep-h .prep-shift-label { font-size: 0.875rem; color: var(--bv-ink); }
 /* The shift's hours stay on one line at 320px ("9:00am – 5:00pm · 8 h" at the longest). */
 @media (max-width: 349px) {
-  .prep-h .prep-shift-label { font-size: 13px; }
+  .prep-h .prep-shift-label { font-size: 0.8125rem; }
 }
 
-/* The shift window: bars by the hour over a two-thumb slider. Thumbs land on the hour lines. */
-.prep-range { --thumb: 30px; position: relative; display: grid; gap: 2px; }
-.prep-range svg { display: block; width: calc(100% - var(--thumb)); margin: 0 auto; height: 56px; }
-.prep-range rect { fill: var(--bv-rule-2); transition: fill 0.15s; }
-.prep-range rect.on { fill: var(--bv-paprika); }
-.prep-range .rng { position: relative; height: var(--thumb); }
-.prep-range .track { position: absolute; left: calc(var(--thumb) / 2); right: calc(var(--thumb) / 2); top: 50%; height: 6px; margin-top: -3px; border-radius: 3px; background: var(--bv-rule-2); }
-.prep-range .track i { position: absolute; top: 0; bottom: 0; left: calc(var(--a) * 100%); width: calc((var(--b) - var(--a)) * 100%); border-radius: 3px; background: var(--bv-paprika); }
-.prep-range input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; background: none; -webkit-appearance: none; appearance: none; pointer-events: none; outline: none; }
-.prep-range input::-webkit-slider-runnable-track { height: var(--thumb); background: none; border: 0; }
-.prep-range input::-moz-range-track { height: var(--thumb); background: none; border: 0; }
-.prep-range input::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: var(--thumb); height: var(--thumb); border-radius: 50%; background: var(--bv-paper); border: 2px solid var(--bv-ink); box-shadow: 0 2px 5px rgb(42 38 34 / 0.22); cursor: grab; }
-.prep-range input::-moz-range-thumb { pointer-events: auto; width: var(--thumb); height: var(--thumb); box-sizing: border-box; border-radius: 50%; background: var(--bv-paper); border: 2px solid var(--bv-ink); box-shadow: 0 2px 5px rgb(42 38 34 / 0.22); cursor: grab; }
-.prep-range input:focus-visible::-webkit-slider-thumb { outline: 3px solid var(--bv-paprika-soft); }
+/* Pacing and the shift share one card; the shift's heading sits a little below the pacing's line (DESIGN §51). */
+.prep-today .prep-h + .bv-seg { margin-top: -2px; }
+.prep-today .day-hint + .prep-h { margin-top: 8px; }
+.prep-today .bv-seg small { display: block; font-size: 0.6875rem; font-weight: 600; opacity: 0.7; }
+
+/* Folded Prep: the bonuses brought, as chips; then one row that unfolds the menu and the bonus list. */
+.prep-brought { display: flex; flex-wrap: wrap; gap: 6px; }
+.prep-brought .bv-chip { font-size: 0.8125rem; background: var(--bv-paper-2); }
+.prep-fold { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 10px 14px; border: 1.5px dashed var(--bv-rule-2); border-radius: var(--bv-r-lg); background: var(--bv-paper); color: var(--bv-ink); text-align: left; font: inherit; }
+.prep-fold > span { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.prep-fold b { font-size: 0.9375rem; font-weight: 700; }
+.prep-fold small { font-size: 0.7813rem; color: var(--bv-mute); font-weight: 600; }
+.prep-fold > .bv-icon { flex: none; font-size: 1.25rem; color: var(--bv-ink-2); transition: transform 0.2s var(--bv-ease); }
+.prep-fold[aria-expanded="true"] > .bv-icon { transform: rotate(180deg); }
 
 /* The menu: one burger a row; tap the row to show or hide it, the chevron to read its recipe. */
 .prep-rows { display: grid; gap: 8px; }
 .prep-row { display: grid; grid-template-columns: minmax(0, 1fr) 48px; border: 1.5px solid var(--bv-ink); border-radius: var(--bv-r-lg); background: var(--bv-paper); overflow: hidden; }
 .prep-row .pick { display: grid; grid-template-columns: 24px 46px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 4px 9px 12px; background: none; border: 0; text-align: left; min-height: 60px; }
 .prep-row .mref-stack { width: 46px; padding: 0; }
-.prep-row .nm { font-family: var(--bv-font-serif); font-weight: 400; font-size: 17px; line-height: 1.15; }
+.prep-row .nm { font-family: var(--bv-font-serif); font-weight: 400; font-size: 1.0625rem; line-height: 1.15; }
 .prep-row .dots { display: inline-flex; gap: 3px; }
 .prep-row .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--bv-rule-2); }
 .prep-row .dots i.on { background: var(--bv-ink-2); }
-.prep-row .tick { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--bv-ink); color: var(--bv-paper); font-size: 14px; }
-.prep-row .chev { display: grid; place-items: center; background: none; border: 0; border-left: 1px solid var(--bv-rule); color: var(--bv-ink-2); font-size: 20px; }
+.prep-row .tick { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--bv-ink); color: var(--bv-paper); font-size: 0.875rem; }
+.prep-row .chev { display: grid; place-items: center; background: none; border: 0; border-left: 1px solid var(--bv-rule); color: var(--bv-ink-2); font-size: 1.25rem; }
 .prep-row .chev .bv-icon { transition: transform 0.2s var(--bv-ease); }
 .prep-row.open .chev .bv-icon { transform: rotate(180deg); }
 .prep-row .rec { grid-column: 1 / -1; display: grid; gap: 7px; padding: 10px 12px 12px; border-top: 1px dashed var(--bv-rule-2); background: var(--bv-paper-2); }
@@ -185,15 +185,15 @@
 .prep-row .pick[aria-disabled="true"] .tick { background: var(--bv-mute); }
 .prep-bonuses { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .prep-bonus { display: grid; grid-template-columns: 24px minmax(0, 1fr); column-gap: 8px; row-gap: 2px; align-items: start; padding: 9px 10px; border: 1px solid var(--bv-rule-2); border-radius: var(--bv-r-lg); background: var(--bv-paper); text-align: left; }
-.prep-bonus .ic { grid-row: span 3; font-size: 20px; color: var(--bv-ink-2); }
-.prep-bonus b { font-size: 14px; font-weight: 700; line-height: 1.15; }
-.prep-bonus small { font-size: 11.5px; color: var(--bv-ink-2); font-weight: 600; line-height: 1.3; }
-.prep-bonus em { font-style: normal; font-size: 10.5px; color: var(--bv-mute); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.prep-bonus .ic { grid-row: span 3; font-size: 1.25rem; color: var(--bv-ink-2); }
+.prep-bonus b { font-size: 0.875rem; font-weight: 700; line-height: 1.15; }
+.prep-bonus small { font-size: 0.7188rem; color: var(--bv-ink-2); font-weight: 600; line-height: 1.3; }
+.prep-bonus em { font-style: normal; font-size: 0.6563rem; color: var(--bv-mute); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .prep-bonus[aria-pressed="true"] { border: 1.5px solid var(--bv-paprika); background: var(--bv-paprika-soft); }
 .prep-bonus[aria-pressed="true"] .ic { color: var(--bv-paprika); }
-.prep .day-foot .sum b { font-size: 18px; }
+.prep .day-foot .sum b { font-size: 1.125rem; }
 
-.prep .day-hint > .bv-icon { flex: none; font-size: 16px; margin-top: 1px; color: var(--bv-ink); }
+.prep .day-hint > .bv-icon { flex: none; font-size: 1rem; margin-top: 1px; color: var(--bv-ink); }
 .prep .day-hint:has(> .bv-icon) { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; }
 
 /* ---- Prep & Open as a card over the map (after build #62) ---------------------------------- */
@@ -209,19 +209,19 @@
 /* Expected: one big number, with "expected customers" and the crowd stacked beside it. */
 .prep-expect.prep-card { background: var(--bv-card-pale, #fbf9f4); }
 .prep-expect .l { display: flex; align-items: center; gap: 12px; }
-.prep-expect .num { font-size: 54px; font-weight: 700; line-height: 0.9; letter-spacing: -0.03em; }
+.prep-expect .num { font-size: 3.375rem; font-weight: 700; line-height: 0.9; letter-spacing: -0.03em; }
 .prep-expect .who { display: grid; gap: 5px; justify-items: start; align-content: center; }
-.prep-expect .who > span:first-child { font-size: 14px; font-weight: 700; color: var(--bv-ink-2); line-height: 1.1; }
-.prep-expect .who .crowd { margin: 0; font-size: 12.5px; background: var(--bv-paper-2); }
+.prep-expect .who > span:first-child { font-size: 0.875rem; font-weight: 700; color: var(--bv-ink-2); line-height: 1.1; }
+.prep-expect .who .crowd { margin: 0; font-size: 0.7813rem; background: var(--bv-paper-2); }
 
 /* Menu: a switch for the builds; each dish a row with the tick, the name, and the burger on the right. */
-.prep-h .prep-ing { margin-left: auto; width: auto; min-height: 0; padding: 0; border: 0; gap: 8px; font-size: 12.5px; font-weight: 700; color: var(--bv-ink-2); }
+.prep-h .prep-ing { margin-left: auto; width: auto; min-height: 0; padding: 0; border: 0; gap: 8px; font-size: 0.7813rem; font-weight: 700; color: var(--bv-ink-2); }
 .prep-h .prep-ing .lbl { flex: none; }
 .prep-rows .prep-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 50px; align-items: center; gap: 12px; padding: 9px 12px; min-height: 62px; text-align: left; width: 100%; border: 1.5px solid var(--bv-ink); color: var(--bv-ink); }
 .prep-row .nm { display: grid; gap: 4px; min-width: 0; font-family: var(--bv-font-ui); }
-.prep-row .nm b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 17px; line-height: 1.15; }
-.prep-row .nm small { font-size: 11.5px; font-weight: 700; color: var(--bv-mute); }
-.prep-row .nm .mref-flow { font-size: 12px; }
+.prep-row .nm b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 1.0625rem; line-height: 1.15; }
+.prep-row .nm small { font-size: 0.7188rem; font-weight: 700; color: var(--bv-mute); }
+.prep-row .nm .mref-flow { font-size: 0.75rem; }
 .prep-row .mref-stack { width: 50px; justify-self: end; }
 .prep-row.off > :not(.tick) { opacity: 0.45; filter: grayscale(0.8); }
 .prep-row[aria-disabled="true"] .tick { background: var(--bv-mute); }
@@ -234,10 +234,10 @@
 .prep-bonuses { grid-template-columns: minmax(0, 1fr); }
 .prep-bonus { grid-template-columns: 24px minmax(0, 1fr) 24px; align-items: center; padding: 10px 12px; }
 .prep-bonus .ic { grid-row: span 2; align-self: center; }
-.prep-bonus .tick { grid-column: 3; grid-row: 1 / span 2; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--bv-rule-2); font-size: 13px; }
+.prep-bonus .tick { grid-column: 3; grid-row: 1 / span 2; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--bv-rule-2); font-size: 0.8125rem; }
 .prep-bonus[aria-pressed="true"] .tick { background: var(--bv-paprika); border-color: var(--bv-paprika); color: #fff; }
 .prep-expect .who .crowd { white-space: nowrap; }
-.prep-row .nm .build { font-size: 12.5px; font-weight: 600; color: var(--bv-ink-2); line-height: 1.3; }
+.prep-row .nm .build { font-size: 0.7813rem; font-weight: 600; color: var(--bv-ink-2); line-height: 1.3; }
 
 /* ---- One modal frame (DESIGN §46) ------------------------------------------------------------
    The Garage and Popularity & reviews sit over the map as cards, the same as Settings, the menus,
@@ -254,7 +254,7 @@
 /* Popularity & reviews before the first review: one calm empty state that says what will fill it,
    not a chart of five empty bars (DESIGN §46). */
 .rev-empty { display: grid; justify-items: center; gap: 8px; padding: 22px 16px 20px; text-align: center; border-radius: var(--bv-r-lg); border: 1px dashed var(--bv-rule-2); }
-.rev-empty .day-stars { font-size: 26px; letter-spacing: 4px; color: var(--bv-rule-2); }
+.rev-empty .day-stars { font-size: 1.625rem; letter-spacing: 4px; color: var(--bv-rule-2); }
 .rev-empty .day-stars .off { opacity: 1; }
-.rev-empty > b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 20px; line-height: 1.15; color: var(--bv-ink); }
-.rev-empty > span:not(.day-stars) { font-size: 13px; color: var(--bv-ink-2); line-height: 1.45; max-width: 30ch; }
+.rev-empty > b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 1.25rem; line-height: 1.15; color: var(--bv-ink); }
+.rev-empty > span:not(.day-stars) { font-size: 0.8125rem; color: var(--bv-ink-2); line-height: 1.45; max-width: 30ch; }

@@ -51,7 +51,7 @@
 .home-actions { margin-left: auto; display: flex; gap: 8px; }
 .home-actions .bv-btn.icon { width: 44px; min-height: 44px; border: 0; background: var(--bv-paper-2); color: var(--bv-ink); }
 .home-actions .bv-btn.icon:active { background: var(--bv-paper-3); }
-.home-actions .bv-btn .bv-icon { font-size: 19px; }
+.home-actions .bv-btn .bv-icon { font-size: 1.1875rem; }
 .home-brand .bv-eyebrow:empty { display: none; }
 
 /* ---- the plate under the bar: popularity & rating, the Garage, and the menu (or results) ---- */
@@ -68,15 +68,15 @@
 .home-pill > span { display: grid; gap: 1px; min-width: 0; line-height: 1.1; }
 .home-pill.duo { gap: 12px; }
 .home-pill.duo > span { flex: 1 1 auto; min-width: 2.5em; }
-.home-pill small { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bv-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.home-pill small .bv-icon { font-size: 11px; color: inherit; vertical-align: -0.14em; margin-right: 3px; }
+.home-pill small { display: block; font-size: 0.6563rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bv-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-pill small .bv-icon { font-size: 0.6875rem; color: inherit; vertical-align: -0.14em; margin-right: 3px; }
 .home-pill .dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--bv-paprika); box-shadow: 0 0 0 2px var(--bv-paper-2); }
-.home-pill b { font-size: 16px; font-weight: 600; white-space: nowrap; }
+.home-pill b { font-size: 1rem; font-weight: 600; white-space: nowrap; }
 .home-pill b.bv-mono { font-weight: 500; }
 .home-pill:active { background: var(--bv-paper-3); transform: translateY(1px); }
 .home-pill:disabled { opacity: 0.5; }
 .home-dayline { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; letter-spacing: .06em; }
-.home-dayline .bv-icon { font-size: 13px; color: var(--bv-paprika); }
+.home-dayline .bv-icon { font-size: 0.8125rem; color: var(--bv-paprika); }
 
 /* ---- map -------------------------------------------------------------- */
 .home-map {
@@ -191,17 +191,17 @@
 .home-zoom button {
   width: 40px; height: 42px; display: grid; place-items: center;
   background: var(--bv-paper-2); color: var(--bv-ink); box-shadow: var(--bv-shadow-2);
-  font-size: 18px; transition: background var(--bv-fast);
+  font-size: 1.125rem; transition: background var(--bv-fast);
 }
 .home-zoom button:active { background: var(--bv-paper-3); }
-.home-zoom button .bv-icon { font-size: 18px; }
+.home-zoom button .bv-icon { font-size: 1.125rem; }
 /* The capsule is 40px wide to the eye; its tap is the full 44px. */
 .home-zoom button { position: relative; }
 .home-zoom button::after { content: ""; position: absolute; inset: 0 -2px; }
 .home-zoom [data-home="zoom-in"] { border-radius: 20px 20px 0 0; }
 .home-zoom [data-home="zoom-out"] { border-radius: 0 0 20px 20px; box-shadow: var(--bv-shadow-2), inset 0 1px 0 var(--bv-rule); }
 .home-zoom .locate { width: 44px; height: 44px; margin-top: 10px; border-radius: 50%; }
-.home-zoom .locate .bv-icon { font-size: 20px; }
+.home-zoom .locate .bv-icon { font-size: 1.25rem; }
 
 
 /* ---- dock (the current town, always one tap from a shift) ------------- */
@@ -216,14 +216,14 @@
 /* Prep & Open gives back a little room to the town's name (DESIGN §46). */
 .home-dock-row > .bv-btn.lg { flex: none; padding: 0 14px; gap: 8px; }
 /* (#ui's own .bv-btn.lg size used to win over the dock's, so the narrow-phone size never applied.) */
-#ui .home-dock-row > .bv-btn.lg { font-size: 19px; }
-.home-dock .bv-btn .cost { font-family: var(--bv-font-mono); font-weight: 500; font-size: 13px; opacity: 0.8; }
+#ui .home-dock-row > .bv-btn.lg { font-size: 1.1875rem; }
+.home-dock .bv-btn .cost { font-family: var(--bv-font-mono); font-weight: 500; font-size: 0.8125rem; opacity: 0.8; }
 .home-dock-info { display: grid; gap: 2px; min-width: 0; flex: 1; text-align: left; }
-.home-dock-info b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 22px; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-dock-info b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 1.375rem; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-dock-info .bv-caption { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; }
 .home-dock-info .bv-caption .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .home-dock .bv-btn { flex: none; }
-.home-dock .bv-btn .bv-icon { font-size: 20px; }
+.home-dock .bv-btn .bv-icon { font-size: 1.25rem; }
 
 /* shift pips in text */
 .home-pips { display: inline-flex; gap: 3px; align-items: center; }
@@ -242,15 +242,15 @@
 .home-sheet[hidden] { display: none; }
 .home-sheet-head { display: flex; align-items: flex-start; gap: 10px; padding-top: 4px; }
 .home-sheet-head > div { display: grid; gap: 6px; min-width: 0; flex: 1; }
-.home-sheet-head .bv-title { font-size: 24px; }
+.home-sheet-head .bv-title { font-size: 1.5rem; }
 .home-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.home-tags .bv-chip { font-size: 12px; }
-.home-tags .bv-chip .bv-icon { font-size: 14px; }
+.home-tags .bv-chip { font-size: 0.75rem; }
+.home-tags .bv-chip .bv-icon { font-size: 0.875rem; }
 .home-tags .bv-chip.crowd { color: var(--bv-ink); border-color: var(--bv-rule-2); background: var(--bv-paper-2); }
 .home-tags .bv-chip.here { color: var(--bv-paprika); border-color: var(--bv-paprika); background: var(--bv-paprika-soft); }
 /* The close button is the one thing a thumb reaches for on this sheet: a full-size target. */
 .home-sheet-head .bv-btn.icon { flex: none; width: 44px; height: 44px; border: 0; background: transparent; color: var(--bv-ink-2); margin: -4px -6px 0 0; }
-.home-sheet-head .bv-btn.icon .bv-icon { font-size: 22px; }
+.home-sheet-head .bv-btn.icon .bv-icon { font-size: 1.375rem; }
 .home-blurb { font-size: var(--bv-fs-md); }
 
 .home-cal-wrap { display: grid; gap: 6px; }
@@ -258,7 +258,7 @@
 .home-cal { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 3px; }
 .home-day {
   position: relative; display: grid; place-items: center; aspect-ratio: 1 / 1.1; border-radius: 5px;
-  background: var(--bv-paper-2); font-family: var(--bv-font-mono); font-weight: 500; font-size: 11px; color: var(--bv-mute); line-height: 1;
+  background: var(--bv-paper-2); font-family: var(--bv-font-mono); font-weight: 500; font-size: 0.6875rem; color: var(--bv-mute); line-height: 1;
 }
 .home-day.ev { background: var(--bv-amber-soft); color: var(--bv-amber); font-weight: 700; box-shadow: inset 0 0 0 1px var(--bv-amber); }
 .home-day.ev::after { content: ""; position: absolute; top: 2px; right: 2px; width: 4px; height: 4px; border-radius: 50%; background: var(--bv-amber); }
@@ -266,15 +266,15 @@
 .home-day.today.ev { box-shadow: inset 0 0 0 1.5px var(--bv-paprika); }
 .home-cal-note { display: grid; gap: 3px; font-size: var(--bv-fs-sm); color: var(--bv-ink-2); font-weight: 600; }
 .home-cal-note div { display: flex; align-items: center; gap: 6px; }
-.home-cal-note .bv-icon { color: var(--bv-paprika); font-size: 14px; flex: none; }
+.home-cal-note .bv-icon { color: var(--bv-paprika); font-size: 0.875rem; flex: none; }
 .home-cal-note .when { font-family: var(--bv-font-mono); font-weight: 500; color: var(--bv-paprika-ink); white-space: nowrap; }
 .home-cal-note .mute { color: var(--bv-mute); }
 
 .home-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .home-facts > div { display: grid; gap: 3px; padding: 8px 10px; border-radius: var(--bv-r-md); background: var(--bv-paper-2); min-width: 0; }
-.home-facts .bv-eyebrow { font-size: 10px; letter-spacing: 0.1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.home-facts b { display: flex; align-items: center; gap: 5px; font-family: var(--bv-font-mono); font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; }
-.home-facts b .bv-icon { font-size: 14px; color: var(--bv-amber); flex: none; }
+.home-facts .bv-eyebrow { font-size: 0.625rem; letter-spacing: 0.1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-facts b { display: flex; align-items: center; gap: 5px; font-family: var(--bv-font-mono); font-weight: 500; font-size: 0.875rem; white-space: nowrap; overflow: hidden; }
+.home-facts b .bv-icon { font-size: 0.875rem; color: var(--bv-amber); flex: none; }
 .home-facts b .home-pips i { width: 6px; height: 6px; }
 
 .home-sheet .bv-callout { padding: 8px 10px; font-size: var(--bv-fs-sm); }
@@ -286,7 +286,7 @@
 
 /* A locked town: a box, not a button. Says what opens the road and how far along that is. */
 .home-locked { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--bv-r-md); background: var(--bv-paper-2); color: var(--bv-ink-2); border: 1px dashed var(--bv-rule-2); }
-.home-locked > .bv-icon { font-size: 20px; color: var(--bv-mute); flex: none; margin-top: 2px; }
+.home-locked > .bv-icon { font-size: 1.25rem; color: var(--bv-mute); flex: none; margin-top: 2px; }
 .home-locked > div { display: grid; gap: 3px; min-width: 0; }
 .home-locked b { color: var(--bv-ink); font-size: var(--bv-fs-md); }
 .home-locked span { font-size: var(--bv-fs-sm); font-weight: 600; line-height: 1.35; }
@@ -313,7 +313,7 @@
   transition: transform var(--bv-fast) var(--bv-ease), border-color var(--bv-fast);
 }
 .home-offer-btn b { font-size: var(--bv-fs-lg); font-weight: 700; display: flex; align-items: center; gap: 8px; }
-.home-offer-btn b .bv-icon { color: var(--bv-paprika); font-size: 18px; }
+.home-offer-btn b .bv-icon { color: var(--bv-paprika); font-size: 1.125rem; }
 .home-offer-btn span { font-size: var(--bv-fs-sm); color: var(--bv-mute); font-weight: 600; }
 .home-offer-btn:active { transform: translateY(1px); border-color: var(--bv-paprika); }
 @media (hover: hover) { .home-offer-btn:hover { border-color: var(--bv-ink); } }
@@ -325,7 +325,7 @@
   background: var(--bv-paprika-2); color: #fff; font-weight: 700; font-size: var(--bv-fs-md); box-shadow: var(--bv-shadow-2);
   white-space: nowrap; max-width: calc(100% - 24px); pointer-events: none; animation: home-rise 0.25s var(--bv-ease);
 }
-.home-toast .bv-icon { font-size: 18px; flex: none; }
+.home-toast .bv-icon { font-size: 1.125rem; flex: none; }
 
 @keyframes home-rise { from { transform: translateY(14px); opacity: 0; } }
 @keyframes home-fade { from { opacity: 0; } }
@@ -343,22 +343,22 @@
 @media (max-width: 379px) {
   .home-logo .bv-logo { height: 32px; }
   .home-pill { padding: 6px 8px; gap: 10px; }
-  .home-pill b { font-size: 15px; }
+  .home-pill b { font-size: 0.9375rem; }
   .home-pill small { letter-spacing: 0.02em; }
-  .home-dock-info b { font-size: 20px; }
-  .home-sheet-head .bv-title { font-size: 22px; }
+  .home-dock-info b { font-size: 1.25rem; }
+  .home-sheet-head .bv-title { font-size: 1.375rem; }
 }
 @media (max-width: 359px) {
   .home-dock-row > .bv-btn.lg { padding: 0 12px; }
-  #ui .home-dock-row > .bv-btn.lg { font-size: 18px; }
+  #ui .home-dock-row > .bv-btn.lg { font-size: 1.125rem; }
   .home-dock-row > .bv-btn.lg .bv-icon { display: none; }
-  .home-pill small { letter-spacing: 0; font-size: 10px; }
+  .home-pill small { letter-spacing: 0; font-size: 0.625rem; }
   .home-pill small .bv-icon { display: none; }
 }
 @media (max-height: 700px) {
   .home-sheet { gap: 8px; }
   .home-blurb { display: none; }
-  .home-day { aspect-ratio: 1 / 1; font-size: 10px; }
+  .home-day { aspect-ratio: 1 / 1; font-size: 0.625rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -393,35 +393,35 @@
 .home-night .sun { background: radial-gradient(circle, #ffd27a 0 55%, #f4a54a 100%); box-shadow: 0 0 40px rgb(255 190 110 / 0.7); opacity: 0; transform: translateY(18px) scale(0.8); }
 .home-night.dawn .moon { opacity: 0; transform: translateY(-14px) scale(0.85); }
 .home-night.dawn .sun { opacity: 1; transform: none; }
-.home-dayroll { display: flex; align-items: baseline; gap: 10px; font-family: var(--bv-font-serif); font-size: 40px; line-height: 1; }
+.home-dayroll { display: flex; align-items: baseline; gap: 10px; font-family: var(--bv-font-serif); font-size: 2.5rem; line-height: 1; }
 .home-dayroll .num { display: inline-block; height: 1em; overflow: hidden; font-family: var(--bv-font-mono); font-weight: 500; }
 .home-dayroll .track { display: grid; transition: transform 0.6s cubic-bezier(0.5, -0.3, 0.3, 1.3); }
 .home-dayroll .track b { display: block; height: 1em; font-weight: 500; }
 .home-night.roll .home-dayroll .track { transform: translateY(-1em); }
 .home-night-deltas { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; opacity: 0; transform: translateY(6px); transition: opacity 0.4s var(--bv-ease), transform 0.4s var(--bv-ease); }
 .home-night.roll .home-night-deltas { opacity: 1; transform: none; }
-.home-night-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--bv-r-pill); background: rgb(246 242 234 / 0.12); border: 1px solid rgb(246 242 234 / 0.2); font-size: 13px; font-weight: 700; transition: background 0.6s, border-color 0.6s; }
-.home-night-chip .bv-icon { font-size: 15px; color: var(--bv-amber); }
-.home-night-chip b { font-weight: 500; font-size: 14px; }
-.home-night-chip em { font-style: normal; font-family: var(--bv-font-mono); font-weight: 500; font-size: 12px; opacity: 0.75; }
+.home-night-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--bv-r-pill); background: rgb(246 242 234 / 0.12); border: 1px solid rgb(246 242 234 / 0.2); font-size: 0.8125rem; font-weight: 700; transition: background 0.6s, border-color 0.6s; }
+.home-night-chip .bv-icon { font-size: 0.9375rem; color: var(--bv-amber); }
+.home-night-chip b { font-weight: 500; font-size: 0.875rem; }
+.home-night-chip em { font-style: normal; font-family: var(--bv-font-mono); font-weight: 500; font-size: 0.75rem; opacity: 0.75; }
 .home-night-chip em.up { color: #8fd0ae; opacity: 1; }
 .home-night-chip em.dn { color: #f09a85; opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .home-dayroll .track, .home-night .orb i { transition: none; }
 }
 /* Dev mode's progress simulation is on: say so by the logo, so a simulated trip is never mistaken for the real one. */
-.home-dev { align-self: center; padding: 2px 7px; border-radius: var(--bv-r-pill); border: 1px dashed var(--bv-amber); color: var(--bv-amber); font-size: 11px; letter-spacing: 0.02em; }
+.home-dev { align-self: center; padding: 2px 7px; border-radius: var(--bv-r-pill); border: 1px dashed var(--bv-amber); color: var(--bv-amber); font-size: 0.6875rem; letter-spacing: 0.02em; }
 
 /* ---- the truck under the stars in the night card ---------------------------------------- */
 .home-night-truck { width: min(300px, 78vw); margin: -6px 0 2px; }
 .home-night-truck .tk { width: 100%; height: auto; max-height: 34vh; }
 .home-bonus { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 10px; margin-top: 10px; border: 1px solid var(--bv-rule-2); border-radius: var(--bv-r-lg); }
 .home-bonus.found { border-color: var(--bv-amber); background: var(--bv-amber-soft); }
-.home-bonus .ic { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--bv-paper-2); font-size: 18px; }
+.home-bonus .ic { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--bv-paper-2); font-size: 1.125rem; }
 .home-bonus .t { display: grid; line-height: 1.25; min-width: 0; }
-.home-bonus .t b { font-size: 14px; }
-.home-bonus .t small { font-size: 11.5px; color: var(--bv-ink-2); font-weight: 600; }
-.home-bonus em { font-style: normal; display: inline-flex; gap: 4px; align-items: center; font-size: 11.5px; font-weight: 700; color: var(--bv-mute); white-space: nowrap; }
+.home-bonus .t b { font-size: 0.875rem; }
+.home-bonus .t small { font-size: 0.7188rem; color: var(--bv-ink-2); font-weight: 600; }
+.home-bonus em { font-style: normal; display: inline-flex; gap: 4px; align-items: center; font-size: 0.7188rem; font-weight: 700; color: var(--bv-mute); white-space: nowrap; }
 .home-bonus em.sale { font-family: var(--bv-font-mono); font-weight: 500; color: var(--bv-ink); }
 .home-bonus em.own { color: var(--bv-paprika); }
 .home-truck .tk .tk-shade { filter: none; }

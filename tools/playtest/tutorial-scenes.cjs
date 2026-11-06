@@ -45,6 +45,8 @@ const scene = process.env.SCENE || 'town';
     const st = await p.evaluate(() => ({ town: window.__bv.save.town, phase: window.__bv.game.phase, overlay: window.__bv.game.overlay, served: window.__bv.game.served }));
     if (!c) {
       if (++quiet > 30) { console.log('QUIET', JSON.stringify(st)); break; }
+      // The Garage card waits for the town sheet to close (DESIGN §49): close it, as a player would.
+      if (scene === 'town' && st.town !== 'pinecrest' && (await p.$('.home-sheet:not([hidden]) [data-home=close]'))) { await p.click('.home-sheet:not([hidden]) [data-home=close]'); await p.waitForTimeout(500); continue; }
       if (st.phase === 'playing') await step(p, 0.5);
       if (scene !== 'town' && st.served >= 1) break;
       await p.waitForTimeout(400);

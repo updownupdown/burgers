@@ -7,7 +7,7 @@
 /* ---- the card ------------------------------------------------------------ */
 .menu-card.howto .hw-body { padding: 10px 16px 24px; gap: 0; }
 .menu-card.howto .hw-body .menu-chips { margin: -10px -16px 0; padding: 10px 16px 8px; }
-.menu-card.howto .menu-chips .bv-chip { min-height: 40px; padding: 0 13px; font-size: 13px; }
+.menu-card.howto .menu-chips .bv-chip { min-height: 40px; padding: 0 13px; font-size: 0.8125rem; }
 
 /* Kitchens: the four middle counters, the one you're at marked. */
 .hw-kpick { flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 2px 16px 10px; }
@@ -15,11 +15,11 @@
 .hw-kpick button {
   position: relative; display: grid; justify-items: center; align-content: center; gap: 1px;
   min-height: 60px; padding: 4px 2px 5px; border-radius: 10px; border: 1px solid transparent;
-  background: var(--bv-paper-2); color: var(--bv-ink-2); font: 700 13px/1.1 var(--bv-font-ui);
+  background: var(--bv-paper-2); color: var(--bv-ink-2); font: 700 0.8125rem/1.1 var(--bv-font-ui);
   transition: background var(--bv-fast), box-shadow var(--bv-fast);
 }
 .hw-kpick button .tab-art { width: 34px; height: 25px; }
-.hw-kpick button small { font-size: 11px; font-weight: 600; color: #5c626b; white-space: nowrap; }
+.hw-kpick button small { font-size: 0.6875rem; font-weight: 600; color: #5c626b; white-space: nowrap; }
 .hw-kpick button[aria-pressed="true"] { background: var(--bv-paper); box-shadow: inset 0 0 0 1.5px var(--bv-ink), var(--bv-shadow-1); color: var(--bv-ink); }
 .hw-kpick button.here small { color: var(--bv-paprika-2); font-weight: 800; }
 .hw-kpick button.here small::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: var(--bv-paprika); vertical-align: 1px; }
@@ -28,9 +28,9 @@
 .hw-tabs { flex: none; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--bv-rule); background: var(--menu-bg, var(--bv-paper)); padding: 0 6px 2px; }
 .hw-tabs button {
   position: relative; display: grid; justify-items: center; align-content: center; gap: 3px;
-  min-height: 56px; color: var(--bv-mute); font: 700 13px/1 var(--bv-font-ui);
+  min-height: 56px; color: var(--bv-mute); font: 700 0.8125rem/1 var(--bv-font-ui);
 }
-.hw-tabs button .bv-icon { font-size: 21px; }
+.hw-tabs button .bv-icon { font-size: 1.3125rem; }
 .hw-tabs button::before { content: ""; position: absolute; top: -1px; left: 22%; right: 22%; height: 3px; border-radius: 0 0 3px 3px; background: transparent; transition: background var(--bv-fast); }
 .hw-tabs button[aria-selected="true"] { color: var(--bv-ink); }
 .hw-tabs button[aria-selected="true"]::before { background: var(--bv-paprika); }
@@ -40,7 +40,7 @@
 .howto .hw-sec { gap: 12px; }
 .howto .hw-ic.art { background: var(--bv-paper-2); }
 .howto .hw-ic.art .tab-art { width: 34px; height: 26px; }
-.howto .hw-pts li { font-size: 14.5px; }
+.howto .hw-pts li { font-size: 0.9063rem; }
 /* Captions read as one line of text, an icon in it if there is one (menu.css made them flex rows). */
 .howto .hw-cap { display: block; color: #5c626b; }
 .howto .hw-cap .bv-icon { vertical-align: -0.2em; margin-right: 4px; }
@@ -53,11 +53,11 @@
 .hw-fig .hwa.wide { max-width: 340px; }
 .hw-fig > .hw-cap { max-width: 320px; }
 .hw-cap b { color: var(--bv-ink); font-weight: 800; }
-.hw-end { font-size: 18px; text-align: center; flex-wrap: wrap; line-height: 1.3; }
-.hw-end small { display: block; width: 100%; font: 600 13px/1.4 var(--bv-font-ui); color: #5c626b; }
+.hw-end { font-size: 1.125rem; text-align: center; flex-wrap: wrap; line-height: 1.3; }
+.hw-end small { display: block; width: 100%; font: 600 0.8125rem/1.4 var(--bv-font-ui); color: #5c626b; }
 .hw-step { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
-.hw-step li { display: grid; justify-items: center; gap: 3px; text-align: center; padding: 8px 2px 7px; border-radius: var(--bv-r-md); background: var(--bv-paper); font-size: 12px; font-weight: 800; line-height: 1.15; }
-.hw-step .bv-icon { font-size: 20px; color: var(--bv-paprika); }
+.hw-step li { display: grid; justify-items: center; gap: 3px; text-align: center; padding: 8px 2px 7px; border-radius: var(--bv-r-md); background: var(--bv-paper); font-size: 0.75rem; font-weight: 800; line-height: 1.15; }
+.hw-step .bv-icon { font-size: 1.25rem; color: var(--bv-paprika); }
 
 /* The real ticket, at rest in the guide. */
 .hw-tk .ticket { position: relative; width: 100%; z-index: auto; pointer-events: none; }
@@ -66,15 +66,15 @@
 .hw-key .kbar i { display: block; width: 70%; height: 100%; border-radius: 3px; background: #6f9a4f; }
 .hw-pair-t { align-content: center; gap: 8px !important; }
 .hw-pair-t .hw-cap { text-align: left; }
-.hw-key.lite { display: grid; gap: 6px; font-size: 13.5px; }
+.hw-key.lite { display: grid; gap: 6px; font-size: 0.8438rem; }
 /* The ticket key: a chip or a line as on the ticket, then what it means. */
-.hw-key.ticket { position: static; z-index: auto; background: none; filter: none; padding: 0; overflow: visible; pointer-events: auto; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px 10px; align-items: center; font: 500 13.5px/1.3 var(--bv-font-ui); color: var(--bv-ink-2); width: 100%; }
+.hw-key.ticket { position: static; z-index: auto; background: none; filter: none; padding: 0; overflow: visible; pointer-events: auto; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px 10px; align-items: center; font: 500 0.8438rem/1.3 var(--bv-font-ui); color: var(--bv-ink-2); width: 100%; }
 .hw-key.ticket::after { display: none; }
 /* A plain one-column list in the ticket key style (the fryer's local items): no dt/dd pairs. */
 .hw-key.ticket.list { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 6px; }
 .hw-key > dt { justify-self: start; display: flex; align-items: center; gap: 3px; font-weight: 700; color: var(--bv-ink); white-space: nowrap; }
 .hw-key > dd { margin: 0; }
-.hw-key .kw { font-size: 11px; }
+.hw-key .kw { font-size: 0.6875rem; }
 .hw-key .ln { font-weight: 700; }
 .hw-key .ln.mod { color: #b4520f; font-weight: 800; box-shadow: inset 3px 0 0 var(--t-mod); padding: 0 4px 0 7px; }
 .hw-key .ln.mod .kw { color: var(--t-mod); }
@@ -85,59 +85,59 @@
 .hw-key .face { width: 18px; height: 18px; }
 .hw-key .how { display: inline-flex; align-items: center; gap: 3px; }
 .hw-key .how i { font-style: normal; font-weight: 800; color: var(--bv-ink-2); }
-.hw-key .mb { font-size: 12px; padding: 1px 5px 2px; }
+.hw-key .mb { font-size: 0.75rem; padding: 1px 5px 2px; }
 .hw-key.lite { background: var(--bv-paper); border-radius: var(--bv-r-md); padding: 10px 12px; }
 
 /* A recipe, step by step. */
 .hw-walk { display: grid; gap: 12px; padding: 14px 12px; border-radius: var(--bv-r-lg); background: var(--bv-paper-2); }
 .hw-walk-h { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.hw-walk-h h4 { margin: 0; font: 400 21px/1.05 var(--bv-font-serif); color: var(--bv-ink); }
-.hw-walk-h .pr { font: 500 14px var(--bv-font-mono); color: var(--bv-ink-2); }
-.hw-walk-h .wh { flex-basis: 100%; font-size: 13px; font-weight: 600; color: #5c626b; line-height: 1.3; }
+.hw-walk-h h4 { margin: 0; font: 400 1.3125rem/1.05 var(--bv-font-serif); color: var(--bv-ink); }
+.hw-walk-h .pr { font: 500 0.875rem var(--bv-font-mono); color: var(--bv-ink-2); }
+.hw-walk-h .wh { flex-basis: 100%; font-size: 0.8125rem; font-weight: 600; color: #5c626b; line-height: 1.3; }
 .hw-walk-top { display: grid; grid-template-columns: minmax(0, 158px) minmax(0, 1fr); gap: 12px; align-items: start; }
-.hw-walk-top .hw-tk .ticket { font-size: 12.5px; }
+.hw-walk-top .hw-tk .ticket { font-size: 0.7813rem; }
 .hw-walk-art { display: grid; justify-items: center; align-content: start; gap: 6px; min-width: 0; }
 .hw-walk-art .mref-stack { width: 92px; }
 .hw-walk-art .hwa { max-width: 160px; }
-.hw-walk-art .hw-cap { font-size: 12px; }
+.hw-walk-art .hw-cap { font-size: 0.75rem; }
 .hw-do { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; counter-reset: d; }
-.hw-do li { counter-increment: d; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 8px; align-items: start; font-size: 14.5px; font-weight: 500; line-height: 1.42; color: var(--bv-ink-2); }
-.hw-do li::before { content: counter(d); display: grid; place-items: center; width: 22px; height: 22px; margin-top: 0; border-radius: 50%; background: var(--bv-paper); box-shadow: inset 0 0 0 1.5px var(--bv-ink); font: 500 12px/1 var(--bv-font-mono); color: var(--bv-ink); }
+.hw-do li { counter-increment: d; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 8px; align-items: start; font-size: 0.9063rem; font-weight: 500; line-height: 1.42; color: var(--bv-ink-2); }
+.hw-do li::before { content: counter(d); display: grid; place-items: center; width: 22px; height: 22px; margin-top: 0; border-radius: 50%; background: var(--bv-paper); box-shadow: inset 0 0 0 1.5px var(--bv-ink); font: 500 0.75rem/1 var(--bv-font-mono); color: var(--bv-ink); }
 .hw-do li b { color: var(--bv-ink); font-weight: 800; }
 .hw-do li.at::before { content: ""; background: var(--bv-ink); box-shadow: none; -webkit-mask: none; }
 .hw-do li.at { color: var(--bv-ink); }
-.hw-walk .hw-tip { margin: 0; padding: 9px 11px; border-radius: var(--bv-r-md); background: var(--bv-paper); font-size: 13.5px; font-weight: 500; line-height: 1.4; color: var(--bv-ink-2); }
+.hw-walk .hw-tip { margin: 0; padding: 9px 11px; border-radius: var(--bv-r-md); background: var(--bv-paper); font-size: 0.8438rem; font-weight: 500; line-height: 1.4; color: var(--bv-ink-2); }
 .hw-walk .hw-tip b { color: var(--bv-ink); }
 
 /* The tostada in four frames. */
 .hw-flow { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
-.hw-flow li { position: relative; display: grid; justify-items: center; gap: 2px; text-align: center; font-size: 12px; font-weight: 700; color: var(--bv-ink-2); line-height: 1.15; }
+.hw-flow li { position: relative; display: grid; justify-items: center; gap: 2px; text-align: center; font-size: 0.75rem; font-weight: 700; color: var(--bv-ink-2); line-height: 1.15; }
 .hw-flow svg { width: 100%; max-width: 64px; height: auto; }
 .hw-flow li:not(:last-child)::after { content: ""; position: absolute; right: -5px; top: 18px; width: 5px; height: 5px; border-top: 2px solid var(--bv-rule-2); border-right: 2px solid var(--bv-rule-2); transform: rotate(45deg); }
 
 /* Dishes of a kitchen, and where each first comes on. */
 .hw-dishes { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.hw-dishes li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: baseline; padding: 8px 2px; border-bottom: 1px dotted var(--bv-rule-2); font-size: 14px; }
+.hw-dishes li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: baseline; padding: 8px 2px; border-bottom: 1px dotted var(--bv-rule-2); font-size: 0.875rem; }
 .hw-dishes li:last-child { border-bottom: 0; }
-.hw-dishes .nm { font: 400 16px/1.1 var(--bv-font-serif); color: var(--bv-ink); }
-.hw-dishes .fr { font-size: 12.5px; font-weight: 600; color: #5c626b; text-align: right; }
-.hw-dishes .pr { font: 500 13px var(--bv-font-mono); color: var(--bv-ink-2); min-width: 30px; text-align: right; }
-.hw-dishes li.on .nm::after { content: "Today"; margin-left: 6px; font: 800 10.5px/1 var(--bv-font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--bv-olive); vertical-align: 2px; }
+.hw-dishes .nm { font: 400 1rem/1.1 var(--bv-font-serif); color: var(--bv-ink); }
+.hw-dishes .fr { font-size: 0.7813rem; font-weight: 600; color: #5c626b; text-align: right; }
+.hw-dishes .pr { font: 500 0.8125rem var(--bv-font-mono); color: var(--bv-ink-2); min-width: 30px; text-align: right; }
+.hw-dishes li.on .nm::after { content: "Today"; margin-left: 6px; font: 800 0.6563rem/1 var(--bv-font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--bv-olive); vertical-align: 2px; }
 
 /* The map key. */
 .hw-mapkey { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
-.hw-mapkey li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; align-items: center; font-size: 13px; font-weight: 600; line-height: 1.25; color: var(--bv-ink-2); }
+.hw-mapkey li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; align-items: center; font-size: 0.8125rem; font-weight: 600; line-height: 1.25; color: var(--bv-ink-2); }
 .hw-mapkey svg { width: 28px; height: 22px; }
 
 /* Pacing, one row each. */
 .hw-pace { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; gap: 6px; }
-.hw-pace li { display: grid; gap: 2px; padding: 9px 11px; border-radius: var(--bv-r-md); background: var(--bv-paper); font-size: 13.5px; line-height: 1.38; color: var(--bv-ink-2); }
-.hw-pace b { font: 400 16px/1.1 var(--bv-font-serif); color: var(--bv-ink); }
+.hw-pace li { display: grid; gap: 2px; padding: 9px 11px; border-radius: var(--bv-r-md); background: var(--bv-paper); font-size: 0.8438rem; line-height: 1.38; color: var(--bv-ink-2); }
+.hw-pace b { font: 400 1rem/1.1 var(--bv-font-serif); color: var(--bv-ink); }
 
 .howto .hw-drink { grid-template-columns: repeat(4, 1fr); }
-.howto .hw-biz .bv-mono { font-size: 22px !important; }
+.howto .hw-biz .bv-mono { font-size: 1.375rem !important; }
 .hw-fig .hwa-sauce { max-width: 250px; }
-.hwa-grill .hwa-txt, .hwa-comal .hwa-txt { font-size: 8.5px; }
+.hwa-grill .hwa-txt, .hwa-comal .hwa-txt { font-size: 0.5313rem; }
 .hwa-quesa .hwa-guide { stroke: #cfc8bc; }
 
 /* ---- the drawings -------------------------------------------------------- */
@@ -146,9 +146,9 @@
 .hwa .tch-i { fill: rgb(35 42 51 / 0.36); stroke: rgb(35 42 51 / 0.82); stroke-width: 1.4; }
 .hwa-guide { fill: none; stroke: #6b727c; stroke-width: 1.5; stroke-dasharray: 2.5 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.75; }
 .hwa-guide.head { stroke-dasharray: none; }
-.hwa-txt { font: 700 10px var(--bv-font-ui); fill: #434b55; }
-.hwa-txt.light { fill: #fff; font-size: 11px; }
-.hwa-txt.hot { fill: #8a3a10; font-size: 7px; letter-spacing: 0.08em; }
+.hwa-txt { font: 700 0.625rem var(--bv-font-ui); fill: #434b55; }
+.hwa-txt.light { fill: #fff; font-size: 0.6875rem; }
+.hwa-txt.hot { fill: #8a3a10; font-size: 0.4375rem; letter-spacing: 0.08em; }
 
 /* Tap: a name pops up. */
 .hwa-tap { --hd: 3s; }
@@ -270,7 +270,7 @@
 .hwm-top { fill: #a8643a; animation: hwm-top var(--hd) linear infinite; }
 .hwm .cmeter { width: 100%; height: 16px; margin-top: 2px; }
 .hwm .cmeter b { animation: hwm-fill var(--hd) linear infinite; }
-.hwm-lbl { width: 100%; display: grid; grid-template-columns: var(--mu) calc(var(--md) - var(--mu)) 1fr; font-size: 12px; font-weight: 700; color: #5c626b; text-align: center; }
+.hwm-lbl { width: 100%; display: grid; grid-template-columns: var(--mu) calc(var(--md) - var(--mu)) 1fr; font-size: 0.75rem; font-weight: 700; color: #5c626b; text-align: center; }
 .hwm-lbl span:nth-child(2) { color: var(--bv-olive); font-weight: 800; }
 @keyframes hwm-fill {
   0% { width: 0%; background-color: #ff8197; }
@@ -292,6 +292,6 @@
 
 @media (max-width: 370px) {
   .hw-kpick { gap: 4px; padding-left: 12px; padding-right: 12px; }
-  .hw-kpick button { font-size: 12px; }
+  .hw-kpick button { font-size: 0.75rem; }
   .hw-walk-top { grid-template-columns: minmax(0, 140px) minmax(0, 1fr); }
 }

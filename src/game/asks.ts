@@ -1,5 +1,6 @@
 import { middleOf, fryerOf, type Recipe, type Stop } from "./stops";
 import { isSauce, type Kind } from "./types";
+import { TOWN_ASKS } from "./identity";
 
 /**
  * The daily local ask (after build #78): one small optional goal per shift, picked from the town's
@@ -58,6 +59,16 @@ export function asksFor(stop: Stop, menu: readonly Recipe[]): AskId[] {
   return out;
 }
 
+/**
+ * The asks this town draws from (DESIGN §50): its own shortlist (identity.ts), kept to what it can
+ * do today. A town whose shortlist it can't do at all falls back to everything it can.
+ */
+export function townAsks(stop: Stop, menu: readonly Recipe[]): AskId[] {
+  const can = asksFor(stop, menu);
+  const own = (TOWN_ASKS[stop.id] ?? []).filter((id) => can.includes(id));
+  return own.length ? own : can;
+}
+
 /** A small stable hash, so the same town and day always ask the same thing. */
 function hash(s: string): number {
   let h = 2166136261;
@@ -68,13 +79,11 @@ function hash(s: string): number {
 /**
  * Today's ask in this town: the same on Prep and in the shift. The count scales with the crowd
  * expected (about 40% of it, at least two, at most the ask's usual), and pays $10 to $20.
- * Town specialities (the press at Sun Valley, the cut at Harbor City and Port Amber, the commuters'
- * hurry) come up more often than the plain five stars.
+ * Each town draws from its own shortlist (townAsks): hand-pressed tortillas at Sun Valley, clean
+ * cuts at Harbor City and Port Amber, speed in the commuter towns.
  */
 export function askFor(stop: Stop, menu: readonly Recipe[], day: number, expected: number): Ask {
-  const ids = asksFor(stop, menu);
-  const special = ids.filter((id) => id !== "five");
-  const pool = [...ids, ...special];
+  const pool = townAsks(stop, menu);
   const id = pool[hash(`${stop.id}:${day}`) % pool.length];
   const a = ASKS[id];
   const need = Math.max(2, Math.min(a.base, Math.round(expected * 0.4)));

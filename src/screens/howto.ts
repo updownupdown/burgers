@@ -12,7 +12,6 @@
 import { cookTime } from "../game/pace";
 import "./howto.css";
 import { CROWD } from "../game/business";
-import { RANGE_MI } from "../game/day";
 import { DIFFICULTIES, DIFFICULTY } from "../game/difficulty";
 import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE, orderFromRecipe } from "../game/menu";
 import { GREAT } from "../game/bonus";
@@ -224,7 +223,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
         </div>`,
       points: [
         "A tap on a pan, bin, stack or well only shows a name bubble. Placing always takes a drag.",
-        "Each drag is <b>one piece</b>, so count as you go. From the pork, bean or tuna well, one drag is one scoop.",
+        "A sliced topping goes on in <b>one drag</b>: the first brings the ticket's whole count, and each drag after that adds one more. From the pork, bean or tuna well, one drag is one scoop.",
         "Hold something over a counter button for a moment and that counter comes up, so you can carry food across.",
       ],
     },
@@ -238,7 +237,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
         ${ticketKey()}`,
       points: [
         "<b>Tap a ticket or its tray</b> to make that order active and open it. Tap it again to fold it: every ticket goes small, with just the changes and the sides, so you can see them all.",
-        "The tray with the blue outline is the one you're building.",
+        "The tray with the dark ring around it is the one you're building.",
         "Lines tick off as they land on the tray. The ticket is forgiving: a piece ticks off its line wherever it went. The stars are not.",
         "Now and then someone wants <b>just a drink or just a side</b>. Their tray has no ring for food.",
       ],
@@ -334,7 +333,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
       chip: "Counts",
       icon: "pickle",
       title: town ? `Counts in ${town.name}` : "Topping counts",
-      lede: "Sliced things go on one piece at a time, and every recipe has a count.",
+      lede: "Every recipe has a count for its sliced toppings. The first drag lays the ticket's count; each drag after adds one.",
       fig: `<ul class="hw-counts">${counted
         .map((k) => `<li><i class="swc" style="--c:${KIND_COLOR[k]}"></i><span>${KIND_LABEL[k]}</span><span class="pcs ${k}" style="--c:${KIND_COLOR[k]}">${"<b></b>".repeat(count(k))}</span><b class="bv-mono">×${count(k)}</b></li>`)
         .join("")}</ul>
@@ -489,10 +488,10 @@ function tripSecs(): Sec[] {
       title: "The day",
       lede: "Prep in the morning, a lunch shift, then the evening on the map.",
       points: [
-        "<b>Prep & Open</b>: who to expect, the menu, the shift's hours, the pacing and up to three bonuses.",
+        "<b>Prep & Open</b>: who to expect, the pacing, the shift, the local ask and your bonuses. <b>Change menu or bonuses</b> opens the rest.",
         "A longer <b>menu</b> brings more people and more kinds of order. Hide recipes to keep it simple.",
         "A <b>new town</b> starts simpler: fewer changes and sides on its first shift, and the regular and the local ask from the second. Word takes a few shifts to reach a <b>new region</b>, so its first days are quieter. A dish you've never served well comes plain the first time.",
-        "Drag the <b>shift</b> slider to open early or close late. Lunch peaks from noon to one. A shift is at least four hours.",
+        "Pick the <b>shift</b>: <b>Lunch</b> (11 to 3) or a <b>Full day</b> (10 to 4), half as long again with more customers and more takings. Lunch peaks from noon to one.",
         "At sundown the <b>Closed</b> sign goes up. The results come up over the evening map, then <b>Sleep</b> starts tomorrow.",
         "<b>Takings</b> are your score: orders and tips, less anything given away. They go into your <b>savings</b>.",
       ],
@@ -526,18 +525,18 @@ function tripSecs(): Sec[] {
         <li>${mk(MK.lock)}Not open yet</li>
         <li>${mk(MK.prize)}A bonus still to win there</li>
         <li>${mk(MK.gated)}A highway that opens later: its note says when</li>
-        <li>${mk(MK.reach)}At night: what you can still reach</li>
+        <li>${mk(MK.reach)}At night: where you can drive before you sleep</li>
       </ul>
       <div class="hw-drive">
-        <span>${icon("moon")}<b>Tonight</b><small>Short hops, ${RANGE_MI} miles in all</small></span>
-        <span>${icon("sun")}<b>Further away</b><small>A whole day on the road</small></span>
+        <span>${icon("sun")}<b>Morning</b><small>Drive, then open there</small></span>
+        <span>${icon("moon")}<b>Evening</b><small>Drive, then sleep there</small></span>
       </div>
       <div class="hw-cal" aria-label="A town's calendar">${[1, 2, 3, 4, 5, 6, 7].map((d) => `<span class="${d === 2 ? "today" : ""} ${d === 5 ? "ev" : ""}"><b class="bv-mono">${d}</b>${d === 5 ? "<i>Fair</i>" : ""}</span>`).join("")}</div>
       <p class="hw-cap">A town's week ahead: today is day 2, and there's a fair on day 5.</p>`,
       points: [
         `Pass <b>${SHIFTS_TO_UNLOCK} shifts</b> in a town to open the roads to its neighbours.`,
-        `${icon("moon")} After a shift, roads within tonight's range glow. Hop along them before you sleep: the hops add up to ${RANGE_MI} miles.`,
-        `${icon("sun")} Going <b>further</b> takes a whole day on the road, with no shift that day.`,
+        `${icon("truck")} Any open town is <b>one drive</b> away, morning or evening, however far. A drive never costs a day.`,
+        `${icon("moon")} Only sleeping turns the day, so events still fall on their days.`,
         `${icon("calendar")} <b>Tap a town</b> to see its crowd and calendar. Events bring bigger crowds and sometimes a special.`,
         "Good shifts spread the word. Every few customers who give 4★ or more bring in a little more <b>popularity</b>. Walk-outs, and people who give up on the line, cost some.",
       ],
@@ -554,6 +553,8 @@ function tripSecs(): Sec[] {
         "A great shift unlocks that town's bonus. Then it's for sale here.",
         "Bring <b>up to three bonuses</b> per shift, picked on Prep & Open.",
         "Looks for the truck show on the map and at night.",
+        `${icon("menu-book")} Towns give <b>stamps</b>: open the road, a great shift, the regular won, an event worked, a 4.8★ shift. They collect in the <b>postcard book</b> on the map.`,
+        `${icon("flag")} Port Amber is the end of the road. Pass it and the next day is the <b>last night of the trip</b>. A new trip after that keeps your looks and stamps, and new stamps come in gold.`,
       ],
     },
   ];

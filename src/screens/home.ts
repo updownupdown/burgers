@@ -1,10 +1,10 @@
 import { CROWD } from "../game/business";
-import { expectedCustomers, rangeUnits, regionShifts } from "../game/day";
-import { savedPacing } from "../game/difficulty";
-import { todaysClosing, type Save } from "../game/progress";
+import { expectedCustomers, regionShifts } from "../game/day";
+import { savedPacing, type Difficulty } from "../game/difficulty";
+import { todaysClosing, type Closing, type Save } from "../game/progress";
 import { ratingPull, reviewAverage } from "../game/reviews";
 import { EVENTS, eventOn, FINAL_TOWN, nextDay, STOPS, townById, withEvent, type Stop } from "../game/stops";
-import { applyTrip, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Legs, type Trip } from "../game/travel";
+import { applyTrip, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Trip } from "../game/travel";
 import { icon } from "../ui/icons";
 import { logoStack } from "../ui/logo";
 import { simLevel } from "../game/devmode";
@@ -17,14 +17,18 @@ import { modalClosedAt } from "./modal";
 import { openReport } from "./report";
 import { renderMap, roadPath, routePoints, SEA, townPoint, VIEW, LAND_BOX } from "./map";
 import { PanZoom } from "./panzoom";
+import { tripNo } from "../game/finale";
+import { signatureOf } from "../game/identity";
+import { openTripCard } from "./finale";
+import { openBook, townStamps } from "./postcards";
 import "./home.css";
 
 /**
  * The home screen: a full-screen road map with the truck's numbers always in view. Tap a town
  * for its sheet (crowd, upcoming events, shifts worked, the drive there). The map has two
  * states (see game/day.ts): in the morning it is daylight and the dock leads to Prep and the
- * shift; in the evening it goes dark, the roads within tonight's range are lit, and the dock
- * leads to a short hop or sleep, and the dashboard's Results brings back today's report card.
+ * shift; in the evening it goes dark, every open town is lit (any of them is one drive away), and
+ * the dock leads to a drive or sleep, and the dashboard's Results brings back today's report card.
  */
 
 export interface HomeDeps {
@@ -43,6 +47,10 @@ export interface HomeDeps {
   openSettings(): void;
   /** The How to Play modal. */
   openHowTo(): void;
+  /** Set tomorrow's pacing (the report card's Try Steady). */
+  setPacing?(d: Difficulty): void;
+  /** Start the next trip from the end of the trip's credits (DESIGN §50). */
+  newTrip?(): void;
   /** A town to open the sheet on straight away, e.g. one the last shift unlocked. */
   focus?: string | null;
   /** Just slept: play the night passing over the map before handing it over. */
@@ -182,9 +190,10 @@ function shellHtml(save: Save): string {
     <div class="home-float">
     <header class="home-top">
       <div class="home-brand">
-        <span class="home-logo">${logoStack()}</span>${save.trips > 0 ? `<span class="bv-eyebrow">Trip ${save.trips + 1}</span>` : ""}${simLevel() !== null ? `<span class="home-dev bv-mono" title="Simulated progress (dev mode, in Settings)">Sim ${simLevel()}%</span>` : ""}
+        <span class="home-logo">${logoStack()}</span>${tripNo(save) > 1 ? `<span class="bv-eyebrow">Trip ${tripNo(save)}</span>` : ""}${simLevel() !== null ? `<span class="home-dev bv-mono" title="Simulated progress (dev mode, in Settings)">Sim ${simLevel()}%</span>` : ""}
       </div>
       <div class="home-actions">
+        <button class="bv-btn icon" data-home="book" aria-label="Postcard book" title="Postcard book">${icon("menu-book")}</button>
         <button class="bv-btn icon" data-home="howto" aria-label="How to play" title="How to play">${icon("help")}</button>
         <button class="bv-btn icon" data-home="settings" aria-label="Settings" title="Settings">${icon("settings")}</button>
       </div>
@@ -230,18 +239,13 @@ function statsHtml(save: Save): string {
 // ---------------------------------------------------------------------------
 // The map
 
-/** The time of day and the range left, which decide when a drive can happen. */
-function legs(s: Save): Legs {
-  return { time: s.time, range: rangeUnits(), driven: s.driven };
-}
-
-/** Towns a drive reaches right now without the day passing. */
+/** Towns a drive reaches right now: every open town (no overnight range since DESIGN §51). */
 function reachable(s: Save): { id: string; path: string[] }[] {
   const out: { id: string; path: string[] }[] = [];
   for (const id of s.unlocked) {
     if (id === s.town) continue;
-    const t = planTrip(s.town, id, s.unlocked, legs(s));
-    if (t && t.when === "now") out.push({ id, path: t.path });
+    const t = planTrip(s.town, id, s.unlocked);
+    if (t) out.push({ id, path: t.path });
   }
   return out;
 }
@@ -253,7 +257,7 @@ function renderMapInto(m: Mounted): void {
     const b = townBonus(id);
     return b && !s.found.includes(b.id);
   });
-  m.world.innerHTML = renderMap({ town: s.town, unlocked: s.unlocked, shiftsIn: s.shiftsIn, day: s.day, selected: m.selected, night, reach: m.night ? [] : reachable(s), look: s.look, bonusHere, px: m.base });
+  m.world.innerHTML = renderMap({ town: s.town, unlocked: s.unlocked, shiftsIn: s.shiftsIn, day: s.day, selected: m.selected, night, reach: m.night ? [] : reachable(s), look: s.look, bonusHere, px: m.base, stamps: s.stamps });
   for (const t of m.world.querySelectorAll<SVGGElement>(".home-town")) t.classList.toggle("sel", t.dataset.town === m.selected);
 }
 
@@ -329,7 +333,7 @@ function select(m: Mounted, id: string, pan: boolean): void {
   for (const t of m.world.querySelectorAll<SVGGElement>(".home-town")) t.classList.toggle("sel", t.dataset.town === id);
   // Route preview from the truck.
   const s = m.deps.save;
-  const trip = planTrip(s.town, id, s.unlocked, legs(s));
+  const trip = planTrip(s.town, id, s.unlocked);
   const route = m.world.querySelector<SVGPathElement>(".home-route")!;
   route.setAttribute("d", trip ? trip.path.slice(1).map((b, i) => roadPath(trip.path[i], b)).join(" ") : "");
   renderSheet(m, id);
@@ -435,8 +439,11 @@ function calendarHtml(t: Stop, day: number): string {
   const span = 14;
   const cells: string[] = [];
   const seen = new Map<string, number>();
+  // The last night of the trip isn't in EVENTS (stops.ts FINALE): keep the events seen by id.
+  const byId = new Map(EVENTS.map((e) => [e.id, e]));
   for (let d = day; d < day + span; d++) {
     const e = eventOn(t.id, d);
+    if (e) byId.set(e.id, e);
     if (e && !seen.has(e.id)) seen.set(e.id, d);
     cells.push(`<span class="home-day ${d === day ? "today" : ""} ${e ? "ev" : ""}" title="Day ${d}${e ? `: ${esc(e.name)}` : ""}">${d}</span>`);
   }
@@ -444,7 +451,7 @@ function calendarHtml(t: Stop, day: number): string {
   let note: string;
   if (seen.size) {
     note = [...seen].map(([id, d]) => {
-      const e = EVENTS.find((x) => x.id === id)!;
+      const e = byId.get(id)!;
       return `<div>${icon("flag")}<span class="when">${when(day, d)}</span><span><b>${esc(e.name)}</b> · ${CROWD[e.crowd].label}, busier and longer${e.special ? ` · special: ${esc(e.special.name)}` : ""}</span></div>`;
     }).join("");
   } else if (own.length) {
@@ -465,7 +472,7 @@ function renderSheet(m: Mounted, id: string): void {
   const open = s.unlocked.includes(id);
   const ev = eventOn(id, s.day);
   const crowd = CROWD[ev?.crowd ?? t.crowd];
-  const trip = here || !open ? null : planTrip(s.town, id, s.unlocked, legs(s));
+  const trip = here || !open ? null : planTrip(s.town, id, s.unlocked);
   const best = s.best[id];
   const evening = s.time === "evening";
 
@@ -477,9 +484,7 @@ function renderSheet(m: Mounted, id: string): void {
       : `<button class="bv-btn primary lg block" data-home="open">${icon("bell")}Prep &amp; Open${ev ? ` · ${esc(ev.name)}` : ""}</button>
       ${ev ? `<span class="bv-caption">Event day: a longer, busier shift with its own crowd.</span>` : ""}`;
   } else if (trip) {
-    const can = trip.when !== "tomorrow";
-    const how = trip.when === "now" ? (evening ? "tonight" : "this morning") : trip.when === "day" ? "takes the day" : "tomorrow";
-    action = `<button class="bv-btn primary lg block" data-home="drive" data-id="${id}" ${can ? "" : "disabled"}>${icon("truck")}Drive here · ${how}</button>`;
+    action = `<button class="bv-btn primary lg block" data-home="drive" data-id="${id}">${icon("truck")}Drive here · ${evening ? "tonight" : "this morning"}</button>`;
   } else if (!open) {
     const gates = openedBy(id).map((g) => ({ t: townById(g), ...unlockProgress(s.shiftsIn, g) }));
     const reachable = gates.filter((g) => s.unlocked.includes(g.t.id));
@@ -512,6 +517,7 @@ function renderSheet(m: Mounted, id: string): void {
       <div><span class="bv-eyebrow">${trip ? "From here" : "Customers"}</span><b>${trip ? `${miles(trip.distance)} mi` : `${icon("people")}~${expectedCustomers({ stop: withEvent(t, ev), popularity: s.popularity, rating: ratingPull(s.reviewCounts), hidden: s.hidden, shift: s.shift, pacing: savedPacing() ?? (s.tutorialDone ? "balanced" : "chill"), regionShifts: regionShifts(s.shiftsIn, t) })}`}</b></div>
     </div>
     ${bonusRow(s, id)}
+    ${identityRows(s, id)}
     ${open && t.newThing && !(s.shiftsIn[id] ?? 0) ? `<div class="bv-callout new">${icon("new")}<span>${esc(t.newThing)}</span></div>` : ""}
     <div class="home-action">${action}</div>`;
   sheet.hidden = false;
@@ -527,6 +533,18 @@ function bonusRow(s: Save, id: string): string {
       ? `<em class="sale">${dollars(b.price)} in the Garage</em>`
       : `<em>${icon("lock")}Great shift to unlock</em>`;
   return `<div class="home-bonus ${s.found.includes(b.id) ? "found" : ""}"><span class="ic">${icon(b.icon)}</span><span class="t"><span class="bv-eyebrow">Town bonus</span><b>${esc(b.name)}</b><small>${esc(b.text)}</small></span>${state}</div>`;
+}
+
+/**
+ * The town's signature dish and its postcard stamps (DESIGN §50), once the town is open (or
+ * stamped on an earlier trip). The stamps open the postcard book at the town's page.
+ */
+function identityRows(s: Save, id: string): string {
+  const stamped = Object.keys(s.stamps?.[id] ?? {}).length > 0;
+  if (!s.unlocked.includes(id) && !stamped) return "";
+  const sig = signatureOf(id);
+  return `${sig ? `<div class="home-sig">${icon("food-menu")}<span>Known for its <b>${esc(sig)}</b></span></div>` : ""}
+    <button class="home-stamps" data-home="book-town" data-id="${id}" aria-label="Stamps in the postcard book"><span class="bv-eyebrow">Stamps</span><span class="row">${townStamps(s, id, true)}</span><span class="chev">${icon("forward")}</span></button>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -603,6 +621,14 @@ function onClick(e: Event): void {
     case "howto":
       m.deps.openHowTo();
       break;
+    case "book":
+      m.deps.sfx?.tap();
+      openBook(s);
+      break;
+    case "book-town":
+      m.deps.sfx?.tap();
+      openBook(s, btn.dataset.id);
+      break;
   }
 }
 
@@ -610,9 +636,9 @@ function onClick(e: Event): void {
 function drive(m: Mounted, to: string): void {
   const s = m.deps.save;
   if (m.driving) return;
-  const trip = planTrip(s.town, to, s.unlocked, legs(s));
-  if (!trip || trip.when === "tomorrow") return;
-  if (!applyTrip(s, trip)) return;
+  const trip = planTrip(s.town, to, s.unlocked);
+  if (!trip) return;
+  applyTrip(s, trip);
   m.deps.commit();
   m.deps.sfx?.whoosh();
   animateDrive(m, trip);
@@ -646,7 +672,6 @@ function animateDrive(m: Mounted, trip: Trip): void {
   const finish = () => {
     m.driving = false;
     m.el.classList.remove("driving");
-    // A day on the road lands on the evening map, and the lit roads change with what's left of the range.
     m.el.classList.toggle("evening", m.deps.save.time === "evening");
     renderMapInto(m);
     m.el.querySelector(".home-stats")!.outerHTML = statsHtml(m.deps.save);
@@ -747,6 +772,26 @@ function showReport(m: Mounted, arrive: boolean): void {
   // over from it here, in the same tick, so the page never loses its catch on Back.
   if (arrive) dropBack("shift");
   if (!last) return;
+  // The last night of the trip ends on the trip card (screens/finale.ts), which can still show
+  // the night's own report card.
+  if (last.finale) {
+    openTripCard(
+      last,
+      {
+        save: s,
+        report: () => openReportCard(m, last, false),
+        driveOff: (done) => driveOff(m, done),
+        newTrip: () => m.deps.newTrip?.(),
+      },
+      !arrive,
+    );
+    return;
+  }
+  openReportCard(m, last, arrive);
+}
+
+function openReportCard(m: Mounted, last: Closing, arrive: boolean): void {
+  const s = m.deps.save;
   openReport(
     last,
     {
@@ -761,9 +806,77 @@ function showReport(m: Mounted, arrive: boolean): void {
       reviews: () => m.deps.openReviews(),
       garage: () => m.deps.openGarage(),
       town: (id) => select(m, id, true),
+      steady: () => {
+        m.deps.setPacing?.("balanced");
+        last.steady = false;
+        m.deps.commit();
+      },
+      book: () => openBook(s, last.town),
     },
     arrive,
   );
+}
+
+// ---------------------------------------------------------------------------
+// The drive-off at the end of the trip
+
+const DRIVE_OFF_MS = { trail: 1600, truck: 2600, end: 3600 };
+
+/**
+ * After the trip card (screens/finale.ts): the map pulls out to the whole island, the trip's roads
+ * light up in gold, and the truck leaves Port Amber on the ferry and fades out over the water.
+ * A tap or Back skips to the end; with reduced motion the trail is drawn and it ends at once.
+ */
+function driveOff(m: Mounted, done: () => void): void {
+  if (cur !== m || !m.el.isConnected) {
+    done();
+    return;
+  }
+  const s = m.deps.save;
+  if (m.selected) deselect(m);
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // The trail: every road between two towns this trip worked in.
+  const worked = new Set(STOPS.filter((t) => (s.shiftsIn[t.id] ?? 0) > 0 || s.passedTowns.includes(t.id)).map((t) => t.id));
+  const d = STOPS.flatMap((t) => t.roads.filter((r) => worked.has(t.id) && worked.has(r)).map((r) => roadPath(t.id, r))).join(" ");
+  const towns = m.world.querySelector(".home-towns");
+  if (towns && d) towns.insertAdjacentHTML("beforebegin", `<path class="home-trail ${reduce ? "" : "draw"}" d="${d}"/>`);
+  // Pull out to the land, centred on it.
+  const [cx, cy] = px(m, [(LAND_BOX[0] + LAND_BOX[2]) / 2, (LAND_BOX[1] + LAND_BOX[3]) / 2]);
+  m.pz.centerOn(cx, cy, 0, undefined, !reduce);
+  if (reduce) {
+    done();
+    return;
+  }
+  m.driving = true;
+  const truck = m.world.querySelector<SVGGElement>(".home-truck");
+  const anims: Animation[] = [];
+  const timers: number[] = [];
+  let over = false;
+  const finish = () => {
+    if (over) return;
+    over = true;
+    for (const t of timers) clearTimeout(t);
+    for (const a of anims) a.cancel();
+    m.driving = false;
+    m.el.removeEventListener("click", finish, true);
+    dropBack("drive-off");
+    done();
+  };
+  pushBack("drive-off", finish);
+  m.el.addEventListener("click", finish, true);
+  if (truck && typeof truck.animate === "function") {
+    // Along the ferry line toward Harbor City, fading out over the water as it goes.
+    const pts = routePoints([FINAL_TOWN, "harbor"]);
+    const n = pts.length;
+    const frames = pts.slice(0, n).map((p, i, a) => ({ transform: `translate(${p[0]}px, ${p[1]}px)`, opacity: i < a.length * 0.6 ? 1 : 1 - (i - a.length * 0.6) / (a.length * 0.4), offset: i / (a.length - 1) }));
+    truck.classList.toggle("west", pts[n - 1][0] < pts[0][0]);
+    timers.push(
+      window.setTimeout(() => {
+        anims.push(truck.animate(frames, { duration: DRIVE_OFF_MS.truck, easing: "ease-in-out", fill: "forwards" }));
+      }, DRIVE_OFF_MS.trail * 0.5),
+    );
+  }
+  timers.push(window.setTimeout(finish, DRIVE_OFF_MS.end));
 }
 
 // ---------------------------------------------------------------------------

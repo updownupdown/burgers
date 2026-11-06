@@ -39,7 +39,9 @@ export type Gesture =
   /** Press, then keep moving in circles (sauce). */
   | { kind: "circle"; at: Pt; r: number }
   /** Press, carry to `to`, then circle there before letting go (sauce from the bottle). */
-  | { kind: "dragCircle"; from: Pt; to: Pt; r: number };
+  | { kind: "dragCircle"; from: Pt; to: Pt; r: number }
+  /** Press, carry to `to`, then flick on to `end` before letting go (the oven's peel: carry it, swipe down). */
+  | { kind: "dragSwipe"; from: Pt; to: Pt; end: Pt };
 
 export interface Show {
   /** Short line in bold. */
@@ -329,6 +331,8 @@ function period(g: Gesture): number {
       return 1.6 + Math.min(1.2, Math.hypot(g.to.x - g.from.x, g.to.y - g.from.y) / 300);
     case "dragCircle":
       return 3.6;
+    case "dragSwipe":
+      return 2.2 + Math.min(1.2, Math.hypot(g.to.x - g.from.x, g.to.y - g.from.y) / 300);
   }
 }
 
@@ -369,6 +373,15 @@ function pose(g: Gesture, u: number): Pose {
       const cy = lerp(g.from.y, g.to.y, t);
       return { x: cx + Math.sin(a) * r, y: cy - Math.cos(a) * r * 0.8 + r * 0.8, s: 1 - 0.2 * p, o, press: p };
     }
+    case "dragSwipe": {
+      // Press, carry slowly, a beat, then a quick flick before letting go.
+      const p = span(u, 0.08, 0.15) - span(u, 0.8, 0.88);
+      const t = span(u, 0.15, 0.55);
+      const f = span(u, 0.66, 0.76);
+      const x = lerp(lerp(g.from.x, g.to.x, t), g.end.x, f);
+      const y = lerp(lerp(g.from.y, g.to.y, t), g.end.y, f);
+      return { x, y: y + p * 6, s: 1 - 0.2 * p, o, press: p };
+    }
   }
 }
 
@@ -397,18 +410,21 @@ function draw(show: Show, now: number): void {
   }
 
   // A dashed trail from where a drag starts to where it goes, and a ring where it lands.
-  const path = g && (g.kind === "drag" || g.kind === "swipe" || g.kind === "dragCircle") ? g : null;
+  const path = g && (g.kind === "drag" || g.kind === "swipe" || g.kind === "dragCircle" || g.kind === "dragSwipe") ? g : null;
   if (path) {
-    const { from, to } = path;
+    // The peel's carry and flick: the trail goes on round the corner to where the flick ends.
+    const bend = path.kind === "dragSwipe" ? `M ${path.from.x} ${path.from.y} L ${path.to.x} ${path.to.y} ` : "";
+    const from = path.kind === "dragSwipe" ? path.to : path.from;
+    const to = path.kind === "dragSwipe" ? path.end : path.to;
     const d = Math.hypot(to.x - from.x, to.y - from.y) || 1;
     const ux = (to.x - from.x) / d;
     const uy = (to.y - from.y) / d;
     const end = { x: to.x - ux * 6, y: to.y - uy * 6 };
     const ah = 10;
     const head = `M ${end.x - ux * ah - uy * ah * 0.6} ${end.y - uy * ah + ux * ah * 0.6} L ${end.x} ${end.y} L ${end.x - ux * ah + uy * ah * 0.6} ${end.y - uy * ah - ux * ah * 0.6}`;
-    trailPath.setAttribute("d", `M ${from.x} ${from.y} L ${end.x} ${end.y} ${head}`);
+    trailPath.setAttribute("d", `${bend}M ${from.x} ${from.y} L ${end.x} ${end.y} ${head}`);
   } else trailPath.setAttribute("d", "");
-  const land = g && (g.kind === "drag" || g.kind === "dragCircle") ? g.to : null;
+  const land = g && (g.kind === "drag" || g.kind === "dragCircle" || g.kind === "dragSwipe") ? g.to : null;
   target.hidden = !land;
   // left/top, not transform: the breathing scale would scale a translate too and push the ring off.
   if (land) {
@@ -453,6 +469,7 @@ function gestureBoxes(g: Gesture | null, show: Show): Box[] {
   if (g) {
     if ("at" in g) pts.push(g.at);
     if ("from" in g) pts.push(g.from, g.to);
+    if (g.kind === "dragSwipe") pts.push(g.end);
   }
   const boxes: Box[] = pts.map((p) => ({ x: p.x - 40, y: p.y - 44, w: 80, h: 88 }));
   if (g && (g.kind === "circle" || g.kind === "dragCircle")) {
@@ -477,7 +494,8 @@ function placeCard(show: Show, g: Gesture | null): void {
   const avoid = [...(show.avoid ?? []), ...busy];
   const fits = (y: number) => y >= 8 && y + H <= vh - 8 && !avoid.some((b) => overlaps({ x: left, y, w: W, h: H }, b));
   let y: number;
-  if (show.place === "top") y = 64;
+  // Pinned to the top, but under a ring up there (the map's Garage button), not over it.
+  if (show.place === "top") y = show.ring && show.ring.y < 64 + H ? Math.max(64, show.ring.y + show.ring.h + 14) : 64;
   else if (show.place === "bottom") y = bottom;
   else {
     const cands: number[] = [];

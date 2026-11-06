@@ -2,37 +2,25 @@ import { CROWD, menuFactor, menuFor, ratingFactor } from "./business";
 import { bonusCrowd, type BonusId } from "./bonus";
 import { DIFFICULTY, type Difficulty } from "./difficulty";
 import { popularityTraffic } from "./press";
+import { tripState } from "./tripstate";
 import { crowdShare, DEFAULT_SHIFT, type ShiftWindow } from "./shift";
 import { STOPS, type Stop } from "./stops";
-import { MILES_PER_UNIT } from "./travel";
 
 /**
  * The shape of one day on the road.
  *
  * A day has two halves the player can act in. In the **morning** the truck is parked on the
  * map in daylight: open the window (after the Prep screen), or set off. In the **evening**, after
- * the shift's Closing screen, the map is dark: see the results, hop to a town within tonight's
- * range, or sleep. Sleeping is the only thing that turns the day. A drive further than the
- * range takes the whole day, so it lands on the evening map without a shift.
+ * the shift's Closing screen, the map is dark: see the results, drive to any open town, or sleep.
+ * Sleeping is the only thing that turns the day; a drive never costs one (DESIGN §51).
  */
 export type TimeOfDay = "morning" | "evening";
-
-/**
- * Overnight range in miles: any single road, highways and the Old Pass road (about 120 mi, the
- * longest) included, is one night's drive, and two ordinary roads usually fit.
- */
-export const RANGE_MI = 130;
-
-/** Overnight range in map units, which is what roads are measured in. */
-export function rangeUnits(): number {
-  return RANGE_MI / MILES_PER_UNIT;
-}
 
 /** The part of a save that sleeping touches. */
 export interface Sleeper {
   day: number;
   time: TimeOfDay;
-  /** Map units driven since the last shift or sleep; hops tonight add up against the range. */
+  /** Kept in the save from the days of the overnight range; always 0 after a sleep. */
   driven: number;
 }
 
@@ -96,7 +84,9 @@ export function expectedCustomers(p: CrowdInput): number {
     menuFactor(menu) *
     crowdShare(p.shift ?? DEFAULT_SHIFT) *
     bonusCrowd(p.bonuses ?? []) *
-    newRegionCrowd(p.regionShifts ?? 99);
+    newRegionCrowd(p.regionShifts ?? 99) *
+    // A lap after finishing the road brings more people everywhere (finale.ts).
+    tripState.crowd;
   // Relaxed brings fewer, but never fewer than six where six or more would come (after build #78 a
   // new truck on the easy tier saw only four and wondered where everyone was).
   const k = DIFFICULTY[p.pacing ?? "balanced"].crowd;

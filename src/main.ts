@@ -6206,6 +6206,11 @@ function frame(now: number): void {
 }
 showTitle();
 requestAnimationFrame(frame);
+// The splash in index.html lifts once the first frame is on screen and the UI fonts are in
+// (or after 1.5 s without them), so the map never shows in a fallback face (DESIGN §44).
+Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1500))]).then(() =>
+  requestAnimationFrame(() => requestAnimationFrame(() => (window as { __bvReady?: () => void }).__bvReady?.())),
+);
 
 // Tutorial mode: the thumb (src/tutorial). It reads the game through this and never changes it.
 startCoach(

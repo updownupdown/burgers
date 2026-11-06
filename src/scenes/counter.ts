@@ -146,6 +146,8 @@ const BATTER_AT = { x: 3.42, z: -2.05 };
 const GRIDDLE_SPOTS = makeGriddle().userData.spots;
 const GRIDDLE_SURFACE = GRIDDLE_SPOTS.surface;
 export const GRILL_TOP = GRIDDLE_SURFACE.y;
+/** How far food on the grille sits above GRILL_TOP: on its bars (see grillTopAt). */
+const GRILLE_LIFT = GRIDDLE_SPOTS.grille;
 /** Heights of the oven's hearth and the peel's blade, for drops and painting. */
 export const HEARTH_Y = HEARTH.y;
 export const PEEL_Y = PEEL.y;
@@ -2153,7 +2155,7 @@ export class CounterView {
     this.raycaster.setFromCamera(ndc, this.camera);
     // Grill items before anything else but the zone buttons: they sit on top of everything.
     const items = this.grillItems.filter((g) => !g.held && !this.above(g));
-    const p = this.groundPoint(ndc, GRILL_TOP + 0.15);
+    const p = this.grillPoint(ndc, 0.15);
     let best: GrillItem | null = null;
     let bestD = 0.62;
     for (const it of items) {
@@ -2247,7 +2249,23 @@ export class CounterView {
 
   /** Where an item sits: on the grill top, or on the item it's stacked on. */
   private baseY(it: GrillItem): number {
-    return it.below ? this.baseY(it.below) + (it.below.obj.userData.height as number) * GRILL_SCALE : GRILL_TOP;
+    if (it.below) return this.baseY(it.below) + (it.below.obj.userData.height as number) * GRILL_SCALE;
+    return this.grillTopAt(it.x);
+  }
+  /**
+   * The height food rests at on the grill at page-local x: the plate, or on the grille (the grill's
+   * left zone) the tops of its bars, so a rasher or a bun isn't cut through by them. Drops and hit
+   * tests on the grill use the same height.
+   */
+  grillTopAt(x: number): number {
+    const z = GRILL_ZONES[GRILLE_ZONE];
+    return this.middle === "grill" && x >= z.x0 && x <= z.x1 ? GRILL_TOP + GRILLE_LIFT : GRILL_TOP;
+  }
+  /** Where a pointer meets the grill's cook surface (at the grille's bar tops over the grille), plus `dy`. */
+  grillPoint(ndc: THREE.Vector2, dy = 0): THREE.Vector3 {
+    const p = this.groundPoint(ndc, GRILL_TOP + dy);
+    const y = this.grillTopAt(p.x - pageX(1));
+    return y === GRILL_TOP ? p : this.groundPoint(ndc, y + dy);
   }
   private placeItem(it: GrillItem): void {
     it.obj.position.set(pageX(1) + it.x, this.baseY(it), it.z);

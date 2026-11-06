@@ -1403,7 +1403,7 @@ function finishHold(pt: Pointer): void {
   } else if (band === "counter") {
     const g = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), 0.3);
     // The griddle's plate stands well above the counter, so drops there are matched at its height.
-    const gTop = counter.groundPoint(ndcIn(bands.counter, pt.x, pt.y), GRILL_TOP);
+    const gTop = counter.grillPoint(ndcIn(bands.counter, pt.x, pt.y));
     const station = payload.type === "empty" || payload.type === "carton" || payload.type === "drink" || payload.type === "ice" || payload.type === "lid" || payload.type === "curds" || payload.type === "gravy" || (payload.type === "fries" && payload.basket !== null);
     if (station) done = dropAtStation(payload, g);
     if (!station && counter.overRack(gTop) && (payload.type === "piece" || (payload.type === "stack" && !payload.rack))) {
@@ -1985,7 +1985,7 @@ function placeWorld(place: Place, w: Moved): THREE.Vector3 | null {
     case "tray":
       return null;
     case "grill":
-      return counter.world(HOME_PAGE, place.x, GRILL_TOP + 0.1, place.z);
+      return counter.world(HOME_PAGE, place.x, counter.grillTopAt(place.x) + 0.1, place.z);
     case "bay":
       return counter.bayPoint(place.i);
     case "board":
@@ -2288,7 +2288,7 @@ function releaseEgg(pt: Pointer, dt: number, cancelled: boolean): void {
   counter.highlightTrash(false);
   if (!e || cancelled) return;
   const ndc = ndcIn(bands.counter, pt.x, pt.y);
-  const g = counter.groundPoint(ndc, GRILL_TOP);
+  const g = counter.grillPoint(ndc);
   const justPicked = pt.hit?.type === "bin" && pt.hit.kind === "egg" && !pt.moved;
   if (justPicked) return;
   if (counter.overTrash(counter.groundPoint(ndc, 0.3))) {

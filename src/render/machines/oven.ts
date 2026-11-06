@@ -27,8 +27,8 @@ const BRICK = "#c46e4e";
 const BRICK_D = "#b05e40";
 const MORTAR = "#e7c9a8";
 const STONE = "#dcc8a4";
-/** The baking deck: a warmer, darker stone than the caps, sooted toward the back and corners. */
-const DECK_STONE = "#c9ad86";
+/** The baking deck: a dark sooted stone (DESIGN §45), so pale dough and golden crusts stand out on it as in a real deck oven. */
+const DECK_STONE = "#7d6a5c";
 
 /** Mortar joints over a brick face, in a plane: `at(u, v)` maps face coordinates (u along, v up) to a point. */
 function brickFace(p: Parts, w: number, h: number, at: (u: number, v: number) => [number, number, number], rot: [number, number, number], course = 0.22, brick = 0.52): void {
@@ -56,8 +56,8 @@ const base = (() => {
     // The stone deck, a lip proud of the bricks, its slabs' joints.
     p.add(box(w + 0.1, 0.1, d + 0.08), DECK_STONE, { p: [cx, y - 0.05, cz + 0.02], ink: 0.02 });
     // Square stone slabs (three across, two deep), so the deck reads as stone, not planks.
-    for (let i = 1; i < 3; i++) p.add(box(0.02, 0.005, DECK.z1 - DECK.z0), "#b39672", { p: [DECK.x0 + (i * (DECK.x1 - DECK.x0)) / 3, y + 0.002, (DECK.z0 + DECK.z1) / 2], ink: false });
-    p.add(box(DECK.x1 - DECK.x0, 0.005, 0.02), "#b39672", { p: [cx, y + 0.002, (DECK.z0 + DECK.z1) / 2], ink: false });
+    for (let i = 1; i < 3; i++) p.add(box(0.02, 0.005, DECK.z1 - DECK.z0), "#6f5d50", { p: [DECK.x0 + (i * (DECK.x1 - DECK.x0)) / 3, y + 0.002, (DECK.z0 + DECK.z1) / 2], ink: false });
+    p.add(box(DECK.x1 - DECK.x0, 0.005, 0.02), "#6f5d50", { p: [cx, y + 0.002, (DECK.z0 + DECK.z1) / 2], ink: false });
     const H = WALLS.h;
     const T = WALLS.t;
     // The back wall, its inner face toward the camera in brick.
@@ -92,12 +92,12 @@ const sootTex = (() => {
       // Texture v runs front (bottom) to back (top) once laid on the deck.
       const g = c.createRadialGradient(w / 2, h * 1.05, h * 0.25, w / 2, h * 0.9, w * 0.62);
       g.addColorStop(0, "rgba(138,106,76,0)");
-      g.addColorStop(0.55, "rgba(138,106,76,0.18)");
-      g.addColorStop(1, "rgba(118,88,62,0.6)");
+      g.addColorStop(0.55, "rgba(60,42,32,0.25)");
+      g.addColorStop(1, "rgba(52,36,28,0.75)");
       c.fillStyle = g;
       c.fillRect(0, 0, w, h);
       const b = c.createLinearGradient(0, 0, 0, h);
-      b.addColorStop(0, "rgba(110,80,56,0.45)");
+      b.addColorStop(0, "rgba(40,26,20,0.55)");
       b.addColorStop(0.35, "rgba(110,80,56,0)");
       c.fillStyle = b;
       c.fillRect(0, 0, w, h);
@@ -178,7 +178,7 @@ export function makeHearthOven(): HearthOvenObject {
   };
   const wall = new THREE.Mesh(new THREE.PlaneGeometry(w, WALLS.h), fade("#ff7a2a", 0.72));
   wall.position.set(cx, HEARTH.y + WALLS.h / 2, DECK.z0 + 0.012);
-  const deck = new THREE.Mesh(new THREE.PlaneGeometry(w, 1.5).rotateX(-Math.PI / 2), fade("#ff8f3f", 0.55));
+  const deck = new THREE.Mesh(new THREE.PlaneGeometry(w, 1.5).rotateX(-Math.PI / 2), fade("#ff8f3f", 0.36));
   // The texture's opaque edge lies along the back wall.
   deck.geometry.rotateY(Math.PI);
   deck.position.set(cx, HEARTH.y + 0.008, DECK.z0 + 0.75);

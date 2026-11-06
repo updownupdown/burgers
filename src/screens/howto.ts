@@ -223,7 +223,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
         </div>`,
       points: [
         "A tap on a pan, bin, stack or well only shows a name bubble. Placing always takes a drag.",
-        "Each drag is <b>one piece</b>, so count as you go. From the pork, bean or tuna well, one drag is one scoop.",
+        "A sliced topping goes on in <b>one drag</b>: the first brings the ticket's whole count, and each drag after that adds one more. From the pork, bean or tuna well, one drag is one scoop.",
         "Hold something over a counter button for a moment and that counter comes up, so you can carry food across.",
       ],
     },
@@ -333,7 +333,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
       chip: "Counts",
       icon: "pickle",
       title: town ? `Counts in ${town.name}` : "Topping counts",
-      lede: "Sliced things go on one piece at a time, and every recipe has a count.",
+      lede: "Every recipe has a count for its sliced toppings. The first drag lays the ticket's count; each drag after adds one.",
       fig: `<ul class="hw-counts">${counted
         .map((k) => `<li><i class="swc" style="--c:${KIND_COLOR[k]}"></i><span>${KIND_LABEL[k]}</span><span class="pcs ${k}" style="--c:${KIND_COLOR[k]}">${"<b></b>".repeat(count(k))}</span><b class="bv-mono">×${count(k)}</b></li>`)
         .join("")}</ul>

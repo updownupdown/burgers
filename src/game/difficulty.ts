@@ -1,11 +1,13 @@
 /**
- * How hard a shift is (the difficulty study, DESIGN §43). Patience never was what made the easy
+ * How hard a shift is (the difficulty study, DESIGN §47). Patience never was what made the easy
  * tier hard: it was hands, food cooking out of sight and small slips adding up. So each tier now
  * changes something a player notices:
- * - Relaxed (id "chill"): fewer people, ready alerts, food keeps longer, small slips cost half,
- *   the fountain stops and lids by itself and a counted topping goes on in one drag.
- * - Steady (id "balanced"): the lunch rush as it was, with ready alerts.
+ * - Relaxed (id "chill"): fewer people, food keeps longer, small slips cost half and the fountain
+ *   stops and lids by itself.
+ * - Steady (id "balanced"): the lunch rush as it was.
  * - Busy (id "stressful"): more people, shorter fuses, pickier, and better tips.
+ * Ready alerts and one-drag counted toppings are on every tier since DESIGN §51: not seeing food
+ * burn and dragging five pears one at a time were never the good kind of hard.
  * The ids stay as they were so saves and the dev dial keep working.
  */
 export type Difficulty = "chill" | "balanced" | "stressful";
@@ -21,13 +23,11 @@ export interface DifficultySpec {
   window: number;
   /** The bell calls whoever has waited a while by itself while fewer than this are at the window (0: never). */
   autoCall: number;
-  /** A tick and a lamp on the counter button when something on another counter is done. */
-  alerts: boolean;
   /** Holding (food and fries on a tray going cold) takes this many times as long. */
   hold: number;
   /** Small slips (salt, lid, ice, garnish, a piece short, a messy stack, sauce) cost this share of their usual penalty. */
   small: number;
-  /** The fountain stops at the line and puts the lid on; a counted topping goes on in one drag. */
+  /** The fountain stops at the line and puts the lid on. */
   helpers: boolean;
   /** Cooking past over-done runs at this share of its pace (0.5: burning takes twice as long). */
   burn: number;
@@ -47,18 +47,18 @@ export const CHILL_BURN = 0.5;
 export const DIFFICULTY: Record<Difficulty, DifficultySpec> = {
   chill: {
     label: "Relaxed",
-    blurb: "Fewer customers and a tick when food is ready on another counter. Food keeps longer, small slips cost half, the fountain stops and lids by itself, and toppings go on in one drag.",
-    patience: 2.4, crowd: 0.8, window: 3, autoCall: 2, alerts: true, hold: 1.67, small: 0.5, helpers: true, burn: CHILL_BURN, tips: 0.9, refund: 0.2, sendBack: 40, refuse: 12,
+    blurb: "Fewer customers who wait longer. Food keeps longer, small slips cost half, and the fountain stops and lids by itself.",
+    patience: 2.4, crowd: 0.8, window: 3, autoCall: 2, hold: 1.67, small: 0.5, helpers: true, burn: CHILL_BURN, tips: 0.9, refund: 0.2, sendBack: 40, refuse: 12,
   },
   balanced: {
     label: "Steady",
     blurb: "A steady lunch rush, with a tick when food is ready on another counter. Customers send back what's clearly off.",
-    patience: 1.3, crowd: 1, window: 3, autoCall: 0, alerts: true, hold: 1, small: 1, helpers: false, burn: 1, tips: 1, refund: 0.2, sendBack: 55, refuse: 22,
+    patience: 1.3, crowd: 1, window: 3, autoCall: 0, hold: 1, small: 1, helpers: false, burn: 1, tips: 1, refund: 0.2, sendBack: 55, refuse: 22,
   },
   stressful: {
     label: "Busy",
-    blurb: "More customers, shorter fuses and picky about every order, but they tip a third more. No ready alerts.",
-    patience: 0.8, crowd: 1.28, window: 3, autoCall: 0, alerts: false, hold: 1, small: 1, helpers: false, burn: 1, tips: 1.3, refund: 0.1, sendBack: 68, refuse: 32,
+    blurb: "More customers, shorter fuses and picky about every order, but they tip a third more.",
+    patience: 0.8, crowd: 1.28, window: 3, autoCall: 0, hold: 1, small: 1, helpers: false, burn: 1, tips: 1.3, refund: 0.1, sendBack: 68, refuse: 32,
   },
 };
 

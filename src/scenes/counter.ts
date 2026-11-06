@@ -523,6 +523,8 @@ export class CounterView {
   autoStopPour = false;
   /** The Smart fountain bonus (after build #78): a pour it stops at the line also gets its lid. */
   autoLid = false;
+  /** The Smart fountain (DESIGN §51): drinks pour this many times as fast. */
+  pourBoost = 1;
   /** Relaxed (after build #82): cooking past over-done runs at this share of its pace (1 = normal). */
   burnPace = 1;
   grillItems: GrillItem[] = [];
@@ -2876,7 +2878,7 @@ export class CounterView {
     for (const t of this.taps) {
       const c = t.cup;
       if (t.pouring && c) {
-        c.fill += dt * 0.42 * CUP_SPEED[c.size];
+        c.fill += dt * 0.42 * CUP_SPEED[c.size] * this.pourBoost;
         if (this.autoStopPour && c.fill >= DRINK_FILL.perfect) {
           t.pouring = false;
           if (this.autoLid && !c.lid) {

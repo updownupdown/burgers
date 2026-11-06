@@ -15,8 +15,8 @@ describe("difficulty", () => {
     expect([r.label, s.label, b.label]).toEqual(["Relaxed", "Steady", "Busy"]);
     // Three at the window everywhere: two made Relaxed serve fewer people than Steady.
     expect([r.window, s.window, b.window]).toEqual([3, 3, 3]);
-    // Ready alerts on Relaxed and Steady (James), not on Busy.
-    expect([r.alerts, s.alerts, b.alerts]).toEqual([true, true, false]);
+    // Ready alerts are on every tier now (DESIGN §51): no tier has a switch for them.
+    expect("alerts" in r || "alerts" in s || "alerts" in b).toBe(false);
     // The harder tier pays better.
     expect(b.tips).toBeGreaterThan(s.tips);
     expect(s.tips).toBeGreaterThan(r.tips);

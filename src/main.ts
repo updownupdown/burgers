@@ -502,6 +502,11 @@ function callNext(prefer = -1): boolean {
   return true;
 }
 
+/** The Comfy bench (DESIGN §51): a call made by hand brings one more up with it, if there's room. */
+function benchCall(): void {
+  if (has("bench")) callNext();
+}
+
 /**
  * A tap on an empty tray calls the next person to it (after build #78): the bell is in the hardest
  * spot to reach with a thumb, the trays are not. The header bell still works.
@@ -512,6 +517,7 @@ function callToTray(i: number): void {
   const atWindow = game.slots.filter((s) => s.order || s.fig).length;
   if (atWindow >= WINDOW[game.pacing]) return void hintOnce("bell-full", `No room at the window: ${WINDOW[game.pacing]} at a time on ${DIFFICULTY[game.pacing].label}. Serve someone first.`, 3.5);
   if (!callNext(i)) return;
+  benchCall();
   ui.bell.classList.remove("ring");
   void ui.bell.offsetWidth;
   ui.bell.classList.add("ring");
@@ -542,6 +548,7 @@ function ringBell(): void {
     return;
   }
   if (callNext()) {
+    benchCall();
     coachCounts.bell++;
     hintOnce("bell-called", "Next! More people at the window means more money, if you can keep up.", 3.5);
   }
@@ -1313,9 +1320,10 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
       let n = 0;
       for (let i = s.plate.layers.length - 1; i >= 0 && s.plate.layers[i].piece.kind === p.kind; i--) n++;
       const want = s.order.layers.find((e) => e.kind === p.kind)?.count;
-      // Relaxed's helpers: the first of a counted topping brings the rest of the ticket's count with
-      // it (not tortillas or scoops, which are tacos and fillings of their own). Undo takes them all.
-      if (DIFFICULTY[game.pacing].helpers && want && n === 1 && want > 1 && !TORTILLAS.has(p.kind) && !SCOOPED.has(p.kind)) {
+      // The first of a counted topping brings the rest of the ticket's count with it, on every tier
+      // (DESIGN §51; not tortillas or scoops, which are tacos and fillings of their own). Undo takes
+      // them all; a drag after that adds one more.
+      if (want && n === 1 && want > 1 && !TORTILLAS.has(p.kind) && !SCOOPED.has(p.kind)) {
         const all: Layer[] = [l];
         for (let k = 1; k < want; k++) {
           const more = landing(s.plate.layers, { ...structuredClone(p), uid: newPiece(p.kind).uid }, spread);
@@ -1688,7 +1696,7 @@ function whereFood(p: Piece): Place | null {
   return bi >= 0 ? { at: "basket", i: bi } : null;
 }
 
-/** A counted topping that went on as the ticket's whole count (Relaxed): Undo carries them all back. */
+/** A counted topping that went on as the ticket's whole count (every tier): Undo carries them all back. */
 let bundled: { lead: Piece; layers: Layer[] } | null = null;
 
 /** A drop landed: note it, so Undo can carry it back. */
@@ -2869,6 +2877,7 @@ function paintBench(pt: Pointer): void {
   const last = stroke[stroke.length - 1];
   if (!last || Math.hypot(q.x - last.x, q.z - last.z) > 0.06) {
     stroke.push(q);
+    if (steadySauceFull(stroke)) return;
     setBench(b, ls);
     s.lastPaint = performance.now();
     if (s.lastPaint - lastSquirt > 70) {
@@ -2969,6 +2978,17 @@ function sauceMove(pt: Pointer): void {
   }
 }
 
+/**
+ * Steady hands (DESIGN §51): once a squeeze is just right, the bottle stops. True (and the point
+ * just added taken back off) when this point would have pushed it past the Perfect band.
+ */
+function steadySauceFull(stroke: { x: number; z: number }[]): boolean {
+  if (!has("steady") || sauceCoverage(stroke) <= SAUCE_BAND.hi) return false;
+  stroke.pop();
+  hintOnce("steady-sauce", "Steady hands: that's just right. The bottle stops there.", 2.5);
+  return true;
+}
+
 /** Squeeze a line where the nozzle is, if it's over the burger (and, dragged in, once it's come in over the middle). */
 function paintSauce(pt: Pointer): void {
   const s = sauceDrag!;
@@ -3005,6 +3025,7 @@ function paintSauce(pt: Pointer): void {
   const last = stroke[stroke.length - 1];
   if (!last || Math.hypot(q.x - top.offX - last.x, q.z - top.offZ - last.z) > 0.06) {
     stroke.push({ x: q.x - top.offX, z: q.z - top.offZ });
+    if (steadySauceFull(stroke)) return;
     syncTray(slot, false);
     s.lastPaint = performance.now();
     if (s.lastPaint - lastSquirt > 70) {
@@ -5020,10 +5041,12 @@ function startShift(): void {
   const spec = DIFFICULTY[game.pacing];
   counter.holdRate = (has("lamp") ? 0.5 : 1) / spec.hold;
   // The Smart fountain, and Relaxed's helpers: the pour stops at the line and the lid goes on.
+  // The fountain also pours twice as fast, so it helps on Relaxed too (DESIGN §51).
   counter.autoStopPour = has("autostop") || spec.helpers;
   counter.autoLid = has("autostop") || spec.helpers;
-  // Relaxed: things still burn, at half the pace once over-done.
-  counter.burnPace = spec.burn;
+  counter.pourBoost = has("autostop") ? 2 : 1;
+  // Relaxed: things still burn, at half the pace once over-done. The Kitchen timer halves it again.
+  counter.burnPace = spec.burn * (has("timer") ? 0.5 : 1);
   // Relaxed: small slips cost half (scoring.ts).
   setSmallSlips(spec.small);
   counter.setPage(HOME_PAGE);
@@ -5661,11 +5684,11 @@ counter.events.spill = () => {
   showHint("It's overflowing! Let go, and wipe up the mess.", 2.5);
 };
 // Kitchen timer (bonus): a soft tick when anything on the grill or in the fryer reaches done.
-// Ready alerts (Relaxed and Steady, difficulty study): the same tick, and a word, when it's done on
-// a counter you aren't looking at; the counter's button lamp lights too (see updateHud).
+// Ready alerts (every tier since DESIGN §51): the same tick, and a word, when it's done on a
+// counter you aren't looking at; the counter's button lamp lights too (see updateHud).
 counter.events.done = (page) => {
   if (game.phase !== "playing") return;
-  const away = page !== counter.page && DIFFICULTY[game.pacing].alerts;
+  const away = page !== counter.page;
   if (has("timer") || away) sfx.tick();
   if (away && page === HOME_PAGE) {
     const where = counter.middle === "press" ? "in the press" : counter.middle === "oven" ? "in the oven" : counter.middle === "comal" ? "on the comal" : "on the grill";
@@ -5847,7 +5870,6 @@ function updateUi(dt = 0): void {
   const ovenBurning = pies.some((d) => darkSide(d) > COOK_SCALE.dough.over);
   // Ready alerts: the middle counter's lamp also lights for food done on the grill, comal or press.
   const grillReady =
-    DIFFICULTY[game.pacing].alerts &&
     (counter.grillItems.some((g) => !g.below && !g.held && g.piece.kind in COOK_SCALE && cookZone(g.piece.kind as Cookable, cookLevel(g.piece)) === "done") ||
       counter.bays.some((b, i) => {
         const r = i < counter.bayCount && b.closed ? counter.bayReading(b) : null;

@@ -5,6 +5,8 @@
 .menu-card.report-card { width: min(calc(var(--gw, 100vw) - 24px), 420px); }
 .rep-head { padding-bottom: 4px; }
 .rep-head .bv-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The day and the shift's hours wrap on a narrow phone rather than lose the closing time. */
+.rep-head .bv-eyebrow { white-space: normal; }
 .rep-body { padding-top: 2px; padding-bottom: 12px; gap: 12px; }
 
 .rep-verdict { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0; font-size: 13.5px; color: var(--bv-ink-2); font-weight: 600; line-height: 1.35; }

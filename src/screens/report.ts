@@ -219,7 +219,7 @@ export function reportHtml(c: Closing, save: Save): string {
 
   return `<header class="menu-head bar rep-head">
       <div class="menu-headtext">
-        <span class="bv-eyebrow">Closed · Day ${c.day} · ${clockLabel(c.shift.start)} to ${clockLabel(c.shift.end)}</span>
+        <span class="bv-eyebrow">Closed · Day ${c.day} · ${clockLabel(c.shift.start)}&nbsp;to&nbsp;${clockLabel(c.shift.end)}</span>
         <h2 class="bv-title">${esc(town.name)}</h2>
       </div>
       <button class="bv-btn icon sm ghost menu-x" data-m="close" aria-label="Close the report card">${icon("close")}</button>

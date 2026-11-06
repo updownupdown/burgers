@@ -140,6 +140,8 @@ export function freshSave(): Save {
     trips: 0,
     known: {},
     popularity: START_POPULARITY,
+    // Listed so a new trip (Object.assign over the save) clears the regulars' tallies too.
+    regulars: {},
     press: [],
   };
 }

@@ -46,7 +46,7 @@ import { makeKnife } from "./render/knife";
 import { makeEgg, type EggStage } from "./render/egg";
 import "./ui/components.css";
 import "./style.css";
-import { mountHome, refreshHome, type Arrival, type NightShow } from "./screens/home";
+import { homeBusy, mountHome, refreshHome, type Arrival, type NightShow } from "./screens/home";
 import { Dusk } from "./render/dusk";
 import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
@@ -63,7 +63,7 @@ import { devOn, simulate, type SimLevel } from "./game/devmode";
 import { coachOn, coachShowing, coachState, setCoachOn, skipLessonsFor, startCoach } from "./tutorial/coach";
 import { lessons } from "./tutorial/lessons";
 import { showWelcome, welcomeDue } from "./tutorial/welcome";
-import { modalOpen } from "./screens/modal";
+import { modalClosedAt, modalOpen } from "./screens/modal";
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -217,6 +217,8 @@ const game = {
   /** Which customer (by arrival order) is a food critic today, or -1; and what they wrote. */
   criticAt: -1,
   press: null as PressPiece | null,
+  /** Popularity when the window opened, for the report card (a regular won mid-shift moves it). */
+  popStart: 0,
   /** Which screen is up over the map, so its buttons redraw the right one. */
   overlay: null as null | "closing" | "reviews" | "garage",
   garage: { ...GARAGE_START } as GarageView,
@@ -532,6 +534,8 @@ function setActive(i: number): void {
 function clearSlot(i: number): void {
   const s = game.slots[i];
   history.forgetTray(i);
+  // A sauce close-up open on this tray closes: there's no burger left under it.
+  if (sauceDrag?.slot === i) closeSauce();
   s.order = null;
   s.plate = emptyPlate();
   s.fig = null;
@@ -1233,6 +1237,11 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
     showHint("That customer is on their way out.", 1.5);
     return false;
   }
+  // A pie lifted off the peel by hand goes on an empty tray, as it does when swiped off the peel.
+  if (payload.type === "stack" && payload.peel && s.plate.layers.length) {
+    showHint("That tray already has food on it.", 1.8);
+    return false;
+  }
   if (payload.type === "stack" && payload.whole && payload.fromPlate !== slot && s.plate.layers.length) {
     showHint("That tray already has something on it.", 2);
     return false;
@@ -1317,6 +1326,10 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
       showHint("This tray already has fries.", 2);
       return false;
     }
+    if (payload.fill < 0.02) {
+      showHint("Fill it first!", 1.5);
+      return false;
+    }
     const { cook, size, fill, salt, curds, gravy, held } = payload;
     s.plate.fries = { cook, size, fill, salt, curds, gravy, held: held ?? 0, ...(payload.fry && payload.fry !== "fries" ? { fry: payload.fry } : {}) };
     dropped = { place: { at: "tray", slot }, ref: s.plate.fries };
@@ -1370,6 +1383,11 @@ function finishHold(pt: Pointer): void {
   if (!pt.moved && dur < 450 && (from.at === "supply" || payload.type === "drink")) {
     nameBubble(pt, nameOf(payload));
     if (payload.type === "drink") restorePayload(payload);
+    return;
+  }
+  if (!pt.moved && dur < 450 && payload.type === "carton" && payload.pack >= 0 && payload.fill < 0.02) {
+    restorePayload(payload);
+    showHint("Drag fries from the basket into the carton.", 2);
     return;
   }
 
@@ -1552,7 +1570,7 @@ function restorePayload(payload: Payload): void {
     if (fromPlate !== undefined && flavor) {
       game.slots[fromPlate].plate.drink = { flavor, fill, size, ice, lid, ...(garnish ? { garnish } : {}) };
       syncTray(fromPlate, false);
-    } else if (from) counter.placeCup({ flavor, fill, size, ice, lid }, new THREE.Vector3(from.x, 0.3, from.z));
+    } else if (from) counter.placeCup({ flavor, fill, size, ice, lid }, new THREE.Vector3(from.x, 0.3, from.z), true);
   }
   if (payload.type === "carton") {
     const { size, cook, fill, salt, curds, gravy, fromPlate } = payload;
@@ -1654,7 +1672,7 @@ function noteFood(layers: Layer[], from: Place, to: Place): void {
 const restPlace = (): Place => (counter.rest === counter.board ? { at: "board" } : { at: "bench" });
 
 /** The drink or carton a move left, as it is now. */
-type CupData = { flavor: DrinkId | null; fill: number; size: Size; ice: boolean; lid: boolean };
+type CupData = { flavor: DrinkId | null; fill: number; size: Size; ice: boolean; lid: boolean; garnish?: Garnish };
 type CartonData = { size: FriesSize; cook: number; fill: number; salt: number; curds: boolean; gravy: boolean; fry: FryKind; held?: number };
 
 /** Is the moved thing still where the move put it? */
@@ -1847,19 +1865,19 @@ function takeBack(m: Move<Moved>): { show: Payload | THREE.Object3D; put: () => 
     const pp = w.p as Extract<Payload, { type: "drink" | "empty" }>;
     if (to.at === "tray") {
       const d = game.slots[to.slot].plate.drink!;
-      c = { flavor: d.flavor, fill: d.fill, size: d.size, ice: !!d.ice, lid: !!d.lid };
+      c = { flavor: d.flavor, fill: d.fill, size: d.size, ice: !!d.ice, lid: !!d.lid, ...(d.garnish ? { garnish: d.garnish } : {}) };
       game.slots[to.slot].plate.drink = null;
       syncTray(to.slot, false);
     } else if (to.at === "cup") {
       const cup = w.ref as DrinkCup;
       c = { flavor: cup.flavor, fill: cup.fill, size: cup.size, ice: cup.ice, lid: cup.lid };
       counter.removeCup(cup);
-    } else c = pp.type === "drink" ? { flavor: pp.flavor, fill: pp.fill, size: pp.size, ice: pp.ice, lid: pp.lid } : { flavor: null, fill: 0, size: pp.size, ice: !!pp.ice, lid: false };
+    } else c = pp.type === "drink" ? { flavor: pp.flavor, fill: pp.fill, size: pp.size, ice: pp.ice, lid: pp.lid, ...(pp.garnish ? { garnish: pp.garnish } : {}) } : { flavor: null, fill: 0, size: pp.size, ice: !!pp.ice, lid: false };
     const put = () => {
       if (from.at === "tray") {
-        if (c.flavor) game.slots[from.slot].plate.drink = { flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid };
+        if (c.flavor) game.slots[from.slot].plate.drink = { flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid, ...(c.garnish ? { garnish: c.garnish } : {}) };
         syncTray(from.slot, true);
-      } else if (from.at === "cup") counter.placeCup(c, new THREE.Vector3(from.x, 0.3, from.z));
+      } else if (from.at === "cup") counter.placeCup(c, new THREE.Vector3(from.x, 0.3, from.z), true);
     };
     return { show: { type: "drink", ...c, from: null }, put };
   }
@@ -2920,6 +2938,7 @@ function paintSauce(pt: Pointer): void {
   const q = r > 1 ? { x: raw.x / r, z: raw.z / r } : raw;
   const layers = game.slots[slot].plate.layers;
   let top = layers[layers.length - 1];
+  if (!top) return;
   // Carrying on with the same sauce keeps drawing the same squiggle rather than adding a layer.
   if (top.piece.kind !== s.kind || !top.piece.stroke) {
     const p = newPiece(s.kind);
@@ -3062,8 +3081,14 @@ function updateSauce(dt: number): void {
 /** The press spot the close-up was last on, while it eases out. */
 let lastBench: Bench | null = null;
 
+/**
+ * A card (the pause menu) just closed, or Prep's Open just started the shift: the second tap of a
+ * double tap on Resume or Open isn't a kitchen tap.
+ */
+const afterCard = (e: Event) => e.timeStamp - Math.max(modalClosedAt(), screenShownAt) < 400;
+
 canvas.addEventListener("pointerdown", (e) => {
-  if (game.phase !== "playing" || ptr) return;
+  if (game.phase !== "playing" || ptr || afterCard(e)) return;
   sfx.unlock();
   try {
     canvas.setPointerCapture(e.pointerId);
@@ -3225,11 +3250,12 @@ canvas.addEventListener("pointerdown", (e) => {
     else if (hit.type === "garnish" && counter.garnish) startHold(pt, { type: "garnish", kind: counter.garnish });
     else if (hit.type === "pack") {
       const p = counter.packs[hit.idx];
-      if (p.size && p.fill > 0) {
+      // An empty carton lifts off too, so one of the wrong size can go in the trash.
+      if (p.size) {
         startHold(pt, { type: "carton", size: p.size, cook: p.cook, fill: p.fill, pack: hit.idx, salt: p.salt, curds: p.curds, gravy: p.gravy, fry: p.fry, held: p.held });
         Object.assign(p, EMPTY_PACK);
         counter.syncPack(hit.idx);
-      } else showHint(p.size ? "Drag fries from the basket into the carton." : "Grab a carton from the stacks, front left.", 2);
+      } else showHint("Grab a carton from the stacks, front left.", 2);
     }
     else if (hit.type === "basket") pt.mode = "basket";
     else if (hit.type === "shaker" || hit.type === "curds" || hit.type === "gravy") {
@@ -4473,8 +4499,9 @@ ui.tabs.forEach((t, i) => {
   };
   t.addEventListener("pointerup", end);
   t.addEventListener("pointercancel", end);
-  t.addEventListener("click", () => {
+  t.addEventListener("click", (e) => {
     if (swiped) return void (swiped = false);
+    if (afterCard(e)) return;
     sfx.unlock();
     if (!counter.inHand) goToPage(i);
   });
@@ -4885,6 +4912,7 @@ function startShift(): void {
     bellAt: 0,
     emptySince: 0,
     press: null,
+    popStart: save.popularity,
   });
   // Prep's choices are fixed for the whole shift: pacing, the window and the bonus.
   game.pacing = difficulty;
@@ -4905,7 +4933,9 @@ function startShift(): void {
   ui.bell.hidden = false;
   applyStop();
   // Maybe a critic in today's line, never the very first customer.
-  game.criticAt = has("press") || game.rng() < criticChance(stop().crowd, game.event) ? 1 + Math.floor(game.rng() * Math.max(1, Math.min(game.customers, 8) - 2)) : -1;
+  // The Press pass promises one: the second to order, since people who walk past or give up in line
+  // never order and a later place could go unfilled on a small day.
+  game.criticAt = has("press") ? 1 : game.rng() < criticChance(stop().crowd, game.event) ? 1 + Math.floor(game.rng() * Math.max(1, Math.min(game.customers, 8) - 2)) : -1;
   // Cooking takes cookTime() times as long as before build #86 (pace.ts), the oven too.
   counter.fryBoost = (has("turbo") ? 1.35 : 1) / cookTime();
   // Hot plate (the old Searing plate): the main counter cooks faster, whatever it is.
@@ -4927,6 +4957,7 @@ function startShift(): void {
   ui.title.hidden = true;
   closeAll();
   ui.summary.hidden = true;
+  screenShownAt = performance.now();
 }
 
 /** Dress the truck for the current stop: scenery, pantry bins and HUD label. */
@@ -5180,11 +5211,12 @@ function endShift(arrive: Arrival): void {
   // The shift fills the day; the evening follows, and only sleeping turns the day (see game/day.ts).
   save.time = "evening";
   save.driven = 0;
-  const popBefore = save.popularity;
+  // From where it stood when the window opened, so a regular's +5 during the shift shows in today's change.
+  const popBefore = game.popStart;
   // Popularity: yesterday's fades a touch, then word of mouth and the press move it.
   // The guest book doubles the good word; apology cookies keep walk-outs from costing any.
-  const word = wordOfMouth(game.stars, has("cookies") ? 0 : game.lost, has("cookies") ? 0 : game.leftLine, save.popularity);
-  save.popularity = fadePopularity(save.popularity) + (word > 0 && has("guestbook") ? word * 2 : word) + (game.press?.pop ?? 0);
+  const word = wordOfMouth(game.stars, has("cookies") ? 0 : game.lost, has("cookies") ? 0 : game.leftLine, save.popularity, has("guestbook") ? 2 : 1);
+  save.popularity = fadePopularity(save.popularity) + word + (game.press?.pop ?? 0);
   save.popularity = Math.max(10, Math.min(100, save.popularity));
   if (game.gentle) save.popularity = Math.max(popBefore, save.popularity);
   customersView.setLine([]);
@@ -5264,24 +5296,36 @@ function endShift(arrive: Arrival): void {
   // The results land on the evening map, as a sheet, after the view pulls back out of the truck.
   showTitle(null, arrive);
   if (unlocked) setTimeout(() => sfx.coin(), arrive.shot ? 1900 : 400);
-  // A pending update waits until the player leaves this screen (see showTitle).
+  // A pending update waits until the player leaves the report card (see showTitle and reloadWhenIdle).
   if (game.pendingUpdate) {
     ui.updateText.textContent = `Build #${game.pendingUpdate.build} will load when you continue.`;
     ui.update.hidden = false;
+    reloadWhenIdle(game.pendingUpdate);
   }
 }
 
 // ---------------------------------------------------------------------------
 // Updates
 
+/**
+ * On the map, reload onto a new build once nothing is open over it: not while the report card,
+ * Prep, a screen or a card is up, nor while the map plays the pull-back, a drive or the night.
+ */
+function reloadWhenIdle(v: VersionInfo): void {
+  setTimeout(() => {
+    if (game.phase !== "title" || game.pendingUpdate !== v) return;
+    if (modalOpen() || prepOpen || game.overlay || homeBusy()) reloadWhenIdle(v);
+    else reloadTo(v.build);
+  }, 1200);
+}
+
 const checkNow = startUpdateChecks((v) => {
   game.pendingUpdate = v;
   if (game.phase === "title") {
-    ui.updateText.textContent = `Updating to build #${v.build}…`;
+    const busy = modalOpen() || prepOpen || game.overlay || homeBusy();
+    ui.updateText.textContent = busy ? `Build #${v.build} will load when you continue.` : `Updating to build #${v.build}…`;
     ui.update.hidden = false;
-    setTimeout(() => {
-      if (game.phase === "title") reloadTo(v.build);
-    }, 1200);
+    reloadWhenIdle(v);
   } else if (game.phase === "summary") {
     ui.updateText.textContent = `Build #${v.build} will load when you continue.`;
     ui.update.hidden = false;
@@ -5353,6 +5397,8 @@ function tick(dt: number): void {
     }
     // If nobody's about, don't make the player wait for the next arrival.
     if (!game.slots.some((s) => s.order) && !game.line.length && game.nextSpawn > game.time + 2 && !guiding) game.nextSpawn = game.time + 2;
+    // Everyone expected has been and gone but the rush hasn't come yet: bring it on now.
+    if (r && r.left === RUSH.people && game.spawned >= game.customers && !game.slots.some((s) => s.order) && !game.line.length && r.next > game.time + 2 && !guiding) r.next = game.time + 2;
 
     // The line: patience drains slowest at the front, where they're nearly there.
     for (let k = game.line.length - 1; k >= 0; k--) {
@@ -5462,7 +5508,9 @@ function tick(dt: number): void {
       }
     }
 
-    const doneSpawning = game.time >= game.shiftLength || game.spawned >= game.customers;
+    // A rush still to come keeps the shift open (it adds its own people on top of the day's count).
+    const rushDue = !!game.rush && game.rush.left > 0 && game.rush.at < game.shiftLength;
+    const doneSpawning = game.time >= game.shiftLength || (game.spawned >= game.customers && !rushDue);
     if (doneSpawning && !game.line.length && game.slots.every((s) => !s.order && !s.fig)) startSundown();
   }
   if (game.phase === "sundown") stepSundown(dt);

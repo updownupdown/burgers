@@ -68,9 +68,10 @@ export function rushAt(capital: boolean, event: boolean, day: number, shiftLengt
   const k = ((day * 7919) % 101) / 101;
   return shiftLength * (RUSH.from + RUSH.span * k);
 }
-export function wordOfMouth(stars: number[], walkedOut: number, leftLine: number, popularity = 100): number {
+export function wordOfMouth(stars: number[], walkedOut: number, leftLine: number, popularity = 100, goodWord = 1): number {
   const happy = stars.filter((s) => s >= 4).length;
-  const gained = Math.min(6, Math.floor(happy / (popularity < EARLY_WORD ? 2 : 3)));
+  // `goodWord`: the Guest book doubles what the happy customers spread (not the net of the day).
+  const gained = Math.min(6, Math.floor(happy / (popularity < EARLY_WORD ? 2 : 3))) * goodWord;
   const lost = Math.min(4, Math.floor(walkedOut / 2) + Math.floor(leftLine / 3));
   return gained - lost;
 }

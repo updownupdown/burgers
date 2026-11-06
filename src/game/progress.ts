@@ -1,4 +1,4 @@
-import { migrateBonuses, type BonusId } from "./bonus";
+import { migrateBonuses, validPicks, type BonusId } from "./bonus";
 import { DEFAULT_LOOK, LOOKS, validLook, type Look } from "./looks";
 import type { PressPiece } from "./press";
 import { noReviews, toCounts, type StarCounts } from "./reviews";
@@ -42,8 +42,8 @@ export interface Save {
   found: BonusId[];
   /** Bonuses bought, in the order they came. */
   bonuses: BonusId[];
-  /** The one bonus brought into the next shift, picked on Prep; null for none. */
-  bonus: BonusId | null;
+  /** The bonuses brought into the next shift, picked on Prep (up to MAX_PICKS). */
+  picks: BonusId[];
   /** Recipe names hidden from the menu on Prep (by name, so it carries from town to town). */
   hidden: string[];
   /** When the window opens and closes, picked on Prep (see shift.ts). */
@@ -106,7 +106,7 @@ export interface Closing {
   /** A great shift (see bonus.ts), the bonus it unlocked here, and the bonus that was brought. */
   great: boolean;
   unlocked: BonusId | null;
-  usedBonus: BonusId | null;
+  usedBonus: BonusId[];
   /** Savings after the takings went in. */
   bank: number;
   shift: ShiftWindow;
@@ -128,7 +128,7 @@ export function freshSave(): Save {
     bank: 0,
     found: [],
     bonuses: [],
-    bonus: null,
+    picks: [],
     hidden: [],
     shift: validShift(null),
     reviewCounts: noReviews(),
@@ -222,7 +222,10 @@ export function migrateSave(p: Partial<Save> & Record<string, unknown>): Save {
   }
   s.looks = Array.isArray(s.looks) ? s.looks.filter((id) => LOOKS.some((l) => l.id === id && l.price > 0)) : [];
   s.look = validLook(s.look, s.looks);
-  if (s.bonus && !s.bonuses.includes(s.bonus)) s.bonus = null;
+  // One bonus per shift became up to three: the old single pick carries over.
+  const oldPick = (p as { bonus?: unknown }).bonus;
+  s.picks = validPicks(Array.isArray(p.picks) ? p.picks : typeof oldPick === "string" ? [oldPick] : [], s.bonuses);
+  delete (s as { bonus?: unknown }).bonus;
   // Business mode kept its menu as the dishes on it; Prep now keeps the ones taken off.
   const plan = p.plan as { menu?: string[] } | null | undefined;
   if (!p.hidden && plan?.menu) {

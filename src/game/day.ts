@@ -59,7 +59,7 @@ export interface CrowdInput {
   /** Recipe names hidden from the menu. */
   hidden: readonly string[];
   shift?: ShiftWindow;
-  bonus?: BonusId | null;
+  bonuses?: readonly BonusId[];
   /** Stressful packs people closer, so more come; Chill spaces them out but doesn't cut the crowd. */
   pacing?: Difficulty;
 }
@@ -77,7 +77,7 @@ export function expectedCustomers(p: CrowdInput): number {
     ratingFactor(p.rating) *
     menuFactor(menu) *
     crowdShare(p.shift ?? DEFAULT_SHIFT) *
-    bonusCrowd(p.bonus ?? null) /
+    bonusCrowd(p.bonuses ?? []) /
     pacingCrowd(p.pacing ?? "balanced");
   return Math.max(3, Math.round(n));
 }

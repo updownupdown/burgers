@@ -104,7 +104,7 @@ function rewardHtml(c: Closing, save: Save): string {
   if (!earned) return "";
   const owns = save.bonuses.includes(earned.id);
   const act = owns
-    ? `<small>It's yours. Bring it from Prep &amp; Open, one bonus per shift.</small>`
+    ? `<small>It's yours. Bring it from Prep &amp; Open, up to three per shift.</small>`
     : save.bank >= earned.price
       ? `<button class="bv-btn primary sm" data-rep="buy" data-v="${earned.id}">${icon("coin")}Buy · ${money(earned.price)}</button>`
       : `<button class="bv-btn sm" data-rep="garage">${money(earned.price)} in the Garage</button>`;

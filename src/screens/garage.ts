@@ -57,7 +57,7 @@ export function garageHtml(save: Save, v: GarageView): string {
 
 function bonusesHtml(save: Save): string {
   const owned = save.bonuses.length;
-  let html = `<p class="day-hint">Each town has one bonus. A great shift there (a ${GREAT.stars}★ average, ${Math.round(GREAT.served * 100)}% of orders served) unlocks it; then it's yours to buy. You own ${owned} of ${BONUSES.length}; bring one per shift from Prep.</p>`;
+  let html = `<p class="day-hint">Each town has one bonus. A great shift there (a ${GREAT.stars}★ average, ${Math.round(GREAT.served * 100)}% of orders served) unlocks it; then it's yours to buy. You own ${owned} of ${BONUSES.length}; bring up to three per shift from Prep.</p>`;
   for (const r of REGIONS) {
     const list = BONUSES.filter((b) => townById(b.town).region === r.id);
     html += `<h3 class="prep-h">${esc(r.name)}</h3><div class="gar-list">`;

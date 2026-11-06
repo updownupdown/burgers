@@ -980,7 +980,7 @@ James's playtest of build #82. Code in `src/main.ts` (Undo, the tray's drag, the
 - **Cuts can be undone**, one slice at a time; Undo flies the knife back.
 - **Moving things between trays.** A press on a tray picks the part under the finger (the cup, the fries or the dish). Dragged sideways onto another tray it goes over whole (a tray that already has a dish says so); dragged down onto the counter it peels the top layer off as before.
 - **Sauce comes off with what it's on.** A squeeze can't be dragged off on its own: the top layer under it comes with it. Undo takes a squeeze back.
-- **Sauce on the board or in an open press bay.** Drop the bottle on the bread there (or tap the bottle, then the bread): an even squeeze goes on (`BENCH_SAUCE`, low in the Perfect band). There's no close-up there; on a tray you can still draw it on yourself.
+- **Sauce on the board or in an open press bay** (replaced by a close-up in §40). Drop the bottle on the bread there (or tap the bottle, then the bread): an even squeeze goes on (`BENCH_SAUCE`, low in the Perfect band). There's no close-up there; on a tray you can still draw it on yourself.
 - **Building in the press.** Three bays at every press town, one per tray, left to right. A lone piece or a stack (a veggie patty pressed in another bay, say) can go on top of bread in a bay or on the board, as long as neither is already a closed sandwich.
 - **The knife.** The cut view stays (James likes the slice), for paninis and flatbreads alike, and a baked flatbread can be cut on the peel when the board is bare. The panini's cut is a narrow dark slit sunk into the face, so it reads as bread taken away.
 - **The flatbread close-up.** Spreading sauce or oil on a base opens a close-up over the counter, as the tray's does for burgers.
@@ -1016,3 +1016,21 @@ Supersedes §31's "cutting is never undone", the header bell (§19, §35's tray 
 - **Hold bars.** The small hold bar under food on the warm end, a basket or a carton shows only once the food starts to dry (no green line while it keeps). The tray's staleness bar is unchanged.
 - **Ice.** An empty cup carried over the ice bin scoops its own ice. Ice from the spoon or the cup clinks (sfx.ice). The ice in hand is drawn in the steel scoop.
 - **Dev readout.** The draw-call and triangle chip is gone.
+
+## 40. After build #87: bonuses, learned tools, press sauce and tickets
+
+James's notes after build #87. Code in `src/game/bonus.ts` (`MAX_PICKS`, `togglePick`, `validPicks`), `src/game/progress.ts` (`picks`), `src/game/stops.ts` (`withLearned`), `src/main.ts` (bench sauce, tray taps), `src/ui.ts` (`sideChips`). Checked by `src/game/picks.test.ts` and `tools/playtest/bench-sauce.cjs`.
+
+- **Up to three bonuses a shift.** Prep's Bonuses card says "Pick up to 3"; a tap toggles one, and a fourth pick drops the oldest. `save.bonus` became `save.picks` (an old single pick carries over). The footer names the bonus, or "N bonuses".
+- **Tools learned down the road carry back.** Once a shift has been worked in a town with the cutting board (Harbor City, Port Amber), the tortilla press (Sun Valley) or more bays or oven spots, the earlier towns on the same middle counter get them too (`withLearned`, applied in `stop()`). With the board out, paninis and flatbreads there are cut, as at Harbor City and Port Amber. Menus, fryer sides and drinks stay each town's own.
+- **Sauce on the press works like the tray.** Dragging pesto or aioli over bread in an open bay or on the board opens a close-up of the counter over it (`benchZoom`, like the flatbread's), with the same level bar, score chip and coverage scoring; the line is drawn by hand. With burgers on the trays too, the finger rests over the bread for a moment (`BENCH_DWELL`, 220 ms) so a drag up to a tray can cross the press. Tap the bottle, then the bread, opens the close-up for one stroke. The automatic even squeeze (`BENCH_SAUCE`, §37) is gone from play.
+- **Trays fold tickets.** A tap on the selected tray opens or folds its ticket, as a tap on the ticket does; a tap on another tray selects it and opens its ticket. (A finished tray is still served by a tap.)
+- **Stubs carry the sides.** A folded ticket lists each side under the name: fries by size (and kind when not plain fries), the drink by size and short name, with ICE or NO ICE. They grey out once on the tray right, and go red when wrong. Garnish and a fritter's sugar always go on, so only the open ticket spells them out. The open ticket no longer repeats the fries and cup icons next to the name, and regulars' names are off the tickets.
+
+## 41. Learned recipes everywhere, the board everywhere, the press tally
+
+James, after build #88 (he picked C on the carry-back question).
+
+- **The board at every press and oven town, cutting optional.** `press.slice` and `oven.board` are on everywhere. An uncut or crooked panini or flatbread costs nothing; a clean cut earns the "Clean cut" touch (+$1 on a 4★+ order). The ticket's method chip reads "Cut?" / "Cut 4?" in an outline box. Help, the menu reference, dish tips and hints say it's optional.
+- **Learned recipes travel.** Recipes still roll out town by town, but once a shift has been worked in a town, its recipes are on the menu in every town cooking on the same counter, with the pantry bins they need (`withLearned`: the fullest pantry among them, plus anything missing). Prep can take them off as before. Fryer sides and drinks stay each town's own. Towns stay distinct through their bonus, events, local ask, crowd and regulars.
+- **Three bays, each mapped to its tray**, on every pacing, Chill included. While a tray is empty and its bay holds the panini, the ticket ticks off what's in the bay (and re-renders as it toasts).

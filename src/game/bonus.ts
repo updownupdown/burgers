@@ -1,7 +1,7 @@
 /**
  * Bonuses: kitchen helpers, one per town. A great shift in a town unlocks its bonus; then it is
- * bought with savings in the Garage and kept for good. Before each shift the player brings at
- * most one owned bonus (picked on Prep).
+ * bought with savings in the Garage and kept for good. Before each shift the player brings up
+ * to MAX_PICKS owned bonuses (picked on Prep).
  *
  * They're laid out along the road so the early towns teach and forgive (patience, neat toppings,
  * drinks that stop themselves) and the late ones reward a tuned run (a faster main counter,
@@ -56,6 +56,23 @@ export const BONUSES: Bonus[] = [
   { id: "combo", town: "portamber", price: 650, name: "Meal deal sign", text: "Orders with a main, fries and a drink tip 50% more.", best: "Fast, full trays", icon: "tray" },
 ];
 
+/** Bonuses brought into one shift, at most. */
+export const MAX_PICKS = 3;
+
+/** Owned picks, in order, capped at MAX_PICKS. */
+export function validPicks(picks: readonly string[] | null | undefined, owned: readonly BonusId[]): BonusId[] {
+  return migrateBonuses(picks ?? []).filter((id) => owned.includes(id)).slice(0, MAX_PICKS);
+}
+
+/**
+ * Tap a bonus on Prep: on if it was off, off if it was on. With MAX_PICKS already on, the oldest
+ * pick makes way, so a tap always does what it shows.
+ */
+export function togglePick(picks: readonly BonusId[], id: BonusId): BonusId[] {
+  if (picks.includes(id)) return picks.filter((p) => p !== id);
+  return [...picks, id].slice(-MAX_PICKS);
+}
+
 export function bonusById(id: string): Bonus | undefined {
   return BONUSES.find((b) => b.id === id);
 }
@@ -88,8 +105,8 @@ export function greatShift(stars: readonly number[], served: number, ordered: nu
 }
 
 /** The sandwich board's pull on the crowd. */
-export function bonusCrowd(id: BonusId | null): number {
-  return id === "board" ? 1.15 : 1;
+export function bonusCrowd(ids: readonly BonusId[]): number {
+  return ids.includes("board") ? 1.15 : 1;
 }
 
 /** Old saves' ids made current; anything unknown is dropped. */

@@ -4,15 +4,15 @@ import { buzz, Sfx } from "./audio";
 import { cookLevel, COOK_SCALE, cookZone, darkSide, DRINK_FILL, friesZone, FRY_ZONE, isMelted, paleSide, SALT, setFolded, type Cookable } from "./game/cooking";
 import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { expectedCustomers, sleep } from "./game/day";
-import { greatShift, townBonus, type BonusId } from "./game/bonus";
+import { greatShift, togglePick, townBonus, validPicks, type BonusId } from "./game/bonus";
 import { cookTime, shiftStretch } from "./game/pace";
 import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, validShift, type ShiftWindow } from "./game/shift";
 import { freshSave, loadSave, passed, passTown, todaysClosing, writeSave, type Closing } from "./game/progress";
-import { eventOn, fountainFor, fryerOf, garnishFor, garnishOf, middleOf, townById, withEvent, type TownEvent } from "./game/stops";
+import { eventOn, fountainFor, fryerOf, garnishFor, garnishOf, middleOf, townById, withEvent, withLearned, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
 import { CHILL_BURN, DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
 import { joinChance, lineDrain, linePatience, MAX_LINE, RUSH, rushAt, WINDOW, windowPatience, wordOfMouth } from "./game/line";
-import { BENCH_SAUCE, FRIES_HOLD, HOLD_GRACE, HOLD_RUIN, LADLE_BAND, LEOPARD_EVEN, payout, quickSauceStroke, SAUCE_BAND, sauceCoverage, sauceGate, sauceVerdict, scorePlate, TOUCH_TIP, touchTip, type SauceWord } from "./game/scoring";
+import { FRIES_HOLD, HOLD_GRACE, HOLD_RUIN, LADLE_BAND, LEOPARD_EVEN, payout, SAUCE_BAND, sauceCoverage, sauceGate, sauceVerdict, scorePlate, TOUCH_TIP, touchTip, type SauceWord } from "./game/scoring";
 import { History, samePlace, type Move, type Place } from "./game/undo";
 import { CROWD, menuFor } from "./game/business";
 import { askCounts, askFor, served as askServed, type Ask } from "./game/asks";
@@ -123,10 +123,10 @@ const ui = buildUi(document.getElementById("ui")!, PAGES);
 
 const save = loadSave();
 if (!pickedPacing && !save.tutorialDone) difficulty = "chill";
-/** The town being played, as it is today (an event makes it busier and changes the crowd). */
-const stop = () => withEvent(townById(game.town), game.event);
-/** The bonus brought into this shift (one at most, picked on Prep). */
-const has = (b: BonusId) => game.bonus === b;
+/** The town being worked: its event today and the tools learned further down its road. */
+const stop = () => withEvent(withLearned(townById(game.town), save.shiftsIn), game.event);
+/** A bonus brought into this shift (up to MAX_PICKS, picked on Prep). */
+const has = (b: BonusId) => game.bonuses.includes(b);
 
 interface Slot {
   order: Order | null;
@@ -208,12 +208,12 @@ const game = {
   comped: 0,
   /** Reviews left so far this shift (stars, 1..5); every customer's opinion is in `stars`. */
   reviews: [] as number[],
-  /** Set on Prep and fixed for the shift: pacing, the window, and the one bonus brought along. */
+  /** Set on Prep and fixed for the shift: pacing, the window, and the bonuses brought along. */
   pacing: "balanced" as Difficulty,
   shift: validShift(null) as ShiftWindow,
   /** Play time of today's window in seconds (see shift.ts). */
   shiftLength: 180,
-  bonus: null as BonusId | null,
+  bonuses: [] as BonusId[],
   /** Which customer (by arrival order) is a food critic today, or -1; and what they wrote. */
   criticAt: -1,
   press: null as PressPiece | null,
@@ -1070,6 +1070,8 @@ interface Pointer {
   plate: number;
   /** The part of the tray pressed (the cup, the fries or the main), so a drag lifts what's under the finger. */
   part?: "cup" | "fries" | "main";
+  /** The tray pressed was already the selected one (a tap on it then opens or folds its ticket). */
+  wasActive?: boolean;
   samples: { x: number; y: number; t: number }[];
   moved: boolean;
 }
@@ -2647,6 +2649,11 @@ interface SauceDrag {
   /** The layer this squeeze went into and its stroke's length before it, for Undo. */
   piece: Piece | null;
   before: number;
+  /** Saucing bread on the board or in an open press bay (after build #87), through benchZoom; null on a tray. */
+  bench: Bench | null;
+  /** The bench spot the finger is resting over before it locks on, and since when (ms). */
+  benchHover: string;
+  benchSince: number;
 }
 let sauceDrag: SauceDrag | null = null;
 /** A bottle that was tapped: lifted out of the caddy, waiting for a tap on a burger. */
@@ -2680,18 +2687,23 @@ function startSauce(pt: Pointer, kind: SauceKind): void {
   pt.sauce = kind;
   counter.liftSauce(kind);
   const slot = ok[game.active] ? game.active : ok.findIndex(Boolean);
-  sauceDrag = { kind, ok, slot, aim: 0, locked: false, bottle: counter.sauceBottle(kind), lastPaint: 0, word: "", how: "drag", armed: false, stroking: false, since: performance.now(), piece: null, before: 0 };
+  sauceDrag = { kind, ok, slot, aim: 0, locked: false, bottle: counter.sauceBottle(kind), lastPaint: 0, word: "", how: "drag", armed: false, stroking: false, since: performance.now(), piece: null, before: 0, bench: null, benchHover: "", benchSince: 0 };
   sauceMove(pt);
   sfx.pop();
 }
 
 /**
- * Sauce on the press counter (after build #82): the bread on the cutting board or in an open press
- * bay takes a squeeze too, so aioli can go on the ciabatta while the panini is built in the press.
- * There's no close-up there: drop the bottle on it (or tap the bottle, then the bread) and an even
- * squeeze goes on, a little under the Perfect band's middle. Undo takes it back off.
+ * Sauce on the press counter: the bread on the cutting board or in an open press bay takes sauce
+ * too, so aioli can go on the ciabatta while the panini is built in the press. Since build #88 it
+ * works as on a tray (James): drag the bottle over the bread and the counter close-up (benchZoom)
+ * eases in over it, the finger draws the line, and letting go puts the bottle back. With burgers
+ * on the trays as well, the finger rests a moment over the bread (BENCH_DWELL) so a drag up to a
+ * tray can cross the press. The tap way works too: tap the bottle, then the bread.
  */
 type Bench = "board" | { bay: number };
+/** How long the finger rests over bread on the press before the close-up opens, when trays could take the sauce too (ms). */
+const BENCH_DWELL = 220;
+const benchKey = (b: Bench) => (b === "board" ? "board" : `bay${b.bay}`);
 function benchSauceTargets(): boolean {
   if (counter.middle !== "press" || counter.page !== HOME_PAGE) return false;
   if (counter.board?.on && counter.board.layers.length) return true;
@@ -2705,29 +2717,118 @@ function benchUnder(x: number, y: number): Bench | null {
   const bi = counter.overBay(counter.groundPoint(ndc, PLATE.y + 0.1));
   return bi >= 0 && counter.bays[bi].layers.length ? { bay: bi } : null;
 }
-function autoSauce(kind: SauceKind, where: Bench, at: { x: number; y: number }): boolean {
-  if (where !== "board" && counter.bays[where.bay].closed) {
+const benchLayers = (b: Bench): Layer[] => (b === "board" ? (counter.board?.layers ?? []) : counter.bays[b.bay].layers);
+const benchFood = (b: Bench) => (b === "board" ? counter.board?.food : counter.bays[b.bay].food) ?? null;
+function setBench(b: Bench, ls: Layer[]): void {
+  if (b === "board") counter.setBoard(ls);
+  else counter.setBay(counter.bays[b.bay], ls);
+}
+/** Whether sauce can go on there now; says why not if it can't. */
+function benchReady(b: Bench, kind: SauceKind): boolean {
+  if (b !== "board" && counter.bays[b.bay].closed) {
     showHint("Lift the lid first: swipe the handle up.", 2);
     return false;
   }
-  const ls = where === "board" ? counter.board!.layers : counter.bays[where.bay].layers;
+  const ls = benchLayers(b);
   const top = ls[ls.length - 1];
-  if (!top) return false;
-  if (top.piece.kind === kind && top.piece.stroke) {
-    showHint(`It has ${KIND_LABEL[kind].toLowerCase()} on already. Undo takes it off.`, 2);
+  if (!top || !benchFood(b)) return false;
+  if (top.piece.kind === kind && top.piece.stroke?.length && sauceCoverage(top.piece.stroke) > SAUCE_BAND.drown) {
+    showHint(`It has plenty of ${KIND_LABEL[kind].toLowerCase()} on. Undo takes it off.`, 2);
     return false;
   }
-  const p = newPiece(kind);
-  p.stroke = quickSauceStroke(BENCH_SAUCE);
-  const next = [...ls, { piece: p, offX: top.offX * 0.5, offZ: top.offZ * 0.5 }];
-  if (where === "board") counter.setBoard(next);
-  else counter.setBay(counter.bays[where.bay], next);
-  history.push({ what: { k: "sauce", piece: p, before: 0, kind }, from: SUPPLY, to: where === "board" ? { at: "board" } : { at: "bay", i: where.bay } });
-  sfx.squirt();
-  buzz(10);
-  nameBubble(at, KIND_LABEL[kind], 1000);
-  hintOnce("bench-sauce", "Sauced. On a tray you can draw it on yourself for a Perfect.", 3);
   return true;
+}
+
+/** The counter close-up over bread on the board or in a bay, the way the tray's burgers get theirs. */
+const benchZoom = new CutZoom();
+let benchZoomOn = false;
+
+function openBenchZoom(b: Bench): void {
+  const food = benchFood(b);
+  if (!food) return;
+  const box = new THREE.Box3().setFromObject(food);
+  const size = box.getSize(new THREE.Vector3());
+  const centre = box.getCenter(new THREE.Vector3());
+  centre.y = box.max.y;
+  const reach = Math.max(size.x, size.z) / 2;
+  const a = screenOf("counter", centre.clone().add(new THREE.Vector3(-reach, 0, 0)));
+  const c = screenOf("counter", centre.clone().add(new THREE.Vector3(reach, 0, 0)));
+  const mid = screenOf("counter", centre);
+  const side = Math.max(20, c.x - a.x);
+  benchZoom.frame(centre, reach, { x: mid.x - side / 2, y: mid.y - side / 2, w: side, h: side });
+  benchZoomOn = true;
+}
+/** Lock a drag (or a tap) onto bread on the press: the close-up opens over it. */
+function lockBench(s: SauceDrag, b: Bench): void {
+  s.locked = true;
+  s.bench = b;
+  s.slot = -1;
+  counter.pointSauce(null);
+  trayView.showGhost(-1, null);
+  trayView.ghostOver(null);
+  openBenchZoom(b);
+  buzz(8);
+}
+/** The tap way onto the press: a tapped bottle, then the bread. The close-up waits for one stroke. */
+function openTapBench(kind: SauceKind, b: Bench): void {
+  if (!benchReady(b, kind)) return;
+  sauceDrag = { kind, ok: [false, false, false], slot: -1, aim: 1, locked: true, bottle: counter.sauceBottle(kind), lastPaint: 0, word: "", how: "tap", armed: true, stroking: false, since: performance.now(), piece: null, before: 0, bench: null, benchHover: "", benchSince: 0 };
+  lockBench(sauceDrag, b);
+  sfx.pop();
+  hintOnce("sauce-draw", "Draw it on: press and move your finger over the bread. Lift it when you're done.", 3.5);
+}
+/** Squeeze a line on the bread under the nozzle, through the counter close-up. */
+function paintBench(pt: Pointer): void {
+  const s = sauceDrag!;
+  const b = s.bench!;
+  if (benchZoom.eased < 0.85) return;
+  const r = benchZoom.rect;
+  const x = pt.x;
+  const y = pt.y - NOZZLE_UP;
+  const inside = x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  const ls = benchLayers(b);
+  const food = benchFood(b);
+  if (!inside || !food || !ls.length) return;
+  // No bottle drawn in the close-up: seen from above it would hide the bread; the line shows where it goes.
+  const w = benchZoom.point(x, y);
+  let top = ls[ls.length - 1];
+  const fresh = top.piece.kind !== s.kind || !top.piece.stroke;
+  const idx = fresh ? ls.length : ls.length - 1;
+  const off = fresh ? { x: top.offX * 0.5, z: top.offZ * 0.5 } : { x: top.offX, z: top.offZ };
+  // Into the sauce layer's own frame (stackObject: food scale, half the layer's offset, stepped back a little per layer).
+  const back = stackBases([...ls.map((l) => l.piece), { kind: s.kind }]).back[idx] ?? 0;
+  const lx = (w.x - food.position.x) / GRILL_SCALE - off.x * 0.5;
+  const lz = (w.z - food.position.z) / GRILL_SCALE - (off.z * 0.5 - back);
+  const rr = Math.hypot(lx, lz);
+  const gate = sauceGate(s.armed, rr);
+  s.armed = gate.armed;
+  if (!gate.squeeze || rr > 1.12) return;
+  const q = rr > 1 ? { x: lx / rr, z: lz / rr } : { x: lx, z: lz };
+  if (fresh) {
+    const p = newPiece(s.kind);
+    p.stroke = [];
+    ls.push({ piece: p, offX: off.x, offZ: off.z });
+    top = ls[ls.length - 1];
+  }
+  if (!s.piece) {
+    s.piece = top.piece;
+    s.before = top.piece.stroke!.length;
+  }
+  const stroke = top.piece.stroke!;
+  const last = stroke[stroke.length - 1];
+  if (!last || Math.hypot(q.x - last.x, q.z - last.z) > 0.06) {
+    stroke.push(q);
+    setBench(b, ls);
+    s.lastPaint = performance.now();
+    if (s.lastPaint - lastSquirt > 70) {
+      sfx.squirt();
+      lastSquirt = s.lastPaint;
+    }
+  }
+}
+function updateBenchZoom(dt: number): void {
+  if (benchZoomOn && (!sauceDrag?.bench || game.phase !== "playing")) benchZoomOn = false;
+  benchZoom.update(dt, benchZoomOn ? 1 : 0, ladleFinal());
 }
 
 /** The tap way, step one: the bottle lifts out of the caddy and waits for a tap on a burger. */
@@ -2760,7 +2861,7 @@ function openTapSauce(slot: number): void {
   sauceArm = null;
   counter.pointSauce(null);
   setActive(slot);
-  sauceDrag = { kind, ok: sauceTargets(), slot, aim: 1, locked: true, bottle: counter.sauceBottle(kind), lastPaint: 0, word: "", how: "tap", armed: true, stroking: false, since: performance.now(), piece: null, before: 0 };
+  sauceDrag = { kind, ok: sauceTargets(), slot, aim: 1, locked: true, bottle: counter.sauceBottle(kind), lastPaint: 0, word: "", how: "tap", armed: true, stroking: false, since: performance.now(), piece: null, before: 0, bench: null, benchHover: "", benchSince: 0 };
   trayView.showGhost(slot, sauceDrag.bottle);
   buzz(8);
   sfx.pop();
@@ -2770,6 +2871,22 @@ function openTapSauce(slot: number): void {
 function sauceMove(pt: Pointer): void {
   const s = sauceDrag;
   if (!s) return;
+  if (!s.locked && s.how === "drag") {
+    // Over bread on the press: rest a moment there (at once if no tray could take it) and the close-up opens on it.
+    const b = bandAt(pt.y) === "counter" && Math.hypot(pt.x - pt.x0, pt.y - pt.y0) >= 24 ? benchUnder(pt.x, pt.y) : null;
+    const key = b ? benchKey(b) : "";
+    const now = performance.now();
+    if (key !== s.benchHover) [s.benchHover, s.benchSince] = [key, now];
+    if (b && s.benchSince !== Infinity && (!s.ok.some(Boolean) || now - s.benchSince >= BENCH_DWELL)) {
+      if (benchReady(b, s.kind)) {
+        lockBench(s, b);
+        paintBench(pt);
+        return;
+      }
+      // Not now (a shut lid...): said once, until the finger moves to another spot.
+      s.benchSince = Infinity;
+    }
+  }
   if (!s.locked) {
     // Aim at the plate in the finger's third of the screen, or the nearest one that can take sauce.
     const third = THREE.MathUtils.clamp(Math.floor(pt.x / (bands.tray.w / 3)), 0, 2);
@@ -2795,7 +2912,10 @@ function sauceMove(pt: Pointer): void {
     trayView.showGhost(s.aim >= 0.4 ? s.slot : -1, s.aim >= 0.4 ? s.bottle : null);
     trayView.ghostOver(null);
   }
-  if (s.locked) paintSauce(pt);
+  if (s.locked) {
+    if (s.bench) paintBench(pt);
+    else paintSauce(pt);
+  }
 }
 
 /** Squeeze a line where the nozzle is, if it's over the burger (and, dragged in, once it's come in over the middle). */
@@ -2851,7 +2971,7 @@ function endSauce(pt: Pointer, cancelled: boolean): void {
   if (s.how === "drag" && !cancelled && !s.locked && bandAt(pt.y) === "counter" && Math.hypot(pt.x - pt.x0, pt.y - pt.y0) >= 24) {
     const where = benchUnder(pt.x, pt.y);
     closeSauce();
-    if (where) autoSauce(s.kind, where, pt);
+    if (where) openTapBench(s.kind, where);
     return;
   }
   if (s.how === "drag" && !cancelled && !s.locked && Math.hypot(pt.x - pt.x0, pt.y - pt.y0) < 24) {
@@ -2871,6 +2991,7 @@ function closeSauce(): void {
     if (to) history.push({ what: { k: "sauce", piece: s.piece, before: s.before, kind: s.kind }, from: SUPPLY, to });
   }
   counter.liftSauce(null);
+  if (s.bench) benchZoomOn = false;
   trayView.showGhost(-1, null);
   trayView.ghostOver(null);
   disposeObject(s.bottle);
@@ -2908,19 +3029,23 @@ function updateSauce(dt: number): void {
   if (sauceDrag?.how === "tap" && !sauceDrag.stroking && (now - sauceDrag.since > SAUCE_WAIT.open || game.phase !== "playing")) closeSauce();
   if (sauceArm && !sauceDrag) trayView.aim(sauceTargets(), -1, game.time);
   const s = sauceDrag;
-  const target = s ? (s.locked ? 1 : s.aim * 0.75) : 0;
-  sauceZoom.update(dt, target, s ? s.slot : -1, { x: 0, y: bands.tray.y, w: bands.tray.w, h: bands.tray.h }, sauceFinal());
+  const target = s && !s.bench ? (s.locked ? 1 : s.aim * 0.75) : 0;
+  sauceZoom.update(dt, target, s && !s.bench ? s.slot : -1, { x: 0, y: bands.tray.y, w: bands.tray.w, h: bands.tray.h }, sauceFinal());
+  updateBenchZoom(dt);
   if (s) {
     trayView.aim(s.locked ? null : s.ok, s.slot, game.time);
     (s.bottle.userData as { squeeze?: (t: number) => void }).squeeze?.(performance.now() - s.lastPaint < 140 ? 1 : 0);
   }
-  const k = sauceZoom.eased;
+  if (s?.bench) lastBench = s.bench;
+  // The press close-up (bread on the board or in a bay) or the tray's.
+  const onBench = benchZoom.visible && !!lastBench;
+  const k = onBench ? benchZoom.eased : sauceZoom.eased;
   const slot = sauceZoom.slot;
-  sauceUi.hidden = !(k > 0.05 && slot >= 0 && game.phase === "playing");
+  sauceUi.hidden = !(k > 0.05 && (onBench || slot >= 0) && game.phase === "playing");
   ui.root.classList.toggle("saucing", !sauceUi.hidden && k > 0.25);
   sauceLevel = null;
   if (sauceUi.hidden) return;
-  const r = sauceZoom.rect;
+  const r = onBench ? benchZoom.rect : sauceZoom.rect;
   sauceUi.style.left = `${r.x}px`;
   sauceUi.style.top = `${r.y}px`;
   sauceUi.style.width = `${r.w}px`;
@@ -2929,9 +3054,15 @@ function updateSauce(dt: number): void {
   sauceUi.style.setProperty("--ui", Math.max(0, (k - 0.5) * 2).toFixed(3));
   const kind = s?.kind ?? (sauceUi.dataset.kind as SauceKind | undefined) ?? "ketchup";
   sauceUi.dataset.kind = kind;
-  const cov = sauceCoverage(sauceLayer(slot, kind)?.stroke);
+  const layerOf = (ls: Layer[]) => {
+    for (let i = ls.length - 1; i >= 0; i--) if (ls[i].piece.kind === kind && ls[i].piece.stroke) return ls[i].piece;
+    return null;
+  };
+  const cov = sauceCoverage((onBench ? layerOf(benchLayers(lastBench!)) : sauceLayer(slot, kind))?.stroke);
   const { word } = sauceVerdict(cov);
-  const wanted = !!game.slots[slot].order?.layers.some((l) => l.kind === kind);
+  // Bay i makes tray i's order; what's on the board could be for anyone.
+  const wantsIt = (i: number) => !!game.slots[i]?.order?.layers.some((l) => l.kind === kind);
+  const wanted = onBench ? (lastBench === "board" ? game.slots.some((_, i) => wantsIt(i)) : wantsIt(lastBench!.bay)) : wantsIt(slot);
   if (k > 0.5) sauceLevel = { v: cov, kind, rect: { ...r }, over: cov > SAUCE_BAND.drown };
   const label = s?.how === "tap" && !s.stroking ? "Press and draw it on" : cov === 0 ? "Squeeze on" : wanted ? SAUCE_WORDS[word] : "Not on this order";
   sauceScore.dataset.word = wanted ? (cov === 0 ? "" : word) : "wrong";
@@ -2947,6 +3078,8 @@ function updateSauce(dt: number): void {
     s.word = word;
   }
 }
+/** The press spot the close-up was last on, while it eases out. */
+let lastBench: Bench | null = null;
 
 /**
  * A card (the pause menu) just closed, or Prep's Open just started the shift: the second tap of a
@@ -2989,11 +3122,12 @@ canvas.addEventListener("pointerdown", (e) => {
   if (x < 0 || x > bands.counter.w) return;
   // The tap way's sauce close-up is open: a press on it is the one stroke; anywhere else closes it.
   if (sauceDrag?.how === "tap") {
-    const r = sauceFinal();
+    const r = sauceDrag.bench ? ladleFinal() : sauceFinal();
     if (!sauceDrag.stroking && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
       pt.mode = "sauce";
       sauceDrag.stroking = true;
-      paintSauce(pt);
+      if (sauceDrag.bench) paintBench(pt);
+      else paintSauce(pt);
     } else closeSauce();
     return;
   }
@@ -3024,7 +3158,7 @@ canvas.addEventListener("pointerdown", (e) => {
       const kind = sauceArm.kind;
       disarm();
       if (where) {
-        autoSauce(kind, where, pt);
+        openTapBench(kind, where);
         return;
       }
     }
@@ -3175,6 +3309,7 @@ canvas.addEventListener("pointerdown", (e) => {
     pt.mode = "plate";
     pt.plate = trayView.pick(ndcIn(bands.tray, x, y));
     if (pt.plate >= 0) {
+      pt.wasActive = game.active === pt.plate;
       setActive(pt.plate);
       pt.part = trayView.partAt(ndcIn(bands.tray, x, y), pt.plate);
     }
@@ -4290,7 +4425,14 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
       if (dy < -40 && -dy > Math.abs(dx)) serve(pt.plate);
       // A tap on a finished tray hands it over too.
       else if (!pt.moved && trayReady(pt.plate)) serve(pt.plate);
-      else if (!pt.moved && game.slots[pt.plate].order) hintOnce("serve", "When everything's on, tap Serve (or swipe the tray up) to hand it over.", 2.5);
+      else if (!pt.moved && game.slots[pt.plate].order) {
+        // As on the rail (James, after build #87): a tap on the selected tray opens or folds its
+        // ticket; a tap on another tray selects it and opens its ticket.
+        const open = pt.wasActive ? !ticketOpen : true;
+        if (open !== ticketOpen) open ? coachCounts.opens++ : coachCounts.folds++;
+        ticketOpen = open;
+        hintOnce("serve", "When everything's on, tap Serve (or swipe the tray up) to hand it over.", 2.5);
+      }
       // A tap on an empty tray calls the next person in line to it.
       else if (!pt.moved && !game.slots[pt.plate].order && !game.slots[pt.plate].fig) callToTray(pt.plate);
       break;
@@ -4534,7 +4676,7 @@ ui.root.addEventListener("click", (e) => {
       break;
     case "prep-bonus": {
       const v = btn!.dataset.v as BonusId;
-      save.bonus = save.bonus === v || !save.bonuses.includes(v) ? null : v;
+      if (save.bonuses.includes(v)) save.picks = togglePick(validPicks(save.picks, save.bonuses), v);
       writeSave(save);
       showPrep();
       break;
@@ -4616,7 +4758,7 @@ ui.root.addEventListener("click", (e) => {
 const inShift = () => game.phase === "playing" || game.phase === "paused";
 initMenu({
   inShift,
-  town: () => (inShift() ? shopStop() : withEvent(townById(game.mapSel), eventOn(game.mapSel, save.day))),
+  town: () => (inShift() ? shopStop() : withEvent(withLearned(townById(game.mapSel), save.shiftsIn), eventOn(game.mapSel, save.day))),
   subtitle: () => `Day ${save.day}`,
   counter: () => (counter.page === 0 ? "drinks" : counter.page === 2 ? "fryer" : "middle"),
   sound: () => !sfx.muted,
@@ -4776,10 +4918,10 @@ function startShift(): void {
   game.pacing = difficulty;
   game.gentle = difficulty === "chill" && save.day === 1;
   game.shift = validShift(save.shift);
-  game.bonus = save.bonus && save.bonuses.includes(save.bonus) ? save.bonus : null;
+  game.bonuses = validPicks(save.picks, save.bonuses);
   // A slower kitchen (pace.ts) stretches the clock so the same people come over a longer shift.
   game.shiftLength = shiftSeconds(game.shift, stop().shiftLength) * shiftStretch();
-  game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: game.shift, bonus: game.bonus, pacing: game.pacing });
+  game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: game.shift, bonuses: game.bonuses, pacing: game.pacing });
   // The range is refuelled by endShift, not here: a shift quit or reloaded half way doesn't count.
   // Today's local ask, the same one Prep showed (not on the guided first shift).
   game.ask = game.tutorial ? null : askFor(stop(), menuFor(stop(), save.hidden), save.day, game.customers);
@@ -4952,7 +5094,7 @@ function showTitle(night: NightShow | null = null, arrive: Arrival | null = null
     },
     openReviews: () => showReviews(),
     openGarage: () => showGarage(),
-    openMenuRef: () => openMenuRef(withEvent(townById(save.town), eventOn(save.town, save.day))),
+    openMenuRef: () => openMenuRef(withEvent(withLearned(townById(save.town), save.shiftsIn), eventOn(save.town, save.day))),
     sleep: () => sleepNow(),
     commit: () => {
       writeSave(save);
@@ -5143,7 +5285,7 @@ function endShift(arrive: Arrival): void {
     press: game.press,
     great,
     unlocked,
-    usedBonus: game.bonus,
+    usedBonus: [...game.bonuses],
     bank: save.bank,
     shift: game.shift,
   };
@@ -5313,12 +5455,12 @@ function tick(dt: number): void {
     if (counter.middle === "oven") {
       const o = game.slots[game.active]?.order;
       if (o?.layers[0]?.folded) hintOnce("calzone-order", "A calzone: build it on the peel, then drag the dough's edge across the middle to fold it, then into the oven.", 4.5);
-      else if (o?.slice) hintOnce("slice-pie", "Port Amber cuts its flatbreads in four: after the oven, set it on the board with the peel and cut it twice with the knife.", 4.5);
+      else if (o?.slice) hintOnce("slice-pie", "Cutting is optional: after the oven, set the flatbread on the board with the peel and cut it twice with the knife. A clean cut adds to the tip.", 4.5);
       else if (o?.layers.some((l) => l.after)) hintOnce("after-order", "Basil, rocket and honey go on after the oven, once the flatbread is on the tray.", 4);
     } else if (counter.middle === "press") {
       const o = game.slots[game.active]?.order;
       if (o?.layers.some((l) => l.kind === "chicken" || l.kind === "veggie")) hintOnce("press-first", "The patty in this one goes in the press on its own first. Then build the sandwich and press it again.", 4.5);
-      else if (o?.slice) hintOnce("slice-order", "Harbor City cuts its paninis: after pressing, put it on the board and cut it with the knife.", 4.5);
+      else if (o?.slice) hintOnce("slice-order", "Cutting is optional: put a pressed panini on the board and cut it with the knife. A clean cut adds to the tip.", 4.5);
     } else if (counter.middle === "comal") {
       const base = game.slots[game.active]?.order?.layers[0];
       if (base && TORTILLAS.has(base.kind) && !base.folded) hintOnce("taco-order", "Tacos: warm the tortillas on the hot side, stand them in the rack on the warm end and fill them there, then drag the rack up to the tray.", 4.5);
@@ -5462,8 +5604,11 @@ function updateUi(dt = 0): void {
     const pieShown = !s.plate.layers.length && counter.middle === "oven" ? piesFor(order.id) : null;
     // At the comal the active ticket also ticks off the tacos being filled in the rack.
     const rackShown = focused && counter.middle === "comal" && counter.rack.layers.length && (!s.plate.layers.length || isTacoRun(s.plate.layers)) ? [...s.plate.layers, ...counter.rack.layers] : null;
-    const plate = pieShown ? { ...s.plate, layers: pieShown } : rackShown ? { ...s.plate, layers: rackShown } : s.plate;
-    const key = `${order.id}|${focused}|${mode}|${t.style.width}|${plate.layers.map((l) => l.piece.kind).join(",")}|${s.plate.fries ? `${s.plate.fries.size}${+!!s.plate.fries.salt}${+!!s.plate.fries.curds}${+!!s.plate.fries.gravy}` : ""}|${s.plate.drink ? `${s.plate.drink.flavor}${s.plate.drink.size}${+!!s.plate.drink.ice}${+!!s.plate.drink.lid}` : ""}`;
+    // At the press, bay i makes tray i's panini: while it's in the bay, the ticket ticks off what's in it (James, after build #87).
+    const bay = counter.middle === "press" && !s.plate.layers.length && i < counter.bayCount ? counter.bays[i] : null;
+    const bayShown = bay?.layers.length ? bay.layers : null;
+    const plate = pieShown ? { ...s.plate, layers: pieShown } : rackShown ? { ...s.plate, layers: rackShown } : bayShown ? { ...s.plate, layers: bayShown } : s.plate;
+    const key = `${order.id}|${focused}|${mode}|${t.style.width}|${plate.layers.map((l) => l.piece.kind).join(",")}|${bayShown ? bayShown.map((l) => l.piece.cook.map((c) => Math.round(c * 8)).join("")).join(",") : ""}|${s.plate.fries ? `${s.plate.fries.size}${+!!s.plate.fries.salt}${+!!s.plate.fries.curds}${+!!s.plate.fries.gravy}` : ""}|${s.plate.drink ? `${s.plate.drink.flavor}${s.plate.drink.size}${+!!s.plate.drink.ice}${+!!s.plate.drink.lid}` : ""}`;
     if (key !== s.ticketKey || !t.dataset.fit) {
       t.classList.toggle("active", focused);
       t.classList.toggle("stub", mode === "stub");
@@ -6029,6 +6174,10 @@ function render(): void {
   if (ladleZoom.visible) {
     const r = ladleZoom.rect;
     draw({ x: colX + r.x, y: r.y, w: r.w, h: r.h }, counter.scene, ladleZoom.camera);
+  }
+  if (benchZoom.visible) {
+    const r = benchZoom.rect;
+    draw({ x: colX + r.x, y: r.y, w: r.w, h: r.h }, counter.scene, benchZoom.camera);
   }
 }
 /** Nothing moves under the pause menu: draw a couple of frames, then stop until something changes. */

@@ -397,10 +397,10 @@ export function dishOf(order: Order): Dish {
  */
 export function methodOf(order: Order): { cls: string; text: string }[] {
   const dish = dishOf(order);
-  if (dish === "panini") return [{ cls: "toast", text: "Press" }, ...(order.slice ? [{ cls: "cut", text: "Cut" }] : [])];
+  if (dish === "panini") return [{ cls: "toast", text: "Press" }, ...(order.slice ? [{ cls: "cut opt", text: "Cut?" }] : [])];
   if (dish === "quesadilla") return [{ cls: "fold", text: "Fold" }, { cls: "flip", text: "Flip" }];
   if (dish === "flatbread" || dish === "calzone")
-    return [...(dish === "calzone" ? [{ cls: "fold", text: "Fold" }] : []), { cls: "toast", text: "Bake" }, ...(order.slice ? [{ cls: "cut", text: "Cut 4" }] : [])];
+    return [...(dish === "calzone" ? [{ cls: "fold", text: "Fold" }] : []), { cls: "toast", text: "Bake" }, ...(order.slice ? [{ cls: "cut opt", text: "Cut 4?" }] : [])];
   return [];
 }
 /** The method line: the dish's steps as chips, in order, above the build. */
@@ -592,20 +592,33 @@ function sideRows(order: Order, plate: Plate): string {
   return out.join("");
 }
 
-/**
- * Tiny fries and cup icons for the sides ordered with the main (after build #78; they were "+2"
- * and a "*" for a changed recipe, which the stub's own lines already say).
- */
-function nameMarks(order: Order): string {
-  // Sides with a burger; with no burger they're the order itself.
-  const fries = order.layers.length > 0 && order.fries;
-  const drink = !!order.drink && (order.layers.length > 0 || !!order.poutine);
-  if (!fries && !drink) return "";
-  return `<span class="plus" aria-label="${[fries ? "fries" : "", drink ? "a drink" : ""].filter(Boolean).join(" and ")}">${fries ? ticketIcon(FRY_ICON[fryOf(order)], "#c8472e") : ""}${drink ? ticketIcon("drink", DRINK_COLOR[order.drink!]) : ""}</span>`;
-}
+/** Short side names for a stub, where the size letter does most of the work (plain fries need no word). */
+const FRY_SHORT: Record<FryKind, string> = { fries: "", sweet: "Sweet", chips: "Chips", churros: "Churros", zucchini: "Zucchini", fritters: "Fritters" };
 
-/** A regular's name on their ticket (they order the same thing every visit). */
-const regularMark = (order: Order): string => (order.regular ? `<b class="reg">${esc(order.regular)}</b>` : "");
+/**
+ * The sides on a stub (James, after build #87): enough to make them without opening the ticket,
+ * for a cook who knows the recipes: the fries' size (and kind when it isn't plain fries), the
+ * drink's size and flavour, and ice asked for or left out. Each greys out once it's on the tray
+ * right, or turns red when it's wrong. (A local drink's garnish and a fritter's sugar always go
+ * on, so they aren't spelled out here; the open ticket has them.)
+ */
+function sideChips(order: Order, plate: Plate | null): string {
+  const out: string[] = [];
+  if (order.fries && order.layers.length) {
+    const fry = fryOf(order);
+    const f = plate?.fries;
+    const state = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy && fryOf(f) === fry ? "done" : "wrong";
+    out.push(`<li class="${state}" aria-label="${order.friesSize} ${FRY_LABEL[fry]}">${ticketIcon(FRY_ICON[fry], FRY_COLOR[fry])}<i class="sz">${order.friesSize}</i>${FRY_SHORT[fry] ? `<span class="dn">${FRY_SHORT[fry]}</span>` : ""}</li>`);
+  }
+  if (order.drink) {
+    const d = plate?.drink;
+    const iceOk = order.ice == null || !!d?.ice === order.ice;
+    const state = !d ? "" : d.flavor !== order.drink || d.size !== order.drinkSize || !iceOk ? "wrong" : d.lid ? "done" : "";
+    const ice = order.ice === true ? `<b class="kw">ICE</b>` : order.ice === false ? `<b class="kw">NO ICE</b>` : "";
+    out.push(`<li class="${state}" aria-label="${order.drinkSize} ${DRINK_LABEL[order.drink]}${order.ice === true ? ", ice" : order.ice === false ? ", no ice" : ""}">${ticketIcon("drink", DRINK_COLOR[order.drink])}<i class="sz">${order.drinkSize}</i><span class="dn">${DRINK_SHORT[order.drink]}</span>${ice}</li>`);
+  }
+  return out.length ? `<ul class="sc">${out.join("")}</ul>` : "";
+}
 
 /**
  * The tip coin on the ticket (after build #78): the tip steps down with the customer's mood, so the
@@ -624,7 +637,6 @@ export function exceptions(order: Order): string[] {
     if (m.type === "no") return `${kw("NO")}${label}`;
     return `${kw("ADD")}${label}${m.type === "extra" && COUNTED.has(m.kind) ? countMark(`x${extraCount(m.kind)}`) : ""}`;
   });
-  if (order.drink && order.ice === false) out.push(`${kw("NO")}Ice`);
   return out;
 }
 
@@ -638,8 +650,8 @@ export function exceptions(order: Order): string[] {
 export function peekHtml(order: Order): string {
   const ex = exceptions(order);
   return `<div class="nx">Next up</div>
-    <div class="name"><span class="l">${esc(shortName(order.name))}</span>${nameMarks(order)}</div>
-    ${ex.length ? `<ul class="ex">${ex.map((e) => `<li>${e}</li>`).join("")}</ul>` : ""}`;
+    <div class="name"><span class="l">${esc(shortName(order.name))}</span></div>
+    ${ex.length ? `<ul class="ex">${ex.map((e) => `<li>${e}</li>`).join("")}</ul>` : ""}${sideChips(order, null)}`;
 }
 
 export function ticketHtml(order: Order, plate: Plate, patience: number, focused: boolean, fold = false): string {
@@ -651,8 +663,8 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, focused
     // A stub is just the name and what's different from the menu.
     const ex = exceptions(order);
     return `<div class="pat ${mood}">${moodFace(mood, !!order.critic)}${bar}${tipCoin(pct)}</div>
-      <div class="name">${regularMark(order)}<span class="l">${esc(shortName(order.name))}</span>${nameMarks(order)}</div>
-      ${ex.length ? `<ul class="ex">${ex.map((e) => `<li>${e}</li>`).join("")}</ul>` : ""}`;
+      <div class="name"><span class="l">${esc(shortName(order.name))}</span></div>
+      ${ex.length ? `<ul class="ex">${ex.map((e) => `<li>${e}</li>`).join("")}</ul>` : ""}${sideChips(order, plate)}`;
   }
   let list = rows;
   let folded = "";
@@ -665,7 +677,7 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, focused
   }
   const sides = sideRows(order, plate);
   return `<div class="pat ${mood}">${moodFace(mood)}${bar}${tipCoin(pct)}${order.critic ? `<em class="critic" title="Food critic">Critic</em>` : ""}</div>
-    <div class="name">${regularMark(order)}<span class="l">${esc(order.name)}</span>${nameMarks(order)}</div>
+    <div class="name"><span class="l">${esc(order.name)}</span></div>
     <div class="cols${sides ? "" : " solo"}"><div class="tb"><ol>${methodHtml(order)}${list.map(rowHtml).join("")}${folded}</ol></div>${sides ? `<div class="sides">${sides}</div>` : ""}</div>`;
 }
 

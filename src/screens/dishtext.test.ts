@@ -37,9 +37,8 @@ describe("the pause card's Today's menu (build #82)", () => {
   it("gives the simple dishes no tips and the fussy ones a few, from the recipe and the town", () => {
     expect(dishTips(recipe("pinecrest", "Trailhead Classic"), townById("pinecrest"))).toEqual([]);
     expect(dishTips(recipe("summit", "Summit Smash"), townById("summit")).join(" ")).toMatch(/smash/i);
-    // Cut in half only where the board is out.
-    expect(dishTips(recipe("harbor", "Caprese"), townById("harbor")).join(" ")).toMatch(/half/);
-    expect(dishTips(recipe("saltwater", "Caprese"), townById("saltwater")).join(" ")).not.toMatch(/half/);
+    // The board is out at every press: cutting in half is offered for the tip.
+    expect(dishTips(recipe("saltwater", "Caprese"), townById("saltwater")).join(" ")).toMatch(/half/);
     expect(dishTips(recipe("saltwater", "Avocado Toast"), townById("saltwater"))[0]).toMatch(/cold: avocado and rocket/);
     expect(dishTips(recipe("redmesa", "Quesadilla"), townById("redmesa")).join(" ")).toMatch(/fold/);
     expect(dishTips(recipe("portamber", "Harvest Red"), townById("portamber")).join(" ")).toMatch(/four/);

@@ -58,7 +58,7 @@ describe("judging a cut", () => {
     expect(cutFactor(1)).toBe(1);
     expect(cutFactor(0)).toBeCloseTo(0.95, 5);
   });
-  it("a crooked panini cut is noticed at the window", () => {
+  it("cutting is optional: a crooked cut costs nothing, a clean one earns the Clean cut touch", () => {
     const order: Order = { id: 1, name: "Caprese", layers: [{ kind: "ciabatta" }, { kind: "mozzarella" }, { kind: "ciabatta" }], fries: null, drink: null, slice: true } as unknown as Order;
     const plate = (q: number): Plate => {
       const [b, m, t] = [newPiece("ciabatta"), newPiece("mozzarella"), newPiece("ciabatta")];
@@ -67,9 +67,10 @@ describe("judging a cut", () => {
     };
     const clean = scorePlate(order, plate(1));
     const crooked = scorePlate(order, plate(0.1));
-    expect(crooked.notes).toContain("cut a bit crooked");
-    expect(clean.notes).not.toContain("cut a bit crooked");
-    expect(crooked.quality).toBeLessThan(clean.quality);
+    expect(crooked.notes).not.toContain("cut a bit crooked");
+    expect(crooked.quality).toBe(clean.quality);
+    expect(clean.touches).toContain("Clean cut");
+    expect(crooked.touches).not.toContain("Clean cut");
   });
 });
 

@@ -8,7 +8,11 @@
  *   2nd order  the thumb comes back only when the player stops for a few seconds, and it brings a
  *              drink, so the counters get swiped; someone joins the line, so the bell gets rung
  *              and two tickets share the rail (fold one, open one);
- *   3rd order  a nudge only after a longer pause.
+ *   3rd order  small fries come with it: the fries lesson starts them first, sends the player back
+ *              to the grill while they fry and calls them back when they're golden; the burger
+ *              gets a nudge only after a longer pause.
+ * The first time two orders are at the window (after the ticket lessons), one card on working
+ * ahead: start the next patty now, park finished food on the warm end.
  * After that, each new thing gets its own lesson the first time an order needs it: fries, an egg,
  * a toasted bun, melted cheese, a sauce, a send-back.
  */
@@ -22,7 +26,7 @@ import type { CounterView, GrillItem } from "../scenes/counter";
 import { HOME_PAGE } from "../scenes/counter";
 import type { TrayView } from "../scenes/tray";
 import type { EggStage } from "../render/egg";
-import { okDone, type Box, type Gesture, type Pt, type Show, type Step } from "./coach";
+import { isLearned, okDone, type Box, type Gesture, type Pt, type Show, type Step } from "./coach";
 
 /** What the lessons read from the game. main.ts hands this over once. */
 export interface CoachWorld {
@@ -98,7 +102,7 @@ const tapOn = (el: Element | null): Gesture | null => {
   return b ? { kind: "tap", at: mid(b) } : null;
 };
 const label = (k: Kind) => KIND_LABEL[k].toLowerCase();
-const totalShifts = (s: Save) => Object.values(s.shiftsIn ?? {}).reduce((a, b) => a + b, 0);
+const totalShifts = (s: Pick<Save, "shiftsIn">) => Object.values(s.shiftsIn ?? {}).reduce((a, b) => a + b, 0);
 
 // ---------------------------------------------------------------------------
 // The map
@@ -108,11 +112,16 @@ function mapClear(w: CoachWorld): boolean {
   return w.phase() === "title" && !w.prepOpen() && !w.overlay() && !document.querySelector("div.home-night") && !document.querySelector(".home.driving") && !document.querySelector(".home-arrive") && !document.querySelector(".menu-layer");
 }
 
-/** The first new town the road has opened that the truck hasn't worked yet. */
-function newTown(s: Save): string | null {
+/**
+ * The new town the road has opened that the truck hasn't worked yet: the one that opens the most
+ * road on (Cedar Falls, not the Elk Pass spur, which opens nothing).
+ */
+export function newTown(s: Pick<Save, "town" | "unlocked" | "shiftsIn">): string | null {
   const first = TOWNS[0].id;
   if (s.town !== first || totalShifts(s) === 0) return null;
-  return s.unlocked.find((id) => id !== s.town && !(s.shiftsIn[id] ?? 0)) ?? null;
+  const fresh = s.unlocked.filter((id) => id !== s.town && !(s.shiftsIn[id] ?? 0));
+  // Stable: among equals the first opened stays first.
+  return fresh.map((id, i) => ({ id, i, roads: townById(id).roads.length })).sort((a, b) => b.roads - a.roads || a.i - b.i)[0]?.id ?? null;
 }
 
 function mapSteps(w: CoachWorld): Step[] {
@@ -211,14 +220,18 @@ function mapSteps(w: CoachWorld): Step[] {
       },
     },
     {
+      // A one-time OK card at the top, and only while no town sheet is open, so it never sits
+      // over the dock's or the sheet's Prep & Open (scope review).
       id: "garage",
       once: true,
-      when: () => mapClear(w) && readyToBuy(s) > 0,
-      done: () => w.overlay() === "garage",
+      when: () => mapClear(w) && readyToBuy(s) > 0 && !w.mapSelected(),
+      done: () => okDone("garage") || w.overlay() === "garage",
       show: () => ({
         title: "Treat the truck",
-        text: "You've saved enough for the bonus you unlocked. Tap the Garage to spend your savings.",
-        gesture: tapOn(q(".home-stats [data-home=garage]")),
+        text: "You've saved enough for the bonus you unlocked. Spend your savings in the Garage, up here, whenever you like.",
+        ring: rectOf(q(".home-stats [data-home=garage]")),
+        place: "top",
+        ok: "Got it",
       }),
     },
   ];
@@ -496,7 +509,12 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
     const fry = o.fry ?? "fries";
     const name = FRY_LABEL[fry].toLowerCase();
     const size = SIZE_LABEL[o.friesSize].toLowerCase();
-    if (c.page !== 2) return { ...goTo(2, `This order wants ${size} ${name}. The fryer is on the counter to the right.`) };
+    if (c.page !== 2) {
+      const b = c.baskets.find((x) => x.loaded && !x.shell && x.fry === fry);
+      if (b?.down && friesZone(b.cook, fry) !== "under") return { ...goTo(2, `The ${name} are golden! Lift them out before they go dark.`), urgent: true };
+      const first = s.lesson === 2 && !b;
+      return { ...goTo(2, first ? `This order wants ${size} ${name}. They take the longest, so start them first. The fryer is on the counter to the right.` : `This order wants ${size} ${name}. The fryer is on the counter to the right.`) };
+    }
     const packI = c.packs.findIndex((p) => p.size === o.friesSize && p.fill > 0 && p.fry === fry) ;
     const pack = packI >= 0 ? c.packs[packI] : null;
     const packAt = (i: number) => k.project("counter", new THREE.Vector3(c.packs[i].x, c.packs[i].y + 0.4, c.packs[i].z));
@@ -630,11 +648,32 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
         const t = mine && !mine.hidden ? mine : (k.tickets.find((x) => !x.hidden) ?? null);
         return {
           title: "Pick an order",
-          text: "Tap a ticket to open it and work on that order. The tray with the blue outline is the one you're building.",
+          text: "Tap a ticket to open it and work on that order. The tray with the dark ring around it is the one you're building.",
           gesture: tapOn(t),
           place: "bottom",
         };
       },
+    },
+    {
+      id: "work-ahead",
+      once: true,
+      when: () =>
+        playing() &&
+        grill() &&
+        c.page === HOME_PAGE &&
+        !k.holding() &&
+        !k.sauce() &&
+        isLearned("ticket-open") &&
+        k.game.slots.filter((s) => s.order && !s.leaving).length >= 2,
+      done: () => okDone("work-ahead"),
+      show: () => ({
+        title: "Work ahead",
+        text: "With two orders up, start the next patty now, while you finish this one. Park done food on the warm end on the right: it keeps there without cooking on.",
+        // The warm end sits at the screen's edge: keep the ring on screen.
+        ring: ((r) => ({ ...r, x: Math.min(r.x, window.innerWidth - r.w - 6) }))(ringAround(zoneAt(2), 96, 80)),
+        ok: "Got it",
+        place: "bottom",
+      }),
     },
     // --- New things, the first time an order needs them.
     {
@@ -652,10 +691,24 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
       once: true,
       when: () => {
         const s = activeSlot(k);
-        return playing() && !!s?.order?.fries && !s.order.poutine && !s.plate.fries && (c.page === 2 || sideFirst(k.game.active) || c.baskets.some((b) => b.loaded));
+        if (!playing() || !s?.order?.fries || s.order.poutine || s.plate.fries) return false;
+        const fry = s.order.fry ?? "fries";
+        const b = c.baskets.find((x) => x.loaded && !x.shell && x.fry === fry);
+        // While they fry and the burger still wants work, the lesson steps aside (it says so once,
+        // at the fryer) and comes back when they're golden.
+        if (b?.down && friesZone(b.cook, fry) === "under" && !sideFirst(k.game.active)) return c.page === 2 && grill();
+        // The guided third order starts the fries first.
+        return c.page === 2 || sideFirst(k.game.active) || !!b || s.lesson === 2;
       },
       done: () => k.game.slots.some((s) => !!s.plate.fries),
-      show: () => friesMove(k.game.active),
+      show: () => {
+        const s = activeSlot(k);
+        const fry = s?.order?.fry ?? "fries";
+        const b = c.baskets.find((x) => x.loaded && !x.shell && x.fry === fry);
+        if (s && b?.down && friesZone(b.cook, fry) === "under" && !sideFirst(k.game.active))
+          return goTo(HOME_PAGE, `They fry for about a minute. Build the burger meanwhile. A tip comes up when they're golden.`);
+        return friesMove(k.game.active);
+      },
     },
     ...(["egg", "toast", "melt", "sauce", "smash"] as const).map(
       (only): Step => ({

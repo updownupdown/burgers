@@ -71,6 +71,8 @@ export interface Save {
   regulars?: Record<string, number>;
   /** Recent press, newest first. */
   press: PressPiece[];
+  /** Great shifts in a row on Relaxed, and whether the report card has offered Steady (game/teaching.ts). */
+  paceNudge?: { streak: number; offered: boolean };
 }
 
 /** Everything the Closing screen shows about today's shift, kept until the truck sleeps. */
@@ -112,6 +114,8 @@ export interface Closing {
   shift: ShiftWindow;
   /** The shift's pacing: a great shift on Busy gets its own line on the report card. */
   pacing?: "chill" | "balanced" | "stressful";
+  /** The report card offers Steady for tomorrow (three great shifts in a row on Relaxed; once). */
+  steady?: boolean;
 }
 
 /**
@@ -250,6 +254,8 @@ export function migrateSave(p: Partial<Save> & Record<string, unknown>): Save {
   const bag = s as unknown as Record<string, unknown>;
   for (const k of RETIRED) delete bag[k];
   if (s.time !== "morning" && s.time !== "evening") s.time = "morning";
+  const nudge = s.paceNudge as Partial<{ streak: unknown; offered: unknown }> | undefined;
+  s.paceNudge = { streak: Math.max(0, Math.floor(Number(nudge?.streak) || 0)), offered: nudge?.offered === true };
   // A Closing from before takings is dropped rather than half shown.
   // A shift with nobody served once recorded a best of 0.0★; it never was one.
   for (const [id, v] of Object.entries(s.best)) if (!(Number(v) > 0)) delete s.best[id];

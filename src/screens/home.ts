@@ -1,6 +1,6 @@
 import { CROWD } from "../game/business";
 import { expectedCustomers, regionShifts } from "../game/day";
-import { savedPacing } from "../game/difficulty";
+import { savedPacing, type Difficulty } from "../game/difficulty";
 import { todaysClosing, type Save } from "../game/progress";
 import { ratingPull, reviewAverage } from "../game/reviews";
 import { EVENTS, eventOn, FINAL_TOWN, nextDay, STOPS, townById, withEvent, type Stop } from "../game/stops";
@@ -43,6 +43,8 @@ export interface HomeDeps {
   openSettings(): void;
   /** The How to Play modal. */
   openHowTo(): void;
+  /** Set tomorrow's pacing (the report card's Try Steady). */
+  setPacing?(d: Difficulty): void;
   /** A town to open the sheet on straight away, e.g. one the last shift unlocked. */
   focus?: string | null;
   /** Just slept: play the night passing over the map before handing it over. */
@@ -753,6 +755,11 @@ function showReport(m: Mounted, arrive: boolean): void {
       reviews: () => m.deps.openReviews(),
       garage: () => m.deps.openGarage(),
       town: (id) => select(m, id, true),
+      steady: () => {
+        m.deps.setPacing?.("balanced");
+        last.steady = false;
+        m.deps.commit();
+      },
     },
     arrive,
   );

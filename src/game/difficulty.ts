@@ -52,7 +52,7 @@ export const DIFFICULTY: Record<Difficulty, DifficultySpec> = {
   },
   balanced: {
     label: "Steady",
-    blurb: "A steady lunch rush, with a tick when food is ready on another counter. Customers send back what's clearly off.",
+    blurb: "The full lunch crowd: more customers than Relaxed and full tips. They wait a fair while and only send back what's clearly off.",
     patience: 1.3, crowd: 1, window: 3, autoCall: 0, hold: 1, small: 1, helpers: false, burn: 1, tips: 1, refund: 0.2, sendBack: 55, refuse: 22,
   },
   stressful: {

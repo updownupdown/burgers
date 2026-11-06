@@ -25,6 +25,8 @@ export interface Ui {
   hint: HTMLElement;
   hintText: HTMLElement;
   hintClose: HTMLButtonElement;
+  /** The HUD's button that shows the last tip again (DESIGN §49). */
+  tipBtn: HTMLButtonElement;
   tabs: HTMLButtonElement[];
   menuBtn: HTMLButtonElement;
   /** The service bell: a ring calls the next person in line. */
@@ -123,6 +125,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
   ${[0, 1, 2].map((i) => `<div class="ticket" data-r="ticket" data-slot="${i}" hidden></div>`).join("")}
   <div class="ticket stub peek" data-r="peek" aria-label="Next in line" hidden></div>
   ${[0, 1, 2].map(() => `<div class="sentback" data-r="sentback" hidden></div>`).join("")}
+  <button class="icon-btn tip-btn" data-r="tipBtn" hidden aria-label="Show the last tip again" title="Last tip">${icon("help")}</button>
   <div class="hint" data-r="hint" role="status" hidden><span data-r="hintText"></span><button class="hint-x" data-r="hintClose" aria-label="Dismiss tip">${icon("close")}</button></div>
   ${fountainFor("mountains").map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_SHORT[d]}</div>`).join("")}
   <nav class="cnav" aria-label="Counters">
@@ -158,6 +161,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     hint: q("hint"),
     hintText: q("hintText"),
     hintClose: q("hintClose") as HTMLButtonElement,
+    tipBtn: q("tipBtn") as HTMLButtonElement,
     tabs,
     menuBtn: q("menuBtn") as HTMLButtonElement,
     bell: q("bell"),

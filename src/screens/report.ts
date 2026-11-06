@@ -29,6 +29,8 @@ export interface ReportDeps {
   town(id: string): void;
   /** The card went away (Continue, ×, the scrim or Back), not when it left for another screen. */
   closed?(): void;
+  /** Try Steady tomorrow (the one-time nudge off Relaxed): set the pacing and stop offering. */
+  steady?(): void;
 }
 
 const KEY = "report";
@@ -114,6 +116,15 @@ function rewardHtml(c: Closing, save: Save): string {
     <span class="ic">${icon(earned.icon)}</span>
     <span class="t"><small class="bv-eyebrow">Great shift · bonus unlocked</small><b>${esc(earned.name)}</b><span>${esc(earned.text)}</span></span>
     <span class="a">${act}</span>
+  </section>`;
+}
+
+/** After three great shifts in a row on Relaxed, once: an invitation to try Steady tomorrow. */
+function nudgeHtml(c: Closing): string {
+  if (!c.steady) return "";
+  return `<section class="rep-nudge" aria-label="Try Steady">
+    <span class="t">You're making this look easy. Try Steady tomorrow: more customers and full tips.</span>
+    <button class="bv-btn sm" data-rep="steady">${icon("timer")}Try Steady</button>
   </section>`;
 }
 
@@ -234,6 +245,7 @@ export function reportHtml(c: Closing, save: Save): string {
           : ""
       }<span>${verdictLine(c)}</span></p>
       <div class="rep-reward-slot">${rewardHtml(c, save)}</div>
+      <div class="rep-nudge-slot">${nudgeHtml(c)}</div>
       <div class="day-kpis">
         <div class="day-kpi"><span class="bv-eyebrow">Takings</span><b class="${newBest ? "up" : ""}" data-count="${c.takings}">${money(c.takings)}</b><small>${newBest ? (c.bestBefore === null ? "first here" : "town best") : `best ${money(c.bestBefore ?? 0)}`}</small></div>
         <div class="day-kpi"><span class="bv-eyebrow">Rating</span><b>${c.rating === null ? "–" : c.rating.toFixed(1)}</b><small>${ratingDelta(c)}</small></div>
@@ -322,6 +334,10 @@ export function openReport(c: Closing, d: ReportDeps, arrive = false): void {
         break;
       case "garage":
         leave(d.garage);
+        break;
+      case "steady":
+        d.steady?.();
+        card.querySelector<HTMLElement>(".rep-nudge-slot")!.innerHTML = `<section class="rep-nudge done" role="status"><span class="t">Steady it is for tomorrow. You can change it any time on Prep.</span></section>`;
         break;
       case "reviews":
         leave(d.reviews);

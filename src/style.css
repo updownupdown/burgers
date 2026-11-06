@@ -48,7 +48,7 @@ html, body {
 }
 #ui button { font: inherit; cursor: pointer; }
 /* Main actions (Open, Back to the map...) read bigger; the reset above would flatten their size. */
-#ui .bv-btn.lg { font-size: 20px; font-weight: 700; letter-spacing: 0.01em; }
+#ui .bv-btn.lg { font-size: 1.25rem; font-weight: 700; letter-spacing: 0.01em; }
 #ui button:focus-visible { outline: 2px solid var(--bv-paprika); outline-offset: 2px; }
 
 /* ---- HUD -------------------------------------------------------------- */
@@ -69,7 +69,7 @@ html, body {
 }
 .chip {
   color: var(--bv-ink);
-  font: 500 13px var(--bv-font-mono);
+  font: 500 0.8125rem var(--bv-font-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   display: inline-flex;
@@ -118,7 +118,7 @@ html, body {
   border-radius: 15px;
   background: var(--bv-paper);
   color: var(--bv-ink);
-  font: 500 12px var(--bv-font-ui);
+  font: 500 0.75rem var(--bv-font-ui);
   white-space: nowrap;
   flex: none;
 }
@@ -132,7 +132,7 @@ html, body {
   border-radius: 10px;
   background: var(--bv-ink);
   color: var(--bv-paper);
-  font: 500 12px var(--bv-font-mono);
+  font: 500 0.75rem var(--bv-font-mono);
   font-variant-numeric: tabular-nums;
   display: grid;
   place-items: center;
@@ -180,7 +180,7 @@ html, body {
   background: linear-gradient(#fffdf7, #fffdf7) top / 100% calc(100% - 6px) no-repeat;
   color: var(--bv-ink);
   padding: 9px 7px 12px;
-  font: 600 13px/16px var(--bv-font-ui);
+  font: 600 0.8125rem/1rem var(--bv-font-ui);
   filter: drop-shadow(0 2px 3px rgb(42 38 34 / 0.28));
   transition: filter 0.15s;
   overflow: hidden;
@@ -220,25 +220,25 @@ html, body {
 .ticket .face .cdot { fill: var(--bv-amber); stroke: var(--bv-ink); stroke-width: 1.1; }
 .ticket .pat.angry .face { animation: fume 0.5s ease-in-out infinite alternate; }
 @keyframes fume { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
-.ticket .critic { flex: none; font: 800 12px/1 var(--bv-font-ui); font-style: normal; background: var(--bv-ink); color: var(--bv-amber); border-radius: 4px; padding: 2px 5px 3px; }
+.ticket .critic { flex: none; font: 800 0.75rem/1 var(--bv-font-ui); font-style: normal; background: var(--bv-ink); color: var(--bv-amber); border-radius: 4px; padding: 2px 5px 3px; }
 
 /* Row 2: the name, the thing read first. "*" = changed from the menu, "+2" = sides with it. */
 .ticket .name { display: flex; align-items: baseline; gap: 2px; min-width: 0; }
-.ticket .name .l { min-width: 0; overflow: hidden; white-space: nowrap; font: 400 18px/1.1 var(--bv-font-serif); letter-spacing: 0; }
-.ticket .name.sm .l { font-size: 15px; }
+.ticket .name .l { min-width: 0; overflow: hidden; white-space: nowrap; font: 400 1.125rem/1.1 var(--bv-font-serif); letter-spacing: 0; }
+.ticket .name.sm .l { font-size: 0.9375rem; }
 /* Even the short name doesn't fit: it wraps rather than hide a letter. */
 .ticket .name.wrap .l { white-space: normal; overflow-wrap: anywhere; }
 /* At the tightest, the name sits between the face and the patience bar. */
 .ticket .pat.cmp .name { flex: 0 1 auto; min-width: 0; }
-.ticket .pat.cmp .name .l { font-size: 16px; }
+.ticket .pat.cmp .name .l { font-size: 1rem; }
 .ticket .pat.cmp .bar { flex: 1 1 14px; min-width: 14px; }
 .ticket .nmrow { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .ticket .nmrow .name { flex: 1 1 auto; min-width: 0; }
 .ticket .nmrow .how { flex: none; }
-.ticket .name .ast { font: 800 16px/1 var(--bv-font-ui); color: var(--t-mod); flex: none; }
+.ticket .name .ast { font: 800 1rem/1 var(--bv-font-ui); color: var(--t-mod); flex: none; }
 /* A town's regular: their name before the dish (after build #78). */
 /* The tip coin: whole while the customer looks calm, half once sad, gone once angry. */
-.ticket .pat .tipc { flex: none; width: 14px; height: 14px; border-radius: 50%; display: grid; place-items: center; font: 800 9px/1 var(--bv-font-mono); font-style: normal; color: #6b4a07; background: #e9c25a; box-shadow: inset 0 0 0 1px rgb(107 74 7 / 0.55); transition: background 0.3s, opacity 0.3s; }
+.ticket .pat .tipc { flex: none; width: 14px; height: 14px; border-radius: 50%; display: grid; place-items: center; font: 800 0.5625rem/1 var(--bv-font-mono); font-style: normal; color: #6b4a07; background: #e9c25a; box-shadow: inset 0 0 0 1px rgb(107 74 7 / 0.55); transition: background 0.3s, opacity 0.3s; }
 .ticket .pat .tipc.half { background: linear-gradient(90deg, #e9c25a 50%, rgb(42 38 34 / 0.08) 50%); }
 .ticket .pat .tipc.none { background: transparent; color: rgb(42 38 34 / 0.35); box-shadow: inset 0 0 0 1px rgb(42 38 34 / 0.3); text-decoration: line-through; }
 .ticket .pat .tipc.lost { animation: tip-lost 0.6s ease-out; }
@@ -257,7 +257,7 @@ html, body {
 .ticket ol.bl > li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; min-height: 17px; padding: 0 4px; margin: 0 -4px; border-radius: 4px; }
 .ticket ol.bl .i { display: flex; }
 .ticket ol.bl .l { min-width: 0; overflow-wrap: break-word; }
-.ticket ol.bl .ct { font: 500 12.5px/1 var(--bv-font-mono); text-align: right; white-space: nowrap; }
+.ticket ol.bl .ct { font: 500 0.7813rem/1 var(--bv-font-mono); text-align: right; white-space: nowrap; }
 .ticket ol.bl .cx { display: flex; gap: 2px; justify-content: flex-end; }
 .ticket ol.bl .mk { font-weight: 800; width: 10px; text-align: center; }
 .ticket ol.bl li.mod { color: #b4520f; box-shadow: inset 3px 0 0 var(--t-mod); }
@@ -277,14 +277,14 @@ html, body {
 .ticket ol.bl li.next.mod { box-shadow: inset 3px 0 0 #f08a3a; color: #ffd2b0; }
 .ticket ol.bl li.next.mod .kw { color: #ffb37a; }
 /* Layers already on, folded into one line that still names them. */
-.ticket ol.bl li.sum .l { font-weight: 600; font-size: 12px; line-height: 15px; }
+.ticket ol.bl li.sum .l { font-weight: 600; font-size: 0.75rem; line-height: 0.9375rem; }
 .ticket .ic { width: 16px; height: 12px; flex: none; fill: var(--c); stroke: rgb(42 38 34 / 0.45); stroke-width: 0.7; }
 .ticket .ic .hi { fill: rgb(255 255 255 / 0.55); stroke: none; }
 .ticket .ic .yolk { fill: #f1ae2a; }
 .ticket .ic .st { fill: #f3d36b; }
 .ticket .ic .lid { fill: #f4f1ea; }
 /* Modifiers in small coloured boxes: Toast, Melt, Grill, Smash (an icon), Ice / No ice. */
-.ticket .mb { flex: none; display: inline-grid; place-items: center; font: 800 11.5px/1.15 var(--bv-font-ui); font-style: normal; border-radius: 4px; padding: 0 4px 1px; background: var(--mb-bg); color: var(--mb-fg); }
+.ticket .mb { flex: none; display: inline-grid; place-items: center; font: 800 0.7188rem/1.15 var(--bv-font-ui); font-style: normal; border-radius: 4px; padding: 0 4px 1px; background: var(--mb-bg); color: var(--mb-fg); }
 .ticket .mb.toast { --mb-bg: #f3dcb2; --mb-fg: #774611; }
 .ticket .mb.cut { --mb-bg: #dfe6e6; --mb-fg: #3a4547; }
 .ticket .mb.cut.opt { background: transparent; box-shadow: inset 0 0 0 1px currentColor; opacity: 0.75; }
@@ -304,21 +304,21 @@ html, body {
 .ticket .mb.noice { --mb-bg: #f8dfcb; --mb-fg: #a24c12; }
 .ticket .mb.garn { --mb-bg: var(--bv-olive-soft); --mb-fg: #2f5a49; }
 /* "NO Ketchup", "ADD Bacon": the keyword in caps, then the item. */
-.ticket .kw { font: 800 12px/1 var(--bv-font-ui); letter-spacing: 0.04em; }
+.ticket .kw { font: 800 0.75rem/1 var(--bv-font-ui); letter-spacing: 0.04em; }
 /* The method line: steps for the whole dish ("Press › Cut"), under the name. */
 .ticket .how { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
-.ticket .how .mb { font-size: 12px; padding: 0 5px 1px; }
-.ticket .how i { font: 700 12px/1 var(--bv-font-ui); font-style: normal; color: #8a847a; margin: 0 1px; }
+.ticket .how .mb { font-size: 0.75rem; padding: 0 5px 1px; }
+.ticket .how i { font: 700 0.75rem/1 var(--bv-font-ui); font-style: normal; color: #8a847a; margin: 0 1px; }
 
 /* Changes from the menu on a small ticket: "NO Lettuce", "ADD 2 Tomato". */
 .ticket .cgs { display: grid; gap: 1px; border-top: 1px dashed var(--bv-rule-2); padding-top: 4px; }
-.ticket .cg { color: #b4520f; font: 700 12.5px/16px var(--bv-font-ui); }
+.ticket .cg { color: #b4520f; font: 700 0.7813rem/1rem var(--bv-font-ui); }
 .ticket .cg .kw { color: var(--t-mod); }
 
 /* Sides in one grammar on every ticket: [icon] [size] name, then Ice / No ice / garnish / Sugar. */
 .ticket .sds { display: grid; gap: 3px; }
 .ticket.stub .sds { border-top: 1px dashed var(--bv-rule-2); padding-top: 4px; }
-.ticket .sd { display: grid; align-items: center; column-gap: 3px; row-gap: 2px; font: 700 12.5px/16px var(--bv-font-ui); }
+.ticket .sd { display: grid; align-items: center; column-gap: 3px; row-gap: 2px; font: 700 0.7813rem/1rem var(--bv-font-ui); }
 .ticket .sd.inl { grid-template-columns: 16px auto minmax(0, max-content) minmax(0, 1fr); }
 .ticket .sd.inl .sn { white-space: nowrap; }
 .ticket .sd.stk { grid-template-columns: 16px auto minmax(0, 1fr); }
@@ -332,7 +332,7 @@ html, body {
 .ticket .sd.done .mb { filter: grayscale(1); opacity: 0.5; }
 .ticket .sd.wrong { color: var(--t-wrong); }
 .ticket .sd.next { background: var(--bv-ink); color: #fffdf7; border-radius: 4px; margin: 0 -4px; padding: 1px 4px; }
-.ticket .sz { display: inline-grid; place-items: center; flex: none; min-width: 16px; height: 16px; box-sizing: border-box; border: 1.5px solid currentColor; border-radius: 4px; font: 500 12px/1 var(--bv-font-mono); font-style: normal; padding: 0 2px; }
+.ticket .sz { display: inline-grid; place-items: center; flex: none; min-width: 16px; height: 16px; box-sizing: border-box; border: 1.5px solid currentColor; border-radius: 4px; font: 500 0.75rem/1 var(--bv-font-mono); font-style: normal; padding: 0 2px; }
 /* A narrow small ticket drops the side icons; the size letter and name say enough. */
 .ticket.stub.narrow .sd .i { display: none; }
 .ticket.stub.narrow .sd.stk { grid-template-columns: auto minmax(0, 1fr); }
@@ -341,11 +341,11 @@ html, body {
 .ticket .foot { border-top: 1px dashed var(--bv-rule-2); padding-top: 5px; display: grid; gap: 3px; }
 .ticket .foot.cols { grid-template-columns: minmax(0, max-content) minmax(0, 1fr); column-gap: 12px; }
 .ticket .sds.main { border-top: 1px dashed var(--bv-rule-2); padding-top: 5px; gap: 5px; }
-.ticket .sds.main .sd { font-size: 14px; line-height: 18px; }
+.ticket .sds.main .sd { font-size: 0.875rem; line-height: 1.125rem; }
 
 /* Rows tighten for a long build (see fitTicket in main.ts). */
 .ticket.dense { gap: 2px; padding-top: 7px; }
-.ticket.dense .name .l { font-size: 16px; }
+.ticket.dense .name .l { font-size: 1rem; }
 .ticket.dense ol.bl { row-gap: 0; }
 .ticket.dense ol.bl > li { min-height: 15px; }
 .ticket.dense .foot { padding-top: 3px; }
@@ -372,24 +372,24 @@ html, body {
   cursor: default;
   z-index: 1;
 }
-.ticket.peek .nx { font: 600 10px/1 var(--bv-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--bv-mute); }
+.ticket.peek .nx { font: 600 0.625rem/1 var(--bv-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--bv-mute); }
 /* Stubs: patience, short name, doneness, how much is left. */
 .ticket.stub { padding: 9px 6px 12px; gap: 4px; cursor: pointer; }
 .ticket.stub.narrow { padding-left: 5px; padding-right: 5px; }
 .ticket.stub .bar { min-width: 0; }
 .ticket .pp { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 3px; }
-.ticket .pp .dpill { min-width: 0; font-size: 12px; padding: 0 6px 1px; }
-.ticket .pp .x { font: 700 12px var(--bv-font-mono); }
+.ticket .pp .dpill { min-width: 0; font-size: 0.75rem; padding: 0 6px 1px; }
+.ticket .pp .x { font: 700 0.75rem var(--bv-font-mono); }
 /* A stub's exceptions under its name: "NO Pickles", "ADD Bacon". */
-.ticket .ex { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; color: var(--t-mod); font: 700 11.5px/1.15 var(--bv-font-ui); }
+.ticket .ex { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; color: var(--t-mod); font: 700 0.7188rem/1.15 var(--bv-font-ui); }
 .ticket .ex li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; min-height: 0; padding: 0; margin: 0; }
 /* A stub's sides (after build #87): size and flavour, enough to make them without opening the ticket. */
-.ticket .sc { list-style: none; margin: 1px 0 0; padding: 0; display: grid; gap: 2px; font: 700 11.5px/1.15 var(--bv-font-ui); }
+.ticket .sc { list-style: none; margin: 1px 0 0; padding: 0; display: grid; gap: 2px; font: 700 0.7188rem/1.15 var(--bv-font-ui); }
 .ticket .sc li { display: flex; align-items: center; gap: 3px; min-height: 0; padding: 0; margin: 0; white-space: nowrap; overflow: hidden; }
 .ticket .sc .ic { width: 13px; height: 10px; }
-.ticket .sc .sz { font-size: 10px; padding: 0 2px; line-height: 1.15; height: auto; min-width: 0; border-width: 1px; }
+.ticket .sc .sz { font-size: 0.625rem; padding: 0 2px; line-height: 1.15; height: auto; min-width: 0; border-width: 1px; }
 .ticket .sc .dn { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ticket .sc .kw { flex: none; color: var(--t-mod); font-size: 10px; }
+.ticket .sc .kw { flex: none; color: var(--t-mod); font-size: 0.625rem; }
 .ticket .sc li.done { color: var(--t-done); }
 .ticket .sc li.wrong { color: var(--t-wrong); }
 /* In a narrow stub the ice note drops under the drink, and the size box tightens up. */
@@ -397,7 +397,7 @@ html, body {
 .ticket.stub .sc .kw { flex-basis: 100%; padding-left: 15px; }
 .ticket.stub .sc .sz { padding: 0 1px; }
 .ticket.stub .sc .dn { flex: 1 1 0; }
-.ticket .left { margin-top: 2px; font: 600 12px/1 var(--bv-font-mono); color: var(--bv-ink-2); }
+.ticket .left { margin-top: 2px; font: 600 0.75rem/1 var(--bv-font-mono); color: var(--bv-ink-2); }
 .ticket .left b { color: var(--bv-ink); }
 /* A list that still has to scroll fades out at the top, where the finished end of the burger is. */
 .ticket .tb.up { -webkit-mask-image: linear-gradient(transparent, #000 14px); mask-image: linear-gradient(transparent, #000 14px); }
@@ -409,7 +409,7 @@ html, body {
 .ticket .pips i.wrong { background: var(--t-wrong); }
 
 /* "Sent back", over the customer who sent it. */
-.sentback { position: absolute; z-index: 8; transform: translate(-50%, -100%); width: max-content; padding: 4px 8px 5px; border-radius: 9px; background: var(--t-wrong, #c62f2f); color: #fff; font: 800 12px/1.2 var(--bv-font-ui); text-align: center; box-shadow: 0 2px 5px rgb(42 38 34 / 0.3); pointer-events: none; animation: pop 0.25s ease-out; }
+.sentback { position: absolute; z-index: 8; transform: translate(-50%, -100%); width: max-content; padding: 4px 8px 5px; border-radius: 9px; background: var(--t-wrong, #c62f2f); color: #fff; font: 800 0.75rem/1.2 var(--bv-font-ui); text-align: center; box-shadow: 0 2px 5px rgb(42 38 34 / 0.3); pointer-events: none; animation: pop 0.25s ease-out; }
 .sentback::after { content: ""; position: absolute; left: 50%; bottom: -5px; margin-left: -6px; border: 6px solid transparent; border-top-color: var(--t-wrong, #c62f2f); border-bottom: 0; }
 .sentback[hidden] { display: none; }
 
@@ -418,7 +418,7 @@ html, body {
   background: #fff;
   border-radius: 10px;
   padding: 4px 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   box-shadow: 0 2px 0 rgb(0 0 0 / 0.2);
   transform: translate(-50%, -100%);
@@ -474,9 +474,9 @@ html, body {
 }
 .opinion.said { padding-right: 10px; border-radius: 15px; }
 /* A 4★'s aside: what cost the fifth star, small and grey (after build #78). */
-.opinion.aside .say { font-weight: 600; font-size: 11px; color: var(--bv-ink-2) !important; }
+.opinion.aside .say { font-weight: 600; font-size: 0.6875rem; color: var(--bv-ink-2) !important; }
 .opinion .op-face { width: 26px; height: 26px; }
-.opinion .say { font: 700 12px/1.25 var(--bv-font-ui); color: var(--bv-ink); }
+.opinion .say { font: 700 0.75rem/1.25 var(--bv-font-ui); color: var(--bv-ink); }
 .opinion.angry .say, .opinion.unhappy .say { color: #b4321f; }
 .opinion.delighted .say, .opinion.happy .say { color: #2f6b4f; }
 .opinion::after { content: ""; position: absolute; left: 50%; bottom: -5px; border: 6px solid transparent; border-top-color: #fff; border-bottom: 0; transform: translateX(-50%); }
@@ -493,7 +493,7 @@ html, body {
   border-radius: var(--bv-r-pill);
   background: var(--bv-night);
   color: var(--bv-on-night);
-  font: 800 10px/1 var(--bv-font-ui);
+  font: 800 0.625rem/1 var(--bv-font-ui);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -502,7 +502,7 @@ html, body {
   transform: translate(-50%, 6px) scale(0.6);
   animation: review-pop 2.2s 0.3s var(--bv-ease) forwards;
 }
-.opinion .review .bv-stars { font-size: 13px; gap: 1px; }
+.opinion .review .bv-stars { font-size: 0.8125rem; gap: 1px; }
 .opinion .review .bv-stars .off { color: rgb(241 236 226 / 0.28); }
 @keyframes review-pop {
   0% { opacity: 0; transform: translate(-50%, 6px) scale(0.6); }
@@ -517,7 +517,7 @@ html, body {
   position: absolute;
   font-family: var(--bv-font-mono);
   font-weight: 500;
-  font-size: 20px;
+  font-size: 1.25rem;
   color: var(--bv-amber);
   text-shadow: 0 1px 0 var(--bv-paper), 0 2px 4px rgb(0 0 0 / 0.3);
   pointer-events: none;
@@ -528,7 +528,7 @@ html, body {
 /* Chef's touches as stamps under the coin ("+$1 Perfect sauce"). The coin lingers a little longer with them. */
 .coin { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .coin.touched { animation-duration: 2.1s; }
-.coin .stamp { font: 700 10.5px/1 var(--bv-font-ui); color: #6b4a07; background: #f7e7b8; border: 1px solid #d9a93f; border-radius: 4px; padding: 2px 5px; white-space: nowrap; text-shadow: none; }
+.coin .stamp { font: 700 0.6563rem/1 var(--bv-font-ui); color: #6b4a07; background: #f7e7b8; border: 1px solid #d9a93f; border-radius: 4px; padding: 2px 5px; white-space: nowrap; text-shadow: none; }
 
 /* The local ask: a flag and its count in the HUD, beside the money (DESIGN §46). Tap it for the words;
    it turns pine once the ask is met. The ::after gives it a 44px tap like the round HUD buttons. */
@@ -548,13 +548,13 @@ html, body {
 .gtag .split { display: grid; gap: 2px; }
 .gtag .split .cmeter { width: 56px; height: 8px; }
 .turncue { position: absolute; z-index: 1; transform: translate(-50%, -50%); pointer-events: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
-  font: 800 17px/1 var(--bv-font-ui); color: #5c6f86; background: rgb(240 244 248 / 0.85); box-shadow: 0 0 0 1.5px rgb(92 111 134 / 0.7); animation: turncue 1.6s ease-in-out infinite; }
+  font: 800 1.0625rem/1 var(--bv-font-ui); color: #5c6f86; background: rgb(240 244 248 / 0.85); box-shadow: 0 0 0 1.5px rgb(92 111 134 / 0.7); animation: turncue 1.6s ease-in-out infinite; }
 .turncue[hidden] { display: none; }
 @keyframes turncue { 50% { transform: translate(-50%, -50%) rotate(40deg); } }
 @media (prefers-reduced-motion: reduce) { .turncue { animation: none; } }
 .gtag.rackhold .hbar { position: static; transform: none; margin: 0; }
 #ui .askchip svg { width: 13px; height: 13px; flex: none; }
-#ui .askchip b { font: 500 12px/1 var(--bv-font-mono); font-variant-numeric: tabular-nums; flex: none; }
+#ui .askchip b { font: 500 0.75rem/1 var(--bv-font-mono); font-variant-numeric: tabular-nums; flex: none; }
 #ui .askchip.met { background: var(--bv-olive-soft); color: var(--bv-olive); box-shadow: inset 0 0 0 1px rgb(78 125 106 / 0.45); }
 
 /* Printed labels in a row along the soda machine's front lip, one per nozzle. */
@@ -573,7 +573,7 @@ html, body {
   border-bottom-color: color-mix(in srgb, var(--c) 70%, var(--bv-ink));
   border-radius: 9px;
   padding: 0;
-  font: 800 11px/1 var(--bv-font-ui);
+  font: 800 0.6875rem/1 var(--bv-font-ui);
   letter-spacing: -0.02em;
   text-align: center;
   color: var(--bv-ink);
@@ -597,8 +597,8 @@ html, body {
 .lvl .ok { position: absolute; left: 0; right: 0; background: rgb(150 214 120 / 0.32); }
 .lvl .fill { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 4px 4px 0 0; box-shadow: inset 0 3px 0 rgb(255 255 255 / 0.35); }
 .lvl .perfect { position: absolute; left: -9px; right: -9px; height: 4px; margin-bottom: -2px; background: #fff; border-radius: 2px; box-shadow: 0 0 0 1.5px var(--bv-ink); }
-.lvl .perfect span { position: absolute; left: calc(100% + 5px); top: 50%; transform: translateY(-50%); font: 800 12px/1 var(--bv-font-ui); background: var(--bv-ink); color: #fff; padding: 4px 7px; border-radius: 7px; white-space: nowrap; }
-.lvl em { font: 800 11px/1 var(--bv-font-ui); font-style: normal; color: var(--bv-ink); background: var(--bv-paper); padding: 3px 7px; border-radius: 7px; box-shadow: 0 0 0 1.5px var(--bv-ink); }
+.lvl .perfect span { position: absolute; left: calc(100% + 5px); top: 50%; transform: translateY(-50%); font: 800 0.75rem/1 var(--bv-font-ui); background: var(--bv-ink); color: #fff; padding: 4px 7px; border-radius: 7px; white-space: nowrap; }
+.lvl em { font: 800 0.6875rem/1 var(--bv-font-ui); font-style: normal; color: var(--bv-ink); background: var(--bv-paper); padding: 3px 7px; border-radius: 7px; box-shadow: 0 0 0 1.5px var(--bv-ink); }
 .lvl.over .lvl-tube { animation: blink 0.3s infinite alternate; }
 .gtag.lid { background: rgb(42 38 34 / 0.7); }
 
@@ -619,7 +619,7 @@ html, body {
   color: var(--bv-on-night);
   padding: 7px 4px 7px 12px;
   border-radius: 12px;
-  font: 600 14px/1.32 var(--bv-font-ui);
+  font: 600 0.875rem/1.32 var(--bv-font-ui);
   pointer-events: auto;
   touch-action: none;
   box-shadow: inset 3px 0 0 var(--bv-amber), 0 6px 16px rgb(20 26 34 / 0.3);
@@ -712,31 +712,31 @@ html, body {
   font-family: var(--bv-font-ui);
 }
 .card h1, .card h2 { font-family: var(--bv-font-serif); font-weight: 400; margin: 0; line-height: 1; letter-spacing: -0.01em; text-wrap: balance; }
-.card h1 { font-size: 40px; }
+.card h1 { font-size: 2.5rem; }
 .card h1 i, .card h2 i { font-style: italic; color: var(--bv-paprika); }
-.card h2 { font-size: 28px; }
+.card h2 { font-size: 1.75rem; }
 .card p { margin: 0; line-height: 1.45; color: var(--bv-ink-2); font-weight: 500; }
-.card .sub { font-size: 11px; font-weight: 700; letter-spacing: var(--bv-track); text-transform: uppercase; color: var(--bv-mute); }
-.card ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; font-size: 14px; line-height: 1.4; color: var(--bv-ink-2); font-weight: 500; }
+.card .sub { font-size: 0.6875rem; font-weight: 700; letter-spacing: var(--bv-track); text-transform: uppercase; color: var(--bv-mute); }
+.card ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; font-size: 0.875rem; line-height: 1.4; color: var(--bv-ink-2); font-weight: 500; }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   min-height: 44px;
   border: 1px solid var(--bv-ink);
   border-radius: var(--bv-r-md);
   padding: 0 14px;
-  font: 700 16px var(--bv-font-ui);
+  font: 700 1rem var(--bv-font-ui);
   background: var(--bv-paper);
   color: var(--bv-ink);
   transition: background var(--bv-fast), transform var(--bv-fast) var(--bv-ease);
 }
 .btn:active { transform: translateY(1px); background: var(--bv-paper-3); }
 .btn.primary { background: var(--bv-ink); color: var(--bv-paper); }
-.btn.small { min-height: 36px; font-size: 14px; padding: 0 12px; background: transparent; border-color: transparent; color: var(--bv-ink-2); }
+.btn.small { min-height: 36px; font-size: 0.875rem; padding: 0 12px; background: transparent; border-color: transparent; color: var(--bv-ink-2); }
 .btn:disabled { opacity: 0.4; }
 .btn-row { display: grid; gap: 8px; }
-.card h3 { margin: 0; font-family: var(--bv-font-serif); font-weight: 400; font-size: 20px; line-height: 1; }
-.card .new { display: flex; gap: 8px; align-items: flex-start; background: var(--bv-paprika-soft); color: var(--bv-paprika); border-radius: var(--bv-r-md); padding: 9px 11px; font-weight: 700; font-size: 14px; }
-.card .owned { font-size: 13px; color: var(--bv-mute); }
+.card h3 { margin: 0; font-family: var(--bv-font-serif); font-weight: 400; font-size: 1.25rem; line-height: 1; }
+.card .new { display: flex; gap: 8px; align-items: flex-start; background: var(--bv-paprika-soft); color: var(--bv-paprika); border-radius: var(--bv-r-md); padding: 9px 11px; font-weight: 700; font-size: 0.875rem; }
+.card .owned { font-size: 0.8125rem; color: var(--bv-mute); }
 .offers { display: grid; gap: 8px; }
 .offer {
   border: 1px solid var(--bv-rule-2);
@@ -749,15 +749,15 @@ html, body {
   color: var(--bv-ink);
   transition: border-color var(--bv-fast), background var(--bv-fast);
 }
-.offer b { font-size: 16px; font-weight: 700; }
-.offer span { font-size: 13px; color: var(--bv-mute); font-weight: 500; }
+.offer b { font-size: 1rem; font-weight: 700; }
+.offer span { font-size: 0.8125rem; color: var(--bv-mute); font-weight: 500; }
 .offer:active { background: var(--bv-paper-2); border-color: var(--bv-ink); }
-.build { font: 500 12px var(--bv-font-mono); color: var(--bv-mute); text-align: center; font-variant-numeric: tabular-nums; }
-.stars { font-size: 30px; letter-spacing: 3px; color: var(--bv-amber); text-align: center; line-height: 1; }
+.build { font: 500 0.75rem var(--bv-font-mono); color: var(--bv-mute); text-align: center; font-variant-numeric: tabular-nums; }
+.stars { font-size: 1.875rem; letter-spacing: 3px; color: var(--bv-amber); text-align: center; line-height: 1; }
 .stars .off { color: var(--bv-rule-2); }
-.stats { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; font-size: 14px; margin: 0; }
+.stats { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; font-size: 0.875rem; margin: 0; }
 .stats dt { color: var(--bv-mute); font-weight: 600; padding: 5px 0; border-bottom: 1px dotted var(--bv-rule); }
-.stats dd { margin: 0; font: 500 14px var(--bv-font-mono); text-align: right; font-variant-numeric: tabular-nums; padding: 5px 0; border-bottom: 1px dotted var(--bv-rule); }
+.stats dd { margin: 0; font: 500 0.875rem var(--bv-font-mono); text-align: right; font-variant-numeric: tabular-nums; padding: 5px 0; border-bottom: 1px dotted var(--bv-rule); }
 
 /* On the page, over the game column: above the screens, the cards (.menu-host) and the coach. */
 .update {
@@ -772,14 +772,14 @@ html, body {
   display: flex;
   align-items: center;
   gap: 8px;
-  font: 700 14px var(--bv-font-ui);
+  font: 700 0.875rem var(--bv-font-ui);
   pointer-events: auto;
   box-shadow: var(--bv-shadow-2);
   z-index: 45;
 }
 .update[hidden] { display: none; }
 .update span { flex: 1; }
-.update button { cursor: pointer; border: 1px solid var(--bv-paper); border-radius: var(--bv-r-sm); min-height: 32px; padding: 0 10px; background: var(--bv-paper); color: var(--bv-ink); font: 700 13px var(--bv-font-ui); }
+.update button { cursor: pointer; border: 1px solid var(--bv-paper); border-radius: var(--bv-r-sm); min-height: 32px; padding: 0 10px; background: var(--bv-paper); color: var(--bv-ink); font: 700 0.8125rem var(--bv-font-ui); }
 .update button.later { background: transparent; color: var(--bv-paper); border-color: rgb(255 255 255 / 0.35); }
 
 @media (prefers-reduced-motion: reduce) {
@@ -796,7 +796,7 @@ html, body {
   color: var(--bv-paper);
   border-radius: var(--bv-r-sm);
   padding: 2px 7px;
-  font: 500 11px var(--bv-font-mono);
+  font: 500 0.6875rem var(--bv-font-mono);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -889,13 +889,13 @@ html, body {
 .cmeter.zucchini { --f0: #eadfa8; --f1: #d9a648; --f2: #8a5a24; }
 .cmeter.fritters { --f0: #f3dcae; --f1: #cf8a3e; --f2: #7a4419; }
 /* A pie in the oven: when to turn it (soon, now, done). */
-.gtag.pt.bay .turn { font: 800 9.5px/1.2 var(--bv-font-ui); font-style: normal; color: #6b3a00; background: #ffd99a; border-radius: 4px; padding: 0 4px; box-shadow: 0 0 0 1px rgb(42 38 34 / 0.6); }
+.gtag.pt.bay .turn { font: 800 0.5938rem/1.2 var(--bv-font-ui); font-style: normal; color: #6b3a00; background: #ffd99a; border-radius: 4px; padding: 0 4px; box-shadow: 0 0 0 1px rgb(42 38 34 / 0.6); }
 .gtag.pt.bay .turn.hot { color: #fff; background: #e0442e; animation: turn-pulse 0.6s ease-in-out infinite alternate; }
 .gtag.pt.bay .turn.on { color: #2f5a1e; background: #cfe9b6; opacity: 0.85; }
 @keyframes turn-pulse { from { transform: scale(1); } to { transform: scale(1.12); } }
 @media (prefers-reduced-motion: reduce) { .gtag.pt.bay .turn.hot { animation: none; } }
 /* A quesadilla's cheese on the comal: melting, then melted. */
-.gtag.pt .mlt { position: absolute; left: 50%; top: 100%; transform: translate(-50%, 2px); font: 800 9.5px/1.2 var(--bv-font-ui); color: #6b5200; background: #fbeec0; border-radius: 4px; padding: 0 4px; box-shadow: 0 0 0 1px rgb(42 38 34 / 0.6); opacity: 0.75; white-space: nowrap; }
+.gtag.pt .mlt { position: absolute; left: 50%; top: 100%; transform: translate(-50%, 2px); font: 800 0.5938rem/1.2 var(--bv-font-ui); color: #6b5200; background: #fbeec0; border-radius: 4px; padding: 0 4px; box-shadow: 0 0 0 1px rgb(42 38 34 / 0.6); opacity: 0.75; white-space: nowrap; }
 .gtag.pt .mlt.on { background: #f9d95b; opacity: 1; }
 .gtag.pt .mlt.warm { color: #4a2400; background: #f4a53e; opacity: 1; }
 .gtag.pt .mlt.hard { color: #fff; background: #9a5a26; opacity: 1; }
@@ -903,17 +903,17 @@ html, body {
 .gtag.pt.bay { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .gtag.pt.bay[hidden] { display: none; }
 .gtag.pt.bay .cmeter { margin-top: 0; }
-.gtag.pt.bay .melt { font: 800 9.5px/1.2 var(--bv-font-ui); font-style: normal; color: #6b5200; background: #fbeec0; border-radius: 4px; padding: 0 4px; box-shadow: 0 0 0 1px rgb(42 38 34 / 0.6); opacity: 0.7; }
+.gtag.pt.bay .melt { font: 800 0.5938rem/1.2 var(--bv-font-ui); font-style: normal; color: #6b5200; background: #fbeec0; border-radius: 4px; padding: 0 4px; box-shadow: 0 0 0 1px rgb(42 38 34 / 0.6); opacity: 0.7; }
 .gtag.pt.bay .melt.on { background: #f9d95b; opacity: 1; }
 /* A stack on the grill: how many are in it, beside its meter. */
 .gtag.pt .sc { position: absolute; right: -8px; top: -6px; }
-.gtag .sc { font: 500 11px/1 var(--bv-font-mono); background: var(--bv-ink); color: var(--bv-paper); border-radius: 4px; padding: 2px 4px; align-self: flex-end; }
+.gtag .sc { font: 500 0.6875rem/1 var(--bv-font-mono); background: var(--bv-ink); color: var(--bv-paper); border-radius: 4px; padding: 2px 4px; align-self: flex-end; }
 .gtag.pt.warm .cmeter, .gtag.pt.off .cmeter { opacity: 0.85; }
 .ftag .scoops { display: flex; gap: 3px; }
 .ftag .scoops b { width: 7px; height: 7px; border-radius: 50%; background: rgb(255 255 255 / 0.5); box-shadow: 0 0 0 1px rgb(42 38 34 / 0.7); }
 .ftag .scoops b.on { background: #e7b43c; }
 .ftag .tops { display: flex; gap: 2px; }
-.ftag .tops em { font: 800 9.5px var(--bv-font-ui); font-style: normal; color: #fff; background: rgb(42 38 34 / 0.8); border-radius: 4px; padding: 0 4px; }
+.ftag .tops em { font: 800 0.5938rem var(--bv-font-ui); font-style: normal; color: #fff; background: rgb(42 38 34 / 0.8); border-radius: 4px; padding: 0 4px; }
 
 /* Landscape phones: the kitchen only fits upright. */
 .rotate { display: none; }
@@ -945,30 +945,30 @@ html, body {
 .gtag.hold { background: var(--bv-olive); }
 
 /* Business mode: planning screen, reviews */
-.card .note { font-size: 13px; color: var(--bv-mute); }
+.card .note { font-size: 0.8125rem; color: var(--bv-mute); }
 .card.plan { gap: 9px; }
-.card.plan h3 { font-size: 11px; font-family: var(--bv-font-ui); font-weight: 700; letter-spacing: var(--bv-track); text-transform: uppercase; color: var(--bv-mute); margin-top: 4px; }
-.card .rep { font-size: 14px; }
+.card.plan h3 { font-size: 0.6875rem; font-family: var(--bv-font-ui); font-weight: 700; letter-spacing: var(--bv-track); text-transform: uppercase; color: var(--bv-mute); margin-top: 4px; }
+.card .rep { font-size: 0.875rem; }
 .card .rep b { font-family: var(--bv-font-mono); font-weight: 500; }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--bv-ink); border-radius: var(--bv-r-md); background: var(--bv-paper); }
-.seg button { min-height: 40px; font: 600 13px var(--bv-font-ui); padding: 4px; border: 0; background: transparent; color: var(--bv-mute); }
+.seg button { min-height: 40px; font: 600 0.8125rem var(--bv-font-ui); padding: 4px; border: 0; background: transparent; color: var(--bv-mute); }
 .seg button + button { border-left: 1px solid var(--bv-rule); }
 .seg button:first-child { border-radius: 5px 0 0 5px; }
 .seg button:last-child { border-radius: 0 5px 5px 0; }
 .seg button.on { background: var(--bv-ink); color: var(--bv-paper); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chips button { font: 700 13px var(--bv-font-ui); padding: 6px 10px; border-radius: var(--bv-r-sm); border: 1px solid var(--bv-rule-2); background: transparent; color: var(--bv-mute); text-decoration: line-through; }
+.chips button { font: 700 0.8125rem var(--bv-font-ui); padding: 6px 10px; border-radius: var(--bv-r-sm); border: 1px solid var(--bv-rule-2); background: transparent; color: var(--bv-mute); text-decoration: line-through; }
 .chips button.on { background: var(--bv-paprika-soft); border-color: var(--bv-paprika); color: var(--bv-paprika); text-decoration: none; }
-.reviews { list-style: none; padding: 0 !important; font-size: 14px !important; display: grid; }
-.reviews li { padding: 7px 0; border-bottom: 1px dotted var(--bv-rule); font-family: var(--bv-font-serif); font-style: italic; font-size: 15px; line-height: 1.3; color: var(--bv-ink-2); }
-.reviews .rs { color: var(--bv-amber); letter-spacing: 1px; font-style: normal; font-size: 12px; margin-right: 4px; }
-.reviews i { color: var(--bv-mute); font-size: 12px; font-family: var(--bv-font-ui); font-style: normal; font-weight: 600; margin-left: 4px; }
+.reviews { list-style: none; padding: 0 !important; font-size: 0.875rem !important; display: grid; }
+.reviews li { padding: 7px 0; border-bottom: 1px dotted var(--bv-rule); font-family: var(--bv-font-serif); font-style: italic; font-size: 0.9375rem; line-height: 1.3; color: var(--bv-ink-2); }
+.reviews .rs { color: var(--bv-amber); letter-spacing: 1px; font-style: normal; font-size: 0.75rem; margin-right: 4px; }
+.reviews i { color: var(--bv-mute); font-size: 0.75rem; font-family: var(--bv-font-ui); font-style: normal; font-weight: 600; margin-left: 4px; }
 .stats dd.neg { color: var(--bv-paprika); }
 .btn.biz.on { color: var(--bv-paprika); border-color: var(--bv-paprika); }
 
 /* Road map */
 .card.title { gap: 10px; }
-.card.title h1 { font-size: 36px; }
+.card.title h1 { font-size: 2.25rem; }
 .map { width: 100%; max-height: 54vh; display: block; background: #a9d3e0; border-radius: 14px; border: 2px solid var(--ink); }
 .map .region rect { stroke: rgb(29 20 16 / 0.25); stroke-width: 0.5; }
 .map .region.locked rect { fill: #c9c4b8; }
@@ -986,33 +986,33 @@ html, body {
 .map .tstars { font-size: 2.8px; text-anchor: middle; fill: #c98a00; }
 .map .truck { transition: transform 0.5s ease; pointer-events: none; }
 .townCard { display: grid; gap: 6px; }
-.townCard h3 .rg { font: 700 12px var(--body); color: var(--muted); margin-left: 4px; }
-.card .crowd { font-size: 13px; background: var(--bv-olive-soft); border-radius: var(--bv-r-md); padding: 7px 10px; }
+.townCard h3 .rg { font: 700 0.75rem var(--body); color: var(--muted); margin-left: 4px; }
+.card .crowd { font-size: 0.8125rem; background: var(--bv-olive-soft); border-radius: var(--bv-r-md); padding: 7px 10px; }
 .map .flag circle { fill: var(--tomato); stroke: var(--ink); stroke-width: 0.4; }
 .map .flag text { font: 800 3px var(--body); fill: #fff; text-anchor: middle; }
-.events { list-style: none; padding: 0 !important; display: grid; gap: 4px; font-size: 13px !important; }
+.events { list-style: none; padding: 0 !important; display: grid; gap: 4px; font-size: 0.8125rem !important; }
 .events li { padding: 6px 0; border-bottom: 1px dotted var(--bv-rule); cursor: pointer; }
 .events li b { font-family: var(--bv-font-mono); font-weight: 500; color: var(--bv-paprika); margin-right: 6px; }
-.card .event { font-size: 13px; background: var(--bv-amber-soft); border-radius: var(--bv-r-md); padding: 7px 10px; }
+.card .event { font-size: 0.8125rem; background: var(--bv-amber-soft); border-radius: var(--bv-r-md); padding: 7px 10px; }
 .press { background: var(--bv-paper-2); border-top: 1px solid var(--bv-ink); border-bottom: 1px solid var(--bv-ink); padding: 10px 2px; display: grid; gap: 3px; }
 .press.tv { background: var(--bv-night); color: var(--bv-on-night); border-color: var(--bv-night); border-radius: var(--bv-r-md); padding: 10px 12px; }
 .press.magazine { background: var(--bv-paprika-soft); border-radius: var(--bv-r-md); border-color: transparent; padding: 10px 12px; }
-.press .plabel { font: 700 11px var(--bv-font-ui); letter-spacing: var(--bv-track); text-transform: uppercase; color: var(--bv-paprika); }
+.press .plabel { font: 700 0.6875rem var(--bv-font-ui); letter-spacing: var(--bv-track); text-transform: uppercase; color: var(--bv-paprika); }
 .press.tv .plabel { color: var(--bv-amber); }
-.press .psrc { font: 600 11px var(--bv-font-ui); text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
-.press .phead { font: 400 20px/1.1 var(--bv-font-serif); }
-.press .pquote { font: italic 400 14px/1.3 var(--bv-font-serif); }
-.press .rs { color: var(--bv-amber); font-style: normal; font-size: 12px; }
+.press .psrc { font: 600 0.6875rem var(--bv-font-ui); text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
+.press .phead { font: 400 1.25rem/1.1 var(--bv-font-serif); }
+.press .pquote { font: italic 400 0.875rem/1.3 var(--bv-font-serif); }
+.press .rs { color: var(--bv-amber); font-style: normal; font-size: 0.75rem; }
 /* Patty doneness: two colour halves, top face over bottom face. */
 .gtag.pt { background: transparent; padding: 0; box-shadow: none; }
 /* Doneness pill: the patty's colour with white text, and (on the grill) a bar for progress through that level. */
-.dpill { display: inline-grid; justify-items: center; gap: 1px; min-width: 34px; padding: 1px 7px 2px; border-radius: 999px; background: var(--c); color: #fff; font: 800 10.5px/1.15 var(--bv-font-ui); letter-spacing: 0.02em; vertical-align: 1px; box-shadow: inset 0 -1.5px 0 rgb(0 0 0 / 0.18); }
+.dpill { display: inline-grid; justify-items: center; gap: 1px; min-width: 34px; padding: 1px 7px 2px; border-radius: 999px; background: var(--c); color: #fff; font: 800 0.6563rem/1.15 var(--bv-font-ui); letter-spacing: 0.02em; vertical-align: 1px; box-shadow: inset 0 -1.5px 0 rgb(0 0 0 / 0.18); }
 .dpill b { font-weight: 800; }
 .dpill u { display: block; width: 100%; height: 3px; border-radius: 2px; background: rgb(255 255 255 / 0.3); overflow: hidden; margin-bottom: 1px; }
 .dpill u i { display: block; height: 100%; background: #fff; border-radius: 2px; }
 .dpill.ok { outline: 2px solid #6fcf6a; outline-offset: 1px; }
 .pind { display: grid; gap: 2px; justify-items: center; }
-.pind .dpill { min-width: 44px; font-size: 10px; box-shadow: 0 1px 3px rgb(0 0 0 / 0.35), inset 0 -1.5px 0 rgb(0 0 0 / 0.18); }
+.pind .dpill { min-width: 44px; font-size: 0.625rem; box-shadow: 0 1px 3px rgb(0 0 0 / 0.35), inset 0 -1.5px 0 rgb(0 0 0 / 0.18); }
 
 /* Staleness bars along the trays' front lips: drains from full as cooked food goes cold. The notch
    marks where it stops keeping well. */
@@ -1046,7 +1046,7 @@ html, body {
   display: flex; gap: 8px; align-items: baseline; white-space: nowrap;
   padding: 6px 14px 7px; border-radius: 999px;
   background: var(--bv-paper); color: var(--bv-ink); box-shadow: var(--bv-shadow-2);
-  font: 600 14px/1.2 var(--bv-font-ui);
+  font: 600 0.875rem/1.2 var(--bv-font-ui);
 }
 .sauce-score b { font-weight: 800; }
 .sauce-score[data-word="perfect"] span { color: var(--bv-olive); font-weight: 800; }
@@ -1065,7 +1065,7 @@ html, body {
 #ui .tray-serve {
   width: 90px; height: 28px; border-radius: 999px; padding: 0 12px 0 10px;
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-  background: var(--bv-paprika); color: #fff7f2; font: 800 14px/1 var(--bv-font-ui);
+  background: var(--bv-paprika); color: #fff7f2; font: 800 0.875rem/1 var(--bv-font-ui);
   box-shadow: 0 0 0 2px #fff7f2, 0 3px 8px rgb(42 38 34 / 0.28);
   animation: serve-in 0.18s ease-out, serve-glow 1.6s ease-in-out 0.18s infinite;
 }
@@ -1086,7 +1086,7 @@ html, body {
   pointer-events: auto; position: absolute; left: 0; top: 0; z-index: 3; margin: 0; cursor: pointer;
   width: 100px; height: 44px; border-radius: 999px; padding: 0 8px;
   border: 1.5px dashed rgb(42 38 34 / 0.35); background: rgb(246 242 234 / 0.82); color: var(--bv-ink);
-  font: 700 13px/1 var(--bv-font-ui); -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  font: 700 0.8125rem/1 var(--bv-font-ui); -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   animation: call-pulse 1.8s ease-in-out infinite;
 }
 #ui .tray-call[hidden] { display: none; }
@@ -1105,7 +1105,7 @@ html, body {
 .name-bubble {
   position: absolute; z-index: 7; pointer-events: none; transform: translate(-50%, -100%);
   padding: 5px 11px 6px; border-radius: 999px; white-space: nowrap;
-  background: var(--bv-ink); color: var(--bv-paper); font: 700 14px/1.15 var(--bv-font-ui);
+  background: var(--bv-ink); color: var(--bv-paper); font: 700 0.875rem/1.15 var(--bv-font-ui);
   box-shadow: 0 3px 10px rgb(20 16 12 / 0.3);
 }
 .name-bubble::after {
@@ -1133,15 +1133,15 @@ html, body {
 .closed-sign { position: absolute; z-index: 4; width: 118px; margin-left: -59px; transform-origin: 50% -6px; transform: translateY(-140px); pointer-events: none; }
 .closed-sign .cord { position: absolute; left: 22px; right: 22px; top: -20px; height: 24px; border: 1.5px solid #6b5a44; border-bottom: 0; border-radius: 40px 40px 0 0; }
 .closed-sign .board { position: relative; display: block; padding: 7px 8px 6px; border-radius: 6px; background: var(--bv-paper); border: 2px solid #3d332a; box-shadow: 0 4px 0 rgb(61 51 42 / 0.2), 0 6px 14px rgb(0 0 0 / 0.25); text-align: center; }
-.closed-sign b { display: block; font: 400 21px/1 var(--bv-font-serif); color: var(--bv-paprika); letter-spacing: 0.02em; }
-.closed-sign small { display: block; margin-top: 3px; font: 700 8.5px/1 var(--bv-font-ui); letter-spacing: 0.16em; text-transform: uppercase; color: var(--bv-ink-2); }
+.closed-sign b { display: block; font: 400 1.3125rem/1 var(--bv-font-serif); color: var(--bv-paprika); letter-spacing: 0.02em; }
+.closed-sign small { display: block; margin-top: 3px; font: 700 0.5313rem/1 var(--bv-font-ui); letter-spacing: 0.16em; text-transform: uppercase; color: var(--bv-ink-2); }
 .closed-sign.drop { animation: sign-drop 1.5s cubic-bezier(0.3, 0.6, 0.3, 1) forwards; }
 @keyframes sign-drop { 0% { transform: translateY(-140px) rotate(0); } 30% { transform: translateY(0) rotate(9deg); } 50% { transform: rotate(-6deg); } 68% { transform: rotate(3.5deg); } 84% { transform: rotate(-1.5deg); } 100% { transform: rotate(0); } }
 @media (prefers-reduced-motion: reduce) { .closed-sign.drop { animation: none; transform: none; } }
 
 /* After build #82 the header shows only the line (no bell to ring): people, count, "in line". */
 .bell-btn.line-chip { pointer-events: none; border-color: transparent; background: transparent; padding: 0 4px; gap: 5px; }
-.bell-btn.line-chip .bell-count { background: transparent; color: var(--bv-ink); min-width: 0; padding: 0; font-size: 13px; }
+.bell-btn.line-chip .bell-count { background: transparent; color: var(--bv-ink); min-width: 0; padding: 0; font-size: 0.8125rem; }
 .bell-btn.line-chip.empty .bell-count { background: transparent; }
 .bell-btn.line-chip .bell-label { color: var(--bv-mute); }
 /* On the narrowest phones the HUD makes room for the local ask's flag: the people icon and the count say "in line" (DESIGN §46). */

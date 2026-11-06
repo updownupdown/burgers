@@ -13,6 +13,11 @@ export class Sfx {
   private last: Record<string, number> = {};
   muted = false;
 
+  /** The audio context once a tap has unlocked it (the ambience, src/ambience.ts, plays through it too). */
+  context(): AudioContext | null {
+    return this.ctx;
+  }
+
   /** Silence everything while the page is hidden; the next tap resumes it. */
   suspend(): void {
     if (this.ctx?.state === "running") void this.ctx.suspend();

@@ -1,0 +1,37 @@
+/* Reading and reach (src/a11y.ts, DESIGN §52). */
+
+/* Text size: every UI font size is in rem, so this grows all of it. */
+:root[data-text="large"] { font-size: 115%; }
+
+/* Left hand: the top bar mirrors, so Pause sits under the left thumb and Undo on the right. */
+:root[data-hand="left"] #ui .hud { flex-direction: row-reverse; padding: 5px 10px 5px 6px; }
+:root[data-hand="left"] #ui .undo-btn { margin-left: 0; margin-right: -4px; }
+
+/* Signals that were colour only get a shape too. */
+/* The counter buttons' lamps: amber (that counter wants you) shows a dot, coral (something there is
+   about to spoil) an exclamation mark, steady while the ring blinks. */
+.cbtn[data-lamp="amber"]::before,
+.cbtn[data-lamp="coral"]::before {
+  content: ""; position: absolute; top: 1px; right: 1px; width: 12px; height: 12px; border-radius: 50%;
+  background: #e3a52c; box-shadow: 0 0 0 2px #fffdf7; pointer-events: none;
+}
+.cbtn[data-lamp="coral"]::before {
+  content: "!"; top: -3px; right: -3px; width: 20px; height: 20px; background: #c9432a; color: #fff;
+  font: 800 0.8125rem/1 var(--bv-font-ui); display: grid; place-items: center;
+}
+/* A hold bar gone red (food off the heat too long) is striped as well. */
+.hbar.dry { height: 6px; }
+.hbar.dry > i { background: repeating-linear-gradient(-45deg, var(--bv-paprika) 0 3px, #8f2c1a 3px 5px); }
+
+/* Large text on a narrow phone: the map dock's name and line keep to their own column (one grid
+   track that can shrink), so the name steps down beside Prep & Open instead of sliding under it. */
+.home-dock-info { grid-template-columns: minmax(0, 1fr); }
+.home-dock-info .home-dayline { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* Below 380 px the dock's big button keeps its normal size under Large text, to leave the room to the town. */
+@media (max-width: 379px) {
+  :root[data-text="large"] #ui .home-dock-row > .bv-btn.lg { font-size: 0.98rem; padding: 0 10px; }
+  :root[data-text="large"] .home-dock-info .bv-caption { font-size: 0.75rem; }
+}
+/* Large text: the dock's line under the town name may take two lines rather than lose its end. */
+:root[data-text="large"] .home-dock-info .bv-caption { white-space: normal; align-items: flex-start; }
+:root[data-text="large"] .home-dock-info .bv-caption .t { white-space: normal; overflow: visible; line-height: 1.2; }

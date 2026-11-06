@@ -58,9 +58,9 @@
 .coach-card[hidden] { display: none; }
 .coach-card.in { animation: coach-in 0.32s var(--bv-ease); }
 @keyframes coach-in { from { opacity: 0; translate: 0 6px; } }
-.coach-title { font: 400 18px/1.15 var(--bv-font-serif); color: #fff; }
+.coach-title { font: 400 1.125rem/1.15 var(--bv-font-serif); color: #fff; }
 .coach-title[hidden] { display: none; }
-.coach-text { margin: 0; font: 600 15px/1.38 var(--bv-font-ui); color: var(--bv-on-night); }
+.coach-text { margin: 0; font: 600 0.9375rem/1.38 var(--bv-font-ui); color: var(--bv-on-night); }
 .coach-ok { pointer-events: auto; margin-top: 6px; justify-self: end; background: var(--bv-paprika); border-color: var(--bv-paprika); color: #fff7f2; min-height: 38px; }
 .coach-ok[hidden] { display: none; }
 

@@ -69,35 +69,46 @@ import { ACTION_TIPS, HintLane, type TipOpts } from "./game/hintlane";
 import { newHere, offerSteady, relaxedStreak, roadsAhead } from "./game/teaching";
 import { showWelcome, welcomeDue } from "./tutorial/welcome";
 import { modalClosedAt, modalOpen } from "./screens/modal";
+// Platform: saves, graphics probe, ambience, text size and hand, shift log (DESIGN §52).
+import { autoStepped, FrameWatch, markAutoStepped, stepDown, storedGfx, type Gfx } from "./perf";
+import { botQuiet, keepStorage } from "./platform";
+import { toast } from "./ui/toast";
+import { addToLog, logEntry } from "./game/shiftlog";
+import { Ambience, AMBIENCE_LEVEL } from "./ambience";
+import { applyAccess } from "./a11y";
+import { encodeSave } from "./game/savecode";
+
+applyAccess();
 
 // ---------------------------------------------------------------------------
 // Setup
 
 const canvas = document.getElementById("gl") as HTMLCanvasElement;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+// Low draws without MSAA; the renderer is made once, so a change to or from Low shows from the next start.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: storedGfx() !== "low" });
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.setScissorTest(true);
 
 const sfx = new Sfx();
+/** The region's ambient bed, on the map and under the kitchen (src/ambience.ts). */
+const ambience = new Ambience(() => sfx.context());
+// Any first tap unlocks audio, so the map's ambience starts with it (and iOS gets resumed after a call).
+window.addEventListener("pointerdown", () => sfx.unlock(), { capture: true });
 const customersView = new CustomersView();
 const trayView = new TrayView();
 const counter = new CounterView();
 
 /**
  * Graphics tiers change only cost, never the look: high = soft shadows, standard = hard
- * shadows, low = no shadows and a 1x pixel ratio for slower phones.
+ * shadows, low = no shadows, no MSAA and a 1x pixel ratio for slower phones. New installs start
+ * on Standard, and a slow first shift steps down once (src/perf.ts).
  */
-type Gfx = "high" | "standard" | "low";
-let gfx: Gfx = "high";
+let gfx: Gfx = storedGfx();
 /** Frames drawn since the game paused (see frame()). */
 let pausedDraws = 0;
-try {
-  const saved = localStorage.getItem("bv-gfx");
-  if (saved === "high" || saved === "standard" || saved === "low") gfx = saved;
-} catch {
-  // ignore
-}
+/** Watches frame times in a shift for the one automatic step down. */
+const frameWatch = new FrameWatch(autoStepped() || botQuiet());
 /**
  * Relaxed, Steady or Busy (ids chill, balanced, stressful; src/game/difficulty.ts), picked on Prep.
  * A new player starts on Relaxed (the welcome card says so); a trip already under way that never
@@ -692,7 +703,8 @@ function serve(i: number): void {
   game.served++;
   game.stars.push(r.stars);
   if (r.stars >= 4) {
-    save.known[s.order.name] = (save.known[s.order.name] ?? 0) + 1;
+    // The first good serve of a dish is all `known` needs: after it, that dish comes with changes and sides.
+    if (!save.known[s.order.name]) save.known[s.order.name] = 1;
     // Five-star dishes fill their row in the postcard book (game/stamps.ts).
     if (s.order.layers.length) noteFive(save, s.order.name, r.stars);
     writeSave(save);
@@ -4918,6 +4930,16 @@ initMenu({
   subtitle: () => `Day ${save.day}`,
   counter: () => (counter.page === 0 ? "drinks" : counter.page === 2 ? "fryer" : "middle"),
   sound: () => !sfx.muted,
+  ambience: () => ambience.on,
+  setAmbience: (on) => {
+    sfx.unlock();
+    ambience.setOn(on);
+    try {
+      localStorage.setItem("bv-ambience", on ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  },
   setSound: (on) => {
     sfx.unlock();
     sfx.setMuted(!on);
@@ -4988,6 +5010,16 @@ initMenu({
     if (game.phase === "title") showTitle();
   },
   newTrip: () => newTrip(),
+  saveCode: () => encodeSave(save),
+  loadTrip: (s) => {
+    // A pasted trip replaces this one whole (Settings has checked and confirmed it). Only from the map.
+    for (const k of Object.keys(save)) delete (save as unknown as Record<string, unknown>)[k];
+    Object.assign(save, s);
+    game.mapSel = save.town;
+    writeSave(save);
+    showTitle();
+    toast("Trip loaded.", 3);
+  },
 });
 
 /** Start a new trip (game/finale.ts): looks, stamps and the postcard book are kept; after a finish it's the next lap. */
@@ -5011,6 +5043,7 @@ try {
   if (localStorage.getItem("bv-muted") === "1") {
     sfx.setMuted(true);
   }
+  if (localStorage.getItem("bv-ambience") === "0") ambience.setOn(false);
 } catch {
   // ignore
 }
@@ -5027,6 +5060,7 @@ function shiftGuard(): void {
 
 function startShift(): void {
   cancelPointer();
+  frameWatch.reset();
   resetHands();
   endSundownLeftovers();
   for (const k of ["prep", "overlay"]) dropBack(k);
@@ -5437,6 +5471,7 @@ window.addEventListener(
 function endShift(arrive: Arrival): void {
   cancelPointer();
   resetHands();
+  const overrun = game.time - game.shiftLength;
   game.phase = "summary";
   // The shift fills the day; the evening follows, and only sleeping turns the day (see game/day.ts).
   save.time = "evening";
@@ -5539,6 +5574,8 @@ function endShift(arrive: Arrival): void {
   save.last = closing;
   save.tutorialDone = true;
   writeSave(save);
+  addToLog(logEntry({ day: closing.day, town: here.id, tier: game.pacing, crowd: game.customers, served: game.served, walked: game.walkedPast, left: game.lost + game.leftLine, stars: game.stars, takings, overrun }));
+  void keepStorage();
   ui.title.hidden = false;
   // The results land on the evening map, as a sheet, after the view pulls back out of the truck.
   showTitle(null, arrive);
@@ -6460,13 +6497,32 @@ function redrawPaused(): void {
   pausedDraws = 0;
 }
 
+/** Frames kept running slow in a shift: one level down, once per install, with a toast. */
+function stepGfxDown(): void {
+  markAutoStepped();
+  const to = stepDown(gfx);
+  if (!to) return;
+  applyGfx(to);
+  layout();
+  try {
+    localStorage.setItem("bv-gfx", to);
+  } catch {
+    // ignore
+  }
+  toast(`Graphics set to ${to === "low" ? "Low" : "Standard"} to keep things smooth. Settings can change it back.`, 5);
+}
+
 let last = performance.now();
 /** Automation can freeze the loop and drive time itself (see __bv below). */
 let manualClock = false;
 function frame(now: number): void {
   const dt = Math.min(0.05, (now - last) / 1000);
+  const frameMs = now - last;
   last = now;
+  if (!manualClock && frameWatch.sample(frameMs, game.phase === "playing" && !game.tutorial && !coachState())) stepGfxDown();
   if (!manualClock) {
+    const inKitchen = game.phase === "playing" || game.phase === "paused" || game.phase === "sundown";
+    ambience.update(inKitchen ? stop().region : townById(save.town).region, game.phase === "paused" ? AMBIENCE_LEVEL.paused : inKitchen ? AMBIENCE_LEVEL.kitchen : AMBIENCE_LEVEL.map);
     tick(dt);
     // The home screen covers the truck completely, so skip drawing it there and save battery;
     // paused, the picture under the menu is still, so it's drawn twice and then left.
@@ -6580,6 +6636,8 @@ window.addEventListener("blur", cancelPointer);
 // Debug/automation hook for playtesting in a headless browser.
 (window as unknown as { __bv: unknown }).__bv = {
   game,
+  ambience,
+  frameWatch,
   counter,
   trayView,
   bands,

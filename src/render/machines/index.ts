@@ -4,6 +4,5 @@ export { DRINK_TINT, makeCupStack, makeFountain, makeIceWell, makeLidStackSized,
 export { FRY_BASKET, makeFryBasket, makeFryer, type FryerObject } from "./fryer";
 export { makeGriddle, ZONE_COLOR, ZONE_HEATS, type GriddleObject, type ZoneHeat } from "./griddle";
 export { makeSauceBottle, makeSauceCaddy, type SauceBottleObject, type SauceCaddyObject } from "./sauces";
-export { makePackPad, makeSleeve, makeSupplyShelf, makeTrashChute, stickerTex, type PackPadObject, type SleeveKind, type SupplyShelfObject } from "./supplies";
-export { makeWarmShelf, type WarmShelfObject } from "./warmShelf";
+export { makePackPad, makeTrashChute, type PackPadObject } from "./pass";
 export { makeComal, makeTortillaPress, type ComalObject, type TortillaPressObject } from "./comal";

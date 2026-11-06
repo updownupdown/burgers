@@ -1233,3 +1233,32 @@ The scope review after build #93 (rows 2, 3, 4 and 13) found the trip ended on o
 - Each town has a **signature dish** (`SIGNATURE`): Trailhead Classic, Summit Smash, Campfire Melt, Lumberjack Stack; Caprese, Tuna Melt, Chicken Pesto, Veggie Club; Street Tacos, Pastor Tacos, Breakfast Taco; Harvest Red, Fig & Ham, Calzone. It leads Prep's menu with a Signature tag, the town sheet and its postcard name it, and it is ordered 1.8x as often there (`pickRecipe`).
 - Each town's **local ask** comes from its own shortlist of the nine kinds (`TOWN_ASKS`), kept to what its kitchen and menu can do that day: commuter and party towns ask for speed, foodie towns for the finish (clean cuts at Harbor City and Port Amber, hand-pressed tortillas at Sun Valley), the oven towns for leopard spots, the grill towns for grill marks. A town that can do none of its list falls back to everything it can.
 - How to Play's Garage page says what stamps are and what the end of the road brings.
+## 52. Saves, Android readiness, sound and access
+
+From the scope review of build #93 (pick-list rows 15 to 18 and part of 21). No music: that stays a later asset job.
+
+**Saves.**
+- **Save codes.** Settings → *Your trip* has *Copy save code* and *Paste save code*. A code is `BV<version>.<base64 of the save JSON>.<checksum>` (`src/game/savecode.ts`; the checksum is FNV-1a over the JSON, 8 hex digits). Copy fills a box with the code, selects it and puts it on the clipboard. Paste takes a code (spaces and line breaks are ignored), refuses one that isn't a code, has lost characters or comes from a newer build, and otherwise says what it holds ("Day 9 in Saltwater Bay, 5 towns open, $777 saved.") before *Load this trip*. Loading runs it through `migrateSave`, replaces the trip whole and goes back to the map. Paste isn't offered in a shift; Copy is (it copies the trip as it stood when the shift opened).
+- A line under them says when the trip saves: after each shift, drive and night; a shift still going isn't saved until it ends.
+- **Keeping storage.** After the first shift the game asks once for lasting storage (`navigator.storage.persist()`). If storage isn't kept and looks private (localStorage won't write, or the quota is under 130 MB), one toast says the browser may not keep the trip and points at the save code. Once per install (`src/platform.ts`).
+- **Toasts** (`src/ui/toast.ts`) are a small slate note near the bottom that goes after a few seconds and never takes a tap.
+
+**Android readiness.**
+- **Fonts are bundled.** Young Serif, Hanken Grotesk (500 to 800) and DM Mono (400, 500), latin subset, ship as woff2 in `src/fonts/` with their OFL licences, through `src/ui/tokens.css`. No request goes to Google Fonts; the splash still waits up to 1.5 s for them.
+- **Graphics.** New installs start on **Standard**. In a shift, if frames average over 25 ms for 4 s (after a 3 s warm-up), the level drops one step, once per install, with a toast ("Graphics set to Low to keep things smooth. Settings can change it back."). Never in the guided first shift or while the coach's thumb is up, never behind the pause menu (`src/perf.ts`). **Low also drops MSAA**; the renderer is made once, so a change to or from Low shows its edges from the next start, and Settings says so.
+- **Under Capacitor** (`window.Capacitor` present) there are no update checks, no update banner, no service worker and no *Check for updates* row: the bundle ships with the app.
+- Playtest bots (`navigator.webdriver`) get neither the step-down nor the storage toast unless `bv-test-auto` is set.
+
+**Sound.**
+- **Ambience.** A quiet generated bed per region, in the same Web Audio kit as the effects (`src/ambience.ts`): the Pines, wind in the trees and birds now and then; Sunny Coast, surf rolling in and out and gulls; Red Rock, dry gusty wind and crickets; Orchard Isle, a soft breeze and bees drifting past. Full on the map (the region of the town the truck is parked in), about half under the cooking, low behind the pause menu. Regions and levels fade over a couple of seconds.
+- **Settings → Device** splits Sound into **Effects** (every cooking and UI sound, as before) and **Ambience**. Each has its own bus and switch, remembered on the device.
+
+**Access.**
+- **Text size.** Every UI font size is in rem (16 px = 1 rem; `tools/a11y/px-to-rem.cjs` converts any px size that comes in later, and `--check` lists them). Settings → *Text size* Normal / Large sets the root to 115%, so every line of text grows, tickets and tips included; a phone's own larger-text setting scales it the same way. Sizes under 6 px (SVG units on the paper map) stay as they are. Under Large the map dock's line may wrap to two lines, and below 380 px its big button keeps its normal size so the town name keeps its room (`dock-fit.cjs` passes at 320, 360 and 390 with `TEXT=large`).
+- **Hand.** Settings → *Hand* Right / Left. Left mirrors the top bar: Pause on the left, Undo on the right, the clock and money between. The counters' sauce caddy and knife stay where they are: moving them means mirroring each 3D counter's layout and hit proxies, which this pass didn't take on.
+- **Shapes as well as colour.** A counter button's lamp shows a dot when amber (that counter wants you) and a steady "!" when coral (something there is about to spoil). A hold bar gone red is taller and striped.
+
+**Housekeeping.**
+- `save.known` is now written once per dish, on its first serve at 4★ or more: the only read is "ever served well?", so a dish's first order comes plain (§47). Older saves keep their counts and read the same.
+- The supply shelf, sleeves and warm shelf models are gone; the packing pads and trash chute live in `src/render/machines/pass.ts`.
+- **Shift log.** Every finished shift adds a line on the device (`src/game/shiftlog.ts`, newest 200): day, town, pacing, expected crowd, served, walked past, left, average stars, takings and seconds past closing. With dev mode on, the bottom of Settings shows the last twelve and copies them all as a tab-separated sheet.

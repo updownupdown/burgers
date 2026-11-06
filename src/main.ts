@@ -6493,6 +6493,7 @@ window.addEventListener("blur", cancelPointer);
 // Debug/automation hook for playtesting in a headless browser.
 (window as unknown as { __bv: unknown }).__bv = {
   game,
+  ambience,
   counter,
   trayView,
   bands,

@@ -16,6 +16,8 @@ const W = 8.7;
 const D = 6.0;
 /** Cook surface height. */
 const TOP = 1.3;
+/** How far the grille's bars (the left zone) stand above the plate, to their highlight's top. */
+const BAR_H = 0.075;
 /** The cook plate: x across, z from back to front. */
 const PX = W / 2 - 0.3;
 const PZ0 = -2.7;
@@ -127,6 +129,8 @@ export interface GriddleObject extends THREE.Group {
     spots: {
       /** Cook surface in local game units. */
       surface: { y: number; x0: number; x1: number; z0: number; z1: number };
+      /** How far food on the grille (zone 0) sits above the surface: it rests on the bars. */
+      grille: number;
       /** The three zones, left to right: their x extent on the plate. */
       zones: { x0: number; x1: number }[];
       /** The top of each zone's push button. */
@@ -162,6 +166,7 @@ export function makeGriddle(): GriddleObject {
   });
   machine(g, W, D, TOP + 0.5, {
     surface: { y: TOP * STUDY, x0: -PX * STUDY, x1: PX * STUDY, z0: PZ0 * STUDY, z1: PZ1 * STUDY },
+    grille: BAR_H * STUDY,
     zones: [0, 1, 2].map((i) => ({ x0: (zoneX(i) - zoneW / 2) * STUDY, x1: (zoneX(i) + zoneW / 2) * STUDY })),
     buttons: [0, 1, 2].map((i) => ({ x: zoneX(i) * STUDY, y: (LEDGE_Y + 0.3) * STUDY, z: BTN_Z * STUDY })),
   });

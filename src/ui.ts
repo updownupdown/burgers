@@ -116,7 +116,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     <span class="bell-btn line-chip" data-r="bell" hidden role="status" aria-label="People waiting in line">
       ${icon("people")}<span class="bell-count" data-r="bellCount">0</span><span class="bell-label" data-r="bellLabel">in line</span>
     </span>
-    <button class="icon-btn" data-r="menuBtn" aria-label="Menu">${icon("menu")}</button>
+    <button class="icon-btn" data-r="menuBtn" aria-label="Pause">${icon("pause")}</button>
   </div>
   <div class="rail" data-r="rail"></div>
   ${[0, 1, 2].map((i) => `<div class="ticket" data-r="ticket" data-slot="${i}" hidden></div>`).join("")}

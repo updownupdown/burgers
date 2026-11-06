@@ -325,7 +325,8 @@ export function makeFlatbread(pieces: Piece[], o: { topScale?: number } = {}): F
   } else {
     // The base and its crust in segments round the rim, each browning by how it has faced the hot wall.
     for (let k = 0; k < RIM_SEGS; k++) {
-      const s = mesh(GEO.slabs[k], "#f4e8ce", { unique: true, ink: 1.02 });
+      // No outline on the wedges: each drew its own edge, so an uncut pie showed eight cuts. The rim keeps the outline.
+      const s = mesh(GEO.slabs[k], "#f4e8ce", { unique: true, ink: false });
       const r = mesh(GEO.rims[k], "#f4e8ce", { unique: true, ink: 1.04 });
       g.add(s, r);
       halves.push(s);

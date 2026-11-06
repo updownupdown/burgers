@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { Backdrop } from "../game/stops";
 import { faceted, mesh } from "./materials";
+import { bakeStatic } from "./bake";
 
 /*
  * The customers: chunky one-piece beans with small painted eyes, blush and a sprout of hair,
@@ -38,7 +39,7 @@ function pick<T>(list: readonly T[], seed: number, k: number): T {
 }
 
 const HAIR = ["#3a2a24", "#5e4030", "#8a5a35", "#c99a58", "#e0c48a", "#9a9590", "#2c2a33", "#a5523a"] as const;
-const CLOTH = ["#e7766f", "#f2a46d", "#9fcf8a", "#7f9fe0", "#f2cf5b", "#b9a3e3", "#6fc5b8", "#e889a8", "#5f7fa8", "#c8b89a"] as const;
+const CLOTH = ["#e7766f", "#f2a46d", "#9fcf8a", "#7f9fe0", "#f2cf5b", "#b9a3e3", "#6fc5b8", "#e889a8", "#5f7fa8", "#f4b393"] as const;
 const FEATURE = "#33262b";
 
 const basic = new Map<string, THREE.MeshBasicMaterial>();
@@ -302,5 +303,10 @@ export function buildPerson(seed: number, backdrop: Backdrop): Person {
       body.add(t);
     }
   }
+  // The body, arms, hat and hair never change, so they bake into one vertex-coloured mesh and one
+  // hull (DESIGN §45: a bean drops from about 22 draw calls to 11). Only the painted face, which
+  // moves and changes with mood, stays live.
+  head.userData.noBake = true;
+  bakeStatic(body);
   return { body, setMood: (m) => face.setMood(m), look: (x) => face.look(x) };
 }

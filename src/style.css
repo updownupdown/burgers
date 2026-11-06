@@ -132,7 +132,7 @@ html, body {
   border-radius: 10px;
   background: var(--bv-ink);
   color: var(--bv-paper);
-  font: 600 12px var(--bv-font-mono);
+  font: 500 12px var(--bv-font-mono);
   font-variant-numeric: tabular-nums;
   display: grid;
   place-items: center;
@@ -516,7 +516,7 @@ html, body {
 .coin {
   position: absolute;
   font-family: var(--bv-font-mono);
-  font-weight: 700;
+  font-weight: 500;
   font-size: 20px;
   color: var(--bv-amber);
   text-shadow: 0 1px 0 var(--bv-paper), 0 2px 4px rgb(0 0 0 / 0.3);
@@ -530,8 +530,11 @@ html, body {
 .coin.touched { animation-duration: 2.1s; }
 .coin .stamp { font: 700 10.5px/1 var(--bv-font-ui); color: #6b4a07; background: #f7e7b8; border: 1px solid #d9a93f; border-radius: 4px; padding: 2px 5px; white-space: nowrap; text-shadow: none; }
 
-/* The local ask, pinned under the header while the shift runs (after build #78). */
-#ui .askchip { position: absolute; z-index: 3; pointer-events: none; max-width: 70%; display: flex; align-items: center; gap: 6px; padding: 3px 9px 4px 7px; border-radius: 999px; background: rgb(246 242 234 / 0.9); color: var(--bv-ink); font: 600 11px/1.2 var(--bv-font-ui); box-shadow: 0 1px 3px rgb(42 38 34 / 0.2); }
+/* The local ask: a flag and its count in the HUD, beside the money (DESIGN §46). Tap it for the words;
+   it turns pine once the ask is met. The ::after gives it a 44px tap like the round HUD buttons. */
+#ui .askchip { flex: none; position: relative; pointer-events: auto; display: inline-flex; align-items: center; gap: 3px; height: 26px; padding: 0 8px 0 6px; border: 0; border-radius: 13px; background: var(--bv-paper-2); color: var(--bv-ink); box-shadow: inset 0 0 0 1px var(--bv-rule-2); }
+#ui .askchip::after { content: ""; position: absolute; inset: -9px -2px; }
+#ui .askchip:active { background: var(--bv-paper-3); }
 #ui .askchip[hidden] { display: none; }
 /* Warm holding's small bar under a meter (after build #78): how long food off the heat keeps. */
 .hbar { display: block; width: 44px; height: 4px; margin: 2px auto 0; border-radius: 2px; background: rgb(42 38 34 / 0.35); overflow: hidden; }
@@ -551,9 +554,8 @@ html, body {
 @media (prefers-reduced-motion: reduce) { .turncue { animation: none; } }
 .gtag.rackhold .hbar { position: static; transform: none; margin: 0; }
 #ui .askchip svg { width: 13px; height: 13px; flex: none; }
-#ui .askchip b { font: 700 11px/1 var(--bv-font-mono); flex: none; }
-#ui .askchip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#ui .askchip.met { background: rgb(226 238 228 / 0.95); color: #2f6b4f; }
+#ui .askchip b { font: 500 12px/1 var(--bv-font-mono); font-variant-numeric: tabular-nums; flex: none; }
+#ui .askchip.met { background: var(--bv-olive-soft); color: var(--bv-olive); box-shadow: inset 0 0 0 1px rgb(78 125 106 / 0.45); }
 
 /* Printed labels in a row along the soda machine's front lip, one per nozzle. */
 /* The fountain's push buttons: a coloured cap per drink with its short name, sitting on the
@@ -601,26 +603,29 @@ html, body {
 .gtag.lid { background: rgb(42 38 34 / 0.7); }
 
 /* ---- Hint ------------------------------------------------------------ */
+/* A tip is a small slate card with a butter edge, the same family as the coach's card (which has a
+   coral edge for a lesson). It has one lane, just under the HUD (layout() in main.ts), and the local
+   ask is a flag in the HUD, so nothing else sits there to be covered (DESIGN §46). */
 .hint {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 8px;
   z-index: 7;
   width: max-content;
-  max-width: calc(100% - 24px);
+  max-width: calc(100% - 16px);
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: rgb(42 38 34 / 0.92);
-  color: var(--bv-paper);
-  padding: 6px 4px 6px 14px;
-  border-radius: 14px;
-  font: 700 14px/1.3 var(--bv-font-ui);
+  gap: 8px;
+  background: var(--bv-night);
+  color: var(--bv-on-night);
+  padding: 7px 4px 7px 12px;
+  border-radius: 12px;
+  font: 600 14px/1.32 var(--bv-font-ui);
   pointer-events: auto;
   touch-action: none;
-  box-shadow: var(--bv-shadow-2);
+  box-shadow: inset 3px 0 0 var(--bv-amber), 0 6px 16px rgb(20 26 34 / 0.3);
   transition: opacity 0.25s;
 }
+.hint::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--bv-amber); }
 .hint > span { min-width: 0; }
 .hint-x { flex: none; width: 36px; height: 36px; margin: -4px 0; border: 0; border-radius: 50%; background: transparent; color: rgb(250 247 241 / 0.75); display: grid; place-items: center; padding: 0; }
 .hint-x .bv-icon { width: 18px; height: 18px; }
@@ -786,7 +791,7 @@ html, body {
   color: var(--bv-paper);
   border-radius: var(--bv-r-sm);
   padding: 2px 7px;
-  font: 700 11px var(--bv-font-mono);
+  font: 500 11px var(--bv-font-mono);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -897,7 +902,7 @@ html, body {
 .gtag.pt.bay .melt.on { background: #f9d95b; opacity: 1; }
 /* A stack on the grill: how many are in it, beside its meter. */
 .gtag.pt .sc { position: absolute; right: -8px; top: -6px; }
-.gtag .sc { font: 800 11px/1 var(--bv-font-mono); background: var(--bv-ink); color: var(--bv-paper); border-radius: 4px; padding: 2px 4px; align-self: flex-end; }
+.gtag .sc { font: 500 11px/1 var(--bv-font-mono); background: var(--bv-ink); color: var(--bv-paper); border-radius: 4px; padding: 2px 4px; align-self: flex-end; }
 .gtag.pt.warm .cmeter, .gtag.pt.off .cmeter { opacity: 0.85; }
 .ftag .scoops { display: flex; gap: 3px; }
 .ftag .scoops b { width: 7px; height: 7px; border-radius: 50%; background: rgb(255 255 255 / 0.5); box-shadow: 0 0 0 1px rgb(42 38 34 / 0.7); }
@@ -1134,5 +1139,7 @@ html, body {
 .bell-btn.line-chip .bell-count { background: transparent; color: var(--bv-ink); min-width: 0; padding: 0; font-size: 13px; }
 .bell-btn.line-chip.empty .bell-count { background: transparent; }
 .bell-btn.line-chip .bell-label { color: var(--bv-mute); }
+/* On the narrowest phones the HUD makes room for the local ask's flag: the people icon and the count say "in line" (DESIGN §46). */
+@media (max-width: 359px) { .bell-btn.line-chip .bell-label { display: none; } }
 /* The tray's desk bell's touch area (drawn in 3D under it). */
 #ui .tray-call { width: 64px; height: 64px; border: 0; background: transparent; animation: none; padding: 0; }

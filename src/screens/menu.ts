@@ -300,7 +300,7 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
   const card = pushModal({
     key: "settings",
     label: "Settings",
-    cls: "tall settings",
+    cls: "settings",
     html: `${modalHead({ icon: "settings", title: "Settings", stacked, eyebrow: inShift ? "Paused" : undefined })}
       <div class="menu-body menu-scroll menu-general menu-groups">
         <section class="menu-group">

@@ -225,7 +225,7 @@ export function prepHtml(p: PrepInput): string {
       </section>
     </div>
     <footer class="day-foot">
-      <div class="sum"><span class="bv-eyebrow">${picks.length === 1 ? esc(bonusById(picks[0])!.name) : picks.length ? `${picks.length} bonuses` : "No bonus"}</span><b>~${expect} customers</b></div>
+      <div class="sum"><span class="bv-eyebrow">${picks.length === 1 ? esc(bonusById(picks[0])!.name) : picks.length ? `${picks.length} bonuses` : "No bonus"}</span><b><span class="bv-mono">~${expect}</span> customers</b></div>
       <button class="bv-btn primary lg" data-act="open">${icon("bell")}Open</button>
     </footer>
   </div>`;
@@ -297,22 +297,26 @@ export function reviewsHtml(save: Save): string {
   const avg = reviewAverage(counts);
   const pct = (n: number) => `${Math.round(n * 100)}%`;
   return `<div class="day-screen bv">
-    <header class="day-top">
-      <span class="day-top-ic" aria-hidden="true">${icon("people")}</span>
-      <div class="where"><b>Popularity &amp; reviews</b></div>
-      <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("close")}</button>
+    <header class="menu-head bar">
+      <span class="menu-head-ic" aria-hidden="true">${icon("people")}</span>
+      <div class="menu-headtext"><h2 class="bv-title">Popularity &amp; reviews</h2></div>
+      <button class="bv-btn icon sm ghost menu-x" data-act="back" aria-label="Back to the map">${icon("close")}</button>
     </header>
     <div class="day-scroll">
-      <p class="day-count">${total} review${total === 1 ? "" : "s"} · ${press.length} clipping${press.length === 1 ? "" : "s"}</p>
+      ${total || press.length ? `<p class="day-count">${total} review${total === 1 ? "" : "s"} · ${press.length} clipping${press.length === 1 ? "" : "s"}</p>` : ""}
       <div class="day-kpis two">
         <div class="day-kpi"><span class="bv-eyebrow">${icon("people")}Popularity</span><b>${save.popularity}<small class="of">/100</small></b><small>How many people have heard of the truck. Happy customers spread the word; walk-outs cost some.</small></div>
         <div class="day-kpi"><span class="bv-eyebrow">${icon("star")}Rating</span><b>${avg === null ? "–" : avg.toFixed(1)} <span class="st">★</span></b><small>${avg === null ? "No reviews yet." : `The average of ${total} review${total === 1 ? "" : "s"}.`} A good rating brings a few more people.</small></div>
       </div>
-      <section class="day-card" aria-label="Reviews by stars">
+      ${
+        total
+          ? `<section class="day-card" aria-label="Reviews by stars">
         <div class="day-card-h"><b>Reviews by stars</b>${avg === null ? "" : `<span class="day-avg">${stars(Math.round(avg))}<span class="bv-mono">${avg.toFixed(1)}</span></span>`}</div>
         ${breakdownHtml(counts)}
         <span class="day-hint">Every customer has an opinion; only some write a review. About ${pct(REVIEW_CHANCE[5])} of the delighted and ${pct(REVIEW_CHANCE[1])} of the furious do, but only ${pct(REVIEW_CHANCE[3])} of those who thought it was just okay. Critics always review.</span>
-      </section>
+      </section>`
+          : `<section class="rev-empty" aria-label="No reviews yet">${stars(0)}<b>No reviews yet</b><span>About ${pct(REVIEW_CHANCE[5])} of the delighted and ${pct(REVIEW_CHANCE[1])} of the furious write one; critics always do. The first lands after a shift.</span></section>`
+      }
       <h3 class="day-sub">${icon("critic")}From the critics</h3>
       <div class="day-rlist">
         ${press.map((p) => `<div class="day-rcard critic">${pressHtml(p)}</div>`).join("")}

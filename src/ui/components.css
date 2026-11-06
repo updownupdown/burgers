@@ -50,8 +50,8 @@
 .bv-night .bv-btn.primary { background: var(--bv-paprika); color: #fff7f2; }
 .bv-btn.accent { background: var(--bv-paprika); color: #fff; border-color: var(--bv-paprika); }
 .bv-btn.accent:active { background: var(--bv-paprika-2); }
-.bv-btn.ghost { border-color: transparent; color: var(--bv-ink-2); }
-.bv-btn.ghost:active { background: var(--bv-paper-2); }
+.bv-btn.ghost { border-color: transparent; background: transparent; color: var(--bv-ink-2); }
+.bv-btn.ghost:active { background: rgb(35 42 51 / 0.08); }
 .bv-btn.sm { min-height: 36px; padding: 0 var(--bv-sp-3); font-size: var(--bv-fs-md); }
 .bv-btn.lg { min-height: 58px; font-size: 21px; font-weight: 700; padding: 0 var(--bv-sp-5, 22px); }
 .bv-btn.lg .bv-icon { font-size: 1.35em; }
@@ -78,8 +78,8 @@
 .bv-chip.warn { color: #8a5a10; border-color: var(--bv-amber); background: var(--bv-amber-soft); }
 .bv-chip.solid { background: var(--bv-ink); color: var(--bv-paper); border-color: var(--bv-ink); }
 .bv-chip.pill { border-radius: var(--bv-r-pill); }
-.bv-chip.size { font-family: var(--bv-font-mono); padding: 4px 6px; min-width: 22px; justify-content: center; }
-.bv-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--bv-r-pill); background: var(--bv-paprika); color: #fff; font-family: var(--bv-font-mono); font-size: var(--bv-fs-xs); font-weight: 700; }
+.bv-chip.size { font-family: var(--bv-font-mono); font-weight: 500; padding: 4px 6px; min-width: 22px; justify-content: center; }
+.bv-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--bv-r-pill); background: var(--bv-paprika); color: #fff; font-family: var(--bv-font-mono); font-size: var(--bv-fs-xs); font-weight: 500; }
 .bv-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--bv-paprika); }
 .bv-dot.olive { background: var(--bv-olive); }
 .bv-dot.amber { background: var(--bv-amber); }
@@ -312,9 +312,9 @@
 .bv-bubble.good { color: var(--bv-olive); }
 .bv-bubble.bad { color: var(--bv-paprika); }
 .bv-bubble.order { font-family: var(--bv-font-serif); font-weight: 400; font-size: var(--bv-fs-lg); }
-.bv-coin { font-family: var(--bv-font-mono); font-weight: 700; font-size: var(--bv-fs-xl); color: var(--bv-amber); text-shadow: 0 1px 0 var(--bv-paper), 0 2px 4px rgb(0 0 0 / 0.3); }
+.bv-coin { font-family: var(--bv-font-mono); font-weight: 500; font-size: var(--bv-fs-xl); color: var(--bv-amber); text-shadow: 0 1px 0 var(--bv-paper), 0 2px 4px rgb(0 0 0 / 0.3); }
 .bv-coin.minus { color: var(--bv-paprika); }
-.bv-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: var(--bv-r-sm); background: rgb(42 38 34 / 0.82); color: var(--bv-paper); font-family: var(--bv-font-mono); font-size: var(--bv-fs-xs); font-weight: 700; white-space: nowrap; }
+.bv-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: var(--bv-r-sm); background: rgb(42 38 34 / 0.82); color: var(--bv-paper); font-family: var(--bv-font-mono); font-size: var(--bv-fs-xs); font-weight: 500; white-space: nowrap; }
 .bv-tag .bv-icon { font-size: 12px; }
 .bv-tag.rare { background: #b35a3b; }
 .bv-tag.medium { background: #7c5a3a; }

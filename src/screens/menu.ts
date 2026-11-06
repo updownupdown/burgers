@@ -317,8 +317,8 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
           <h3 class="menu-h">${icon("truck")}App</h3>
           ${row("update", "update", "Check for updates", "", "")}
           ${d.canInstall() ? row("install", "pin", "Install the app", "Add Bun Voyage to your home screen and play offline", "") : ""}
-          ${row("newtrip", "flag", "Start a new trip", "Back to the first town with an empty garage.", "", 'data-tone="danger"')}
-          ${confirmBox("newtrip", `${inShift ? "End this shift and start over?" : "Start over?"} Savings, bonuses, looks, popularity and reviews all reset. Town bests are kept.`, "Start over")}
+          ${row("newtrip", "flag", "Start a new trip", "Back to the first town. Looks and stamps come with you.", "", 'data-tone="danger"')}
+          ${confirmBox("newtrip", `${inShift ? "End this shift and start over?" : "Start over?"} Savings, bonuses, popularity and reviews reset. Looks, stamps, the postcard book and town bests are kept.`, "Start over")}
         </section>
         ${inShift || !d.simulate ? "" : devHtml()}
         <p class="menu-build bv-mono" ${inShift || !d.simulate ? "" : 'data-m="build"'}>${esc(buildLabel())}</p>

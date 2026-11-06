@@ -1,6 +1,7 @@
 import type { CrowdId } from "./business";
 import type { DrinkId, FryKind, Garnish, Kind } from "./types";
 import { HOUSE_DRINKS, STANDARD_COUNT } from "./types";
+import { tripState } from "./tripstate";
 
 export interface Recipe {
   name: string;
@@ -180,6 +181,8 @@ const PEAR_BLUE: Recipe = { name: "Pear & Blue", price: 12, layers: ["dough", "b
 const CALZONE: Recipe = { name: "Calzone", price: 14, layers: ["dough", "redsauce", "mozzarella", "ham", "mushroom"], toasted: true, pie: "calzone", melt: true, counts: { mozzarella: 3, ham: 2, mushroom: 3 }, from: 0.2 };
 /** The Harvest fair special at Larkvale: a loaded flatbread with everything from the fair. */
 const HARVEST_FAIR: Recipe = { name: "Harvest Fair", price: 15, layers: ["dough", "redsauce", "mozzarella", "ham", "mushroom", "pear", "basil"], toasted: true, pie: "flatbread", melt: true, counts: { mozzarella: 3, ham: 3, mushroom: 3, pear: 3 }, from: 0.1 };
+/** The last night of the trip at Port Amber (DESIGN §50): olive oil, ham, pear and fig, honey after the oven. */
+const HARBOR_LIGHTS: Recipe = { name: "Harbor Lights", price: 16, layers: ["dough", "oil", "mozzarella", "ham", "pear", "fig", "honey"], toasted: true, pie: "flatbread", melt: true, counts: { mozzarella: 3, ham: 3, pear: 3, fig: 3 }, from: 0.1 };
 
 const PINES_PANTRY: Kind[] = ["bun", "patty", "bacon", "egg", "cheese", "lettuce", "tomato", "onion", "pickle"];
 /** The press counter's pans: breads, proteins and the tuna well behind the press, fillings in the cold rail. */
@@ -592,8 +595,27 @@ export const EVENTS: TownEvent[] = [
   },
 ];
 
+/**
+ * The last night of the trip (DESIGN §50): the first pass at Port Amber puts it on from the next
+ * day (finale.ts), and it stays on there until it has been worked. Not in EVENTS: it keeps no
+ * calendar of its own.
+ */
+export const FINALE: TownEvent = {
+  id: "finale",
+  name: "Last night of the trip",
+  town: FINAL_TOWN,
+  day: 0,
+  every: 1,
+  crowd: "party",
+  busy: 1.5,
+  longer: 40,
+  blurb: "Lanterns on the harbor wall and a brass band on the quay. The whole town is out to see the truck off.",
+  special: HARBOR_LIGHTS,
+};
+
 /** The event on in a town on a given day, if any. */
 export function eventOn(town: string, day: number): TownEvent | null {
+  if (town === FINAL_TOWN && tripState.finaleFrom !== null && day >= tripState.finaleFrom) return FINALE;
   return EVENTS.find((e) => e.town === town && day >= e.day && (day - e.day) % e.every === 0) ?? null;
 }
 

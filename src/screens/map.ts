@@ -1,6 +1,7 @@
 import { mix } from "./ink";
 import { truckGroup } from "./truckart";
 import type { Look } from "../game/looks";
+import { stampSlots, type StampBook } from "../game/stamps";
 import { eventOn, LINKS, REGIONS, STOPS, townById, type RegionId } from "../game/stops";
 import { MILES_PER_UNIT, unlockProgress } from "../game/travel";
 import "./map.css";
@@ -918,6 +919,8 @@ export interface MapState {
   look: Look;
   /** Open towns whose bonus a great shift would still unlock: a small gold mark by the name. */
   bonusHere: readonly string[];
+  /** The postcard book's stamps (game/stamps.ts): earned ones show as small squares under the town. */
+  stamps?: StampBook;
   /**
    * Screen px per map unit at scale 1 (the home screen's fit). The SVG is drawn at that size, so
    * a redrawn map is never left unsized: an <svg> with only a viewBox lays out as 0 x 0 inside the
@@ -1002,6 +1005,13 @@ export function renderMap(st: MapState): string {
     // The bonus diamond sits up and to the left of the node, or to its right when the name is above.
     const prizeAt = place.side === "above" ? [r + 1.6, -0.2] : [-r - 1.3, -r - 0.6];
     const prize = isOpen && st.bonusHere.includes(t.id) ? `<path class="prize" transform="translate(${f(prizeAt[0])} ${f(prizeAt[1])})" d="M0 -1.25L1 0L0 1.25L-1 0Z"/>` : "";
+    // Stamps earned here (DESIGN §50): a row of small squares under the pips' place, gold from a later trip.
+    const page = st.stamps?.[t.id] ?? {};
+    const got = stampSlots(t.id).filter((id) => page[id]);
+    const stampY = pipY + (pips ? 1.7 : 0);
+    const stamps = got.length
+      ? `<g class="stamps" transform="translate(0 ${f(stampY)})">${got.map((id, i) => `<rect class="stamp${page[id] === 2 ? " gold" : ""}" x="${f((i - (got.length - 1) / 2) * 1.75 - 0.65)}" y="-0.65" width="1.3" height="1.3" rx="0.18"/>`).join("")}</g>`
+      : "";
     // The marker and its name keep a readable size on screen as the map zooms (see --mk in home.css).
     return `<g class="${classes}" data-town="${t.id}" transform="translate(${t.x} ${t.y})">
       <circle class="hit" r="7.5"/>
@@ -1011,7 +1021,7 @@ export function renderMap(st: MapState): string {
         <circle class="node" r="${r}"/>
         <path class="kind" data-region="${t.region}" d="${KITCHEN_GLYPH[t.region]}"/>
         <text class="tname" x="${f(place.dx)}" y="${f(place.dy)}" style="text-anchor:${place.anchor}">${label}</text>
-        ${pips}${flag}${lock}${prize}
+        ${pips}${stamps}${flag}${lock}${prize}
       </g>
     </g>`;
   }).join("");

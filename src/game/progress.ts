@@ -6,6 +6,7 @@ import type { TimeOfDay } from "./day";
 import { validShift, type ShiftWindow } from "./shift";
 import { FINAL_TOWN, REGION_START_IDS, START_TOWN, STOPS, townById } from "./stops";
 import { SHIFTS_TO_UNLOCK } from "./travel";
+import { seedStamps, type StampBook } from "./stamps";
 
 /** How well known a brand new truck is (10..100): enough for a few people to stop by. */
 export const START_POPULARITY = 25;
@@ -71,6 +72,21 @@ export interface Save {
   regulars?: Record<string, number>;
   /** Recent press, newest first. */
   press: PressPiece[];
+  /**
+   * The trip, its end and what carries over (DESIGN §50). Which lap of the road this is (1 on
+   * the first; a new trip after reaching Port Amber goes up by one). Kept by a new trip.
+   */
+  tripNo?: number;
+  /** The last night at Port Amber: on from day `from` once the road is done, until worked. Reset by a new trip. */
+  finale?: { from: number; done: boolean } | null;
+  /** Shifts worked this trip (passed or not), for the trip card. Reset by a new trip. */
+  worked?: number;
+  /** The best order served this trip, for the trip card. Reset by a new trip. */
+  tripBest?: { name: string; score: number; town: string } | null;
+  /** The postcard book's stamps per town (1 earned, 2 gold, on a later trip). Kept by a new trip. */
+  stamps?: StampBook;
+  /** Orders served at five stars, per dish name, ever. Kept by a new trip. */
+  fives?: Record<string, number>;
 }
 
 /** Everything the Closing screen shows about today's shift, kept until the truck sleeps. */
@@ -112,6 +128,10 @@ export interface Closing {
   shift: ShiftWindow;
   /** The shift's pacing: a great shift on Busy gets its own line on the report card. */
   pacing?: "chill" | "balanced" | "stressful";
+  /** The last night of the trip: the evening map shows the trip card, not the report card. */
+  finale?: boolean;
+  /** Postcard stamps this shift earned or turned gold (stamps.ts), for the report card. */
+  stamped?: string[];
 }
 
 /**
@@ -255,6 +275,13 @@ export function migrateSave(p: Partial<Save> & Record<string, unknown>): Save {
   for (const [id, v] of Object.entries(s.best)) if (!(Number(v) > 0)) delete s.best[id];
   // Today's Closing outlives an evening hop to another town; only a stale or partial one goes.
   if (s.last && (!todaysClosing(s) || typeof s.last.takings !== "number" || typeof s.last.bank !== "number")) s.last = null;
+  // The trip's end (DESIGN §50). Saves from before it: a truck that has reached Port Amber is still
+  // on that trip (and gets its last night there); one that started over after reaching it is on the next.
+  const finished = s.passedTowns.includes(FINAL_TOWN);
+  if (!(Number(p.tripNo) >= 1)) s.tripNo = finished ? Math.max(1, s.trips | 0) : (s.trips | 0) + 1;
+  if (p.finale === undefined) s.finale = finished ? { from: s.day, done: false } : null;
+  if (!p.stamps || typeof p.stamps !== "object") s.stamps = seedStamps(s);
+  if (!p.fives || typeof p.fives !== "object") s.fives = {};
   return s;
 }
 

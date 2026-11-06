@@ -268,6 +268,7 @@ const SHORT_NAME: Record<string, string> = {
   "Pear & Blue": "Pear Bl",
   Calzone: "Calzone",
   "Harvest Fair": "Fair",
+  "Harbor Lights": "Lights",
   Poutine: "Poutine",
 };
 

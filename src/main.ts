@@ -7,7 +7,9 @@ import { expectedCustomers, regionShifts, sleep } from "./game/day";
 import { greatShift, togglePick, townBonus, validPicks, type BonusId } from "./game/bonus";
 import { cookTime, shiftStretch } from "./game/pace";
 import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, validShift, type ShiftWindow } from "./game/shift";
-import { freshSave, loadSave, passed, passTown, todaysClosing, writeSave, type Closing } from "./game/progress";
+import { loadSave, passed, passTown, todaysClosing, writeSave, type Closing } from "./game/progress";
+import { finishFinale, noteShift, queueFinale, startNewTrip, syncTrip } from "./game/finale";
+import { noteFive, stampShift } from "./game/stamps";
 import { eventOn, fountainFor, fryerOf, garnishFor, garnishOf, middleOf, townById, withEvent, withLearned, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
 import { DIFFICULTY, verdict, type Difficulty } from "./game/difficulty";
@@ -122,6 +124,8 @@ function applyGfx(level: Gfx): void {
 const ui = buildUi(document.getElementById("ui")!, PAGES);
 
 const save = loadSave();
+// Port Amber's last night and a lap's bigger crowd follow the save (game/finale.ts).
+syncTrip(save);
 if (!pickedPacing && !save.tutorialDone) difficulty = "chill";
 /** The town being worked: its event today and the tools learned further down its road. */
 const stop = () => withEvent(withLearned(townById(game.town), save.shiftsIn), game.event);
@@ -164,7 +168,7 @@ const game = {
   served: 0,
   lost: 0,
   stars: [] as number[],
-  best: null as { name: string; score: number } | null,
+  best: null as { name: string; score: number; dish?: string } | null,
   spawned: 0,
   /** Customers who have reached the window and ordered. */
   ordered: 0,
@@ -663,9 +667,11 @@ function serve(i: number): void {
   game.stars.push(r.stars);
   if (r.stars >= 4) {
     save.known[s.order.name] = (save.known[s.order.name] ?? 0) + 1;
+    // Five-star dishes fill their row in the postcard book (game/stamps.ts).
+    if (s.order.layers.length) noteFive(save, s.order.name, r.stars);
     writeSave(save);
   }
-  if (!game.best || r.score > game.best.score) game.best = { name: `#${s.order.id} ${s.order.name} (${r.score}%)`, score: r.score };
+  if (!game.best || r.score > game.best.score) game.best = { name: `#${s.order.id} ${s.order.name} (${r.score}%)`, score: r.score, dish: s.order.name };
   // Everyone shows a face; only something specific (missing, wrong, especially quick or good) gets words.
   const say = opinionLine({ stars: r.stars, missing: r.missing, notes: r.notes, perks: r.perks, patience: s.patience / s.maxPatience }, game.rng);
   customerLeaves(i, r.stars, say, reviewed, r.stars === 4 && !r.missing && r.notes.length > 0);
@@ -4810,10 +4816,7 @@ ui.root.addEventListener("click", (e) => {
         btn!.textContent = "Tap again to start over (towns and bonuses reset)";
         break;
       }
-      Object.assign(save, freshSave(), { tutorialDone: save.tutorialDone, trips: save.trips, best: save.best });
-      game.mapSel = save.town;
-      writeSave(save);
-      showTitle();
+      newTrip();
       break;
   }
 });
@@ -4897,17 +4900,21 @@ initMenu({
   },
   simulate: (level) => {
     simulate(save, level === null ? null : (level as SimLevel));
+    syncTrip(save);
     game.mapSel = save.town;
     writeSave(save);
     if (game.phase === "title") showTitle();
   },
-  newTrip: () => {
-    Object.assign(save, freshSave(), { tutorialDone: save.tutorialDone, trips: save.trips, best: save.best });
-    game.mapSel = save.town;
-    writeSave(save);
-    showTitle();
-  },
+  newTrip: () => newTrip(),
 });
+
+/** Start a new trip (game/finale.ts): looks, stamps and the postcard book are kept; after a finish it's the next lap. */
+function newTrip(): void {
+  startNewTrip(save);
+  game.mapSel = save.town;
+  writeSave(save);
+  showTitle();
+}
 
 ui.menuBtn.addEventListener("click", () => {
   if (game.phase === "playing") {
@@ -5191,6 +5198,7 @@ function showTitle(night: NightShow | null = null, arrive: Arrival | null = null
     },
     openSettings: () => openSettings(),
     openHowTo: () => openHowTo(),
+    newTrip: () => newTrip(),
     sfx: { whoosh: () => sfx.whoosh(), coin: () => sfx.coin(), tap: () => sfx.unlock() },
   });
   game.mapSel = save.town;
@@ -5380,6 +5388,14 @@ function endShift(arrive: Arrival): void {
     if (great || askMet()) passTown(save, here.id);
     if (lastStop) save.trips++;
   }
+  // The end of the trip (game/finale.ts): the road's done, so Port Amber holds the last night from
+  // tomorrow; and that night, once worked, ends on the trip card.
+  const finale = game.event?.id === "finale";
+  if (lastStop) queueFinale(save);
+  if (finale) finishFinale(save);
+  noteShift(save, game.best && game.best.dish ? { name: game.best.dish, score: game.best.score } : null, here.id);
+  // Postcard stamps (game/stamps.ts), gold on a later trip.
+  const stamped = stampShift(save, { town: here.id, ok, event: !!game.event, avg });
   const opened = save.unlocked.filter((id) => !before.includes(id)).map(townById);
   // Point the map at the next new town so "Back to the map" leads somewhere.
   if (opened.length) game.mapSel = opened[0].id;
@@ -5412,6 +5428,8 @@ function endShift(arrive: Arrival): void {
     usedBonus: [...game.bonuses],
     bank: save.bank,
     shift: game.shift,
+    finale: finale || undefined,
+    stamped: stamped.length ? stamped : undefined,
   };
   save.last = closing;
   save.tutorialDone = true;

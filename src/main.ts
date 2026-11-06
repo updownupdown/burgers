@@ -54,7 +54,6 @@ import type { Slot as LookSlot } from "./game/looks";
 import { renderPrep, reviewsHtml, syncRange, toggleIngredients } from "./screens/day";
 import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, setTabArt, ticketHtml, tortillaMeter } from "./ui";
 import { icon } from "./ui/icons";
-import { esc } from "./screens/modal";
 import { DRINK_TINT } from "./render/machines";
 import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type VersionInfo } from "./update";
 import { closeAll, initMenu, openHowTo, openMenu, openMenuRef, openSettings } from "./screens/menu";
@@ -375,8 +374,11 @@ function layout(): void {
     b.style.maxWidth = `${slotW - 8}px`;
   });
   ticketsAt = "";
-  // Tips sit over the customers, clear of the receipts and the counter you're working on.
-  ui.hint.style.top = `${hudH + 6}px`;
+  // Tips have one lane, just under the HUD over the customers, clear of the receipts and the
+  // counter you're working on (the local ask is a flag in the HUD, so nothing else sits there).
+  const hudEl = ui.root.querySelector<HTMLElement>(".hud");
+  const hudBottom = hudEl?.offsetHeight ? hudEl.offsetTop + hudEl.offsetHeight : hudH;
+  ui.hint.style.top = `${hudBottom + 6}px`;
   // Turned sideways mid-shift: pause behind the "turn your phone" overlay.
   if (W > H && H < 500 && game.phase === "playing") {
     cancelPointer();
@@ -570,6 +572,7 @@ function noteServed(order: Order, r: { stars: number; touches: string[] }, patie
   const a = game.ask;
   if (!a || askMet() || !askCounts(a, askServed(r, patience))) return;
   game.askCount++;
+  if (!askMet()) showHint(`Local ask ${game.askCount}/${a.need}: ${a.text}`, 3);
   if (askMet()) {
     game.money += a.reward;
     showHint(`Local ask done: ${a.text}. +$${a.reward}, and today counts as two shifts here.`, 4);
@@ -852,13 +855,20 @@ function trayBellTap(i: number): void {
   buzz(10);
 }
 
-/** The local ask's chip, pinned at the top of the window while the shift runs (game/asks.ts). */
+/**
+ * The local ask (game/asks.ts) lives in the HUD as a small flag and its count, beside the money, so
+ * nothing sits on the window all shift. Tap it for the words (they also show on Prep and the pause
+ * card); they show as a tip when the count moves, and the ask's own tip when it's met.
+ */
 const askChip = (() => {
-  const el = document.createElement("div");
+  const el = document.createElement("button");
   el.className = "askchip";
   el.hidden = true;
-  el.setAttribute("role", "status");
-  ui.root.append(el);
+  ui.root.querySelector<HTMLElement>(".hud .chip.money")!.after(el);
+  el.addEventListener("click", () => {
+    const a = game.ask;
+    if (a) showHint(`Local ask: ${a.text} (${Math.min(game.askCount, a.need)} of ${a.need})`, 4);
+  });
   return el;
 })();
 function updateAskChip(): void {
@@ -867,16 +877,14 @@ function updateAskChip(): void {
   askChip.hidden = !show;
   if (!show || !a) return;
   const met = game.askCount >= a.need;
-  const html = `${icon("flag")}<span>${esc(a.text)}</span><b>${met ? "Done" : `${game.askCount}/${a.need}`}</b>`;
+  const n = Math.min(game.askCount, a.need);
+  const html = `${icon("flag")}<b>${n}/${a.need}</b>`;
   if (askChip.dataset.k !== html) {
     askChip.dataset.k = html;
     askChip.innerHTML = html;
     askChip.classList.toggle("met", met);
+    askChip.setAttribute("aria-label", `Local ask: ${a.text}, ${met ? "done" : `${n} of ${a.need}`}`);
   }
-  const hud = ui.root.querySelector<HTMLElement>(".hud");
-  const top = `${Math.round((hud?.getBoundingClientRect().bottom ?? 60) + 6)}px`;
-  if (askChip.style.top !== top) askChip.style.top = top;
-  if (askChip.style.left !== "12px") askChip.style.left = "12px";
 }
 
 /** The dish on a tray draws this much bigger while its receipt is folded (PlateView.boost). */
@@ -965,7 +973,7 @@ ui.hintClose.addEventListener("click", (e) => {
     if (!start || e.pointerId !== start.id) return;
     const dx = e.clientX - start.x;
     const dy = Math.min(0, e.clientY - start.y);
-    ui.hint.style.transform = `translate(calc(-50% + ${dx}px), ${dy}px)`;
+    ui.hint.style.transform = `translate(${dx}px, ${dy}px)`;
     ui.hint.style.opacity = `${Math.max(0.2, 1 - Math.hypot(dx, dy) / 160)}`;
   });
   const end = (e: PointerEvent) => {

@@ -50,7 +50,7 @@ export function showWelcome(o: { pacing: Difficulty; done(tutorial: boolean, chi
         <p class="bv-body">You run a food truck on a road trip. Cook what each ticket asks for, keep the line happy, and open the road to new towns and new dishes.</p>
         <div class="welcome-sw">
           ${sw("tutorial", "help", "Tutorial mode", "A see-through thumb shows you each move the first time. Change it in Settings.", tutorial)}
-          ${sw("chill", "timer", "Start on Relaxed", "Fewer customers, ready alerts, food that keeps and a forgiving first day. Off: Steady, a steady rush. Change it on Prep.", chill)}
+          ${sw("chill", "timer", "Start on Relaxed", "Fewer customers, more patience, food that keeps and a forgiving first day. Off: Steady, the full lunch crowd. Change it on Prep.", chill)}
         </div>
       </div>
       <footer class="welcome-foot"><button class="bv-btn primary lg block" data-w="go">${icon("play")}Start the trip</button></footer>`,

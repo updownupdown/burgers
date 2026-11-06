@@ -1,4 +1,4 @@
-// The map dock never cuts off text (DESIGN §43): every town at 320, 360 and 390 px, morning and evening,
+// The map dock never cuts off text (DESIGN §46): every town at 320, 360 and 390 px, morning and evening,
 // and on its event day, checks the town's name and the line under it for overflow and prints PASS/FAIL. With OUT= it also
 // saves one sheet per width of every town's dock (`<OUT>dock-<w>.png`).
 // PORT=4191 [OUT=dir/] node tools/playtest/dock-fit.cjs
@@ -28,17 +28,23 @@ const out = process.env.OUT;
           const t = d.querySelector('.bv-caption .t') || d.querySelector('.bv-caption');
           const btn = d.querySelector('.home-dock-row > .bv-btn');
           const over = (el) => el && el.scrollWidth > el.clientWidth + 0.5;
-          return { name: name.textContent, size: getComputedStyle(name).fontSize, nameCut: over(name), line: t ? t.textContent : '', lineCut: over(t), btnCut: over(btn) };
+          // The button must sit inside the dock's padding, not run over its edge.
+          const dr = d.getBoundingClientRect();
+          const btnOut = btn.getBoundingClientRect().right > dr.right - parseFloat(getComputedStyle(d).paddingRight) + 0.5;
+          return { name: name.textContent, size: getComputedStyle(name).fontSize, nameCut: over(name), line: t ? t.textContent : '', lineCut: over(t), btnCut: over(btn) || btnOut };
         });
         const ok = !r.nameCut && !r.lineCut && !r.btnCut;
         if (!ok) fails++;
         console.log(`${ok ? 'PASS' : 'FAIL'} ${w}px ${time.padEnd(7)} ${r.name.padEnd(16)} ${r.size} | ${r.line}${r.nameCut ? ' [name cut]' : ''}${r.lineCut ? ' [line cut]' : ''}${r.btnCut ? ' [button cut]' : ''}`);
-        if (out && time === 'morning') shots.push(await (await p.$('.home-dock')).screenshot());
+        if (out && time === 'morning') {
+          const bb = await (await p.$('.home-dock')).boundingBox();
+          shots.push(await p.screenshot({ clip: { x: 0, y: bb.y - 6, width: w, height: bb.height + 12 } }));
+        }
       }
     }
     if (out) {
-      const html = `<body style="margin:0;background:#2a3340;display:grid;gap:6px;padding:6px;width:${w}px">${shots.map((s) => `<img style="width:${w - 20}px;margin-left:4px" src="data:image/png;base64,${s.toString('base64')}">`).join('')}</body>`;
-      await p.setViewportSize({ width: w + 12, height: 400 });
+      const html = `<body style="margin:0;background:#2a3340;display:grid;gap:6px;padding:6px 0;width:${w}px">${shots.map((s) => `<img style="width:${w}px" src="data:image/png;base64,${s.toString('base64')}">`).join('')}</body>`;
+      await p.setViewportSize({ width: w, height: 400 });
       await p.setContent(html);
       await p.screenshot({ path: `${out}dock-${w}.png`, fullPage: true });
     }

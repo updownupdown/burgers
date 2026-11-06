@@ -27,6 +27,7 @@ import { HOME_PAGE } from "../scenes/counter";
 import type { TrayView } from "../scenes/tray";
 import type { EggStage } from "../render/egg";
 import { isLearned, okDone, type Box, type Gesture, type Pt, type Show, type Step } from "./coach";
+import { counterLessons } from "./counters";
 
 /** What the lessons read from the game. main.ts hands this over once. */
 export interface CoachWorld {
@@ -52,7 +53,8 @@ export interface KitchenSlot {
 }
 
 export interface KitchenWorld {
-  game: { slots: KitchenSlot[]; active: number; line: unknown[]; tutorial: boolean; served: number; pacing: string };
+  /** `guide`: the kitchen whose first order is being guided this shift; `guided`: the one just taught (counters.ts). */
+  game: { slots: KitchenSlot[]; active: number; line: unknown[]; tutorial: boolean; served: number; pacing: string; guide?: string | null; guided?: string | null };
   counter: CounterView;
   trayView: TrayView;
   /** Viewport point of a world point in a band of the 3D view. */
@@ -80,6 +82,12 @@ export interface KitchenWorld {
   windowCap(): number;
   /** Running counts of things the player has done, for lessons that end when they've done it. */
   counts: { bell: number; folds: number; opens: number };
+  /** The counter close-up (sauce on bread in a press bay, the oven's ladle) while it's open: its middle and half its side, viewport px. */
+  closeUp?(): { x: number; y: number; r: number } | null;
+  /** Where that close-up opens, before it does. */
+  closeUpFinal?(): { x: number; y: number; r: number };
+  /** The oven's ladle (or oil bottle) is in hand, spreading. */
+  ladling?(): boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -767,7 +775,8 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
 /** Every lesson, in the order they take priority. */
 export function lessons(w: CoachWorld): Step[] {
   // In the truck the card keeps clear of the tickets: they're what the player is reading.
-  const kitchen = lessonStepsKitchen(w).map((st): Step => ({
+  // The guided first order at a new kitchen (counters.ts) comes first while it runs.
+  const kitchen = [...counterLessons(w), ...lessonStepsKitchen(w)].map((st): Step => ({
     ...st,
     show: () => {
       const sh = st.show();

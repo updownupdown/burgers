@@ -60,7 +60,8 @@ import { buildLabel, registerServiceWorker, reloadTo, startUpdateChecks, type Ve
 import { closeAll, initMenu, openHowTo, openMenu, openMenuRef, openSettings } from "./screens/menu";
 import { dropBack, pushBack } from "./screens/nav";
 import { devOn, simulate, type SimLevel } from "./game/devmode";
-import { coachOn, coachShowing, coachState, setCoachOn, skipLessonsFor, startCoach } from "./tutorial/coach";
+import { coachOn, coachShowing, coachState, isLearned, markLearned, setCoachOn, skipLessonsFor, startCoach } from "./tutorial/coach";
+import { guidedKey, guidedKitchen, guidedRecipe, type NewKitchen } from "./game/guided";
 import { lessons } from "./tutorial/lessons";
 import { ACTION_TIPS, HintLane, type TipOpts } from "./game/hintlane";
 import { newHere, offerSteady, relaxedStreak, roadsAhead } from "./game/teaching";
@@ -175,6 +176,9 @@ const game = {
   orderSeq: 1,
   active: 0,
   tutorial: true,
+  /** The new kitchen whose first order the coach is guiding this shift (game/guided.ts, DESIGN §48), and the one it has just taught. */
+  guide: null as NewKitchen | null,
+  guided: null as NewKitchen | null,
   /** The trip's first day on Relaxed: nothing scores under four stars and only happy customers review. */
   gentle: false,
   town: save.town,
@@ -430,6 +434,12 @@ function spawnCustomer(slotIdx: number, seed: number, early?: Order): void {
     if (drink) order.ice = null;
   }
   s.lesson = lesson;
+  // A new kitchen's guided first order (DESIGN §48): its simplest dish, plain, no sides.
+  const firstDish = game.guide && game.ordered === 0 ? guidedRecipe(shopStop().menu, game.guide) : null;
+  if (firstDish) {
+    order = orderFromRecipe(order.id, firstDish, false, null, [], "S", "S");
+    s.lesson = 0;
+  }
   s.order = order;
   // The plate is kept: the slot was free, so anything on it was put there ahead for whoever steps up
   // (served, refused and walked-out trays are cleared when they leave).
@@ -697,6 +707,12 @@ function serve(i: number): void {
   if (game.tutorial && s.lesson === 1) {
     save.tutorialDone = true;
     writeSave(save);
+  }
+  // A new kitchen's guided order served: learned, and the clock starts.
+  if (game.guide && s.lesson === 0) {
+    markLearned(guidedKey(game.guide));
+    game.guided = game.guide;
+    game.guide = null;
   }
   s.lesson = -1;
 }
@@ -5040,6 +5056,9 @@ function startShift(): void {
     active: 0,
     // The guided shift's lessons are the grill's: anywhere else a replayed tutorial is a normal shift.
     tutorial: !save.tutorialDone && middleOf(stop()) === "grill",
+    // The press, comal and oven each guide their first order instead (DESIGN §48).
+    guide: guidedKitchen({ middle: middleOf(stop()), coach: coachOn(), learned: isLearned, shiftsIn: save.shiftsIn, replay: !save.tutorialDone }),
+    guided: null,
     comped: 0,
     reviews: [],
     line: [],
@@ -5569,7 +5588,8 @@ function tick(dt: number): void {
     // The first shift's guided orders (tutorial/lessons.ts): the clock waits while the first two are
     // talked through, and people come one at a time. The first customer; once they're served, the
     // next; and once that burger is under way, one more waits in line so the bell gets rung.
-    const guiding = game.tutorial && game.served < 2;
+    // A new kitchen's guided first order (DESIGN §48) holds the clock the same way, until it's served.
+    const guiding = (game.tutorial && game.served < 2) || (!!game.guide && game.served < 1);
     if (!(guiding && game.ordered >= 1)) game.time += dt;
     let due = game.time >= game.nextSpawn;
     if (guiding && game.ordered >= 1) {
@@ -6490,6 +6510,17 @@ startCoach(
       holding: () => !!counter.inHand || !!eggHand || ptr?.mode === "held",
       windowCap: () => WINDOW[game.pacing],
       counts: coachCounts,
+      // The counter close-up (press sauce, the oven's ladle) opens over ladleFinal() (DESIGN §48 lessons).
+      closeUp: () => {
+        if (!(benchZoomOn && benchZoom.eased > 0.85) && !(ladleZoomOn && ladleZoom.eased > 0.85)) return null;
+        const f = ladleFinal();
+        return { x: colX + f.x + f.w / 2, y: f.y + f.h / 2, r: f.w / 2 };
+      },
+      closeUpFinal: () => {
+        const f = ladleFinal();
+        return { x: colX + f.x + f.w / 2, y: f.y + f.h / 2, r: f.w / 2 };
+      },
+      ladling: () => !!ladle,
     },
   }),
   { paused: () => modalOpen() || (game.phase === "playing" && document.hidden) },

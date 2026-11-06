@@ -38,9 +38,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Hashed build assets never change: cache first. Fonts and icons: cache, refresh in the background.
+  // Hashed build assets (the bundled fonts among them) never change: cache first. Icons: cache, refresh in the background.
   const sameOrigin = url.origin === self.location.origin;
-  if (sameOrigin || url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com")) {
+  if (sameOrigin) {
     event.respondWith(
       caches.match(req).then((hit) => {
         const net = fetch(req)

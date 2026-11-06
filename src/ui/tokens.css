@@ -17,6 +17,7 @@
  * so every screen follows without a rename: paprika is now coral, olive is pine, amber is
  * butter and night is dusk.
  */
+@import "../fonts/fonts.css";
 :root {
   /* colour */
   --bv-paper: #f6f2ea;

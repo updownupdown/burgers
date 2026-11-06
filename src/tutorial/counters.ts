@@ -188,7 +188,7 @@ export function counterLessons(w: CoachWorld): Step[] {
         ? `Drag a ${label(next.kind)} into the open bay: the panini is built right there in the press.`
         : `The top ${label(next.kind)} closes the sandwich.`
       : n > 1
-        ? `${KIND_LABEL[next.kind]} ×${n}: drag ${have ? "one more" : "one"} onto the bread. ${have} of ${n}.`
+        ? `${KIND_LABEL[next.kind]} ×${n}: drag ${have ? "more" : "it"} onto the bread until the ticket has them all. ${have} of ${n}.`
         : `Drag the ${label(next.kind)} on.`;
     return { title: BREADS.has(next.kind) ? (got.length === 0 ? "Bread first" : "Top bread") : KIND_LABEL[next.kind], text, gesture: from ? { kind: "drag", from, to: target } : null };
   };
@@ -266,7 +266,7 @@ export function counterLessons(w: CoachWorld): Step[] {
       const from = bin(l.kind);
       const scoop = l.kind === "pork" || l.kind === "beans";
       const text = scoop
-        ? `One drag from the ${label(l.kind)} well is one scoop into one taco. ${got} of ${n}.`
+        ? `Drag ${label(l.kind)} from its well into the rack: each taco gets a scoop. ${got} of ${n}.`
         : l.kind === "lime"
           ? "Drag a lime wedge in. It sits beside the tacos."
           : `Drag the ${label(l.kind)} in once: it goes over every taco in the rack.`;
@@ -319,6 +319,7 @@ export function counterLessons(w: CoachWorld): Step[] {
         title: pale >= sc.over ? "Quick!" : "Done!",
         text: "Lift it out: press the peel's handle and push the blade straight in under the pie. Then let go: the peel comes back with it.",
         gesture: { kind: "drag", from: handle, to: lift },
+        ring: ringAround(project(sp), 110, 60),
         urgent: pale >= sc.over,
       };
     }
@@ -355,7 +356,7 @@ export function counterLessons(w: CoachWorld): Step[] {
       const got = countIn(pie, l.kind);
       if (got >= n) continue;
       const from = bin(l.kind);
-      return { title: KIND_LABEL[l.kind], text: n > 1 ? `${KIND_LABEL[l.kind]} ×${n}: drag one at a time onto the pie. ${got} of ${n}.` : `Drag the ${label(l.kind)} onto the pie.`, gesture: from ? { kind: "drag", from, to: peelAt } : null };
+      return { title: KIND_LABEL[l.kind], text: n > 1 ? `${KIND_LABEL[l.kind]} ×${n}: drag it onto the pie until the ticket has them all. ${got} of ${n}.` : `Drag the ${label(l.kind)} onto the pie.`, gesture: from ? { kind: "drag", from, to: peelAt } : null };
     }
     // Built: into the oven.
     const free = spots.findIndex((p) => !p.layers.length);
@@ -363,8 +364,10 @@ export function counterLessons(w: CoachWorld): Step[] {
     const sp = c.spotPoint(free);
     return {
       title: "Into the oven",
-      text: "Press the peel's handle, carry the pie over a free spot in the oven, and flick down to slide it off.",
+      text: "Press the peel's handle and carry it until the pie is over the ringed spot in the oven. Then flick down to slide it off.",
       gesture: flickDown(handle, handleFor(sp.x, sp.z)),
+      // The finger stays near the handle; the ring shows where the pie itself goes.
+      ring: ringAround(project(sp), 110, 60),
     };
   };
 

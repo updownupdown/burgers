@@ -498,6 +498,8 @@
 .menu-group > :last-child { border-bottom: 0; }
 /* Settings' App group ends in Start a new trip with its confirm hidden after it: the row is the last thing seen, so no rule under it. */
 .menu-group > :has(+ .menu-confirm[hidden]:last-child) { border-bottom: 0; }
+/* A switch says on or off by itself (and aria-checked says it aloud): no "On"/"Off" word beside it (DESIGN §43). */
+.menu-toggle > .state { display: none; }
 .menu-group .menu-dev .menu-field { border-bottom: 0; }
 .menu-groups > .menu-build { margin-top: 8px !important; }
 

@@ -73,3 +73,12 @@
 .welcome-body { display: grid; gap: 12px; }
 .welcome-sw { display: grid; }
 .welcome-foot { padding: 4px 16px 16px; }
+
+/* The first thing a new player sees is the mark and the name (DESIGN §43): a slate band over the pitch. */
+.menu-card.welcome { overflow: hidden; }
+.welcome-hero { display: grid; justify-items: center; gap: 6px; padding: 26px 18px 20px; background: var(--bv-night); color: var(--bv-on-night); text-align: center; }
+.welcome-hero .mark { width: 52px; height: 52px; display: block; }
+.welcome-hero .wm { margin: 0; display: grid; font: 400 40px/0.92 var(--bv-font-serif); letter-spacing: -0.01em; color: var(--bv-on-night); }
+.welcome-hero .wm .w2 { color: var(--bv-amber); }
+.welcome-hero .bv-eyebrow { margin-top: 8px; color: var(--bv-mute); }
+.welcome .welcome-body { padding-top: 16px; }

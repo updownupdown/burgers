@@ -23,6 +23,7 @@ import type { DrinkId, FriesSize, FryKind, Garnish, Layer, Order, Piece, Plate, 
 import { GARNISH_LABEL } from "./game/types";
 import { makeGarnish } from "./render/models/garnish";
 import { countRegular, REGULAR_AT, REGULAR_GOAL, REGULAR_POP, regularOrder } from "./game/regulars";
+import { RegularTags } from "./ui/regulars";
 import { AFTER_OVEN, BREADS, COMAL_FILL, COUNTED, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, FRY_LABEL, fryOf, GRILLABLE, isSauce, KIND_LABEL, newPiece, pressable, PROTEINS, sauceRadius, SCOOPED, SIZE_LABEL, SUGARED, TORTILLAS, unfoldTortilla } from "./game/types";
 import { SCALE } from "./render/units";
 import { dressCup } from "./render/cup";
@@ -306,6 +307,8 @@ const bands = { customers: { x: 0, y: 0, w: 0, h: 0 } as Rect, tray: {} as Rect,
 let colX = 0;
 /** Where the order rail sits in the customers band (CSS px from the top). */
 let railTop = 100;
+/** The town's regular's name tag over their head (ui/regulars.ts). */
+const regularTags = new RegularTags(ui.root);
 /** Where the receipts were last placed, so they're only moved when focus or the orders change. */
 let ticketsAt = "";
 /** The focused order's ticket is opened out. Tapping it folds it back; tapping a stub opens that one. */
@@ -376,6 +379,8 @@ function layout(): void {
     b.style.top = `${railY - 6}px`;
     b.style.maxWidth = `${slotW - 8}px`;
   });
+  // The regular's name tag sits where bubbles go, over their head (DESIGN §51).
+  regularTags.place(w, railY * 0.58);
   ticketsAt = "";
   // Tips have one lane, just under the HUD over the customers, clear of the receipts and the
   // counter you're working on (the local ask is a flag in the HUD, so nothing else sits there).
@@ -5717,7 +5722,9 @@ function updateUi(dt = 0): void {
   updateTrayActs();
   const len = game.shiftLength;
   const left = Math.max(0, len - game.time);
-  const tText = game.phase === "sundown" ? "Closed" : left > 0 ? clockLabel(clockAt(game.time, game.shift, len)) : "Closing";
+  // Closing (DESIGN §51): the clock says how many are still to serve, at the window and in line.
+  const toServe = game.line.length + game.slots.filter((s) => s.order && !s.leaving).length;
+  const tText = game.phase === "sundown" ? "Closed" : left > 0 ? clockLabel(clockAt(game.time, game.shift, len)) : toServe > 0 ? `${toServe} left to serve` : "Closing";
   if (tText !== lastTimerText) {
     ui.timer.textContent = tText;
     ui.timer.classList.toggle("closing", left <= 0 && game.phase !== "sundown");
@@ -5744,6 +5751,7 @@ function updateUi(dt = 0): void {
     const t = ui.tickets[i];
     const show = !!s.order && !s.leaving && game.phase !== "title";
     t.hidden = !show;
+    regularTags.sync(i, show && !s.bubble ? (s.order?.regular ?? null) : null);
     const back = ui.sentBack[i];
     const note = show && s.sentBack ? `Sent back: ${capitalise(s.sentBack)}` : "";
     back.hidden = !note;

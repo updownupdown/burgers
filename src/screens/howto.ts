@@ -488,10 +488,10 @@ function tripSecs(): Sec[] {
       title: "The day",
       lede: "Prep in the morning, a lunch shift, then the evening on the map.",
       points: [
-        "<b>Prep & Open</b>: who to expect, the menu, the shift's hours, the pacing and up to three bonuses.",
+        "<b>Prep & Open</b>: who to expect, the pacing, the shift, the local ask and your bonuses. <b>Change menu or bonuses</b> opens the rest.",
         "A longer <b>menu</b> brings more people and more kinds of order. Hide recipes to keep it simple.",
         "A <b>new town</b> starts simpler: fewer changes and sides on its first shift, and the regular and the local ask from the second. Word takes a few shifts to reach a <b>new region</b>, so its first days are quieter. A dish you've never served well comes plain the first time.",
-        "Drag the <b>shift</b> slider to open early or close late. Lunch peaks from noon to one. A shift is at least four hours.",
+        "Pick the <b>shift</b>: <b>Lunch</b> (11 to 3) or a <b>Full day</b> (10 to 4), half as long again with more customers and more takings. Lunch peaks from noon to one.",
         "At sundown the <b>Closed</b> sign goes up. The results come up over the evening map, then <b>Sleep</b> starts tomorrow.",
         "<b>Takings</b> are your score: orders and tips, less anything given away. They go into your <b>savings</b>.",
       ],

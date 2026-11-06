@@ -130,7 +130,7 @@ const tap = async (p, sel) => { await p.click(sel); await p.waitForTimeout(350);
     let seen = '';
     for (let i = 0; i < 600; i++) {
       await step(p, 1);
-      const st = await p.evaluate(() => ({ t: window.__bv.game.time, len: window.__bv.game.shiftLength, phase: window.__bv.game.phase, left: document.querySelector('.hud-left')?.textContent?.trim() || '', hidden: document.querySelector('.hud-left')?.hidden }));
+      const st = await p.evaluate(() => ({ t: window.__bv.game.time, len: window.__bv.game.shiftLength, phase: window.__bv.game.phase, left: document.querySelector('[data-r=timer]')?.textContent?.trim() || '', hidden: false }));
       if (st.t > st.len && st.left && !st.hidden && !seen) {
         seen = st.left;
         await p.waitForTimeout(200);

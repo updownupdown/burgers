@@ -68,6 +68,11 @@ import { autoStepped, FrameWatch, markAutoStepped, stepDown, storedGfx, type Gfx
 import { botQuiet, keepStorage } from "./platform";
 import { toast } from "./ui/toast";
 import { addToLog, logEntry } from "./game/shiftlog";
+import { Ambience, AMBIENCE_LEVEL } from "./ambience";
+import { applyAccess } from "./a11y";
+import { encodeSave } from "./game/savecode";
+
+applyAccess();
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -80,6 +85,8 @@ renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.setScissorTest(true);
 
 const sfx = new Sfx();
+/** The region's ambient bed, on the map and under the kitchen (src/ambience.ts). */
+const ambience = new Ambience(() => sfx.context());
 const customersView = new CustomersView();
 const trayView = new TrayView();
 const counter = new CounterView();
@@ -4836,6 +4843,16 @@ initMenu({
   subtitle: () => `Day ${save.day}`,
   counter: () => (counter.page === 0 ? "drinks" : counter.page === 2 ? "fryer" : "middle"),
   sound: () => !sfx.muted,
+  ambience: () => ambience.on,
+  setAmbience: (on) => {
+    sfx.unlock();
+    ambience.setOn(on);
+    try {
+      localStorage.setItem("bv-ambience", on ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  },
   setSound: (on) => {
     sfx.unlock();
     sfx.setMuted(!on);
@@ -4910,6 +4927,16 @@ initMenu({
     writeSave(save);
     showTitle();
   },
+  saveCode: () => encodeSave(save),
+  loadTrip: (s) => {
+    // A pasted trip replaces this one whole (Settings has checked and confirmed it). Only from the map.
+    for (const k of Object.keys(save)) delete (save as unknown as Record<string, unknown>)[k];
+    Object.assign(save, s);
+    game.mapSel = save.town;
+    writeSave(save);
+    showTitle();
+    toast("Trip loaded.", 3);
+  },
 });
 
 ui.menuBtn.addEventListener("click", () => {
@@ -4925,6 +4952,7 @@ try {
   if (localStorage.getItem("bv-muted") === "1") {
     sfx.setMuted(true);
   }
+  if (localStorage.getItem("bv-ambience") === "0") ambience.setOn(false);
 } catch {
   // ignore
 }
@@ -6361,6 +6389,8 @@ function frame(now: number): void {
   last = now;
   if (!manualClock && frameWatch.sample(frameMs, game.phase === "playing" && !game.tutorial && !coachState())) stepGfxDown();
   if (!manualClock) {
+    const inKitchen = game.phase === "playing" || game.phase === "paused" || game.phase === "sundown";
+    ambience.update(inKitchen ? stop().region : townById(save.town).region, game.phase === "paused" ? AMBIENCE_LEVEL.paused : inKitchen ? AMBIENCE_LEVEL.kitchen : AMBIENCE_LEVEL.map);
     tick(dt);
     // The home screen covers the truck completely, so skip drawing it there and save battery;
     // paused, the picture under the menu is still, so it's drawn twice and then left.

@@ -1570,7 +1570,7 @@ function restorePayload(payload: Payload): void {
     if (fromPlate !== undefined && flavor) {
       game.slots[fromPlate].plate.drink = { flavor, fill, size, ice, lid, ...(garnish ? { garnish } : {}) };
       syncTray(fromPlate, false);
-    } else if (from) counter.placeCup({ flavor, fill, size, ice, lid }, new THREE.Vector3(from.x, 0.3, from.z), true);
+    } else if (from) counter.placeCup({ flavor, fill, size, ice, lid, ...(garnish ? { garnish } : {}) }, new THREE.Vector3(from.x, 0.3, from.z), true);
   }
   if (payload.type === "carton") {
     const { size, cook, fill, salt, curds, gravy, fromPlate } = payload;
@@ -1870,7 +1870,7 @@ function takeBack(m: Move<Moved>): { show: Payload | THREE.Object3D; put: () => 
       syncTray(to.slot, false);
     } else if (to.at === "cup") {
       const cup = w.ref as DrinkCup;
-      c = { flavor: cup.flavor, fill: cup.fill, size: cup.size, ice: cup.ice, lid: cup.lid };
+      c = { flavor: cup.flavor, fill: cup.fill, size: cup.size, ice: cup.ice, lid: cup.lid, ...(cup.garnish ? { garnish: cup.garnish } : {}) };
       counter.removeCup(cup);
     } else c = pp.type === "drink" ? { flavor: pp.flavor, fill: pp.fill, size: pp.size, ice: pp.ice, lid: pp.lid, ...(pp.garnish ? { garnish: pp.garnish } : {}) } : { flavor: null, fill: 0, size: pp.size, ice: !!pp.ice, lid: false };
     const put = () => {
@@ -2553,7 +2553,7 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
     // A cup stands anywhere on the drinks counter; over a drip tray it goes under that nozzle.
     if (counter.page !== 0 || counter.overTrash(g)) return false;
     const c = payload.type === "drink" ? payload : { flavor: null, fill: 0, size: payload.size, ice: !!payload.ice, lid: false };
-    const { cup, why } = counter.placeCup({ flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid }, g);
+    const { cup, why } = counter.placeCup({ flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid, ...(payload.type === "drink" && payload.garnish ? { garnish: payload.garnish } : {}) }, g);
     if (!cup) {
       if (why) showHint(why, 2);
       return false;
@@ -3296,7 +3296,7 @@ canvas.addEventListener("pointerdown", (e) => {
     } else if (hit.type === "cup") {
       // Pick any cup up, full or empty, to move it or take it to the tray.
       const c = counter.cups[hit.idx];
-      startHold(pt, { type: "drink", flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid, from: { x: c.x, z: c.z } });
+      startHold(pt, { type: "drink", flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid, from: { x: c.x, z: c.z }, ...(c.garnish ? { garnish: c.garnish } : {}) });
       counter.removeCup(c);
     } else if (hit.type === "spill") {
       const t = counter.taps[hit.idx];

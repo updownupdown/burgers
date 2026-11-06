@@ -39,8 +39,11 @@ const MIN_FIT = 0.55;
  * the lid and straw are what you check before serving.
  */
 export const TRAY_SIDES = 0.6;
-/** The "selected" outline: a cool blue that reads against the warm wood and the food. */
-const ACTIVE_RING = "#3f7fd0";
+/**
+ * The "selected" outline: dusk slate (--bv-night), the same ink ring an active ticket wears. It reads
+ * on the wood, on the steel press bays and against the food without bringing a colour the kit lacks.
+ */
+const ACTIVE_RING = "#2a3340";
 export const TRAY_VIEW_HALF_H = 2.2;
 
 /**

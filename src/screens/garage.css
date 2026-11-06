@@ -31,6 +31,16 @@
 .gar-item.forSale .ic { background: var(--bv-paper); color: var(--bv-ink); }
 .gar-item.owned .ic { background: var(--bv-paprika-soft); color: var(--bv-paprika); }
 .gar-item.locked { opacity: 0.78; }
+/* Towns the road hasn't reached (DESIGN §46): a short row on the page's paper, no card border, the
+   town's name as its label and the price without a second lock. */
+.gar-item.far { grid-template-columns: 24px minmax(0, 1fr) auto; gap: 8px; padding: 5px 10px 5px 15px; border-color: transparent; background: transparent; opacity: 1; }
+.gar-item.far .ic { width: 24px; height: 24px; font-size: 15px; background: transparent; color: var(--bv-mute); }
+.gar-item.far .t { display: flex; align-items: baseline; gap: 8px; }
+.gar-item.far .t b { font-size: 13.5px; font-weight: 600; color: var(--bv-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gar-item.far .t small { margin-left: auto; font-size: 11px; color: var(--bv-mute); white-space: nowrap; }
+.gar-item.far .gar-lock { font-size: 12px; }
+.gar-item.far .gar-lock .bv-icon { display: none; }
+.gar-list > .gar-item.far + .gar-item.far { margin-top: -6px; }
 .gar-owned, .gar-lock { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--bv-ink-2); white-space: nowrap; }
 .gar-owned { color: var(--bv-paprika); }
 .gar-lock { font-family: var(--bv-font-mono); font-weight: 500; color: var(--bv-mute); }

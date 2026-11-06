@@ -4,7 +4,8 @@
  * pacing are both on; the card says where to change them later.
  */
 import { icon } from "../ui/icons";
-import { modalHead, popModal, pushModal } from "../screens/modal";
+import { logoStack } from "../ui/logo";
+import { popModal, pushModal } from "../screens/modal";
 import type { Difficulty } from "../game/difficulty";
 import type { Save } from "../game/progress";
 
@@ -42,8 +43,9 @@ export function showWelcome(o: { pacing: Difficulty; done(tutorial: boolean, chi
     label: "Welcome",
     cls: "welcome",
     onDismiss: finish,
-    // No ×: "Start the trip" is the one way on (Back or a tap outside does the same).
-    html: `${modalHead({ icon: "truck", title: "Welcome aboard", stacked: false }).replace(/<button[^]*?<\/button>/, "")}
+    // No ×: "Start the trip" is the one way on (Back or a tap outside does the same). The card
+    // opens as a title card: the mark and the wordmark on a slate band (DESIGN §46).
+    html: `<header class="welcome-hero bv-night"><h2 class="wm">${logoStack()}</h2><span class="bv-eyebrow">Welcome aboard</span></header>
       <div class="menu-body menu-scroll welcome-body">
         <p class="bv-body">You run a food truck on a road trip. Cook what each ticket asks for, keep the line happy, and open the road to new towns and new dishes.</p>
         <div class="welcome-sw">

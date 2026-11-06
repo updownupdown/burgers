@@ -9,10 +9,11 @@
 .rep-head .bv-eyebrow { white-space: normal; }
 .rep-body { padding-top: 2px; padding-bottom: 12px; gap: 12px; }
 
-.rep-verdict { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0; font-size: 13.5px; color: var(--bv-ink-2); font-weight: 600; line-height: 1.35; }
-.rep-stars { display: inline-flex; align-items: center; gap: 6px; flex: none; }
-.rep-stars .day-stars { font-size: 16px; letter-spacing: 1px; }
-.rep-stars .bv-mono { font-size: 13px; font-weight: 500; color: var(--bv-ink); }
+/* The shift's stars are the card's headline, the verdict a line under them (DESIGN §46). */
+.rep-verdict { display: grid; gap: 4px; margin: 0; font-size: 14.5px; color: var(--bv-ink-2); font-weight: 600; line-height: 1.35; }
+.rep-stars { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.rep-stars .day-stars { font-size: 24px; letter-spacing: 2px; }
+.rep-stars .bv-mono { font-size: 22px; font-weight: 500; color: var(--bv-ink); }
 
 .rep-reward-slot:empty { display: none; }
 .rep-reward { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 4px 10px; align-items: center; padding: 10px 12px; border-radius: var(--bv-r-lg); background: var(--bv-amber-soft); border: 1px solid var(--bv-amber); }
@@ -29,7 +30,8 @@
 .rep-sec-h { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 46px; padding: 8px 2px; font-size: 14px; text-align: left; color: var(--bv-ink); }
 .rep-sec-h > .bv-icon { font-size: 16px; color: var(--bv-mute); flex: none; }
 .rep-sec-h .l { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rep-sec-h em { font-style: normal; font-family: var(--bv-font-mono); font-weight: 500; font-size: 12.5px; color: var(--bv-ink-2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 58%; }
+/* A row's answer is words as often as numbers ("Apology cookies", "1 of 3 · 2 more"): Hanken, with tabular figures. */
+.rep-sec-h em { font-style: normal; font-family: var(--bv-font-ui); font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; color: var(--bv-ink-2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 58%; }
 .rep-sec-h em b { font-family: var(--bv-font-ui); font-weight: 700; color: var(--bv-ink); }
 .rep-sec.up .rep-sec-h em { color: var(--bv-olive); }
 .rep-sec.dn .rep-sec-h em { color: var(--bv-paprika); }

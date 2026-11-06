@@ -34,11 +34,11 @@ export function garageHtml(save: Save, v: GarageView): string {
   const preview = v.preview ? lookById(v.preview) : undefined;
   const look = preview ? { ...save.look, [preview.slot]: preview.id } : save.look;
   return `<div class="day-screen bv garage">
-    <header class="day-top">
-      <span class="day-top-ic" aria-hidden="true">${icon("garage")}</span>
-      <div class="where"><b>Garage</b></div>
+    <header class="menu-head bar">
+      <span class="menu-head-ic" aria-hidden="true">${icon("garage")}</span>
+      <div class="menu-headtext"><h2 class="bv-title">Garage</h2></div>
       <div class="gar-bank"><span class="bv-eyebrow">Savings</span><b class="bv-mono">${dollars(save.bank)}</b></div>
-      <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("close")}</button>
+      <button class="bv-btn icon sm ghost menu-x" data-act="back" aria-label="Back to the map">${icon("close")}</button>
     </header>
     <div class="day-scroll">
       <section class="gar-stage ${v.night ? "night" : ""}">
@@ -57,7 +57,8 @@ export function garageHtml(save: Save, v: GarageView): string {
 
 function bonusesHtml(save: Save): string {
   const owned = save.bonuses.length;
-  let html = `<p class="day-hint">Each town has one bonus. A great shift there (a ${GREAT.stars}★ average, ${Math.round(GREAT.served * 100)}% of orders served) unlocks it; then it's yours to buy. You own ${owned} of ${BONUSES.length}; bring up to three per shift from Prep.</p>`;
+  let html = `<p class="day-count">You own ${owned} of ${BONUSES.length} · up to three a shift, picked on Prep</p>
+    <p class="day-hint">Each town has one bonus. A great shift there (a ${GREAT.stars}★ average, ${Math.round(GREAT.served * 100)}% of orders served) unlocks it; then it's yours to buy.</p>`;
   for (const r of REGIONS) {
     const list = BONUSES.filter((b) => townById(b.town).region === r.id);
     html += `<h3 class="prep-h">${esc(r.name)}</h3><div class="gar-list">`;
@@ -71,11 +72,20 @@ function bonusesHtml(save: Save): string {
           : st === "forSale"
             ? `<button class="bv-btn sm ${save.bank >= b.price ? "primary" : ""}" data-act="gar-buy-bonus" data-v="${b.id}" ${save.bank >= b.price ? "" : "disabled"}>${dollars(b.price)}</button>`
             : `<span class="gar-lock">${icon("lock")}${dollars(b.price)}</span>`;
-      const where =
-        st === "locked" ? (reach ? `Great shift in ${esc(town)} to unlock` : `${esc(town)}, further down the road`) : st === "forSale" ? `Unlocked in ${esc(town)}` : `From ${esc(town)} · ${esc(b.best)}`;
+      // A town the road hasn't reached yet: one quiet line with the town's name and the price, not a
+      // card with a "?" in it (the town is already on the map, so its name gives nothing away).
+      if (st === "locked" && !reach) {
+        html += `<div class="gar-item far">
+          <span class="ic">${icon("lock")}</span>
+          <span class="t"><b>${esc(town)}</b><small>Further down the road</small></span>
+          ${action}
+        </div>`;
+        continue;
+      }
+      const where = st === "locked" ? `Great shift in ${esc(town)} to unlock` : st === "forSale" ? `Unlocked in ${esc(town)}` : `From ${esc(town)} · ${esc(b.best)}`;
       html += `<div class="gar-item ${st}">
-        <span class="ic">${icon(st === "locked" && !reach ? "lock" : b.icon)}</span>
-        <span class="t"><b>${st === "locked" && !reach ? "?" : esc(b.name)}</b><small>${st === "locked" && !reach ? "Visit to find out" : esc(b.text)}</small><em>${where}</em></span>
+        <span class="ic">${icon(b.icon)}</span>
+        <span class="t"><b>${esc(b.name)}</b><small>${esc(b.text)}</small><em>${where}</em></span>
         ${action}
       </div>`;
     }

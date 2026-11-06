@@ -185,14 +185,23 @@
 .home-town .prize { fill: #e1b55c; stroke: var(--home-ink); stroke-width: 0.28; stroke-linejoin: round; }
 
 /* ---- zoom buttons ------------------------------------------------------ */
-.home-zoom { position: absolute; right: 10px; top: calc(var(--safe-t) + 150px); display: grid; gap: 6px; }
+/* Zoom in and out share one capsule; find-the-truck stands on its own under it, so the three
+   buttons read as two jobs and cover less of the map (DESIGN §46). */
+.home-zoom { position: absolute; right: 10px; top: calc(var(--safe-t) + 150px); display: grid; justify-items: center; }
 .home-zoom button {
-  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  width: 40px; height: 42px; display: grid; place-items: center;
   background: var(--bv-paper-2); color: var(--bv-ink); box-shadow: var(--bv-shadow-2);
-  font-size: 18px; transition: transform var(--bv-fast) var(--bv-ease);
+  font-size: 18px; transition: background var(--bv-fast);
 }
-.home-zoom button:active { transform: scale(0.94); }
-.home-zoom button .bv-icon { font-size: 19px; }
+.home-zoom button:active { background: var(--bv-paper-3); }
+.home-zoom button .bv-icon { font-size: 18px; }
+/* The capsule is 40px wide to the eye; its tap is the full 44px. */
+.home-zoom button { position: relative; }
+.home-zoom button::after { content: ""; position: absolute; inset: 0 -2px; }
+.home-zoom [data-home="zoom-in"] { border-radius: 20px 20px 0 0; }
+.home-zoom [data-home="zoom-out"] { border-radius: 0 0 20px 20px; box-shadow: var(--bv-shadow-2), inset 0 1px 0 var(--bv-rule); }
+.home-zoom .locate { width: 44px; height: 44px; margin-top: 10px; border-radius: 50%; }
+.home-zoom .locate .bv-icon { font-size: 20px; }
 
 
 /* ---- dock (the current town, always one tap from a shift) ------------- */
@@ -203,8 +212,11 @@
   animation: home-rise 0.3s var(--bv-ease);
 }
 .home-dock[hidden] { display: none; }
-.home-dock-row { display: flex; align-items: center; gap: 10px; }
-.home-dock-row > .bv-btn.lg { flex: none; padding: 0 16px; gap: 8px; }
+.home-dock-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* Prep & Open gives back a little room to the town's name (DESIGN §46). */
+.home-dock-row > .bv-btn.lg { flex: none; padding: 0 14px; gap: 8px; }
+/* (#ui's own .bv-btn.lg size used to win over the dock's, so the narrow-phone size never applied.) */
+#ui .home-dock-row > .bv-btn.lg { font-size: 19px; }
 .home-dock .bv-btn .cost { font-family: var(--bv-font-mono); font-weight: 500; font-size: 13px; opacity: 0.8; }
 .home-dock-info { display: grid; gap: 2px; min-width: 0; flex: 1; text-align: left; }
 .home-dock-info b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 22px; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -230,7 +242,7 @@
 .home-sheet[hidden] { display: none; }
 .home-sheet-head { display: flex; align-items: flex-start; gap: 10px; padding-top: 4px; }
 .home-sheet-head > div { display: grid; gap: 6px; min-width: 0; flex: 1; }
-.home-sheet-head .bv-title { font-size: 26px; }
+.home-sheet-head .bv-title { font-size: 24px; }
 .home-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .home-tags .bv-chip { font-size: 12px; }
 .home-tags .bv-chip .bv-icon { font-size: 14px; }
@@ -334,10 +346,11 @@
   .home-pill b { font-size: 15px; }
   .home-pill small { letter-spacing: 0.02em; }
   .home-dock-info b { font-size: 20px; }
-  .home-sheet-head .bv-title { font-size: 23px; }
+  .home-sheet-head .bv-title { font-size: 22px; }
 }
 @media (max-width: 359px) {
-  .home-dock-row > .bv-btn.lg { padding: 0 12px; font-size: 18px; }
+  .home-dock-row > .bv-btn.lg { padding: 0 12px; }
+  #ui .home-dock-row > .bv-btn.lg { font-size: 18px; }
   .home-dock-row > .bv-btn.lg .bv-icon { display: none; }
   .home-pill small { letter-spacing: 0; font-size: 10px; }
   .home-pill small .bv-icon { display: none; }
@@ -390,7 +403,7 @@
 .home-night-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--bv-r-pill); background: rgb(246 242 234 / 0.12); border: 1px solid rgb(246 242 234 / 0.2); font-size: 13px; font-weight: 700; transition: background 0.6s, border-color 0.6s; }
 .home-night-chip .bv-icon { font-size: 15px; color: var(--bv-amber); }
 .home-night-chip b { font-weight: 500; font-size: 14px; }
-.home-night-chip em { font-style: normal; font-family: var(--bv-font-mono); font-size: 12px; opacity: 0.75; }
+.home-night-chip em { font-style: normal; font-family: var(--bv-font-mono); font-weight: 500; font-size: 12px; opacity: 0.75; }
 .home-night-chip em.up { color: #8fd0ae; opacity: 1; }
 .home-night-chip em.dn { color: #f09a85; opacity: 1; }
 @media (prefers-reduced-motion: reduce) {

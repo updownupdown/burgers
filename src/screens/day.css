@@ -26,19 +26,15 @@
 .day-screen .bv-mono { font-family: var(--bv-font-mono); font-weight: 500; font-variant-numeric: tabular-nums; }
 .day-screen .bv-chip.pill { border-radius: var(--bv-r-pill); }
 
-.day-top { display: flex; align-items: center; gap: 10px; padding: calc(var(--safe-t) + 10px) 12px 10px; border-bottom: 1px solid var(--bv-rule); }
-.day-top .where { display: grid; line-height: 1.05; min-width: 0; flex: 1; }
-.day-top .where b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 22px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.day-top .bv-btn.icon { border-color: transparent; width: 44px; height: 44px; }
-.day-top-ic { flex: none; display: grid; place-items: center; width: 32px; height: 32px; margin-left: 6px; color: var(--bv-ink); }
-.day-top-ic .bv-icon { width: 24px; height: 24px; }
 .day-count { margin: 0; font-size: 13px; font-weight: 700; color: var(--bv-mute); }
 
 .day-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; overscroll-behavior: contain; }
 .day-scroll > * { flex-shrink: 0; }
 .day-foot { display: flex; align-items: center; gap: 10px; padding: 10px 14px calc(var(--safe-b) + 12px); border-top: 1px solid var(--bv-rule); background: var(--bv-paper); box-shadow: 0 -6px 14px rgb(42 38 34 / 0.06); }
 .day-foot .sum { display: grid; line-height: 1.1; min-width: 0; flex: 1; }
-.day-foot .sum b { font-family: var(--bv-font-mono); font-weight: 500; font-size: 20px; white-space: nowrap; }
+/* Words in Hanken, only the number in mono ("~9 customers"). */
+.day-foot .sum b { font-family: var(--bv-font-ui); font-weight: 700; font-size: 20px; white-space: nowrap; }
+.day-foot .sum b .bv-mono { font-weight: 500; }
 .day-foot .bv-btn.lg { min-width: 140px; }
 .day-hint { font-size: 12.5px; font-weight: 600; color: var(--bv-ink-2); line-height: 1.4; }
 .day-hint b { color: var(--bv-ink); }
@@ -123,13 +119,6 @@
 
 /* ---- supplies ------------------------------------------------------------------------------ */
 
-@media (max-width: 379px) {
-  .day-top .where b { font-size: 20px; }
-}
-/* "Popularity & reviews" whole at 320px. */
-@media (max-width: 349px) {
-  .day-top .where b { font-size: 18px; }
-}
 @media (prefers-reduced-motion: reduce) {
   .day-screen *, .day-screen *::before { transition: none !important; animation: none !important; }
 }
@@ -249,3 +238,23 @@
 .prep-bonus[aria-pressed="true"] .tick { background: var(--bv-paprika); border-color: var(--bv-paprika); color: #fff; }
 .prep-expect .who .crowd { white-space: nowrap; }
 .prep-row .nm .build { font-size: 12.5px; font-weight: 600; color: var(--bv-ink-2); line-height: 1.3; }
+
+/* ---- One modal frame (DESIGN §46) ------------------------------------------------------------
+   The Garage and Popularity & reviews sit over the map as cards, the same as Settings, the menus,
+   Prep and the report card: inset from the edges, rounded, hugging their content, with the same
+   header as every modal card (.menu-head.bar in menu.css: glyph, serif title, plain ×). */
+.screen.card-host:has(> .day-screen) { padding: calc(var(--safe-t) + 12px) 12px calc(var(--safe-b) + 12px); place-items: center; }
+.card-host > .day-screen { width: min(440px, 100%); height: auto; max-height: 100%; border-radius: 14px; }
+.card-host.card-rise > .day-screen { animation: menu-rise var(--bv-mid) var(--bv-ease); }
+.card-host .menu-head.bar { border-bottom-color: var(--bv-rule); }
+/* A long title ("Popularity & reviews" on a 320px phone) wraps onto a second line rather than lose its end. */
+.card-host .menu-head.bar .bv-title { overflow-wrap: break-word; }
+.card-host .day-scroll { padding: 12px 16px 18px; }
+
+/* Popularity & reviews before the first review: one calm empty state that says what will fill it,
+   not a chart of five empty bars (DESIGN §46). */
+.rev-empty { display: grid; justify-items: center; gap: 8px; padding: 22px 16px 20px; text-align: center; border-radius: var(--bv-r-lg); border: 1px dashed var(--bv-rule-2); }
+.rev-empty .day-stars { font-size: 26px; letter-spacing: 4px; color: var(--bv-rule-2); }
+.rev-empty .day-stars .off { opacity: 1; }
+.rev-empty > b { font-family: var(--bv-font-serif); font-weight: 400; font-size: 20px; line-height: 1.15; color: var(--bv-ink); }
+.rev-empty > span:not(.day-stars) { font-size: 13px; color: var(--bv-ink-2); line-height: 1.45; max-width: 30ch; }

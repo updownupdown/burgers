@@ -370,11 +370,24 @@ interface TicketRow {
   extra?: boolean;
   /** A leave-off ("NO Ketchup"). */
   removed?: boolean;
+  /** How many go on ("×3"), or how far a short count has got ("2/3"): its own column on the ticket. */
+  count?: string;
 }
 
+/**
+ * One build line on a grid the whole list shares (O1 "Clean receipt" from the ticket study, after
+ * build #88): icon | label | count | chips | tick, so counts and chips line up in columns. Done
+ * lines go grey with a tick; strike-through is kept for a leave-off ("NO Ketchup").
+ */
 function rowHtml(r: TicketRow): string {
-  const cls = [r.state, r.mod ? "mod" : "", r.next ? "next" : ""].filter(Boolean).join(" ");
-  return `<li class="${cls}" data-l style="--k:${r.color}">${ticketIcon(r.icon, r.color)}<span class="l">${r.label}</span>${r.tail}</li>`;
+  const cls = [r.state, r.mod ? "mod" : "", r.next ? "next" : "", r.removed ? "rm" : ""].filter(Boolean).join(" ");
+  const mark = r.state === "done" ? "✓" : r.state === "wrong" ? "✕" : "";
+  return `<li class="${cls}" style="--k:${r.color}"><span class="i">${ticketIcon(r.icon, r.color)}</span><span class="l">${r.label}</span><span class="ct">${r.count ?? ""}</span><span class="cx">${r.tail}</span><span class="mk">${mark}</span></li>`;
+}
+/** Layers already on, folded into one grey line that still names them (a long build, see fitTicket). */
+function doneRow(done: TicketRow[]): string {
+  const names = done.filter((r) => !r.removed).map((r) => r.label.replace(/<b class="kw">[^<]*<\/b>\s*/g, "").replace(/<[^>]+>/g, "").trim() + (r.count ? ` ${r.count}` : ""));
+  return `<li class="done sum"><span class="i"></span><span class="l">${names.join(" · ")}</span><span class="ct"></span><span class="cx"></span><span class="mk">✓</span></li>`;
 }
 
 /** What kind of dish an order is, from its bottom layer. */
@@ -407,7 +420,7 @@ export function methodOf(order: Order): { cls: string; text: string }[] {
 function methodHtml(order: Order): string {
   const steps = methodOf(order);
   if (!steps.length) return "";
-  return `<li class="how">${steps.map((s) => modBox(s.cls, s.text)).join('<i aria-hidden="true">›</i>')}</li>`;
+  return `<div class="how">${steps.map((s) => modBox(s.cls, s.text)).join('<i aria-hidden="true">›</i>')}</div>`;
 }
 
 /** The build, top of the burger first, compared against what's on the plate so far. */
@@ -492,7 +505,7 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     }
     const k = st.piece.kind;
     const icon = k === "bun" ? (j === 0 ? "bunBottom" : "bunTop") : k;
-    const row: TicketRow = { icon, color: KIND_COLOR[k], label: ticketLabel(k) + (st.count > 1 ? countMark(`x${st.count}`) : ""), tail: "", state: "wrong", mod: false, next: false, extra: true };
+    const row: TicketRow = { icon, color: KIND_COLOR[k], label: ticketLabel(k), count: st.count > 1 ? `×${st.count}` : undefined, tail: "", state: "wrong", mod: false, next: false, extra: true };
     extrasAt.set(below, [row, ...(extrasAt.get(below) ?? [])]);
   });
   // Extras above the top of the build go first in the list.
@@ -503,6 +516,7 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     let icon: string = exp.kind;
     let label = ticketLabel(exp.kind);
     let tail = "";
+    let count: string | undefined;
     // Steps for the whole dish are on the method line (methodOf); a line only carries a step of its own.
     if (exp.kind === "dough") {
       // Baked in the deck oven (a calzone folded first): on the method line.
@@ -538,12 +552,12 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
     if (exp.count && (exp.count > 1 || add === "extra")) {
       const short = got[i] && got[i] < exp.count;
       // No "x1" (one onion on a taco is just "Onion").
-      if (exp.count > 1 || short) label += countMark(short ? `${got[i]}/${exp.count}` : `x${exp.count}`);
+      if (exp.count > 1 || short) count = short ? `${got[i]}/${exp.count}` : `×${exp.count}`;
       if (add === "extra") tail = modBox("add", `ADD ${extraCount(exp.kind)}`) + tail;
     } else if (add === "extra") label = `${kw("ADD")}${label}`;
     for (const r of removed.filter((r) => r.at === i + 1)) rows.push(removedRow(r.kind, states[i + 1] ?? ""));
     if (i < order.layers.length - 1) rows.push(...(extrasAt.get(i) ?? []));
-    rows.push({ icon, color: KIND_COLOR[exp.kind], label, tail, state: states[i], mod: !!add, next: i === nextIdx });
+    rows.push({ icon, color: KIND_COLOR[exp.kind], label, count, tail, state: states[i], mod: !!add, next: i === nextIdx });
   }
   rows.push(...(extrasAt.get(-1) ?? []));
   for (const r of removed.filter((r) => r.at === 0)) rows.push(removedRow(r.kind, states[0] ?? ""));
@@ -552,8 +566,6 @@ function buildRows(order: Order, plate: Plate): TicketRow[] {
 
 /** A keyword in front of a line: "NO Ketchup", "ADD Bacon". */
 const kw = (w: string) => `<b class="kw">${w}</b> `;
-/** How many go on, right after the name: "Pickles x3", or "2/3" while it's short. */
-const countMark = (t: string) => ` <b class="cnt">${t}</b>`;
 
 /** "NO Ketchup": a leave-off, where it would have gone. Crossed off once the layer above it is on. */
 function removedRow(kind: Order["layers"][number]["kind"], above: RowState): TicketRow {
@@ -561,35 +573,48 @@ function removedRow(kind: Order["layers"][number]["kind"], above: RowState): Tic
   return { icon, color: KIND_COLOR[kind], label: `${kw("NO")}${KIND_LABEL[kind]}`, tail: "", state: above === "done" ? "done" : "", mod: true, next: false, removed: true };
 }
 
-/**
- * Fries and drinks beside the build, each under its own section icon with a pale rule, so the
- * items get the column's full width: size first ("[L] Pine Fizz"), its own modifiers under it.
- */
-function sideRows(order: Order, plate: Plate): string {
-  const out: string[] = [];
-  const section = (icon: string, color: string) => `<div class="sec">${ticketIcon(icon, color)}<i></i></div>`;
-  // With no burger, just a drink or fries are the build itself (buildRows), and a poutine's fries are too.
-  if (!order.layers.length && !order.poutine) return "";
-  if (order.fries && order.layers.length) {
-    const f = plate.fries;
+/** A side on the ticket: what it is, its size, its marks (Ice / No ice / garnish / Sugar) and whether it's on the tray. */
+interface SideItem {
+  icon: string;
+  color: string;
+  size: string;
+  name: string;
+  short: string;
+  /** Ice or No ice: the cook's choice, so on every ticket. */
+  marks: string;
+  /** Sugar on fritters, a local drink's garnish: they always go on, so only the open ticket says so. */
+  always: string;
+  state: RowState;
+}
+/** The fries and drink with a main, or a poutine's drink, or the sides that are the whole order. */
+function sidesOf(order: Order, plate: Plate | null): SideItem[] {
+  const out: SideItem[] = [];
+  if (order.fries && !(order.poutine && !order.layers.length)) {
     const fry = fryOf(order);
-    const state = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy && fryOf(f) === fry ? "done" : "wrong";
-    out.push(`<div class="sg">${section(FRY_ICON[fry], "#c8472e")}<div class="sd ${state}"><span class="sl"><i class="sz">${order.friesSize}</i><span class="dn">${FRY_LABEL[fry]}</span></span>${SUGARED.has(fry) ? `<span class="sm">${modBox("sugar", "Sugar")}</span>` : ""}</div></div>`);
+    const f = plate?.fries;
+    const state: RowState = !f ? "" : f.size === order.friesSize && !f.curds && !f.gravy && fryOf(f) === fry ? "done" : "wrong";
+    out.push({ icon: FRY_ICON[fry], color: FRY_COLOR[fry], size: order.friesSize, name: FRY_LABEL[fry], short: FRY_LABEL[fry], marks: "", always: SUGARED.has(fry) ? modBox("sugar", "Sugar") : "", state });
   }
   if (order.drink) {
-    const d = plate.drink;
+    const d = plate?.drink;
     const iceOk = order.ice == null || !!d?.ice === order.ice;
-    const wrong = !!d && (d.flavor !== order.drink || d.size !== order.drinkSize || !iceOk);
-    const state = !d ? "" : wrong ? "wrong" : d.lid ? "done" : "";
+    const state: RowState = !d ? "" : d.flavor !== order.drink || d.size !== order.drinkSize || !iceOk ? "wrong" : d.lid ? "done" : "";
     const ice = order.ice === true ? modBox("ice", "Ice") : order.ice === false ? modBox("noice", "No ice") : "";
     // The local drink's garnish (Coast cucumber, Red Rock lime, Isle apple), dropped on from the dish.
-    const garnish = order.garnish ? modBox("add", GARNISH_LABEL[order.garnish]) : "";
-    const marks = ice + garnish;
-    out.push(
-      `<div class="sg">${section("drink", DRINK_COLOR[order.drink])}<div class="sd ${state}"><span class="sl"><i class="sz">${order.drinkSize}</i><span class="dn">${DRINK_LABEL[order.drink]}</span></span>${marks ? `<span class="sm">${marks}</span>` : ""}</div></div>`,
-    );
+    const garnish = order.garnish ? modBox("garn", `+ ${GARNISH_LABEL[order.garnish]}`) : "";
+    out.push({ icon: "drink", color: DRINK_COLOR[order.drink], size: order.drinkSize, name: DRINK_LABEL[order.drink], short: DRINK_SHORT[order.drink], marks: ice, always: garnish, state });
   }
-  return out.join("");
+  return out;
+}
+/**
+ * A side in one grammar on every ticket: [icon] [size] name, then its marks. `inline` keeps the
+ * marks on the name's line (fitTicket stacks them under the name when they don't fit). A side on
+ * the tray shows its tick (or a red cross) where its icon was.
+ */
+function sideLine(sd: SideItem, { short = false, next = false, inline = false, small = false } = {}): string {
+  const marks = small ? sd.marks : sd.marks + sd.always;
+  const ic = sd.state ? `<b class="st">${sd.state === "done" ? "✓" : "✕"}</b>` : ticketIcon(sd.icon, sd.color);
+  return `<div class="sd ${inline ? "inl" : "stk"} ${sd.state}${next ? " next" : ""}"><span class="i">${ic}</span><i class="sz">${sd.size}</i><span class="sn">${esc(short ? sd.short : sd.name)}</span>${marks ? `<span class="sm">${marks}</span>` : ""}</div>`;
 }
 
 /** Short side names for a stub, where the size letter does most of the work (plain fries need no word). */
@@ -635,7 +660,7 @@ export function exceptions(order: Order): string[] {
     if (m.type === "toast") return `${kw("TOAST")}Bun`;
     const label = KIND_LABEL[m.kind];
     if (m.type === "no") return `${kw("NO")}${label}`;
-    return `${kw("ADD")}${label}${m.type === "extra" && COUNTED.has(m.kind) ? countMark(`x${extraCount(m.kind)}`) : ""}`;
+    return `${kw("ADD")}${m.type === "extra" && COUNTED.has(m.kind) ? `${extraCount(m.kind)} ` : ""}${label}`;
   });
   return out;
 }
@@ -654,30 +679,63 @@ export function peekHtml(order: Order): string {
     ${ex.length ? `<ul class="ex">${ex.map((e) => `<li>${e}</li>`).join("")}</ul>` : ""}${sideChips(order, null)}`;
 }
 
-export function ticketHtml(order: Order, plate: Plate, patience: number, focused: boolean, fold = false): string {
+/**
+ * Ticket HTML for the focus rail: O1 "Clean receipt" from the ticket study (after build #88).
+ *
+ * Small (`focused` false): patience, the name, a progress strip with one segment per layer, the
+ * changes from the menu, then every side with its size, name and marks: enough to finish the order
+ * without opening it, for a cook who knows the recipes.
+ *
+ * Open: the whole build top first on one grid, the dish's steps under the name, the sides in a
+ * footer. `level` (0-4) squeezes a long build to fit: fold the layers already on into one line,
+ * tighten, put the steps beside the name, then the name beside the
+ * patience bar. `width` is the ticket's width in px.
+ */
+export function ticketHtml(order: Order, plate: Plate, patience: number, focused: boolean, level = 0, width = 300): string {
   const pct = Math.max(0, Math.min(1, patience));
   const mood = patienceMood(pct);
   const bar = `<span class="bar"><i style="width:${(pct * 100).toFixed(0)}%"></i></span>`;
+  const sidesOnly = !order.layers.length && !order.poutine;
+  const title = sidesOnly ? "Sides" : order.name;
+  const nameDiv = (cls = "") => `<div class="name${cls}" data-short="${esc(sidesOnly ? "Sides" : shortName(order.name))}"><span class="l">${esc(title)}</span></div>`;
   const rows = buildRows(order, plate);
+  const sides = sidesOf(order, plate);
   if (!focused) {
-    // A stub is just the name and what's different from the menu.
     const ex = exceptions(order);
-    return `<div class="pat ${mood}">${moodFace(mood, !!order.critic)}${bar}${tipCoin(pct)}</div>
-      <div class="name"><span class="l">${esc(shortName(order.name))}</span></div>
-      ${ex.length ? `<ul class="ex">${ex.map((e) => `<li>${e}</li>`).join("")}</ul>` : ""}${sideChips(order, plate)}`;
+    const badge = width >= 110;
+    const pips = sidesOnly
+      ? ""
+      : `<div class="pips" aria-hidden="true">${rows
+          .filter((r) => !r.removed && !r.extra)
+          .reverse()
+          .map((r) => `<i class="${r.state}${r.next ? " nx" : ""}"></i>`)
+          .join("")}</div>`;
+    return `<div class="pat ${mood}">${moodFace(mood, !!order.critic && !badge)}${bar}${tipCoin(pct)}${order.critic && badge ? `<em class="critic" title="Food critic">Critic</em>` : ""}</div>
+      ${nameDiv(" sm")}${pips}
+      ${ex.length ? `<div class="cgs">${ex.map((e) => `<div class="cg">${e}</div>`).join("")}</div>` : ""}
+      ${sides.length ? `<div class="sds">${sides.map((x) => sideLine(x, { short: width < 110, small: true })).join("")}</div>` : ""}`;
+  }
+  const how = methodHtml(order);
+  const head =
+    level >= 4
+      ? `<div class="pat cmp ${mood}">${moodFace(mood, !!order.critic)}${nameDiv()}${bar}${tipCoin(pct)}</div>${how}`
+      : `<div class="pat ${mood}">${moodFace(mood)}${bar}${tipCoin(pct)}${order.critic ? `<em class="critic" title="Food critic">Critic</em>` : ""}</div>` +
+        (level >= 3 && how ? `<div class="nmrow">${nameDiv()}${how}</div>` : nameDiv() + how);
+  if (sidesOnly) {
+    const next = sides.findIndex((x) => !x.state);
+    return `${head}<div class="sds main">${sides.map((x, i) => sideLine(x, { next: i === next, inline: true })).join("")}</div>`;
   }
   let list = rows;
   let folded = "";
-  if (fold) {
+  if (level >= 1) {
     const done = rows.filter((r) => r.state === "done");
     if (done.length > 1) {
       list = rows.filter((r) => r.state !== "done");
-      folded = `<li class="done fold"><span class="l">${done.length} stacked</span></li>`;
+      folded = doneRow(done);
     }
   }
-  const sides = sideRows(order, plate);
-  return `<div class="pat ${mood}">${moodFace(mood)}${bar}${tipCoin(pct)}${order.critic ? `<em class="critic" title="Food critic">Critic</em>` : ""}</div>
-    <div class="name"><span class="l">${esc(order.name)}</span></div>
-    <div class="cols${sides ? "" : " solo"}"><div class="tb"><ol>${methodHtml(order)}${list.map(rowHtml).join("")}${folded}</ol></div>${sides ? `<div class="sides">${sides}</div>` : ""}</div>`;
+  // Fries and drink side by side only where both fit with their marks.
+  const cols = sides.length > 1 && width >= 250;
+  const foot = sides.length ? `<div class="foot${cols ? " cols" : ""}">${sides.map((x) => sideLine(x, { short: cols && width < 250, inline: !cols })).join("")}</div>` : "";
+  return `${head}<div class="tb"><ol class="bl">${list.map(rowHtml).join("")}${folded}</ol></div>${foot}`;
 }
-

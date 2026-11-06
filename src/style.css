@@ -180,13 +180,13 @@ html, body {
   background: linear-gradient(#fffdf7, #fffdf7) top / 100% calc(100% - 6px) no-repeat;
   color: var(--bv-ink);
   padding: 9px 7px 12px;
-  font: 600 12.5px/1.2 var(--bv-font-ui);
+  font: 600 13px/16px var(--bv-font-ui);
   filter: drop-shadow(0 2px 3px rgb(42 38 34 / 0.28));
   transition: filter 0.15s;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 .ticket > * { flex: none; }
 .ticket[hidden] { display: none; }
@@ -200,6 +200,11 @@ html, body {
   background: linear-gradient(135deg, #fffdf7 4px, transparent 0) 0 0 / 8px 6px repeat-x, linear-gradient(-135deg, #fffdf7 4px, transparent 0) 0 0 / 8px 6px repeat-x;
 }
 .ticket.active { filter: drop-shadow(0 5px 7px rgb(42 38 34 / 0.34)); z-index: 3; }
+/* The selected order: a blue band across the top, the same blue as its tray's outline. */
+.ticket.active::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: #3f7fd0; }
+/* Small tickets are a shade darker than the open one. */
+.ticket.stub { background-image: linear-gradient(#f6f2ea, #f6f2ea); }
+.ticket.stub::after { background: linear-gradient(135deg, #f6f2ea 4px, transparent 0) 0 0 / 8px 6px repeat-x, linear-gradient(-135deg, #f6f2ea 4px, transparent 0) 0 0 / 8px 6px repeat-x; }
 
 /* Row 1: face, patience, critic. */
 .ticket .pat { display: flex; align-items: center; gap: 5px; --mood: #6f9a4f; min-height: 18px; }
@@ -219,7 +224,17 @@ html, body {
 
 /* Row 2: the name, the thing read first. "*" = changed from the menu, "+2" = sides with it. */
 .ticket .name { display: flex; align-items: baseline; gap: 2px; min-width: 0; }
-.ticket .name .l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 17px/1.05 var(--bv-font-serif); letter-spacing: 0; }
+.ticket .name .l { min-width: 0; overflow: hidden; white-space: nowrap; font: 400 18px/1.1 var(--bv-font-serif); letter-spacing: 0; }
+.ticket .name.sm .l { font-size: 15px; }
+/* Even the short name doesn't fit: it wraps rather than hide a letter. */
+.ticket .name.wrap .l { white-space: normal; overflow-wrap: anywhere; }
+/* At the tightest, the name sits between the face and the patience bar. */
+.ticket .pat.cmp .name { flex: 0 1 auto; min-width: 0; }
+.ticket .pat.cmp .name .l { font-size: 16px; }
+.ticket .pat.cmp .bar { flex: 1 1 14px; min-width: 14px; }
+.ticket .nmrow { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ticket .nmrow .name { flex: 1 1 auto; min-width: 0; }
+.ticket .nmrow .how { flex: none; }
 .ticket .name .ast { font: 800 16px/1 var(--bv-font-ui); color: var(--t-mod); flex: none; }
 /* A town's regular: their name before the dish (after build #78). */
 /* The tip coin: whole while the customer looks calm, half once sad, gone once angry. */
@@ -229,21 +244,45 @@ html, body {
 .ticket .pat .tipc.lost { animation: tip-lost 0.6s ease-out; }
 @keyframes tip-lost { 30% { transform: scale(1.35); } }
 
-/* The build beside the sides. */
-.ticket .cols { flex: 0 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 80px; grid-template-rows: minmax(0, 1fr); gap: 6px; border-top: 1px dashed var(--bv-rule-2); padding-top: 4px; }
-.ticket .cols.solo { grid-template-columns: minmax(0, 1fr); }
-.ticket .tb { position: relative; min-height: 0; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; }
+/*
+ * The build: O1 "Clean receipt" from the ticket study (after build #88). Every line sits on one grid
+ * (icon | label | count | chips | tick), so counts and chips line up in columns. A change from the
+ * menu has an orange edge, the next layer is an ink bar, a layer on right goes grey with a tick,
+ * one on wrong red with a cross. Strike-through only means a leave-off ("NO Ketchup").
+ */
+.ticket .tb { position: relative; flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; }
 .ticket .tb::-webkit-scrollbar { display: none; }
-.ticket ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
-.ticket li { display: flex; align-items: center; gap: 4px; min-height: 16px; padding: 0 3px; margin: 0 -3px; border-radius: 4px; white-space: nowrap; }
-.ticket li .l { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ticket .tb.up { -webkit-mask-image: linear-gradient(transparent, #000 14px); mask-image: linear-gradient(transparent, #000 14px); }
+.ticket ol.bl { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto auto auto; column-gap: 4px; row-gap: 1px; }
+.ticket ol.bl > li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; min-height: 17px; padding: 0 4px; margin: 0 -4px; border-radius: 4px; }
+.ticket ol.bl .i { display: flex; }
+.ticket ol.bl .l { min-width: 0; overflow-wrap: break-word; }
+.ticket ol.bl .ct { font: 500 12.5px/1 var(--bv-font-mono); text-align: right; white-space: nowrap; }
+.ticket ol.bl .cx { display: flex; gap: 2px; justify-content: flex-end; }
+.ticket ol.bl .mk { font-weight: 800; width: 10px; text-align: center; }
+.ticket ol.bl li.mod { color: #b4520f; box-shadow: inset 3px 0 0 var(--t-mod); }
+.ticket ol.bl li.mod .kw { color: var(--t-mod); }
+.ticket ol.bl li.rm .l { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.ticket ol.bl li.rm .ic { opacity: 0.45; }
+.ticket ol.bl li.done { color: var(--t-done); box-shadow: none; }
+.ticket ol.bl li.done .kw { color: inherit; }
+.ticket ol.bl li.done .ic { --c: #cfc8bd !important; stroke: rgb(42 38 34 / 0.25); }
+.ticket ol.bl li.done .ic .yolk, .ticket ol.bl li.done .ic .st { fill: #bdb5a9; }
+.ticket ol.bl li.done .mb { filter: grayscale(1); opacity: 0.45; }
+.ticket ol.bl li.done .mk { color: var(--bv-olive); }
+.ticket ol.bl li.wrong { color: var(--t-wrong); background: #fbe1dd; font-weight: 800; }
+.ticket ol.bl li.wrong .ic { --c: var(--t-wrong) !important; }
+.ticket ol.bl li.wrong .ic .yolk, .ticket ol.bl li.wrong .ic .st { fill: #e88; }
+.ticket ol.bl li.next { background: var(--bv-ink); color: #fffdf7; font-weight: 800; }
+.ticket ol.bl li.next.mod { box-shadow: inset 3px 0 0 #f08a3a; color: #ffd2b0; }
+.ticket ol.bl li.next.mod .kw { color: #ffb37a; }
+/* Layers already on, folded into one line that still names them. */
+.ticket ol.bl li.sum .l { font-weight: 600; font-size: 12px; line-height: 15px; }
 .ticket .ic { width: 16px; height: 12px; flex: none; fill: var(--c); stroke: rgb(42 38 34 / 0.45); stroke-width: 0.7; }
 .ticket .ic .hi { fill: rgb(255 255 255 / 0.55); stroke: none; }
 .ticket .ic .yolk { fill: #f1ae2a; }
 .ticket .ic .st { fill: #f3d36b; }
 .ticket .ic .lid { fill: #f4f1ea; }
-.ticket li .n { font: 700 12px var(--bv-font-mono); flex: none; }
-.ticket li .dpill { flex: none; min-width: 0; font-size: 11.5px; line-height: 1.15; padding: 0 6px 1px; vertical-align: 0; }
 /* Modifiers in small coloured boxes: Toast, Melt, Grill, Smash (an icon), Ice / No ice. */
 .ticket .mb { flex: none; display: inline-grid; place-items: center; font: 800 11.5px/1.15 var(--bv-font-ui); font-style: normal; border-radius: 4px; padding: 0 4px 1px; background: var(--mb-bg); color: var(--mb-fg); }
 .ticket .mb.toast { --mb-bg: #f3dcb2; --mb-fg: #774611; }
@@ -262,62 +301,65 @@ html, body {
 .ticket .mb.warm { --mb-bg: #f4a53e; --mb-fg: #4a2400; }
 .ticket .mb.sugar { --mb-bg: #f3e1c4; --mb-fg: #7a4a1e; }
 .ticket .mb.add { --mb-bg: var(--t-mod); --mb-fg: #fff; }
-/* "NO Ketchup", "ADD Bacon": the keyword in caps, then the item; "x3" right after the name. */
-.ticket .kw { font: 800 0.82em/1 var(--bv-font-ui); letter-spacing: 0.04em; }
-.ticket .cnt { font: 800 0.92em/1 var(--bv-font-mono); white-space: nowrap; }
 .ticket .mb.noice { --mb-bg: #f8dfcb; --mb-fg: #a24c12; }
-/* Changed from the menu (extra, add-on, "− Ketchup"): orange. */
-.ticket li.mod { color: var(--t-mod); font-weight: 800; }
-/* The next thing to stack: a wash of its own colour. */
-.ticket li.next { background: color-mix(in srgb, var(--k) 26%, #fffdf7); font-weight: 800; }
-/* Stacked right: grey and struck through. Stacked wrong: red and struck through. */
-.ticket li.done, .ticket li.wrong { text-decoration: line-through; text-decoration-thickness: 1.5px; font-weight: 600; }
-.ticket li.done { color: var(--t-done); }
-.ticket li.wrong { color: var(--t-wrong); font-weight: 800; }
-.ticket li.done .ic { --c: #cfc8bd !important; stroke: rgb(42 38 34 / 0.25); }
-.ticket li.wrong .ic { --c: var(--t-wrong) !important; }
-.ticket li.done .ic .yolk, .ticket li.done .ic .st { fill: #bdb5a9; }
-.ticket li.wrong .ic .yolk, .ticket li.wrong .ic .st { fill: #e88; }
-.ticket li.done .mb, .ticket li.done .dpill { filter: grayscale(1); opacity: 0.45; }
-.ticket li.wrong .mb, .ticket li.wrong .dpill { opacity: 0.6; }
-.ticket li.fold { text-decoration: none; padding-left: 23px; font-style: italic; }
-/* The method line: steps for the whole dish ("Press › Cut"), above the build. */
-.ticket li.how { gap: 3px; padding: 1px 3px 3px; margin-bottom: 2px; border-bottom: 1px dotted var(--bv-rule-2); border-radius: 0; }
-.ticket li.how .mb { font-size: 12px; padding: 1px 6px 2px; }
-.ticket li.how i { font: 800 12px/1 var(--bv-font-ui); font-style: normal; color: var(--bv-ink-2); }
+.ticket .mb.garn { --mb-bg: var(--bv-olive-soft); --mb-fg: #2f5a49; }
+/* "NO Ketchup", "ADD Bacon": the keyword in caps, then the item. */
+.ticket .kw { font: 800 12px/1 var(--bv-font-ui); letter-spacing: 0.04em; }
+/* The method line: steps for the whole dish ("Press › Cut"), under the name. */
+.ticket .how { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
+.ticket .how .mb { font-size: 12px; padding: 0 5px 1px; }
+.ticket .how i { font: 700 12px/1 var(--bv-font-ui); font-style: normal; color: #8a847a; margin: 0 1px; }
 
-/* Sides: an icon, then the item with its own modifiers stacked under it. */
-.ticket .sides { display: flex; flex-direction: column; gap: 2px; border-left: 1px dashed var(--bv-rule-2); padding-left: 6px; min-width: 0; }
-/* A section per kind of side: its icon, then a pale rule out to the edge. */
-.ticket .sec { display: flex; align-items: center; gap: 4px; }
-.ticket .sg { display: grid; gap: 2px; min-width: 0; align-content: start; }
-.ticket .sg + .sg { margin-top: 4px; }
-.ticket .sec i { flex: 1; height: 1px; background: var(--bv-rule); }
-.ticket .sd { display: grid; gap: 2px; min-width: 0; justify-items: start; }
-.ticket .sd .sl { display: flex; align-items: center; gap: 3px; min-width: 0; max-width: 100%; }
-.ticket .sd .dn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ticket .sd .sm { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
-.ticket .sz { font: 700 11px/1.2 var(--bv-font-mono); font-style: normal; border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; flex: none; }
-.ticket .sd.done .sl, .ticket .sd.wrong .sl { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+/* Changes from the menu on a small ticket: "NO Lettuce", "ADD 2 Tomato". */
+.ticket .cgs { display: grid; gap: 1px; border-top: 1px dashed var(--bv-rule-2); padding-top: 4px; }
+.ticket .cg { color: #b4520f; font: 700 12.5px/16px var(--bv-font-ui); }
+.ticket .cg .kw { color: var(--t-mod); }
+
+/* Sides in one grammar on every ticket: [icon] [size] name, then Ice / No ice / garnish / Sugar. */
+.ticket .sds { display: grid; gap: 3px; }
+.ticket.stub .sds { border-top: 1px dashed var(--bv-rule-2); padding-top: 4px; }
+.ticket .sd { display: grid; align-items: center; column-gap: 3px; row-gap: 2px; font: 700 12.5px/16px var(--bv-font-ui); }
+.ticket .sd.inl { grid-template-columns: 16px auto minmax(0, max-content) minmax(0, 1fr); }
+.ticket .sd.inl .sn { white-space: nowrap; }
+.ticket .sd.stk { grid-template-columns: 16px auto minmax(0, 1fr); }
+.ticket .sd.stk .sm { grid-row: 2; grid-column: 3 / -1; }
+.ticket .sd .i { display: flex; }
+.ticket .sd .sn { min-width: 0; }
+.ticket .sd .sm { display: flex; flex-wrap: wrap; gap: 2px; }
+.ticket .sd .st { width: 16px; text-align: center; font-weight: 800; color: var(--bv-olive); }
+.ticket .sd.wrong .st { color: var(--t-wrong); }
 .ticket .sd.done { color: var(--t-done); }
-.ticket .sd.done .mb { filter: grayscale(1); opacity: 0.45; }
+.ticket .sd.done .mb { filter: grayscale(1); opacity: 0.5; }
 .ticket .sd.wrong { color: var(--t-wrong); }
+.ticket .sd.next { background: var(--bv-ink); color: #fffdf7; border-radius: 4px; margin: 0 -4px; padding: 1px 4px; }
+.ticket .sz { display: inline-grid; place-items: center; flex: none; min-width: 16px; height: 16px; box-sizing: border-box; border: 1.5px solid currentColor; border-radius: 4px; font: 500 12px/1 var(--bv-font-mono); font-style: normal; padding: 0 2px; }
+/* A narrow small ticket drops the side icons; the size letter and name say enough. */
+.ticket.stub.narrow .sd .i { display: none; }
+.ticket.stub.narrow .sd.stk { grid-template-columns: auto minmax(0, 1fr); }
+.ticket.stub.narrow .sd.stk .sm { grid-column: 1 / -1; }
+/* The open ticket's sides: a footer under the build, side by side when there's room. */
+.ticket .foot { border-top: 1px dashed var(--bv-rule-2); padding-top: 5px; display: grid; gap: 3px; }
+.ticket .foot.cols { grid-template-columns: minmax(0, max-content) minmax(0, 1fr); column-gap: 12px; }
+.ticket .sds.main { border-top: 1px dashed var(--bv-rule-2); padding-top: 5px; gap: 5px; }
+.ticket .sds.main .sd { font-size: 14px; line-height: 18px; }
 
-/* Rows tighten for a long build before anything folds or scrolls (see fitTicket in main.ts). */
-.ticket.dense { gap: 2px; padding-top: 8px; padding-bottom: 10px; }
-.ticket.dense .name .l { font-size: 18px; }
-.ticket.dense li { min-height: 13.5px; line-height: 1.08; }
-.ticket.dense ol { gap: 0; }
-
-/* Two tickets, neither opened: each gets half the rail and the whole build, sides under it. */
-.ticket.half .cols { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 4px; }
-.ticket.half .sides { flex-direction: row; gap: 8px; border-left: 0; padding-left: 0; border-top: 1px dashed var(--bv-rule-2); padding-top: 3px; }
-/* Side by side, each item beside its section icon, to keep the room for the build. */
-.ticket.half .sg { flex: 1; display: flex; align-items: flex-start; gap: 4px; }
-.ticket.half .sec i { display: none; }
-.ticket.half .sec .ic { margin-top: 1px; }
-.ticket.half .sg + .sg { margin-top: 0; }
-.ticket.half .name .l { font-size: 18px; }
+/* Rows tighten for a long build (see fitTicket in main.ts). */
+.ticket.dense { gap: 2px; padding-top: 7px; }
+.ticket.dense .name .l { font-size: 16px; }
+.ticket.dense ol.bl { row-gap: 0; }
+.ticket.dense ol.bl > li { min-height: 15px; }
+.ticket.dense .foot { padding-top: 3px; }
+/* A slim open ticket (small phones): each line wraps on its own, chips under the name if need be. */
+.ticket.slim ol.bl { display: flex; flex-direction: column; }
+.ticket.slim ol.bl > li { display: flex; flex-wrap: wrap; align-items: center; column-gap: 4px; row-gap: 1px; padding-top: 1px; padding-bottom: 1px; }
+.ticket.slim ol.bl > li .i { flex: none; }
+.ticket.slim ol.bl > li .l { flex: 1 1 auto; overflow-wrap: normal; }
+.ticket.slim ol.bl > li .cx { margin-left: auto; }
+/* A small ticket that's still too long drops its progress strip and tightens. */
+.ticket.stub.dense { gap: 2px; padding-top: 7px; }
+.ticket.stub.dense .pips { display: none; }
+.ticket.stub.dense .cgs, .ticket.stub.dense .sds { padding-top: 2px; }
+.ticket.stub.dense .sds { gap: 1px; }
 
 /* The Ticket rail's early ticket: the next order, faded and tilted, clipped under the bell. */
 .ticket.peek {
@@ -332,10 +374,9 @@ html, body {
 }
 .ticket.peek .nx { font: 600 10px/1 var(--bv-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--bv-mute); }
 /* Stubs: patience, short name, doneness, how much is left. */
-.ticket.stub { padding: 9px 5px 12px; gap: 4px; cursor: pointer; }
+.ticket.stub { padding: 9px 6px 12px; gap: 4px; cursor: pointer; }
+.ticket.stub.narrow { padding-left: 5px; padding-right: 5px; }
 .ticket.stub .bar { min-width: 0; }
-.ticket.stub .name { flex-wrap: wrap; }
-.ticket.stub .name .l { font-size: 14px; letter-spacing: -0.01em; line-height: 1.05; white-space: normal; overflow-wrap: normal; }
 .ticket .pp { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 3px; }
 .ticket .pp .dpill { min-width: 0; font-size: 12px; padding: 0 6px 1px; }
 .ticket .pp .x { font: 700 12px var(--bv-font-mono); }
@@ -346,7 +387,7 @@ html, body {
 .ticket .sc { list-style: none; margin: 1px 0 0; padding: 0; display: grid; gap: 2px; font: 700 11.5px/1.15 var(--bv-font-ui); }
 .ticket .sc li { display: flex; align-items: center; gap: 3px; min-height: 0; padding: 0; margin: 0; white-space: nowrap; overflow: hidden; }
 .ticket .sc .ic { width: 13px; height: 10px; }
-.ticket .sc .sz { font-size: 10px; padding: 0 2px; line-height: 1.15; }
+.ticket .sc .sz { font-size: 10px; padding: 0 2px; line-height: 1.15; height: auto; min-width: 0; border-width: 1px; }
 .ticket .sc .dn { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ticket .sc .kw { flex: none; color: var(--t-mod); font-size: 10px; }
 .ticket .sc li.done { color: var(--t-done); }
@@ -360,10 +401,12 @@ html, body {
 .ticket .left b { color: var(--bv-ink); }
 /* A list that still has to scroll fades out at the top, where the finished end of the burger is. */
 .ticket .tb.up { -webkit-mask-image: linear-gradient(transparent, #000 14px); mask-image: linear-gradient(transparent, #000 14px); }
-.ticket .pips { display: flex; gap: 1px; height: 5px; }
-.ticket .pips i { flex: 1; border-radius: 1px; background: var(--k); opacity: 0.3; }
-.ticket .pips i.done { background: #b9b1a5; opacity: 1; }
-.ticket .pips i.wrong { background: var(--t-wrong); opacity: 1; }
+/* A small ticket's progress: one segment per layer, bottom first. On in pine, next in ink, wrong in red. */
+.ticket .pips { display: flex; gap: 2px; height: 5px; margin: 1px 0; }
+.ticket .pips i { flex: 1; border-radius: 2px; background: var(--bv-rule); }
+.ticket .pips i.done { background: var(--bv-olive); }
+.ticket .pips i.nx { background: var(--bv-ink); }
+.ticket .pips i.wrong { background: var(--t-wrong); }
 
 /* "Sent back", over the customer who sent it. */
 .sentback { position: absolute; z-index: 8; transform: translate(-50%, -100%); width: max-content; padding: 4px 8px 5px; border-radius: 9px; background: var(--t-wrong, #c62f2f); color: #fff; font: 800 12px/1.2 var(--bv-font-ui); text-align: center; box-shadow: 0 2px 5px rgb(42 38 34 / 0.3); pointer-events: none; animation: pop 0.25s ease-out; }

@@ -76,10 +76,12 @@
 .hw-key > dd { margin: 0; }
 .hw-key .kw { font-size: 11px; }
 .hw-key .ln { font-weight: 700; }
-.hw-key .ln.mod { color: var(--t-mod); font-weight: 800; }
-.hw-key .ln.nx { background: color-mix(in srgb, #e9b25c 30%, #fffdf7); border-radius: 4px; padding: 0 4px; }
-.hw-key .ln.dn { color: var(--t-done); text-decoration: line-through; text-decoration-thickness: 1.5px; }
-.hw-key .ln.wr { color: var(--t-wrong); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.hw-key .ln.mod { color: #b4520f; font-weight: 800; box-shadow: inset 3px 0 0 var(--t-mod); padding: 0 4px 0 7px; }
+.hw-key .ln.mod .kw { color: var(--t-mod); }
+.hw-key .ln.nm { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.hw-key .ln.nx { background: var(--bv-ink); color: #fffdf7; border-radius: 4px; padding: 0 4px; }
+.hw-key .ln.dn { color: var(--t-done); }
+.hw-key .ln.wr { color: var(--t-wrong); background: #fbe1dd; border-radius: 4px; padding: 0 4px; }
 .hw-key .face { width: 18px; height: 18px; }
 .hw-key .how { display: inline-flex; align-items: center; gap: 3px; }
 .hw-key .how i { font-style: normal; font-weight: 800; color: var(--bv-ink-2); }

@@ -614,7 +614,7 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
       done: () => k.counts.folds > 0,
       show: () => ({
         title: "Two orders",
-        text: "Tap the big ticket to fold it. Folded, you can see both orders side by side.",
+        text: "Tap the big ticket to fold it. Folded, every ticket shows its changes and sides side by side.",
         gesture: tapOn(k.tickets.find((t) => !t.hidden && t.dataset.mode === "big") ?? null),
         place: "bottom",
       }),

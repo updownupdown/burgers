@@ -9,6 +9,7 @@ import { clockLabel, shiftHours, shiftKind, type ShiftWindow } from "../game/shi
 import { eventOn, REGIONS, type Recipe, type Stop } from "../game/stops";
 import { askFor } from "../game/asks";
 import { newHere, roadsAhead } from "../game/teaching";
+import { signatureFirst, signatureOf } from "../game/identity";
 import { icon } from "../ui/icons";
 import { buildLine, methodTags, stackArt } from "./menuref";
 import { scrollShadows } from "./modal";
@@ -116,7 +117,8 @@ export function prepHtml(p: PrepInput): string {
   const menu = menuFor(stop, save.hidden);
   const critic = picks.includes("press") ? 1 : criticChance(stop.crowd, ev);
 
-  const rows = stop.menu
+  // The town's signature dish first (game/identity.ts).
+  const rows = signatureFirst(stop.menu, stop.id)
     .map((r) => {
       const on = menu.includes(r);
       const locked = on && menu.length <= MIN_MENU;
@@ -124,7 +126,7 @@ export function prepHtml(p: PrepInput): string {
       const build = buildLine(r);
       return `<button class="prep-row ${on ? "" : "off"}" data-act="prep-menu" data-v="${esc(r.name)}" aria-pressed="${on}" ${locked ? 'aria-disabled="true"' : ""}>
         <span class="tick">${on ? icon("check") : ""}</span>
-        <span class="nm"><b>${esc(r.name)}</b>${
+        <span class="nm"><b>${esc(r.name)}${r.name === signatureOf(stop.id) ? `<em class="prep-sig">Signature</em>` : ""}</b>${
           showIngredients ? `<span class="build">${esc(build)}</span>${chips.length ? `<small>${chips.join(" · ")}</small>` : ""}` : ""
         }</span>
         ${stackArt(r)}

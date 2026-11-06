@@ -553,6 +553,8 @@ function tripSecs(): Sec[] {
         "A great shift unlocks that town's bonus. Then it's for sale here.",
         "Bring <b>up to three bonuses</b> per shift, picked on Prep & Open.",
         "Looks for the truck show on the map and at night.",
+        `${icon("menu-book")} Towns give <b>stamps</b>: open the road, a great shift, the regular won, an event worked, a 4.8★ shift. They collect in the <b>postcard book</b> on the map.`,
+        `${icon("flag")} Port Amber is the end of the road. Pass it and the next day is the <b>last night of the trip</b>. A new trip after that keeps your looks and stamps, and new stamps come in gold.`,
       ],
     },
   ];

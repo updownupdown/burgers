@@ -2,6 +2,7 @@ import { CROWD, menuFactor, menuFor, ratingFactor } from "./business";
 import { bonusCrowd, type BonusId } from "./bonus";
 import { DIFFICULTY, type Difficulty } from "./difficulty";
 import { popularityTraffic } from "./press";
+import { tripState } from "./tripstate";
 import { crowdShare, DEFAULT_SHIFT, type ShiftWindow } from "./shift";
 import { STOPS, type Stop } from "./stops";
 
@@ -83,7 +84,9 @@ export function expectedCustomers(p: CrowdInput): number {
     menuFactor(menu) *
     crowdShare(p.shift ?? DEFAULT_SHIFT) *
     bonusCrowd(p.bonuses ?? []) *
-    newRegionCrowd(p.regionShifts ?? 99);
+    newRegionCrowd(p.regionShifts ?? 99) *
+    // A lap after finishing the road brings more people everywhere (finale.ts).
+    tripState.crowd;
   // Relaxed brings fewer, but never fewer than six where six or more would come (after build #78 a
   // new truck on the easy tier saw only four and wondered where everyone was).
   const k = DIFFICULTY[p.pacing ?? "balanced"].crowd;

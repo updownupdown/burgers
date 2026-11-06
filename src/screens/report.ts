@@ -2,12 +2,14 @@ import { bonusById, GREAT, townBonus, type BonusId } from "../game/bonus";
 import { ordersShown, PASS_STARS, type Closing, type Save } from "../game/progress";
 import { addReviews, noReviews, reviewAverage, reviewTotal } from "../game/reviews";
 import { clockLabel } from "../game/shift";
-import { townById } from "../game/stops";
+import { FINAL_TOWN, townById } from "../game/stops";
 import { SHIFTS_TO_UNLOCK } from "../game/travel";
 import { opinionFace, opinionLabel } from "../ui/faces";
 import { icon } from "../ui/icons";
 import { breakdownHtml, pressHtml } from "./day";
 import { esc, popModal, pushModal } from "./modal";
+import { STAMPS, type StampId } from "../game/stamps";
+import { stampHtml } from "./postcards";
 import "./report.css";
 
 /**
@@ -27,6 +29,8 @@ export interface ReportDeps {
   reviews(): void;
   garage(): void;
   town(id: string): void;
+  /** The postcard book, at this town (DESIGN §50). */
+  book?(): void;
   /** The card went away (Continue, ×, the scrim or Back), not when it left for another screen. */
   closed?(): void;
   /** Try Steady tomorrow (the one-time nudge off Relaxed): set the pacing and stop offering. */
@@ -129,7 +133,7 @@ function nudgeHtml(c: Closing): string {
 }
 
 /** The card's HTML: head, scrolling body (numbers, then the rows), and Continue. */
-export function reportHtml(c: Closing, save: Save): string {
+export function reportHtml(c: Closing, save: Save, withBook = false): string {
   const town = townById(c.town);
   const avg = c.stars.length ? c.stars.reduce((a, b) => a + b, 0) / c.stars.length : 0;
   const newBest = c.takings > 0 && (c.bestBefore === null || c.takings > c.bestBefore);
@@ -189,7 +193,7 @@ export function reportHtml(c: Closing, save: Save): string {
   const left = SHIFTS_TO_UNLOCK - c.shiftsHere;
   const roadShort =
     c.outcome === "trip"
-      ? "Trip done"
+      ? "Road done"
       : opened.length
         ? `<b>${opened.map((t) => esc(t.name)).join(" and ")}</b> open`
         : c.outcome === "failed"
@@ -198,10 +202,12 @@ export function reportHtml(c: Closing, save: Save): string {
             ? `${Math.min(c.shiftsHere, SHIFTS_TO_UNLOCK)} of ${SHIFTS_TO_UNLOCK} · ${left} more`
             : town.roads.length
               ? "Roads open"
-              : "A side road";
+              : town.id === FINAL_TOWN
+                ? "Last stop"
+                : "A side road";
   const roadLong =
     c.outcome === "trip"
-      ? "You've reached the end of the road. Every town stays open, so keep touring or start a new trip from the menu."
+      ? `That's the whole road. From tomorrow ${esc(town.name)} throws a festival for the last night of the trip: open here in the morning to work it.`
       : opened.length
         ? `<b>${opened.map((t) => esc(t.name)).join(" and ")}</b> ${opened.length > 1 ? "are" : "is"} open. Tap ${opened.length > 1 ? "one" : "it"} on the map to see the drive.`
         : c.outcome === "failed"
@@ -210,7 +216,9 @@ export function reportHtml(c: Closing, save: Save): string {
             ? `Good shift. ${left === 1 ? "One more good shift opens" : `${left} more good shifts open`} the road on.`
             : town.roads.length
               ? "The roads out of here are open."
-              : "Nothing further opens from here: it's a side road.";
+              : town.id === FINAL_TOWN
+                ? "The last town of the trip. Every town on the map stays open."
+                : "Nothing further opens from here: it's a side road.";
   secs.push({
     id: "road",
     icon: "road",
@@ -220,6 +228,22 @@ export function reportHtml(c: Closing, save: Save): string {
     body: `<div class="day-road"><span class="day-pips">${Array.from({ length: SHIFTS_TO_UNLOCK }, (_, i) => `<i class="${i < c.shiftsHere ? (i === c.shiftsHere - 1 && c.outcome !== "failed" ? "new" : "on") : ""}"></i>`).join("")}</span><span>${roadLong}</span></div>
       ${opened.length ? `<button class="bv-btn sm" data-rep="town" data-v="${opened[0].id}">${icon("map")}See ${esc(opened[0].name)}</button>` : ""}`,
   });
+
+  // Postcard stamps the shift earned here (DESIGN §50).
+  const stamped = (c.stamped ?? []).filter((id): id is StampId => STAMPS.some((s) => s.id === id));
+  if (stamped.length) {
+    const gold = stamped.some((id) => save.stamps?.[c.town]?.[id] === 2);
+    secs.push({
+      id: "stamp",
+      icon: "menu-book",
+      label: gold ? "Gold stamps" : "Stamps",
+      value: stamped.map((id) => STAMPS.find((s) => s.id === id)!.label).join(", "),
+      cls: "go",
+      body: `<div class="pc-stamps">${stamped.map((id) => stampHtml(id, save.stamps?.[c.town]?.[id] ?? 1)).join("")}</div>
+      <span class="day-hint">New in ${esc(town.name)}'s page of the postcard book.</span>
+      ${withBook ? `<button class="bv-btn sm" data-rep="book">${icon("menu-book")}Postcard book</button>` : ""}`,
+    });
+  }
 
   const tb = townBonus(town.id);
   if (!c.unlocked && tb && !save.found.includes(tb.id) && c.outcome !== "failed")
@@ -282,7 +306,7 @@ export function openReport(c: Closing, d: ReportDeps, arrive = false): void {
     key: KEY,
     label: `Report card, ${townById(c.town).name}`,
     cls: "report-card",
-    html: reportHtml(c, d.save),
+    html: reportHtml(c, d.save, !!d.book),
     onDismiss: () => d.closed?.(),
   });
   if (arrive) countUp(card);
@@ -344,6 +368,9 @@ export function openReport(c: Closing, d: ReportDeps, arrive = false): void {
         break;
       case "town":
         leave(() => d.town(btn.dataset.v!));
+        break;
+      case "book":
+        if (d.book) leave(d.book);
         break;
     }
   });

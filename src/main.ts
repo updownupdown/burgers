@@ -1235,6 +1235,11 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
     showHint("That customer is on their way out.", 1.5);
     return false;
   }
+  // A pie lifted off the peel by hand goes on an empty tray, as it does when swiped off the peel.
+  if (payload.type === "stack" && payload.peel && s.plate.layers.length) {
+    showHint("That tray already has food on it.", 1.8);
+    return false;
+  }
   if (payload.type === "stack" && payload.whole && payload.fromPlate !== slot && s.plate.layers.length) {
     showHint("That tray already has something on it.", 2);
     return false;

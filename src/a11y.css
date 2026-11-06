@@ -22,3 +22,8 @@
 /* A hold bar gone red (food off the heat too long) is striped as well. */
 .hbar.dry { height: 6px; }
 .hbar.dry > i { background: repeating-linear-gradient(-45deg, var(--bv-paprika) 0 3px, #8f2c1a 3px 5px); }
+
+/* Large text on a narrow phone: the map dock's name and line keep to their own column (one grid
+   track that can shrink), so the name steps down beside Prep & Open instead of sliding under it. */
+.home-dock-info { grid-template-columns: minmax(0, 1fr); }
+.home-dock-info .home-dayline { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

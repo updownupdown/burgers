@@ -1,3 +1,4 @@
+import { regularBadge } from "./ui/regulars";
 import type { Order, Plate } from "./game/types";
 import { COOK_SCALE, cookZone, type Cookable } from "./game/cooking";
 import { collapseCounted, dishOrder, layerQuality, PATTY_OFF, TIP_MOOD } from "./game/scoring";
@@ -716,7 +717,7 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, focused
           .reverse()
           .map((r) => `<i class="${r.state}${r.next ? " nx" : ""}"></i>`)
           .join("")}</div>`;
-    return `<div class="pat ${mood}">${moodFace(mood, !!order.critic && !badge)}${bar}${tipCoin(pct)}${order.critic && badge ? `<em class="critic" title="Food critic">Critic</em>` : ""}</div>
+    return `<div class="pat ${mood}">${moodFace(mood, !!order.critic && !badge)}${bar}${tipCoin(pct)}${order.critic && badge ? `<em class="critic" title="Food critic">Critic</em>` : ""}${badge ? regularBadge(order.regular, true) : ""}</div>
       ${nameDiv(" sm")}${pips}
       ${ex.length ? `<div class="cgs">${ex.map((e) => `<div class="cg">${e}</div>`).join("")}</div>` : ""}
       ${sides.length ? `<div class="sds">${sides.map((x) => sideLine(x, { short: width < 110, small: true })).join("")}</div>` : ""}`;
@@ -725,7 +726,7 @@ export function ticketHtml(order: Order, plate: Plate, patience: number, focused
   const head =
     level >= 4
       ? `<div class="pat cmp ${mood}">${moodFace(mood, !!order.critic)}${nameDiv()}${bar}${tipCoin(pct)}</div>${how}`
-      : `<div class="pat ${mood}">${moodFace(mood)}${bar}${tipCoin(pct)}${order.critic ? `<em class="critic" title="Food critic">Critic</em>` : ""}</div>` +
+      : `<div class="pat ${mood}">${moodFace(mood)}${bar}${tipCoin(pct)}${order.critic ? `<em class="critic" title="Food critic">Critic</em>` : ""}${regularBadge(order.regular)}</div>` +
         (level >= 3 && how ? `<div class="nmrow">${nameDiv()}${how}</div>` : nameDiv() + how);
   if (sidesOnly) {
     const next = sides.findIndex((x) => !x.state);

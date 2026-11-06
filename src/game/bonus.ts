@@ -40,12 +40,12 @@ export interface Bonus {
 
 /** In road order: the town that unlocks each, and its price. */
 export const BONUSES: Bonus[] = [
-  { id: "bench", town: "pinecrest", price: 40, name: "Comfy bench", text: "Customers wait 30% longer at the window, and nobody in line gives up.", best: "Learning the ropes", icon: "people" },
-  { id: "autostop", town: "elkpass", price: 70, name: "Smart fountain", text: "Drinks stop pouring at the line and get their lid by themselves (Relaxed does this anyway).", best: "Thirsty crowds", icon: "drink" },
-  { id: "steady", town: "cedarfalls", price: 90, name: "Steady hands", text: "Tossed toppings land neatly.", best: "Tall burgers", icon: "burger" },
+  { id: "bench", town: "pinecrest", price: 40, name: "Comfy bench", text: "Nobody in line gives up, the window waits 30% longer, and each call of the bell brings two people up.", best: "Learning the ropes", icon: "people" },
+  { id: "autostop", town: "elkpass", price: 70, name: "Smart fountain", text: "Drinks pour twice as fast, stop at the line and get their lid by themselves.", best: "Thirsty crowds", icon: "drink" },
+  { id: "steady", town: "cedarfalls", price: 90, name: "Steady hands", text: "Sauce stops flowing once it's just right, so it never drowns, and tossed toppings land neatly.", best: "Tall burgers", icon: "burger" },
   { id: "lamp", town: "summit", price: 140, name: "Heat lamp", text: "Warm holding: the warm end, the taco rack, lifted fries and the trays keep food fresh twice as long.", best: "Cooking ahead", icon: "flame" },
   { id: "cookies", town: "saltwater", price: 180, name: "Apology cookies", text: "Walk-outs don't cost popularity today.", best: "Busy, stressful days", icon: "heart" },
-  { id: "timer", town: "gullpoint", price: 210, name: "Kitchen timer", text: "A soft tick when anything reaches done, and a countdown ring on the counter buttons.", best: "A full grill and fryer", icon: "timer" },
+  { id: "timer", town: "gullpoint", price: 210, name: "Kitchen timer", text: "A countdown ring on the counter buttons, a tick when anything is done, and food takes twice as long to burn.", best: "A full grill and fryer", icon: "timer" },
   { id: "turbo", town: "driftwood", price: 240, name: "Turbo fryer", text: "Fries cook 35% faster.", best: "Fries and poutine", icon: "fries" },
   { id: "guestbook", town: "harbor", price: 290, name: "Guest book", text: "Happy customers spread twice the word.", best: "Building popularity", icon: "review" },
   { id: "board", town: "redmesa", price: 340, name: "Sandwich board", text: "15% more people stop by today.", best: "Growing popular", icon: "flag" },

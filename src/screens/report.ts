@@ -133,7 +133,7 @@ export function reportHtml(c: Closing, save: Save): string {
     label: "Orders",
     value: `${money(orders)}${c.tips ? ` + ${money(c.tips)} tips` : ""}`,
     body: `<div class="day-ledger"><dl>
-      ${row("Orders", money(orders), "", `${plural(c.served, "order")}${c.lost ? ` · ${c.lost} walked out` : ""}${c.leftLine ? ` · ${c.leftLine} left the line` : ""}`)}
+      ${row("Orders", money(orders), "", `${plural(c.served, "order")}${c.lost ? ` · ${c.lost} walked out` : ""}${c.leftLine ? ` · ${c.leftLine} left the line` : ""}${c.walkedPast ? ` · ${c.walkedPast} walked past the line` : ""}`)}
       ${row("Tips", money(c.tips), "", "for speed")}
       ${c.comped ? row("On the house", `−${money(c.comped)}`, "neg", "sides and extras nobody ordered") : ""}
       ${c.spills ? row("Spilled soda", `−${money(c.spills)}`, "neg") : ""}

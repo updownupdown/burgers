@@ -5,25 +5,16 @@ import { fadePopularity } from "./press";
 import { buyBonus, buyLook, readyToBuy, wearLook } from "./garage";
 import { DEFAULT_LOOK, LOOKS, SLOTS } from "./looks";
 import { roadOrder } from "./devmode";
-import { expectedCustomers, NEW_REGION, RANGE_MI, rangeUnits, regionShifts, sleep } from "./day";
+import { expectedCustomers, NEW_REGION, regionShifts, sleep } from "./day";
 import { migrateSave, freshSave, START_POPULARITY } from "./progress";
-import { arrivalGap, clockAt, crowdShare, DEFAULT_SHIFT, shiftSeconds, validShift } from "./shift";
-import { distance } from "./travel";
-import { LINKS, STOPS, townById } from "./stops";
+import { arrivalGap, clockAt, crowdShare, DEFAULT_SHIFT, shiftKind, SHIFTS, shiftSeconds, validShift } from "./shift";
+import { STOPS, townById } from "./stops";
 
 describe("sleeping", () => {
   it("turns the day and resets the night's driving", () => {
     const s = { day: 4, time: "evening" as const, driven: 12 };
     expect(sleep(s)).toEqual({ day: 4 });
     expect(s).toEqual({ day: 5, time: "morning", driven: 0 });
-  });
-});
-
-describe("range", () => {
-  it("fits any single road, highways and late links included", () => {
-    expect(RANGE_MI).toBe(130);
-    for (const t of STOPS) for (const r of t.roads) expect(distance(t.id, r)).toBeLessThanOrEqual(rangeUnits());
-    for (const l of LINKS) expect(distance(l.a, l.b)).toBeLessThanOrEqual(rangeUnits());
   });
 });
 
@@ -94,10 +85,24 @@ describe("a new truck's first shifts (review of build #78)", () => {
 describe("the shift window", () => {
   it("defaults to the lunch rush and stays inside the day", () => {
     expect(validShift(null)).toEqual(DEFAULT_SHIFT);
-    expect(validShift({ start: 5, end: 30 })).toEqual({ start: 9, end: 17 });
-    expect(validShift({ start: 14, end: 12 })).toEqual({ start: 13, end: 17 });
-    expect(validShift({ start: 11, end: 13 })).toEqual({ start: 11, end: 15 });
+    // Old slider windows go to the nearest of the two shifts (DESIGN §51).
+    expect(validShift({ start: 5, end: 30 })).toEqual(SHIFTS.full);
+    expect(validShift({ start: 9, end: 17 })).toEqual(SHIFTS.full);
+    expect(validShift({ start: 12, end: 17 })).toEqual(SHIFTS.full);
+    expect(validShift({ start: 9, end: 13 })).toEqual(SHIFTS.lunch);
+    expect(validShift({ start: 14, end: 12 })).toEqual(SHIFTS.lunch);
+    expect(validShift({ start: 11, end: 13 })).toEqual(SHIFTS.lunch);
+    expect(validShift({ start: 10, end: 16 })).toEqual(SHIFTS.full);
+    expect(shiftKind(validShift({ start: 10, end: 16 }))).toBe("full");
     expect(crowdShare(DEFAULT_SHIFT)).toBeCloseTo(1);
+  });
+
+  it("makes the full day longer and busier, with the crowd still on the lunch curve", () => {
+    const share = crowdShare(SHIFTS.full);
+    expect(shiftSeconds(SHIFTS.full, 200)).toBe(300);
+    expect(share).toBeGreaterThan(1.15);
+    // Fewer extra people than extra hours: the edges of the day are quiet.
+    expect(share).toBeLessThan(1.5);
   });
 
   it("plays a quarter of the town's shift per hour and runs the clock across it", () => {

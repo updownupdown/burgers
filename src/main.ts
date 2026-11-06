@@ -6,7 +6,7 @@ import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { expectedCustomers, regionShifts, sleep } from "./game/day";
 import { greatShift, togglePick, townBonus, validPicks, type BonusId } from "./game/bonus";
 import { cookTime, shiftStretch } from "./game/pace";
-import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, validShift, type ShiftWindow } from "./game/shift";
+import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, SHIFTS, validShift, type ShiftWindow } from "./game/shift";
 import { freshSave, loadSave, passed, passTown, todaysClosing, writeSave, type Closing } from "./game/progress";
 import { eventOn, fountainFor, fryerOf, garnishFor, garnishOf, middleOf, townById, withEvent, withLearned, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
@@ -23,6 +23,7 @@ import type { DrinkId, FriesSize, FryKind, Garnish, Layer, Order, Piece, Plate, 
 import { GARNISH_LABEL } from "./game/types";
 import { makeGarnish } from "./render/models/garnish";
 import { countRegular, REGULAR_AT, REGULAR_GOAL, REGULAR_POP, regularOrder } from "./game/regulars";
+import { RegularTags } from "./ui/regulars";
 import { AFTER_OVEN, BREADS, COMAL_FILL, COUNTED, DRINK_LABEL, FRIES_PORTION, FRIES_SCOOP, FRY_LABEL, fryOf, GRILLABLE, isSauce, KIND_LABEL, newPiece, pressable, PROTEINS, sauceRadius, SCOOPED, SIZE_LABEL, SUGARED, TORTILLAS, unfoldTortilla } from "./game/types";
 import { SCALE } from "./render/units";
 import { dressCup } from "./render/cup";
@@ -51,7 +52,7 @@ import { Dusk } from "./render/dusk";
 import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
-import { renderPrep, reviewsHtml, syncRange, toggleIngredients } from "./screens/day";
+import { renderPrep, reviewsHtml, toggleIngredients, togglePrepFold } from "./screens/day";
 import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, setTabArt, ticketHtml, tortillaMeter } from "./ui";
 import { icon } from "./ui/icons";
 import { DRINK_TINT } from "./render/machines";
@@ -306,6 +307,8 @@ const bands = { customers: { x: 0, y: 0, w: 0, h: 0 } as Rect, tray: {} as Rect,
 let colX = 0;
 /** Where the order rail sits in the customers band (CSS px from the top). */
 let railTop = 100;
+/** The town's regular's name tag over their head (ui/regulars.ts). */
+const regularTags = new RegularTags(ui.root);
 /** Where the receipts were last placed, so they're only moved when focus or the orders change. */
 let ticketsAt = "";
 /** The focused order's ticket is opened out. Tapping it folds it back; tapping a stub opens that one. */
@@ -376,6 +379,8 @@ function layout(): void {
     b.style.top = `${railY - 6}px`;
     b.style.maxWidth = `${slotW - 8}px`;
   });
+  // The regular's name tag sits where bubbles go, over their head (DESIGN §51).
+  regularTags.place(w, railY * 0.58);
   ticketsAt = "";
   // Tips have one lane, just under the HUD over the customers, clear of the receipts and the
   // counter you're working on (the local ask is a flag in the HUD, so nothing else sits there).
@@ -502,6 +507,11 @@ function callNext(prefer = -1): boolean {
   return true;
 }
 
+/** The Comfy bench (DESIGN §51): a call made by hand brings one more up with it, if there's room. */
+function benchCall(): void {
+  if (has("bench")) callNext();
+}
+
 /**
  * A tap on an empty tray calls the next person to it (after build #78): the bell is in the hardest
  * spot to reach with a thumb, the trays are not. The header bell still works.
@@ -512,6 +522,7 @@ function callToTray(i: number): void {
   const atWindow = game.slots.filter((s) => s.order || s.fig).length;
   if (atWindow >= WINDOW[game.pacing]) return void hintOnce("bell-full", `No room at the window: ${WINDOW[game.pacing]} at a time on ${DIFFICULTY[game.pacing].label}. Serve someone first.`, 3.5);
   if (!callNext(i)) return;
+  benchCall();
   ui.bell.classList.remove("ring");
   void ui.bell.offsetWidth;
   ui.bell.classList.add("ring");
@@ -542,6 +553,7 @@ function ringBell(): void {
     return;
   }
   if (callNext()) {
+    benchCall();
     coachCounts.bell++;
     hintOnce("bell-called", "Next! More people at the window means more money, if you can keep up.", 3.5);
   }
@@ -1313,9 +1325,10 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
       let n = 0;
       for (let i = s.plate.layers.length - 1; i >= 0 && s.plate.layers[i].piece.kind === p.kind; i--) n++;
       const want = s.order.layers.find((e) => e.kind === p.kind)?.count;
-      // Relaxed's helpers: the first of a counted topping brings the rest of the ticket's count with
-      // it (not tortillas or scoops, which are tacos and fillings of their own). Undo takes them all.
-      if (DIFFICULTY[game.pacing].helpers && want && n === 1 && want > 1 && !TORTILLAS.has(p.kind) && !SCOOPED.has(p.kind)) {
+      // The first of a counted topping brings the rest of the ticket's count with it, on every tier
+      // (DESIGN §51; not tortillas or scoops, which are tacos and fillings of their own). Undo takes
+      // them all; a drag after that adds one more.
+      if (want && n === 1 && want > 1 && !TORTILLAS.has(p.kind) && !SCOOPED.has(p.kind)) {
         const all: Layer[] = [l];
         for (let k = 1; k < want; k++) {
           const more = landing(s.plate.layers, { ...structuredClone(p), uid: newPiece(p.kind).uid }, spread);
@@ -1688,7 +1701,7 @@ function whereFood(p: Piece): Place | null {
   return bi >= 0 ? { at: "basket", i: bi } : null;
 }
 
-/** A counted topping that went on as the ticket's whole count (Relaxed): Undo carries them all back. */
+/** A counted topping that went on as the ticket's whole count (every tier): Undo carries them all back. */
 let bundled: { lead: Piece; layers: Layer[] } | null = null;
 
 /** A drop landed: note it, so Undo can carry it back. */
@@ -2869,6 +2882,7 @@ function paintBench(pt: Pointer): void {
   const last = stroke[stroke.length - 1];
   if (!last || Math.hypot(q.x - last.x, q.z - last.z) > 0.06) {
     stroke.push(q);
+    if (steadySauceFull(stroke)) return;
     setBench(b, ls);
     s.lastPaint = performance.now();
     if (s.lastPaint - lastSquirt > 70) {
@@ -2969,6 +2983,17 @@ function sauceMove(pt: Pointer): void {
   }
 }
 
+/**
+ * Steady hands (DESIGN §51): once a squeeze is just right, the bottle stops. True (and the point
+ * just added taken back off) when this point would have pushed it past the Perfect band.
+ */
+function steadySauceFull(stroke: { x: number; z: number }[]): boolean {
+  if (!has("steady") || sauceCoverage(stroke) <= SAUCE_BAND.hi) return false;
+  stroke.pop();
+  hintOnce("steady-sauce", "Steady hands: that's just right. The bottle stops there.", 2.5);
+  return true;
+}
+
 /** Squeeze a line where the nozzle is, if it's over the burger (and, dragged in, once it's come in over the middle). */
 function paintSauce(pt: Pointer): void {
   const s = sauceDrag!;
@@ -3005,6 +3030,7 @@ function paintSauce(pt: Pointer): void {
   const last = stroke[stroke.length - 1];
   if (!last || Math.hypot(q.x - top.offX - last.x, q.z - top.offZ - last.z) > 0.06) {
     stroke.push({ x: q.x - top.offX, z: q.z - top.offZ });
+    if (steadySauceFull(stroke)) return;
     syncTray(slot, false);
     s.lastPaint = performance.now();
     if (s.lastPaint - lastSquirt > 70) {
@@ -4681,22 +4707,6 @@ function fitTicket(t: HTMLElement, render: (level: number) => string, levels = 5
 // Screens
 
 let screenShownAt = 0;
-// The shift window's two-thumb slider on Prep: follow the drag, then keep the window when let go.
-ui.root.addEventListener("input", (e) => {
-  const el = e.target as HTMLInputElement;
-  const end = el.dataset?.range as "start" | "end" | undefined;
-  if (!end || !prepOpen) return;
-  syncRange(ui.summary, end);
-});
-ui.root.addEventListener("change", (e) => {
-  const el = e.target as HTMLInputElement;
-  const end = el.dataset?.range as "start" | "end" | undefined;
-  if (!end || !prepOpen) return;
-  save.shift = validShift(syncRange(ui.summary, end));
-  writeSave(save);
-  showPrep();
-});
-
 ui.root.addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-act]");
   const act = btn?.dataset.act;
@@ -4742,6 +4752,19 @@ ui.root.addEventListener("click", (e) => {
     }
     case "prep-ing":
       toggleIngredients();
+      showPrep();
+      break;
+    // Lunch or Full day (DESIGN §51): kept in the save as the window itself.
+    case "prep-shift": {
+      const v = btn!.dataset.v;
+      if (v !== "lunch" && v !== "full") break;
+      save.shift = { ...SHIFTS[v] };
+      writeSave(save);
+      showPrep();
+      break;
+    }
+    case "prep-fold":
+      togglePrepFold(save.day, save.town);
       showPrep();
       break;
     case "prep-bonus": {
@@ -4996,7 +5019,6 @@ function startShift(): void {
   game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: game.shift, bonuses: game.bonuses, pacing: game.pacing, regionShifts: regionShifts(save.shiftsIn, stop()) });
   // A town's first shift is simpler (fewer changes and sides), then a little more, then as usual.
   game.townEase = [0.5, 0.75, 1][Math.min(2, save.shiftsIn[game.town] ?? 0)];
-  // The range is refuelled by endShift, not here: a shift quit or reloaded half way doesn't count.
   // Today's local ask, the same one Prep showed (not on the guided first shift).
   // Not on a town's first shift either: one new thing at a time.
   game.ask = game.tutorial || !save.shiftsIn[game.town] ? null : askFor(stop(), menuFor(stop(), save.hidden), save.day, game.customers);
@@ -5021,10 +5043,12 @@ function startShift(): void {
   const spec = DIFFICULTY[game.pacing];
   counter.holdRate = (has("lamp") ? 0.5 : 1) / spec.hold;
   // The Smart fountain, and Relaxed's helpers: the pour stops at the line and the lid goes on.
+  // The fountain also pours twice as fast, so it helps on Relaxed too (DESIGN §51).
   counter.autoStopPour = has("autostop") || spec.helpers;
   counter.autoLid = has("autostop") || spec.helpers;
-  // Relaxed: things still burn, at half the pace once over-done.
-  counter.burnPace = spec.burn;
+  counter.pourBoost = has("autostop") ? 2 : 1;
+  // Relaxed: things still burn, at half the pace once over-done. The Kitchen timer halves it again.
+  counter.burnPace = spec.burn * (has("timer") ? 0.5 : 1);
   // Relaxed: small slips cost half (scoring.ts).
   setSmallSlips(spec.small);
   counter.setPage(HOME_PAGE);
@@ -5662,11 +5686,11 @@ counter.events.spill = () => {
   showHint("It's overflowing! Let go, and wipe up the mess.", 2.5);
 };
 // Kitchen timer (bonus): a soft tick when anything on the grill or in the fryer reaches done.
-// Ready alerts (Relaxed and Steady, difficulty study): the same tick, and a word, when it's done on
-// a counter you aren't looking at; the counter's button lamp lights too (see updateHud).
+// Ready alerts (every tier since DESIGN §51): the same tick, and a word, when it's done on a
+// counter you aren't looking at; the counter's button lamp lights too (see updateHud).
 counter.events.done = (page) => {
   if (game.phase !== "playing") return;
-  const away = page !== counter.page && DIFFICULTY[game.pacing].alerts;
+  const away = page !== counter.page;
   if (has("timer") || away) sfx.tick();
   if (away && page === HOME_PAGE) {
     const where = counter.middle === "press" ? "in the press" : counter.middle === "oven" ? "in the oven" : counter.middle === "comal" ? "on the comal" : "on the grill";
@@ -5698,7 +5722,10 @@ function updateUi(dt = 0): void {
   updateTrayActs();
   const len = game.shiftLength;
   const left = Math.max(0, len - game.time);
-  const tText = game.phase === "sundown" ? "Closed" : left > 0 ? clockLabel(clockAt(game.time, game.shift, len)) : "Closing";
+  // Closing (DESIGN §51): the clock says how many are still to serve, at the window and in line
+  // ("3 left" on a phone under 360 px, where the longer words would run into the money).
+  const toServe = game.line.length + game.slots.filter((s) => s.order && !s.leaving).length;
+  const tText = game.phase === "sundown" ? "Closed" : left > 0 ? clockLabel(clockAt(game.time, game.shift, len)) : toServe > 0 ? `${toServe} left${innerWidth < 360 ? "" : " to serve"}` : "Closing";
   if (tText !== lastTimerText) {
     ui.timer.textContent = tText;
     ui.timer.classList.toggle("closing", left <= 0 && game.phase !== "sundown");
@@ -5725,6 +5752,7 @@ function updateUi(dt = 0): void {
     const t = ui.tickets[i];
     const show = !!s.order && !s.leaving && game.phase !== "title";
     t.hidden = !show;
+    regularTags.sync(i, show && !s.bubble ? (s.order?.regular ?? null) : null);
     const back = ui.sentBack[i];
     const note = show && s.sentBack ? `Sent back: ${capitalise(s.sentBack)}` : "";
     back.hidden = !note;
@@ -5848,7 +5876,6 @@ function updateUi(dt = 0): void {
   const ovenBurning = pies.some((d) => darkSide(d) > COOK_SCALE.dough.over);
   // Ready alerts: the middle counter's lamp also lights for food done on the grill, comal or press.
   const grillReady =
-    DIFFICULTY[game.pacing].alerts &&
     (counter.grillItems.some((g) => !g.below && !g.held && g.piece.kind in COOK_SCALE && cookZone(g.piece.kind as Cookable, cookLevel(g.piece)) === "done") ||
       counter.bays.some((b, i) => {
         const r = i < counter.bayCount && b.closed ? counter.bayReading(b) : null;

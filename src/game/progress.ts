@@ -27,7 +27,7 @@ export interface Save {
   day: number;
   /** Morning (open or set off) or evening (results, a short hop, sleep). */
   time: TimeOfDay;
-  /** Map units driven since the last shift or sleep; hops add up against the overnight range. */
+  /** Left from the overnight range (gone in DESIGN §51): unused, kept so old saves load. */
   driven: number;
   /** Today's shift, for the Closing screen, until the truck sleeps. */
   last: Closing | null;

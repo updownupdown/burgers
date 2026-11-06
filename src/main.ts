@@ -5722,9 +5722,10 @@ function updateUi(dt = 0): void {
   updateTrayActs();
   const len = game.shiftLength;
   const left = Math.max(0, len - game.time);
-  // Closing (DESIGN §51): the clock says how many are still to serve, at the window and in line.
+  // Closing (DESIGN §51): the clock says how many are still to serve, at the window and in line
+  // ("3 left" on a phone under 360 px, where the longer words would run into the money).
   const toServe = game.line.length + game.slots.filter((s) => s.order && !s.leaving).length;
-  const tText = game.phase === "sundown" ? "Closed" : left > 0 ? clockLabel(clockAt(game.time, game.shift, len)) : toServe > 0 ? `${toServe} left to serve` : "Closing";
+  const tText = game.phase === "sundown" ? "Closed" : left > 0 ? clockLabel(clockAt(game.time, game.shift, len)) : toServe > 0 ? `${toServe} left${innerWidth < 360 ? "" : " to serve"}` : "Closing";
   if (tText !== lastTimerText) {
     ui.timer.textContent = tText;
     ui.timer.classList.toggle("closing", left <= 0 && game.phase !== "sundown");

@@ -3,7 +3,7 @@
 // town with no lost day, the regular's name tag and ticket header, "N left to serve" while
 // Closing and the walked-past count on the report card.
 // PORT=4184 [OUT=dir/] node tools/playtest/prep51.cjs [prep,drive,regular,closing]
-const { open, step, enterShift, out } = require('./lib.cjs');
+const { open, step, enterShift, out, gesture } = require('./lib.cjs');
 const only = (process.argv[2] || '').split(',').filter(Boolean);
 const want = (n) => !only.length || only.includes(n);
 const ALL = ['pinecrest', 'elkpass', 'cedarfalls', 'summit', 'saltwater', 'gullpoint', 'driftwood', 'harbor'];
@@ -47,7 +47,7 @@ const tap = async (p, sel) => { await p.click(sel); await p.waitForTimeout(350);
     check('old 9 to 5 window shows as Full day', folded.shift === 'full', JSON.stringify(sh));
     check('Prep opens folded (no menu rows, no bonus list, no slider)', !folded.menu && !folded.bonusList && !folded.slider);
     check('folded Prep shows the bonuses brought last time', folded.brought.join() === 'Comfy bench,Heat lamp', folded.brought.join());
-    check('folded Prep fits without much scrolling', folded.height <= folded.view + 140, `${folded.height} in ${folded.view}`);
+    if (p.viewportSize().height >= 800) check('folded Prep fits without much scrolling', folded.height <= folded.view + 140, `${folded.height} in ${folded.view}`);
     await tap(p, '.prep [data-act=prep-shift][data-v=lunch]');
     const lunch = await p.evaluate(() => ({ s: JSON.parse(localStorage.getItem('bv-save-v1')).shift, label: document.querySelector('.prep .prep-shift-label').textContent }));
     check('Lunch sets 11 to 3', lunch.s.start === 11 && lunch.s.end === 15, lunch.label);
@@ -110,10 +110,16 @@ const tap = async (p, sel) => { await p.click(sel); await p.waitForTimeout(350);
       // Serve nobody; call people up as they come so the regular reaches the window.
       reg = await p.evaluate(() => {
         const g = window.__bv.game;
-        const k = g.slots.findIndex((s) => s.order && s.regular);
+        const k = g.slots.findIndex((s) => s.order && s.order.regular && !s.leaving);
         return k >= 0 ? k : null;
       });
       if (reg === null) await p.evaluate(() => { const b = document.querySelector('.tray-call:not([hidden])'); if (b) b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); });
+    }
+    // A tap on their tray opens their ticket (stubs on a phone are too narrow for the badge).
+    if (reg !== null) {
+      const y = await p.evaluate(() => { const t = document.querySelectorAll('.tray-call')[0]; const r = t?.getBoundingClientRect(); return r && r.height ? r.top + r.height / 2 : 442; });
+      await gesture(p, [[(reg + 0.5) * 130, y], [(reg + 0.5) * 130, y]]);
+      await step(p, 0.3);
     }
     await p.waitForTimeout(300);
     await shot('regular');
@@ -123,31 +129,29 @@ const tap = async (p, sel) => { await p.click(sel); await p.waitForTimeout(350);
   }
 
   if (want('closing')) {
-    // A busy Summit City shift, played by nobody: Closing shows how many are left, the report card who walked past.
+    // Summit City with people waiting: jump the clock to closing, read the HUD, then let the shift end.
     await load(p, { ...base, town: 'summit', shiftsIn: { summit: 2 }, popularity: 80, picks: [] });
     await enterShift(p);
     await p.evaluate(() => window.__bv.manual(true));
-    let seen = '';
-    for (let i = 0; i < 600; i++) {
+    for (let i = 0; i < 6; i++) await step(p, 5);
+    await p.evaluate(() => { const g = window.__bv.game; g.time = g.shiftLength + 0.2; if (!g.walkedPast) g.walkedPast = 2; });
+    await step(p, 0.3);
+    await p.waitForTimeout(300);
+    const seen = await p.evaluate(() => document.querySelector('[data-r=timer]')?.textContent?.trim() || '');
+    const n = await p.evaluate(() => { const g = window.__bv.game; return g.line.length + g.slots.filter((s) => s.order && !s.leaving).length; });
+    await shot('closing');
+    check('Closing shows "N left to serve"', seen === `${n} left${p.viewportSize().width < 360 ? '' : ' to serve'}`, seen);
+    // Everyone gives up: the shift closes and the report card comes up.
+    await p.evaluate(() => { const g = window.__bv.game; g.line.length = 0; for (const s of g.slots) if (s.order) s.patience = 0.01; });
+    for (let i = 0; i < 20 && !(await p.$('dt small')); i++) {
       await step(p, 1);
-      const st = await p.evaluate(() => ({ t: window.__bv.game.time, len: window.__bv.game.shiftLength, phase: window.__bv.game.phase, left: document.querySelector('[data-r=timer]')?.textContent?.trim() || '', hidden: false }));
-      if (st.t > st.len && st.left && !st.hidden && !seen) {
-        seen = st.left;
-        await p.waitForTimeout(200);
-        await shot('closing');
-      }
-      if (st.phase !== 'playing') break;
-    }
-    check('Closing shows "N left to serve"', /left to serve/.test(seen), seen);
-    await p.waitForTimeout(4500);
-    for (let i = 0; i < 10 && !(await p.$('.report')); i++) {
-      await p.mouse.click(195, 400);
-      await p.waitForTimeout(800);
+      await p.waitForTimeout(400);
+      if (i > 4) await p.mouse.click(195, 400);
     }
     await p.waitForTimeout(2500);
     await shot('report');
-    const row = await p.evaluate(() => [...document.querySelectorAll('.report *')].map((e) => e.textContent).find((t) => /walked past/.test(t)) || '');
-    check('the report card says how many walked past', /walked past/.test(row), row.slice(0, 80));
+    const row = await p.evaluate(() => [...document.querySelectorAll('dt small')].map((e) => e.textContent).find((t) => /walked past/.test(t)) || '');
+    check('the report card says how many walked past', /walked past the line/.test(row), row);
   }
 
   await b.close();

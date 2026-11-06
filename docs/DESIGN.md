@@ -1163,5 +1163,5 @@ The crowd formula is unchanged: a full day is just a longer window on the same c
 **Regulars you can see.** While the town's regular is at the window, a small name tag with a heart sits over their head (it steps aside for bubbles and opinions), and their ticket's header says "Doug's usual" (just "Doug" on a narrow stub). The "will be back (1 of 3)" tip after serving them is unchanged.
 
 **Losses you can see.**
-- While Closing, the HUD clock says "N left to serve" (everyone at the window and in line), and "Closing" once nobody is left.
+- While Closing, the HUD clock says "N left to serve" (everyone at the window and in line; "N left" under 360 px), and "Closing" once nobody is left.
 - The report card's Orders row adds "N walked past the line" (people who never joined because the line was long or they hadn't heard of the truck), after any who walked out or left the line.

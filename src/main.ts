@@ -552,6 +552,11 @@ function customerLeaves(i: number, stars: number, say: string | null, reviewed: 
   const s = game.slots[i];
   s.leaving = true;
   s.fig?.setMood(stars >= 4 ? "happy" : stars === 3 ? "neutral" : stars === 2 ? "sad" : "angry");
+  // The sauce bottle stops offering this tray, and a close-up open on it closes.
+  if (sauceDrag) {
+    sauceDrag.ok[i] = false;
+    if (sauceDrag.slot === i) closeSauce();
+  }
   // Move straight on to the next order so nothing gets dropped on the departing plate.
   if (game.active === i) {
     const other = game.slots.findIndex((sl) => sl.order && !sl.leaving);
@@ -2673,7 +2678,8 @@ function sauceFinal(): Rect {
   return { x: (w - side) / 2, y, w: side, h: side };
 }
 
-const sauceTargets = () => game.slots.map((s) => s.plate.layers.length > 0);
+// Not a tray whose customer is on their way out: that burger is done with.
+const sauceTargets = () => game.slots.map((s) => s.plate.layers.length > 0 && !s.leaving);
 
 function startSauce(pt: Pointer, kind: SauceKind): void {
   const ok = sauceTargets();
@@ -3135,7 +3141,8 @@ canvas.addEventListener("pointerdown", (e) => {
   if (knifeArm && pt.band !== "counter") disarm();
   if (sauceArm && pt.band !== "counter") {
     const slot = pt.band === "tray" ? trayView.pick(ndcIn(bands.tray, x, y)) : -1;
-    if (slot >= 0 && game.slots[slot].plate.layers.length) openTapSauce(slot);
+    if (slot >= 0 && game.slots[slot].leaving) disarm();
+    else if (slot >= 0 && game.slots[slot].plate.layers.length) openTapSauce(slot);
     else if (slot >= 0) showHint("Start a burger on that tray first.", 1.8);
     else disarm();
     return;

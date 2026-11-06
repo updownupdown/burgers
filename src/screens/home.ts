@@ -149,6 +149,8 @@ export function unmountHome(): void {
   if (!m) return;
   cur = null;
   if (m.selected) dropBack("sheet");
+  // Taken over mid pull-back: the shift's guard has nothing left to hold for.
+  if (m.arriving) dropBack("shift");
   m.observer.disconnect();
   window.removeEventListener("resize", m.onResize);
   m.pz.destroy();
@@ -645,7 +647,10 @@ const ARRIVE_MS = { shrink: 1350, fade: 850, sheet: 1350 };
 function playArrive(m: Mounted, a: Arrival): void {
   const s = m.deps.save;
   const last = todaysClosing(s);
-  if (!last) return;
+  if (!last) {
+    dropBack("shift");
+    return;
+  }
   fitMap(false);
   const truck = m.world.querySelector<SVGGElement>(".home-truck");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -708,6 +713,9 @@ function playArrive(m: Mounted, a: Arrival): void {
 function showReport(m: Mounted, arrive: boolean): void {
   const s = m.deps.save;
   const last = todaysClosing(s);
+  // Straight after a shift the shift's Back guard has held through the pull-back; the card takes
+  // over from it here, in the same tick, so the page never loses its catch on Back.
+  if (arrive) dropBack("shift");
   if (!last) return;
   openReport(
     last,

@@ -5080,8 +5080,9 @@ function showTitle(night: NightShow | null = null, arrive: Arrival | null = null
   ui.title.hidden = false;
   ui.summary.hidden = true;
   ui.summary.classList.remove("prep-host");
-  // Whatever Back was pointing at (a shift, Prep, a screen over the map) is gone now.
-  for (const k of ["shift", "prep", "overlay"]) dropBack(k);
+  // Whatever Back was pointing at (a shift, Prep, a screen over the map) is gone now. Straight
+  // after a shift the shift's guard holds until the report card takes over (see screens/home.ts).
+  for (const k of arrive ? ["prep", "overlay"] : ["shift", "prep", "overlay"]) dropBack(k);
   prepOpen = false;
   game.overlay = null;
   mountHome(ui.title, {
@@ -5127,7 +5128,8 @@ let sundown: { t: number; sign: HTMLElement; dropped: boolean; reduce: boolean }
 
 function startSundown(): void {
   cancelPointer();
-  dropBack("shift");
+  // The shift's Back guard stays up through the sundown and the pull-back (it does nothing once
+  // play has stopped), so Back can't leave the page before the report card is up to catch it.
   game.phase = "sundown";
   hintUntil = 0;
   for (const s of game.slots) {
@@ -5207,7 +5209,6 @@ window.addEventListener(
 function endShift(arrive: Arrival): void {
   cancelPointer();
   resetHands();
-  dropBack("shift");
   game.phase = "summary";
   // The shift fills the day; the evening follows, and only sleeping turns the day (see game/day.ts).
   save.time = "evening";

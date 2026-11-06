@@ -496,6 +496,8 @@
 .menu-group { background: var(--bv-card-pale); border-radius: var(--bv-r-lg); padding: 4px 14px 6px; box-shadow: 0 1px 0 rgb(0 0 0 / 0.04); }
 .menu-group > .menu-h { margin: 10px 0 2px !important; }
 .menu-group > :last-child { border-bottom: 0; }
+/* Settings' App group ends in Start a new trip with its confirm hidden after it: the row is the last thing seen, so no rule under it. */
+.menu-group > :has(+ .menu-confirm[hidden]:last-child) { border-bottom: 0; }
 .menu-group .menu-dev .menu-field { border-bottom: 0; }
 .menu-groups > .menu-build { margin-top: 8px !important; }
 

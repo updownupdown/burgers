@@ -231,7 +231,7 @@
 .home-sheet[hidden] { display: none; }
 .home-sheet-head { display: flex; align-items: flex-start; gap: 10px; padding-top: 4px; }
 .home-sheet-head > div { display: grid; gap: 6px; min-width: 0; flex: 1; }
-.home-sheet-head .bv-title { font-size: 26px; }
+.home-sheet-head .bv-title { font-size: 24px; }
 .home-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .home-tags .bv-chip { font-size: 12px; }
 .home-tags .bv-chip .bv-icon { font-size: 14px; }
@@ -335,7 +335,7 @@
   .home-pill b { font-size: 15px; }
   .home-pill small { letter-spacing: 0.02em; }
   .home-dock-info b { font-size: 20px; }
-  .home-sheet-head .bv-title { font-size: 23px; }
+  .home-sheet-head .bv-title { font-size: 22px; }
 }
 @media (max-width: 359px) {
   .home-dock-row > .bv-btn.lg { padding: 0 12px; font-size: 18px; }

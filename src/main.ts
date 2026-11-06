@@ -4879,7 +4879,7 @@ function startShift(): void {
   endSundownLeftovers();
   for (const k of ["prep", "overlay"]) dropBack(k);
   prepOpen = false;
-  ui.summary.classList.remove("prep-host");
+  ui.summary.classList.remove("prep-host", "card-host");
   shiftGuard();
   for (let i = 0; i < 3; i++) {
     const s = game.slots[i];
@@ -4999,6 +4999,7 @@ function showPrep(): void {
   // Redrawing Prep (a dish switched, the window moved) updates the card in place (day.ts).
   renderPrep(ui.summary, { save, stop: stop(), pacing: difficulty }, prepOpen);
   prepOpen = true;
+  ui.summary.classList.remove("card-host");
   ui.summary.classList.add("prep-host");
   ui.summary.hidden = false;
 }
@@ -5009,7 +5010,7 @@ function closePrep(fromBack = false): void {
   if (!fromBack) dropBack("prep");
   prepOpen = false;
   ui.summary.hidden = true;
-  ui.summary.classList.remove("prep-host");
+  ui.summary.classList.remove("prep-host", "card-host");
   ui.summary.innerHTML = "";
   refreshHome();
 }
@@ -5025,11 +5026,17 @@ let prepOpen = false;
 /** A screen over the map (closing, night, reviews) lives in the summary layer. */
 function showOverlay(kind: NonNullable<typeof game.overlay>, html: string): void {
   // Redrawing the same screen (a box opened, a filter tapped) must not swallow the next tap.
-  if (game.overlay !== kind) screenShownAt = performance.now();
+  const fresh = game.overlay !== kind;
+  if (fresh) screenShownAt = performance.now();
   // One Back entry for the layer, however many screens replace each other in it.
   if (!game.overlay) pushBack("overlay", () => closeOverlay(true));
   game.overlay = kind;
   ui.summary.classList.remove("prep-host");
+  // The Garage and Popularity & reviews float over the map as cards, like every other modal
+  // (DESIGN §43); they rise once when opened, not again on every redraw.
+  const card = kind === "garage" || kind === "reviews";
+  ui.summary.classList.toggle("card-host", card);
+  ui.summary.classList.toggle("card-rise", card && fresh);
   ui.summary.innerHTML = html;
   ui.summary.hidden = false;
 }
@@ -5086,7 +5093,7 @@ function showTitle(night: NightShow | null = null, arrive: Arrival | null = null
   screenShownAt = performance.now();
   ui.title.hidden = false;
   ui.summary.hidden = true;
-  ui.summary.classList.remove("prep-host");
+  ui.summary.classList.remove("prep-host", "card-host");
   // Whatever Back was pointing at (a shift, Prep, a screen over the map) is gone now.
   for (const k of ["shift", "prep", "overlay"]) dropBack(k);
   prepOpen = false;

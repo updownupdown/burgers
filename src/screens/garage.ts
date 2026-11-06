@@ -34,11 +34,11 @@ export function garageHtml(save: Save, v: GarageView): string {
   const preview = v.preview ? lookById(v.preview) : undefined;
   const look = preview ? { ...save.look, [preview.slot]: preview.id } : save.look;
   return `<div class="day-screen bv garage">
-    <header class="day-top">
-      <span class="day-top-ic" aria-hidden="true">${icon("garage")}</span>
-      <div class="where"><b>Garage</b></div>
+    <header class="menu-head bar">
+      <span class="menu-head-ic" aria-hidden="true">${icon("garage")}</span>
+      <div class="menu-headtext"><h2 class="bv-title">Garage</h2></div>
       <div class="gar-bank"><span class="bv-eyebrow">Savings</span><b class="bv-mono">${dollars(save.bank)}</b></div>
-      <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("close")}</button>
+      <button class="bv-btn icon sm ghost menu-x" data-act="back" aria-label="Back to the map">${icon("close")}</button>
     </header>
     <div class="day-scroll">
       <section class="gar-stage ${v.night ? "night" : ""}">

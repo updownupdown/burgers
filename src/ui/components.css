@@ -50,8 +50,8 @@
 .bv-night .bv-btn.primary { background: var(--bv-paprika); color: #fff7f2; }
 .bv-btn.accent { background: var(--bv-paprika); color: #fff; border-color: var(--bv-paprika); }
 .bv-btn.accent:active { background: var(--bv-paprika-2); }
-.bv-btn.ghost { border-color: transparent; color: var(--bv-ink-2); }
-.bv-btn.ghost:active { background: var(--bv-paper-2); }
+.bv-btn.ghost { border-color: transparent; background: transparent; color: var(--bv-ink-2); }
+.bv-btn.ghost:active { background: rgb(35 42 51 / 0.08); }
 .bv-btn.sm { min-height: 36px; padding: 0 var(--bv-sp-3); font-size: var(--bv-fs-md); }
 .bv-btn.lg { min-height: 58px; font-size: 21px; font-weight: 700; padding: 0 var(--bv-sp-5, 22px); }
 .bv-btn.lg .bv-icon { font-size: 1.35em; }

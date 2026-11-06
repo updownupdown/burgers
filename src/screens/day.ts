@@ -297,10 +297,10 @@ export function reviewsHtml(save: Save): string {
   const avg = reviewAverage(counts);
   const pct = (n: number) => `${Math.round(n * 100)}%`;
   return `<div class="day-screen bv">
-    <header class="day-top">
-      <span class="day-top-ic" aria-hidden="true">${icon("people")}</span>
-      <div class="where"><b>Popularity &amp; reviews</b></div>
-      <button class="bv-btn icon" data-act="back" aria-label="Back to the map">${icon("close")}</button>
+    <header class="menu-head bar">
+      <span class="menu-head-ic" aria-hidden="true">${icon("people")}</span>
+      <div class="menu-headtext"><h2 class="bv-title">Popularity &amp; reviews</h2></div>
+      <button class="bv-btn icon sm ghost menu-x" data-act="back" aria-label="Back to the map">${icon("close")}</button>
     </header>
     <div class="day-scroll">
       <p class="day-count">${total} review${total === 1 ? "" : "s"} · ${press.length} clipping${press.length === 1 ? "" : "s"}</p>

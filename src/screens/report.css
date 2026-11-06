@@ -56,3 +56,9 @@
 @media (prefers-reduced-motion: reduce) {
   .rep-sec-b { animation: none; }
 }
+/* The one-time nudge off Relaxed (DESIGN §49): one line and a button, quieter than a bonus. */
+.rep-nudge-slot:empty { display: none; }
+.rep-nudge { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 12px; border-radius: var(--bv-r-lg); background: var(--bv-paper-2); border: 1px solid var(--bv-rule-2); }
+.rep-nudge .t { flex: 1; min-width: 0; font-size: var(--bv-fs-sm, 13px); line-height: 1.35; }
+.rep-nudge .bv-btn { flex: none; }
+.rep-nudge.done { background: var(--bv-olive-soft); border-color: transparent; }

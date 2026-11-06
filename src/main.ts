@@ -62,7 +62,7 @@ import { devOn, simulate, type SimLevel } from "./game/devmode";
 import { coachOn, coachShowing, coachState, setCoachOn, skipLessonsFor, startCoach } from "./tutorial/coach";
 import { lessons } from "./tutorial/lessons";
 import { ACTION_TIPS, HintLane, type TipOpts } from "./game/hintlane";
-import { newHere, roadsAhead } from "./game/teaching";
+import { newHere, offerSteady, relaxedStreak, roadsAhead } from "./game/teaching";
 import { showWelcome, welcomeDue } from "./tutorial/welcome";
 import { modalClosedAt, modalOpen } from "./screens/modal";
 
@@ -5233,6 +5233,14 @@ function showTitle(night: NightShow | null = null, arrive: Arrival | null = null
     },
     openSettings: () => openSettings(),
     openHowTo: () => openHowTo(),
+    setPacing: (d) => {
+      difficulty = d;
+      try {
+        localStorage.setItem("bv-difficulty", d);
+      } catch {
+        // Storage can be unavailable; the pick still holds for this session.
+      }
+    },
     sfx: { whoosh: () => sfx.whoosh(), coin: () => sfx.coin(), tap: () => sfx.unlock() },
   });
   game.mapSel = save.town;
@@ -5409,6 +5417,11 @@ function endShift(arrive: Arrival): void {
   save.bank += takings;
   // A great shift unlocks this town's bonus, for sale in the Garage from now on.
   const great = !game.tutorial && greatShift(game.stars, game.served, game.served + game.lost, game.customers);
+  // Three great shifts in a row on Relaxed: the report card offers Steady for tomorrow, once.
+  const nudge = save.paceNudge ?? { streak: 0, offered: false };
+  const streak = relaxedStreak(nudge.streak, game.pacing, great);
+  const steady = offerSteady(streak, nudge.offered) && difficulty === "chill";
+  save.paceNudge = { streak, offered: nudge.offered || steady };
   let unlocked: BonusId | null = null;
   const tb = townBonus(here.id);
   if (great && tb && !save.found.includes(tb.id)) {
@@ -5450,6 +5463,7 @@ function endShift(arrive: Arrival): void {
     press: game.press,
     great,
     pacing: game.pacing,
+    steady,
     unlocked,
     usedBonus: [...game.bonuses],
     bank: save.bank,

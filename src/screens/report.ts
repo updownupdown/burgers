@@ -2,7 +2,7 @@ import { bonusById, GREAT, townBonus, type BonusId } from "../game/bonus";
 import { ordersShown, PASS_STARS, type Closing, type Save } from "../game/progress";
 import { addReviews, noReviews, reviewAverage, reviewTotal } from "../game/reviews";
 import { clockLabel } from "../game/shift";
-import { townById } from "../game/stops";
+import { FINAL_TOWN, townById } from "../game/stops";
 import { SHIFTS_TO_UNLOCK } from "../game/travel";
 import { opinionFace, opinionLabel } from "../ui/faces";
 import { icon } from "../ui/icons";
@@ -191,7 +191,9 @@ export function reportHtml(c: Closing, save: Save, withBook = false): string {
             ? `${Math.min(c.shiftsHere, SHIFTS_TO_UNLOCK)} of ${SHIFTS_TO_UNLOCK} · ${left} more`
             : town.roads.length
               ? "Roads open"
-              : "A side road";
+              : town.id === FINAL_TOWN
+                ? "Last stop"
+                : "A side road";
   const roadLong =
     c.outcome === "trip"
       ? `That's the whole road. From tomorrow ${esc(town.name)} throws a festival for the last night of the trip: open here in the morning to work it.`
@@ -203,7 +205,9 @@ export function reportHtml(c: Closing, save: Save, withBook = false): string {
             ? `Good shift. ${left === 1 ? "One more good shift opens" : `${left} more good shifts open`} the road on.`
             : town.roads.length
               ? "The roads out of here are open."
-              : "Nothing further opens from here: it's a side road.";
+              : town.id === FINAL_TOWN
+                ? "The last town of the trip. Every town on the map stays open."
+                : "Nothing further opens from here: it's a side road.";
   secs.push({
     id: "road",
     icon: "road",

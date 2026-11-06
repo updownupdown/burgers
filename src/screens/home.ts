@@ -866,14 +866,14 @@ function driveOff(m: Mounted, done: () => void): void {
   pushBack("drive-off", finish);
   m.el.addEventListener("click", finish, true);
   if (truck && typeof truck.animate === "function") {
-    // Along the ferry line, a little over half way out, then gone into the haze.
+    // Along the ferry line toward Harbor City, fading out over the water as it goes.
     const pts = routePoints([FINAL_TOWN, "harbor"]);
-    const n = Math.max(2, Math.ceil(pts.length * 0.6));
+    const n = pts.length;
     const frames = pts.slice(0, n).map((p, i, a) => ({ transform: `translate(${p[0]}px, ${p[1]}px)`, opacity: i < a.length * 0.6 ? 1 : 1 - (i - a.length * 0.6) / (a.length * 0.4), offset: i / (a.length - 1) }));
     truck.classList.toggle("west", pts[n - 1][0] < pts[0][0]);
     timers.push(
       window.setTimeout(() => {
-        anims.push(truck.animate(frames, { duration: DRIVE_OFF_MS.truck, easing: "ease-in", fill: "forwards" }));
+        anims.push(truck.animate(frames, { duration: DRIVE_OFF_MS.truck, easing: "ease-in-out", fill: "forwards" }));
       }, DRIVE_OFF_MS.trail * 0.5),
     );
   }

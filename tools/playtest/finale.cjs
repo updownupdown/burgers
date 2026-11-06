@@ -128,9 +128,13 @@ const back = async (p) => { await p.evaluate(() => history.back()); await p.wait
   check(!!(await p.$('.menu-card.fin-card')), 'closing it goes back to the trip card');
   await p.tap('.fin-card [data-fin=drive]');
   // Screenshots take a while at 2x: check the drive by the page's own clock, mid-way.
-  const drive = await p.evaluate(() => new Promise((res) => setTimeout(() => res({ trail: !!document.querySelector('.home-trail'), moving: document.querySelector('.home-truck').getAnimations().length > 0, credits: !!document.querySelector('.fin-credits') }), 1600)));
+  const drive = await p.evaluate(() => new Promise((res) => {
+    const at = () => { const r = document.querySelector('.home-truck').getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y)]; };
+    const t0 = at();
+    setTimeout(() => res({ trail: !!document.querySelector('.home-trail'), moving: document.querySelector('.home-truck').getAnimations().length > 0, from: t0, to: at(), credits: !!document.querySelector('.fin-credits') }), 2600);
+  }));
   check(drive.trail, 'the trip trail is drawn on the map');
-  check(drive.moving && !drive.credits, 'the truck drives off before the credits');
+  check(drive.moving && !drive.credits && Math.hypot(drive.to[0] - drive.from[0], drive.to[1] - drive.from[1]) > 20, `the truck drives off before the credits (${drive.from} -> ${drive.to})`);
   await shot(p, '12-drive-off');
   await p.waitForSelector('.menu-card.fin-credits', { state: 'attached', timeout: 15000 }).catch(() => {});
   check(!!(await p.$('.menu-card.fin-credits')), 'credits after the drive-off');

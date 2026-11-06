@@ -66,3 +66,12 @@
 
 /* Prep (day.ts): the town's signature dish leads the menu with a small tag. */
 .prep-sig { margin-left: 6px; padding: 1px 5px; border-radius: var(--bv-r-pill); background: var(--bv-amber-soft); color: #8a5e12; font: 800 0.625rem/1.4 var(--bv-font-ui); font-style: normal; letter-spacing: 0.05em; text-transform: uppercase; vertical-align: 2px; }
+
+/* The map header holds three buttons since the postcard book (home.ts): on a narrow phone they and
+   the Trip eyebrow tighten up so the header never runs off the edge. */
+@media (max-width: 379px) {
+  .home-top .home-actions { gap: 4px; }
+  .home-top .home-actions .bv-btn.icon { width: 40px; }
+  .home-top .home-brand { gap: 7px; }
+  .home-top .home-brand .bv-eyebrow { min-width: 0; font-size: 0.625rem; letter-spacing: 0.06em; }
+}

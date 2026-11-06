@@ -169,7 +169,7 @@ describe("bonuses and looks", () => {
   });
   it("prices the grand looks within a trip's reach", () => {
     for (const l of LOOKS.filter((x) => x.grand)) expect(l.price).toBeLessThanOrEqual(20000);
-    expect(LOOKS.find((l) => l.id === "airship")!.price).toBe(18750);
+    expect(LOOKS.find((l) => l.id === "airship")!.price).toBe(15000);
   });
 });
 

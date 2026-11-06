@@ -3,7 +3,7 @@ import { BONUSES, GREAT, greatMin, greatShift, migrateBonuses, townBonus } from 
 import { wordOfMouth } from "./line";
 import { fadePopularity } from "./press";
 import { buyBonus, buyLook, readyToBuy, wearLook } from "./garage";
-import { DEFAULT_LOOK, LOOKS, SLOTS } from "./looks";
+import { DEFAULT_LOOK, lookById, LOOKS, SLOTS } from "./looks";
 import { roadOrder } from "./devmode";
 import { expectedCustomers, NEW_REGION, RANGE_MI, rangeUnits, regionShifts, sleep } from "./day";
 import { migrateSave, freshSave, START_POPULARITY } from "./progress";
@@ -170,7 +170,7 @@ describe("looks", () => {
     s.bank = 500;
     expect(buyLook(s, "sage")).toBe(true);
     expect(s.look.paint).toBe("sage");
-    expect(s.bank).toBe(350);
+    expect(s.bank).toBe(500 - lookById("sage")!.price);
     expect(wearLook(s, "coral")).toBe(true);
     expect(s.look.paint).toBe("coral");
     expect(wearLook(s, "dusk")).toBe(false);

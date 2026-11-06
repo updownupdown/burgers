@@ -102,6 +102,9 @@ interface Layer {
 
 const stack: Layer[] = [];
 let host: HTMLElement | null = null;
+/** When a layer last closed, so the second tap of a double tap on its × doesn't land on what's under it. */
+let closedAt = 0;
+export const modalClosedAt = (): number => closedAt;
 
 function ensureHost(): HTMLElement {
   if (host) return host;
@@ -190,6 +193,7 @@ export function popModal(silent = false): void {
   const layer = stack.pop();
   if (!layer) return;
   dropBack(`modal:${layer.key}`);
+  closedAt = performance.now();
   layer.el.remove();
   if (layer.restoreFocus instanceof HTMLElement && document.contains(layer.restoreFocus)) layer.restoreFocus.focus({ preventScroll: true });
   if (!silent) layer.onDismiss?.();

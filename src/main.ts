@@ -46,7 +46,7 @@ import { makeKnife } from "./render/knife";
 import { makeEgg, type EggStage } from "./render/egg";
 import "./ui/components.css";
 import "./style.css";
-import { mountHome, refreshHome, type Arrival, type NightShow } from "./screens/home";
+import { homeBusy, mountHome, refreshHome, type Arrival, type NightShow } from "./screens/home";
 import { Dusk } from "./render/dusk";
 import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
@@ -63,7 +63,7 @@ import { devOn, simulate, type SimLevel } from "./game/devmode";
 import { coachOn, coachShowing, coachState, setCoachOn, skipLessonsFor, startCoach } from "./tutorial/coach";
 import { lessons } from "./tutorial/lessons";
 import { showWelcome, welcomeDue } from "./tutorial/welcome";
-import { modalOpen } from "./screens/modal";
+import { modalClosedAt, modalOpen } from "./screens/modal";
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -2948,8 +2948,14 @@ function updateSauce(dt: number): void {
   }
 }
 
+/**
+ * A card (the pause menu) just closed, or Prep's Open just started the shift: the second tap of a
+ * double tap on Resume or Open isn't a kitchen tap.
+ */
+const afterCard = (e: Event) => e.timeStamp - Math.max(modalClosedAt(), screenShownAt) < 400;
+
 canvas.addEventListener("pointerdown", (e) => {
-  if (game.phase !== "playing" || ptr) return;
+  if (game.phase !== "playing" || ptr || afterCard(e)) return;
   sfx.unlock();
   try {
     canvas.setPointerCapture(e.pointerId);
@@ -4351,8 +4357,9 @@ ui.tabs.forEach((t, i) => {
   };
   t.addEventListener("pointerup", end);
   t.addEventListener("pointercancel", end);
-  t.addEventListener("click", () => {
+  t.addEventListener("click", (e) => {
     if (swiped) return void (swiped = false);
+    if (afterCard(e)) return;
     sfx.unlock();
     if (!counter.inHand) goToPage(i);
   });
@@ -4808,6 +4815,7 @@ function startShift(): void {
   ui.title.hidden = true;
   closeAll();
   ui.summary.hidden = true;
+  screenShownAt = performance.now();
 }
 
 /** Dress the truck for the current stop: scenery, pantry bins and HUD label. */
@@ -5146,24 +5154,36 @@ function endShift(arrive: Arrival): void {
   // The results land on the evening map, as a sheet, after the view pulls back out of the truck.
   showTitle(null, arrive);
   if (unlocked) setTimeout(() => sfx.coin(), arrive.shot ? 1900 : 400);
-  // A pending update waits until the player leaves this screen (see showTitle).
+  // A pending update waits until the player leaves the report card (see showTitle and reloadWhenIdle).
   if (game.pendingUpdate) {
     ui.updateText.textContent = `Build #${game.pendingUpdate.build} will load when you continue.`;
     ui.update.hidden = false;
+    reloadWhenIdle(game.pendingUpdate);
   }
 }
 
 // ---------------------------------------------------------------------------
 // Updates
 
+/**
+ * On the map, reload onto a new build once nothing is open over it: not while the report card,
+ * Prep, a screen or a card is up, nor while the map plays the pull-back, a drive or the night.
+ */
+function reloadWhenIdle(v: VersionInfo): void {
+  setTimeout(() => {
+    if (game.phase !== "title" || game.pendingUpdate !== v) return;
+    if (modalOpen() || prepOpen || game.overlay || homeBusy()) reloadWhenIdle(v);
+    else reloadTo(v.build);
+  }, 1200);
+}
+
 const checkNow = startUpdateChecks((v) => {
   game.pendingUpdate = v;
   if (game.phase === "title") {
-    ui.updateText.textContent = `Updating to build #${v.build}…`;
+    const busy = modalOpen() || prepOpen || game.overlay || homeBusy();
+    ui.updateText.textContent = busy ? `Build #${v.build} will load when you continue.` : `Updating to build #${v.build}…`;
     ui.update.hidden = false;
-    setTimeout(() => {
-      if (game.phase === "title") reloadTo(v.build);
-    }, 1200);
+    reloadWhenIdle(v);
   } else if (game.phase === "summary") {
     ui.updateText.textContent = `Build #${v.build} will load when you continue.`;
     ui.update.hidden = false;

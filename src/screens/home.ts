@@ -11,6 +11,7 @@ import { townBonus } from "../game/bonus";
 import { buyBonus, readyToBuy } from "../game/garage";
 import { truckSvg as truckArt } from "./truckart";
 import { dollars } from "./garage";
+import { modalClosedAt } from "./modal";
 import { openReport } from "./report";
 import { renderMap, roadPath, routePoints, SEA, townPoint, VIEW, LAND_BOX } from "./map";
 import { PanZoom } from "./panzoom";
@@ -155,9 +156,14 @@ export function unmountHome(): void {
   if (m.root.contains(m.el)) m.el.remove();
 }
 
+/** True while the map is playing something (the pull-back, a drive, the night passing). */
+export const homeBusy = (): boolean => !!cur && (cur.driving || cur.night || !!cur.arriving);
+
 /** Redraw the numbers and the dock after the save changed elsewhere. */
 export function refreshHome(): void {
   if (!cur) return;
+  // Prep or a screen over the map just closed: its button's double tap shouldn't press one here.
+  cur.at = performance.now();
   cur.el.classList.toggle("evening", cur.deps.save.time === "evening");
   renderMapInto(cur);
   // The fresh SVG comes sized (renderMapInto); fitting again keeps the view if the layout moved.
@@ -359,9 +365,11 @@ function pipsHtml(done: number, need: number): string {
 
 function shiftsLine(save: Save, t: Stop): string {
   const n = save.shiftsIn[t.id] ?? 0;
-  if (!t.roads.length) return n ? `${n} shift${n === 1 ? "" : "s"} here` : t.id === FINAL_TOWN ? "Last stop of the trip" : "A side road: nothing further opens from here";
+  // Short enough for the dock beside Prep & Open at 320px (the town sheet says more).
+  if (!t.roads.length) return `<span class="t">${n ? `${n} shift${n === 1 ? "" : "s"} here` : t.id === FINAL_TOWN ? "Last stop of the trip" : "A side road"}</span>`;
   const { done, need } = unlockProgress(save.shiftsIn, t.id);
-  return done >= need ? `${pipsHtml(done, need)}<span class="t">roads open</span>` : `${pipsHtml(done, need)}<span class="t">${done}/${need} shifts to open the road</span>`;
+  const left = need - done;
+  return done >= need ? `${pipsHtml(done, need)}<span class="t">roads open</span>` : `${pipsHtml(done, need)}<span class="t">${left} more shift${left === 1 ? "" : "s"}</span>`;
 }
 
 function renderDock(m: Mounted): void {
@@ -377,7 +385,7 @@ function renderDock(m: Mounted): void {
       <button class="home-dock-info" data-home="here" aria-label="About ${esc(here.name)}">
         <span class="bv-eyebrow home-dayline">${icon(evening ? "moon" : "sun")}Day ${s.day} · ${evening ? "Evening in" : "Morning in"}</span>
         <b>${esc(here.name)}</b>
-        <span class="bv-caption">${evening ? esc(today) : ev ? `${icon("flag")}${esc(ev.name)} today` : shiftsLine(s, here)}</span>
+        <span class="bv-caption">${evening ? esc(today) : ev ? `${icon("flag")}<span class="t">${esc(ev.name)} today</span>` : shiftsLine(s, here)}</span>
       </button>
       ${
         evening
@@ -502,7 +510,7 @@ function onClick(e: Event): void {
     m.arriving();
     return;
   }
-  if (performance.now() - m.at < 450 || m.night) return;
+  if (performance.now() - Math.max(m.at, modalClosedAt()) < 450 || m.night) return;
   const act = btn.dataset.home!;
   const s = m.deps.save;
   switch (act) {
@@ -800,7 +808,11 @@ function playNight(m: Mounted, n: NightShow): void {
   later(NIGHT_MS.dawn, dawn);
   later(NIGHT_MS.out, () => box.classList.add("out"));
   later(NIGHT_MS.end, finish);
-  box.addEventListener("click", finish);
+  // A tap skips to the morning, but not the second half of the double tap on Sleep that started it.
+  const shownAt = performance.now();
+  box.addEventListener("click", () => {
+    if (performance.now() - shownAt > 400) finish();
+  });
   // Leaving the map mid-transition (back, a screen over it) just ends it.
   const stop = new MutationObserver(() => {
     if (!m.el.isConnected) {

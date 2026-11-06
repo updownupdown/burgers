@@ -126,6 +126,10 @@
 @media (max-width: 379px) {
   .day-top .where b { font-size: 20px; }
 }
+/* "Popularity & reviews" whole at 320px. */
+@media (max-width: 349px) {
+  .day-top .where b { font-size: 18px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .day-screen *, .day-screen *::before { transition: none !important; animation: none !important; }
 }
@@ -151,6 +155,10 @@
 .prep-h .bv-icon { font-size: 18px; }
 .prep-h span { margin-left: auto; font-size: 12.5px; font-weight: 600; color: var(--bv-mute); }
 .prep-h .prep-shift-label { font-size: 14px; color: var(--bv-ink); }
+/* The shift's hours stay on one line at 320px ("9:00am – 5:00pm · 8 h" at the longest). */
+@media (max-width: 349px) {
+  .prep-h .prep-shift-label { font-size: 13px; }
+}
 
 /* The shift window: bars by the hour over a two-thumb slider. Thumbs land on the hour lines. */
 .prep-range { --thumb: 30px; position: relative; display: grid; gap: 2px; }

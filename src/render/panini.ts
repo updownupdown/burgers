@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { cookLevel, isMelted } from "../game/cooking";
 import type { Kind, Piece } from "../game/types";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
-import { faceted, grade, mesh, ramp, shareGeometry, toon } from "./materials";
+import { faceted, grade, mesh, ramp, setLine, shareGeometry, toon } from "./materials";
 
 /*
  * The Sunny Coast's panini parts (DESIGN §24, phase 2), in the same ingredient units as the burger
@@ -40,12 +40,14 @@ const breadRamp = ramp([
   [0.8, "#9c5e2a"],
   [1.0, "#3b2216"],
 ]);
+/** Pink raw, white as it cooks through, then golden off the press plates; amber and brown once dry (DESIGN §45). */
 const chickenRamp = ramp([
   [0, "#f5bfb2"],
-  [0.25, "#f3c9bc"],
-  [0.42, "#f5ead8"],
-  [0.7, "#ecd3a6"],
-  [0.85, "#c99257"],
+  [0.25, "#f3cfc0"],
+  [0.4, "#f6e6cc"],
+  [0.6, "#eec27c"],
+  [0.78, "#d99a52"],
+  [0.92, "#a8692f"],
   [1.05, "#4a2c16"],
 ]);
 const veggieRamp = ramp([
@@ -206,7 +208,7 @@ const CHICKEN_SHAPE = blob(0.95, 0.6, 2.2, 0.62, 40, 0.02, 0.7);
 const CHICKEN_GEO = shareGeometry(slab(CHICKEN_SHAPE, PANINI_HEIGHT.chicken!, 0.06));
 const CHICKEN_LINES = (() => {
   const p = new Parts();
-  for (let i = 0; i < 4; i++) p.add(faceted(new THREE.BoxGeometry(1.35, 0.006, 0.07)), "#ffffff", { p: [0.05, 0, -0.36 + i * 0.24], ink: false });
+  for (let i = 0; i < 4; i++) p.add(faceted(new THREE.BoxGeometry(1.35, 0.006, 0.1)), "#ffffff", { p: [0.05, 0, -0.36 + i * 0.24], ink: false });
   return bakeShared(p);
 })();
 function makeChicken(body: THREE.Group): (p: Piece) => void {
@@ -224,8 +226,10 @@ function makeChicken(body: THREE.Group): (p: Piece) => void {
     key = k;
     const c = grade(chickenRamp(t, tmpA), tmpA);
     (m.material as THREE.MeshToonMaterial).color.copy(c);
+    // The outline follows the meat's colour (it used to keep the raw pink's crimson to the end).
+    setLine(m, c);
     lines.visible = t > 0.3;
-    lineMat.color.copy(c).lerp(tmpB.set("#5a3014"), clamp(0.25 + t * 0.5));
+    lineMat.color.copy(c).lerp(tmpB.set("#4a2410"), clamp(0.2 + t * 0.9));
   };
 }
 
@@ -254,7 +258,10 @@ function makeVeggie(body: THREE.Group): (p: Piece) => void {
     const k = Math.round(t * 40);
     if (k === key) return;
     key = k;
-    (m.material as THREE.MeshToonMaterial).color.copy(grade(veggieRamp(t, tmpA), tmpA));
+    const c = grade(veggieRamp(t, tmpA), tmpA);
+    (m.material as THREE.MeshToonMaterial).color.copy(c);
+    // Its outline browns with it, rather than staying the raw patty's green.
+    setLine(m, c);
     flecks.visible = t < 0.9;
   };
 }

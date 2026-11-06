@@ -105,7 +105,8 @@ async function play(name) {
       await touch('touchStart', g.from.x, g.from.y); await sleep(90);
       await path(seg(g.from, g.to, 18).slice(1), 24);
       await sleep(180);
-      await path(seg(g.to, g.end, 6).slice(1), 15);
+      // The flick in three quick moves: on a slow machine moves arrive a frame apart, and six small ones read too slow for a flick.
+      await path(seg(g.to, { x: g.end.x, y: g.to.y + (g.end.y - g.to.y) * 1.6 }, 3).slice(1), 4);
       await sleep(40); await touch('touchEnd');
     } else if (g.kind === 'circle' || g.kind === 'dragCircle') {
       // A spiral from the middle out over the close-up (the ladle), or a smaller round (pesto).

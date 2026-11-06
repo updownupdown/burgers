@@ -44,7 +44,7 @@ async function enterShift(p) {
 }
 async function endShift(p) {
   await p.evaluate(() => { const g = window.__bv.game; g.stars.push(5, 4, 4); g.served = 3; g.money += 30; g.customers = g.spawned; g.line.length = 0; g.time = g.shiftLength + 7; });
-  for (let i = 0; i < 40 && (await p.evaluate(() => window.__bv.game.phase)) !== 'summary'; i++) await p.waitForTimeout(250);
+  for (let i = 0; i < 40 && !['summary', 'title'].includes(await p.evaluate(() => window.__bv.game.phase)); i++) await p.waitForTimeout(250);
   await p.waitForTimeout(1500);
 }
 

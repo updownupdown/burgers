@@ -29,7 +29,11 @@ describe("graphics step-down", () => {
   it("doesn't count frames that don't count (paused, guided order) or one-off hitches", () => {
     const w = new FrameWatch();
     expect(run(w, 40, 30, false)).toBe(0);
-    expect(run(w, 400, 30)).toBe(0);
+    expect(run(w, 1500, 30)).toBe(0);
+    const h = new FrameWatch();
+    run(h, 16, WARMUP);
+    expect(h.sample(400, true)).toBe(false);
+    expect(h.slowFor).toBe(0);
   });
 
   it("a fast patch resets the slow run", () => {

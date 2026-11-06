@@ -2,7 +2,7 @@
 // Text size (DESIGN §52): every UI font size is in rem, so the root size (Settings → Text size)
 // scales all of it. This rewrites px font sizes in the CSS under src/ to rem at 16 px = 1 rem:
 // `font-size: 13px`, the size in a `font:` shorthand (`font: 800 12px/1.2 ...`), and the
-// `--bv-fs-*` tokens. Sizes under 6 px are left alone: those are SVG user units on the paper map.
+// `--bv-fs-*` tokens, and px line heights. Sizes under 6 px are left alone: those are SVG user units on the paper map.
 // Safe to run again; run it after merging CSS that brings new px sizes.
 //
 //   node tools/a11y/px-to-rem.cjs [--check]
@@ -40,6 +40,19 @@ for (const file of walk(root)) {
     return pre + r;
   });
   out = out.replace(/(--bv-fs-[a-z0-9]+\s*:\s*)(\d+(?:\.\d+)?)px/g, (m, pre, num) => {
+    const r = conv(num);
+    if (!r) return m;
+    n++;
+    return pre + r;
+  });
+  // Line heights in px would pin rows at the normal size: they follow the root too.
+  out = out.replace(/(line-height\s*:\s*)(\d+(?:\.\d+)?)px/g, (m, pre, num) => {
+    const r = conv(num);
+    if (!r) return m;
+    n++;
+    return pre + r;
+  });
+  out = out.replace(/(\bfont\s*:[^;{}]*?\/)(\d+(?:\.\d+)?)px/g, (m, pre, num) => {
     const r = conv(num);
     if (!r) return m;
     n++;

@@ -56,11 +56,12 @@ export class FrameWatch {
 
   sample(ms: number, counts: boolean): boolean {
     if (this.done || !counts) return false;
-    // A frame over 250 ms is a hitch (a tab switch, a GC, a modal); it says nothing about the GPU.
-    if (!(ms > 0) || ms > 250) return false;
+    // A frame over a second is a gap (a tab switch, a modal, a breakpoint), not the GPU.
+    if (!(ms > 0) || ms > 1000) return false;
     const s = ms / 1000;
     this.counted += s;
-    this.avg += (ms - this.avg) * 0.08;
+    // Each frame weighs at most 100 ms in the average, so a lone hitch can't tip it.
+    this.avg += (Math.min(ms, 100) - this.avg) * 0.08;
     if (this.counted < WARMUP) return false;
     this.slowFor = this.avg > SLOW_MS ? this.slowFor + s : 0;
     if (this.slowFor >= SLOW_FOR) {

@@ -21,6 +21,8 @@ interface Bed {
 }
 
 const BED_FADE = 1.6;
+/** The whole bed's level: about -32 dB RMS on the map, well under the sizzle and the bell. */
+const BUS_GAIN = 2.2;
 
 export class Ambience {
   private ctx: AudioContext | null = null;
@@ -35,7 +37,7 @@ export class Ambience {
 
   setOn(on: boolean): void {
     this.on = on;
-    if (this.ctx) this.bus.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.3);
+    if (this.ctx) this.bus.gain.setTargetAtTime(on ? BUS_GAIN : 0, this.ctx.currentTime, 0.3);
   }
 
   private ensure(): AudioContext | null {
@@ -44,7 +46,7 @@ export class Ambience {
     if (!ctx) return null;
     this.ctx = ctx;
     this.bus = ctx.createGain();
-    this.bus.gain.value = this.on ? 1 : 0;
+    this.bus.gain.value = this.on ? BUS_GAIN : 0;
     this.bus.connect(ctx.destination);
     // Brown noise (integrated white), 6 s: softer than white for wind and surf, long enough not to
     // be heard looping under the filters.
@@ -111,8 +113,8 @@ export class Ambience {
         break;
       case "desert":
         // Dry wind: thinner and higher, in gusts.
-        this.noiseLayer(out, "bandpass", 900, 0.9, 0.05, 0.16, 0.7);
-        this.noiseLayer(out, "highpass", 3200, 0.4, 0.012, 0.23, 0.9);
+        this.noiseLayer(out, "bandpass", 900, 0.9, 0.13, 0.16, 0.7);
+        this.noiseLayer(out, "highpass", 3200, 0.4, 0.03, 0.23, 0.9);
         break;
       case "orchard":
         // A soft breeze, lower and calmer than the Pines.

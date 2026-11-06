@@ -17,7 +17,7 @@
 }
 .cbtn[data-lamp="coral"]::before {
   content: "!"; top: -3px; right: -3px; width: 20px; height: 20px; background: #c9432a; color: #fff;
-  font: 800 0.8125rem/20px var(--bv-font-ui); text-align: center;
+  font: 800 0.8125rem/1 var(--bv-font-ui); display: grid; place-items: center;
 }
 /* A hold bar gone red (food off the heat too long) is striped as well. */
 .hbar.dry { height: 6px; }

@@ -180,7 +180,7 @@ html, body {
   background: linear-gradient(#fffdf7, #fffdf7) top / 100% calc(100% - 6px) no-repeat;
   color: var(--bv-ink);
   padding: 9px 7px 12px;
-  font: 600 0.8125rem/16px var(--bv-font-ui);
+  font: 600 0.8125rem/1rem var(--bv-font-ui);
   filter: drop-shadow(0 2px 3px rgb(42 38 34 / 0.28));
   transition: filter 0.15s;
   overflow: hidden;
@@ -277,7 +277,7 @@ html, body {
 .ticket ol.bl li.next.mod { box-shadow: inset 3px 0 0 #f08a3a; color: #ffd2b0; }
 .ticket ol.bl li.next.mod .kw { color: #ffb37a; }
 /* Layers already on, folded into one line that still names them. */
-.ticket ol.bl li.sum .l { font-weight: 600; font-size: 0.75rem; line-height: 15px; }
+.ticket ol.bl li.sum .l { font-weight: 600; font-size: 0.75rem; line-height: 0.9375rem; }
 .ticket .ic { width: 16px; height: 12px; flex: none; fill: var(--c); stroke: rgb(42 38 34 / 0.45); stroke-width: 0.7; }
 .ticket .ic .hi { fill: rgb(255 255 255 / 0.55); stroke: none; }
 .ticket .ic .yolk { fill: #f1ae2a; }
@@ -312,13 +312,13 @@ html, body {
 
 /* Changes from the menu on a small ticket: "NO Lettuce", "ADD 2 Tomato". */
 .ticket .cgs { display: grid; gap: 1px; border-top: 1px dashed var(--bv-rule-2); padding-top: 4px; }
-.ticket .cg { color: #b4520f; font: 700 0.7813rem/16px var(--bv-font-ui); }
+.ticket .cg { color: #b4520f; font: 700 0.7813rem/1rem var(--bv-font-ui); }
 .ticket .cg .kw { color: var(--t-mod); }
 
 /* Sides in one grammar on every ticket: [icon] [size] name, then Ice / No ice / garnish / Sugar. */
 .ticket .sds { display: grid; gap: 3px; }
 .ticket.stub .sds { border-top: 1px dashed var(--bv-rule-2); padding-top: 4px; }
-.ticket .sd { display: grid; align-items: center; column-gap: 3px; row-gap: 2px; font: 700 0.7813rem/16px var(--bv-font-ui); }
+.ticket .sd { display: grid; align-items: center; column-gap: 3px; row-gap: 2px; font: 700 0.7813rem/1rem var(--bv-font-ui); }
 .ticket .sd.inl { grid-template-columns: 16px auto minmax(0, max-content) minmax(0, 1fr); }
 .ticket .sd.inl .sn { white-space: nowrap; }
 .ticket .sd.stk { grid-template-columns: 16px auto minmax(0, 1fr); }
@@ -341,7 +341,7 @@ html, body {
 .ticket .foot { border-top: 1px dashed var(--bv-rule-2); padding-top: 5px; display: grid; gap: 3px; }
 .ticket .foot.cols { grid-template-columns: minmax(0, max-content) minmax(0, 1fr); column-gap: 12px; }
 .ticket .sds.main { border-top: 1px dashed var(--bv-rule-2); padding-top: 5px; gap: 5px; }
-.ticket .sds.main .sd { font-size: 0.875rem; line-height: 18px; }
+.ticket .sds.main .sd { font-size: 0.875rem; line-height: 1.125rem; }
 
 /* Rows tighten for a long build (see fitTicket in main.ts). */
 .ticket.dense { gap: 2px; padding-top: 7px; }

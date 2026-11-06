@@ -87,6 +87,8 @@ renderer.setScissorTest(true);
 const sfx = new Sfx();
 /** The region's ambient bed, on the map and under the kitchen (src/ambience.ts). */
 const ambience = new Ambience(() => sfx.context());
+// Any first tap unlocks audio, so the map's ambience starts with it (and iOS gets resumed after a call).
+window.addEventListener("pointerdown", () => sfx.unlock(), { capture: true });
 const customersView = new CustomersView();
 const trayView = new TrayView();
 const counter = new CounterView();
@@ -6494,6 +6496,7 @@ window.addEventListener("blur", cancelPointer);
 (window as unknown as { __bv: unknown }).__bv = {
   game,
   ambience,
+  frameWatch,
   counter,
   trayView,
   bands,

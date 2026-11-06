@@ -268,7 +268,7 @@ async function endShift(p) {
     const { p, ctx } = await page(b, { init: slow });
     await load(p, { ...base, town: 'pinecrest' }, { 'bv-test-auto': '1' });
     await enterShift(p);
-    await p.waitForTimeout(10000);
+    for (let i = 0; i < 10; i++) { await p.waitForTimeout(1500); const w = await p.evaluate(() => ({ ...window.__bv.frameWatch, phase: window.__bv.game.phase })); if (process.env.DEBUG) console.log(JSON.stringify(w)); if (w.done) break; }
     const r = await p.evaluate(() => ({ gfx: localStorage.getItem('bv-gfx'), auto: localStorage.getItem('bv-gfx-auto'), toast: document.querySelector('.bv-toast.on')?.textContent ?? null }));
     check('stepdown: slow frames drop Standard to Low once', r.gfx === 'low' && r.auto === '1', JSON.stringify(r));
     check('stepdown: with a toast', /Graphics set to Low/.test(r.toast || ''), r.toast || '');
@@ -284,6 +284,32 @@ async function endShift(p) {
     const gr = await g.p.evaluate(() => localStorage.getItem('bv-gfx'));
     check('stepdown: never in the guided first shift', guided === true && gr === null, `tutorial=${guided} gfx=${gr}`);
     await g.ctx.close();
+  }
+
+  if (want('storage')) {
+    // A private window: a small quota and no lasting storage. One toast after the first shift, never again.
+    const priv = () => {
+      const s = navigator.storage;
+      s.estimate = async () => ({ quota: 60 * 1024 * 1024, usage: 0 });
+      s.persist = async () => false;
+      s.persisted = async () => false;
+    };
+    const { p, ctx } = await page(b, { init: priv });
+    await load(p, { ...base, town: 'pinecrest' }, { 'bv-test-auto': '1' });
+    await enterShift(p);
+    await endShift(p);
+    const t1 = await p.evaluate(() => document.querySelector('.bv-toast.on')?.textContent ?? null);
+    check('storage: a private window gets one note after the shift', /may not keep your trip/.test(t1 || ''), t1 || 'none');
+    await shot(p, 'storage-toast');
+    // Next morning (a reload keeps the device's flags).
+    await p.evaluate((s) => localStorage.setItem('bv-save-v1', JSON.stringify(s)), { ...base, town: 'pinecrest', day: 6 });
+    await p.reload();
+    await p.waitForTimeout(1300);
+    await enterShift(p);
+    await endShift(p);
+    const t2 = await p.evaluate(() => document.querySelector('.bv-toast.on')?.textContent ?? null);
+    check('storage: and not again', !t2, t2 || 'none');
+    await ctx.close();
   }
 
   if (want('log') || want('storage')) {

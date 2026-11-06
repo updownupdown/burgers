@@ -50,13 +50,13 @@
   --bv-font-ui: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --bv-font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --bv-fs-xs: 11px;   /* eyebrows, ids; never for anything read in a hurry */
-  --bv-fs-sm: 12px;   /* smallest size allowed during a shift */
-  --bv-fs-md: 14px;   /* body */
-  --bv-fs-lg: 16px;   /* buttons */
-  --bv-fs-xl: 18px;   /* ticket names (serif) */
-  --bv-fs-2xl: 25px;  /* card titles (serif) */
-  --bv-fs-3xl: 34px;  /* town name on the stop card (serif) */
+  --bv-fs-xs: 0.6875rem;   /* eyebrows, ids; never for anything read in a hurry */
+  --bv-fs-sm: 0.75rem;   /* smallest size allowed during a shift */
+  --bv-fs-md: 0.875rem;   /* body */
+  --bv-fs-lg: 1rem;   /* buttons */
+  --bv-fs-xl: 1.125rem;   /* ticket names (serif) */
+  --bv-fs-2xl: 1.5625rem;  /* card titles (serif) */
+  --bv-fs-3xl: 2.125rem;  /* town name on the stop card (serif) */
   --bv-track: 0.14em; /* letter-spacing for uppercase eyebrows */
 
   /* shape and space */

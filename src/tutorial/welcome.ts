@@ -43,7 +43,7 @@ export function showWelcome(o: { pacing: Difficulty; done(tutorial: boolean, chi
     cls: "welcome",
     onDismiss: finish,
     // No ×: "Start the trip" is the one way on (Back or a tap outside does the same). The card
-    // opens as a title card: the mark and the wordmark on a slate band (DESIGN §43).
+    // opens as a title card: the mark and the wordmark on a slate band (DESIGN §46).
     html: `<header class="welcome-hero bv-night"><img class="mark" src="./logo.svg" alt="" width="52" height="52" /><h2 class="wm" aria-label="Bun Voyage"><span>Bun</span><span class="w2">Voyage</span></h2><span class="bv-eyebrow">Welcome aboard</span></header>
       <div class="menu-body menu-scroll welcome-body">
         <p class="bv-body">You run a food truck on a road trip. Cook what each ticket asks for, keep the line happy, and open the road to new towns and new dishes.</p>

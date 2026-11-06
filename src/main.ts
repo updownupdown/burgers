@@ -5033,7 +5033,7 @@ function showOverlay(kind: NonNullable<typeof game.overlay>, html: string): void
   game.overlay = kind;
   ui.summary.classList.remove("prep-host");
   // The Garage and Popularity & reviews float over the map as cards, like every other modal
-  // (DESIGN §43); they rise once when opened, not again on every redraw.
+  // (DESIGN §46); they rise once when opened, not again on every redraw.
   const card = kind === "garage" || kind === "reviews";
   ui.summary.classList.toggle("card-host", card);
   ui.summary.classList.toggle("card-rise", card && fresh);

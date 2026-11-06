@@ -376,7 +376,7 @@ function shiftsLine(save: Save, t: Stop): string {
 /**
  * The dock's town name steps down a pixel at a time when it's too long for the room beside Prep &
  * Open (Saltwater Bay, Cactus Junction on a narrow phone) instead of losing its end to an ellipsis
- * (DESIGN §43); a long event's line loses its "today". Measured, so it holds for any name and width; it runs again once the serif has
+ * (DESIGN §46); a long event's line loses its "today". Measured, so it holds for any name and width; it runs again once the serif has
  * loaded, on resize and when the dock comes back from under the town sheet.
  */
 function fitDockName(m: Mounted): void {

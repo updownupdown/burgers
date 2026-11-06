@@ -9,7 +9,7 @@
 .rep-head .bv-eyebrow { white-space: normal; }
 .rep-body { padding-top: 2px; padding-bottom: 12px; gap: 12px; }
 
-/* The shift's stars are the card's headline, the verdict a line under them (DESIGN §43). */
+/* The shift's stars are the card's headline, the verdict a line under them (DESIGN §46). */
 .rep-verdict { display: grid; gap: 4px; margin: 0; font-size: 14.5px; color: var(--bv-ink-2); font-weight: 600; line-height: 1.35; }
 .rep-stars { display: inline-flex; align-items: center; gap: 8px; flex: none; }
 .rep-stars .day-stars { font-size: 24px; letter-spacing: 2px; }

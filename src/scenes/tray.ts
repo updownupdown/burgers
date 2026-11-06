@@ -75,6 +75,10 @@ function roundRect<T extends THREE.Path>(p: T, hw: number, hd: number, r: number
   return p;
 }
 
+/** The serving board's walnut and its grain: darker than the buns, breads and crusts it carries (DESIGN §45). */
+const BOARD_WOOD = "#8a5a3c";
+const BOARD_GRAIN = "#744832";
+
 function makeTrayBody(style: TrayStyle): THREE.Group {
   const g = new THREE.Group();
   const { w, d } = TRAY;
@@ -139,11 +143,12 @@ function makeTrayBody(style: TrayStyle): THREE.Group {
         curveSegments: 6,
       });
       body.rotateX(-Math.PI / 2);
-      const b = mesh(faceted(body), "#b77b45");
+      // Walnut, a step darker than the buns, breads, crusts and fries it carries, so food stands off it.
+      const b = mesh(faceted(body), BOARD_WOOD);
       b.position.y = 0.05 - 0.08 + bevel;
       g.add(b);
       for (let i = 0; i < 5; i++) {
-        const grain = mesh(faceted(new THREE.BoxGeometry(w - 0.9, 0.004, 0.02)), "#9c6534", { ink: false });
+        const grain = mesh(faceted(new THREE.BoxGeometry(w - 0.9, 0.004, 0.02)), BOARD_GRAIN, { ink: false });
         grain.position.set(0, 0.131, -d / 2 + 0.2 + i * ((d - 0.4) / 4));
         g.add(grain);
       }
@@ -360,6 +365,8 @@ export class PlateView {
   /** Red Rock's tacos and quesadillas are drawn as one dish (render/dishes.ts) rather than a stack. */
   private dishObj: DishObject | null = null;
   private dishKey = "";
+  /** The dish is an Orchard Isle flatbread (it fills the board, so it never takes the folded-ticket zoom). */
+  private dishFlat = false;
   /** The half sizes sauce paints over on the dish (burger-local units), or null for a round stack. */
   dishExtent(): { rx: number; rz: number } | null {
     return this.dishObj ? { rx: this.dishObj.rx, rz: this.dishObj.rz } : null;
@@ -370,6 +377,7 @@ export class PlateView {
     disposeObject(this.dishObj.group);
     this.dishObj = null;
     this.dishKey = "";
+    this.dishFlat = false;
   }
   /** Draw the plate as a dish if it is one; true when it was. */
   private syncDish(p: Plate, animate: boolean, onLand: () => void): boolean {
@@ -390,6 +398,7 @@ export class PlateView {
       if (!d) return false;
       this.dishObj = d;
       this.dishKey = key;
+      this.dishFlat = p.layers[0].piece.kind === "dough";
       this.burger.add(d.group);
       if (animate) {
         this.kick(grew ? 0.15 : 0.3);
@@ -409,7 +418,9 @@ export class PlateView {
   private fitScale(): number {
     const top = this.stackTop() + 0.15;
     const room = this.headroom - this.burger.position.y;
-    return Math.max(this.full * MIN_FIT, Math.min(this.full * this.boostNow, room / top));
+    // A flatbread already fills the board: zooming it with the folded receipt pushes it over the edges.
+    const boost = this.dishFlat ? 1 : this.boostNow;
+    return Math.max(this.full * MIN_FIT, Math.min(this.full * boost, room / top));
   }
 
   /**

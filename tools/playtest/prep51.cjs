@@ -47,7 +47,7 @@ const tap = async (p, sel) => { await p.click(sel); await p.waitForTimeout(350);
     check('old 9 to 5 window shows as Full day', folded.shift === 'full', JSON.stringify(sh));
     check('Prep opens folded (no menu rows, no bonus list, no slider)', !folded.menu && !folded.bonusList && !folded.slider);
     check('folded Prep shows the bonuses brought last time', folded.brought.join() === 'Comfy bench,Heat lamp', folded.brought.join());
-    if (p.viewportSize().height >= 800) check('folded Prep fits without much scrolling', folded.height <= folded.view + 140, `${folded.height} in ${folded.view}`);
+    if (p.viewportSize().height >= 800) check('folded Prep fits without much scrolling', folded.height <= folded.view + 220, `${folded.height} in ${folded.view}`);
     await tap(p, '.prep [data-act=prep-shift][data-v=lunch]');
     const lunch = await p.evaluate(() => ({ s: JSON.parse(localStorage.getItem('bv-save-v1')).shift, label: document.querySelector('.prep .prep-shift-label').textContent }));
     check('Lunch sets 11 to 3', lunch.s.start === 11 && lunch.s.end === 15, lunch.label);

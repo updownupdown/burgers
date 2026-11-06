@@ -1042,3 +1042,17 @@ Fixes only, no design changes.
 - **Progress and money.** A new trip resets regulars. The report card's popularity change starts from the morning value, so a regular won mid-shift is counted. The Guest book doubles what happy customers spread, not the day's net. With the Press pass the critic is the second person to order. A rush still to come keeps the shift open, and comes early once the window is empty.
 - **Kitchen.** Undo brings a moved drink back with its garnish. A customer leaving closes a sauce close-up open on their tray. A cup put back under a nozzle with a spill, or carried back by Undo, no longer vanishes. An empty carton on a fryer pad can be picked up and binned. A pie carried up by hand only goes on an empty tray.
 - **Menus.** A new build reloads only once nothing is open over the map. The Prep lesson names the pacing actually chosen. Captions and labels fit at 320 px. Double taps no longer skip the night, reopen Settings under a closing card, change counter under Resume, or start the shift on the fryer.
+
+## 43. Tickets: O1 Clean receipt
+
+James picked O1 from the ticket layout study (2026-11-06; study page and options in /mnt/project-files/ticket-study/). It keeps the focus rail and changes how a ticket reads.
+
+- **One grid for the build.** Every line of the open ticket is icon | name | count | chips | tick, so counts ("×3", "2/3" while short) and chips line up in columns. A change from the menu has an orange edge. The next layer is an ink bar with white text. A layer on right goes grey with a ✓, one on wrong goes red with a ✕ on a pink wash. Strike-through only means a leave-off ("NO Ketchup").
+- **The dish's steps under the name** (Press › Cut?, Fold › Flip, Bake › Cut 4?), not inside the list.
+- **Sides in one grammar**, in a footer under the build: [icon] [size] name, then Ice / No ice, garnish and Sugar. Each side shows once. Side by side when the ticket is 250 px or wider. A side on the tray shows ✓ (or ✕) where its icon was. A sides-only order is titled "Sides" and its sides are the list, the next one inked.
+- **Small tickets** (the others while one is open, or all of them when it's folded): patience, the name, a progress strip (one segment per layer, bottom first: pine on, ink next, red wrong), the changes ("NO Lettuce", "ADD 2 Tomato"), then every side with size, name and Ice / No ice. Garnish and sugar always go on, so only the open ticket spells them out. Small tickets are 80-92 px wide (23% of the width), a shade darker than the open one. Folded, all tickets are small and share the rail evenly; the old "half" tickets are gone.
+- **The selected ticket** has a blue band across its top, the blue of its tray's outline.
+- **Fitting** (`fitTicket` in main.ts): a name too long for its line shows the short name, never an ellipsis. A long build then folds the layers already on into one grey line that still names them, tightens, puts the steps beside the name, and last puts the name beside the patience bar; what still doesn't fit scrolls with the next layer in view. Under 185 px wide (360 px phones) a line's chips drop under its name instead of breaking the word. A small ticket that's too long drops its progress strip and tightens.
+- Help's ticket key shows the new marks. Script: `tools/playtest/tickets-o1.cjs` (real orders in each region, open and folded, `W=360`).
+
+Supersedes §40's stub side chips (their grammar lives on in the small ticket) and the folded "half" tickets that showed two whole builds.

@@ -4532,9 +4532,8 @@ ui.tickets.forEach((t, i) => {
 
 /**
  * The focus rail: the order being worked on gets a wide receipt with its whole build ("big"); the
- * others shrink to stubs beside it, in their customers' order along the rail. With every ticket
- * folded, two orders (or one) share the rail as "half" tickets that still show the whole build,
- * and three are even stubs.
+ * others shrink to small tickets beside it, in their customers' order along the rail. With every
+ * ticket folded, they're all small and share the rail evenly (O1 from the ticket study).
  */
 function placeTickets(): void {
   const shown = game.slots.map((s) => !!s.order && !s.leaving && game.phase !== "title");
@@ -4545,14 +4544,14 @@ function placeTickets(): void {
   const n = shown.filter(Boolean).length;
   const m = 5;
   const gap = 5;
-  const stub = Math.round(THREE.MathUtils.clamp(w * 0.18, 64, 78));
+  // Small tickets carry the changes and the sides in full, so they're a little wider than the old stubs.
+  const stub = Math.round(THREE.MathUtils.clamp(w * 0.23, 80, 92));
   const focus = shown[game.active] ? game.active : shown.indexOf(true);
   const slotW = w / 3;
   const bigW = n <= 1 ? Math.min(w - 2 * m, 260) : w - 2 * m - (n - 1) * (stub + gap);
   const evenW = (w - 2 * m - (n - 1) * gap) / Math.max(1, n);
-  const halfW = n <= 1 ? Math.min(w - 2 * m, 200) : evenW;
-  const mode = (i: number) => (ticketOpen ? (i === focus ? "big" : "stub") : n <= 2 ? "half" : "stub");
-  const width = (i: number) => ({ big: bigW, half: halfW, stub: ticketOpen ? stub : evenW })[mode(i)];
+  const mode = (i: number) => (ticketOpen && i === focus ? "big" : "stub");
+  const width = (i: number) => (mode(i) === "big" ? bigW : ticketOpen ? stub : n <= 1 ? Math.min(w - 2 * m, 200) : evenW);
   // A lone order sits under its own customer, as far as the screen allows.
   const loneW = n <= 1 && focus >= 0 ? width(focus) : 0;
   let x = n <= 1 ? THREE.MathUtils.clamp(slotW * (focus + 0.5) - loneW / 2, m, w - m - loneW) : m;
@@ -4585,21 +4584,40 @@ function updatePeek(): void {
   if (ui.peek.style.top !== `${top}px`) ui.peek.style.top = `${top}px`;
 }
 
+/** A name too long for its line gives way to the short name ("Sun Valley S…" never shows). */
+function fitName(t: HTMLElement): void {
+  const n = t.querySelector<HTMLElement>(".name");
+  const l = n?.querySelector<HTMLElement>(".l");
+  if (!n || !l || l.scrollWidth <= l.clientWidth + 1) return;
+  l.textContent = n.dataset.short ?? l.textContent;
+  if (l.scrollWidth > l.clientWidth + 1) n.classList.add("wrap");
+}
+/** A side whose marks don't fit beside its name puts them under it. */
+function fitSides(t: HTMLElement): void {
+  t.querySelectorAll<HTMLElement>(".sd.inl").forEach((d) => {
+    const n = d.querySelector<HTMLElement>(".sn");
+    const m = d.querySelector<HTMLElement>(".sm");
+    const tooWide = d.scrollWidth > d.clientWidth + 1 || (n && n.scrollWidth > n.clientWidth + 1) || (m && m.getBoundingClientRect().right > d.getBoundingClientRect().right + 0.5);
+    if (tooWide) d.classList.replace("inl", "stk");
+  });
+}
 /**
- * Fits the focused receipt to the room under the rail: rows tighten first, then the layers already
- * stacked fold into one line; whatever still doesn't fit scrolls inside the list.
+ * Fits a ticket to the room under the rail, one level at a time (see ticketHtml): fold the layers
+ * already on into one line, tighten, put the steps beside the name, then the name beside the bar.
+ * Whatever still doesn't fit scrolls inside the list, keeping the next layer in view.
  */
-function fitTicket(t: HTMLElement, render: (fold: boolean) => string): void {
-  t.classList.remove("dense");
-  t.innerHTML = render(false);
-  const tb = t.querySelector<HTMLElement>(".tb");
-  if (!tb) return;
-  const over = () => tb.scrollHeight > tb.clientHeight + 1 || t.scrollHeight > t.clientHeight + 1;
-  if (!over()) return;
-  t.classList.add("dense");
-  if (!over()) return;
-  t.innerHTML = render(true);
-  // Still too long: keep the next layer to stack in view, near the bottom of the list.
+function fitTicket(t: HTMLElement, render: (level: number) => string, levels = 5): void {
+  const over = () => {
+    const tb = t.querySelector<HTMLElement>(".tb");
+    return t.scrollHeight > t.clientHeight + 1 || (!!tb && tb.scrollHeight > tb.clientHeight + 1);
+  };
+  for (let lvl = 0; lvl < levels; lvl++) {
+    t.innerHTML = render(lvl);
+    t.classList.toggle("dense", lvl >= 2);
+    fitName(t);
+    fitSides(t);
+    if (!over()) return;
+  }
   const list = t.querySelector<HTMLElement>(".tb");
   const next = list?.querySelector<HTMLElement>("li.next, li.wrong");
   if (!list || !next) return;
@@ -5612,12 +5630,13 @@ function updateUi(dt = 0): void {
     if (key !== s.ticketKey || !t.dataset.fit) {
       t.classList.toggle("active", focused);
       t.classList.toggle("stub", mode === "stub");
-      t.classList.toggle("half", mode === "half");
-      if (mode !== "stub") fitTicket(t, (fold) => ticketHtml(order, plate, shownPct, true, fold));
-      else {
-        t.classList.remove("dense");
-        t.innerHTML = ticketHtml(order, plate, shownPct, false);
-      }
+      const tw = parseFloat(t.style.width) || 90;
+      t.classList.toggle("narrow", tw < 100);
+      // A slim open ticket lets a line's chips drop under its name rather than break the word.
+      t.classList.toggle("slim", mode === "big" && tw < 185);
+      if (mode === "big") fitTicket(t, (lvl) => ticketHtml(order, plate, shownPct, true, lvl, tw));
+      // A small ticket only tightens (level 2): it has nothing to fold.
+      else fitTicket(t, () => ticketHtml(order, plate, shownPct, false, 0, tw), 3);
       s.ticketKey = key;
       if (t.dataset.tipLost) {
         delete t.dataset.tipLost;

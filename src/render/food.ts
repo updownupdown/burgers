@@ -3,7 +3,7 @@ import { avgCook, bunToast, cookLevel, isFlipped, isMelted, MARKED } from "../ga
 import type { Kind, Piece } from "../game/types";
 import { BREADS, COUNTED, isSauce, SAUCE_RADIUS } from "../game/types";
 import { bakedMesh, bakeShared, Parts, rng, type Baked } from "./bake";
-import { faceted, grade, lineColor, lineMaterial, mesh, outline, ramp, shareGeometry, toon } from "./materials";
+import { faceted, grade, lineColor, lineMaterial, mesh, outline, ramp, setLine, shareGeometry, toon } from "./materials";
 import { TOPPING_BOOST } from "./units";
 import { makePaniniPiece, PANINI_HEIGHT } from "./panini";
 import { pestoSpread } from "./pesto";
@@ -160,10 +160,6 @@ function vcMesh(geo: THREE.BufferGeometry, line: THREE.Color): THREE.Mesh {
   m.castShadow = m.receiveShadow = true;
   outline(m, 1.03, line);
   return m;
-}
-function setLine(m: THREE.Mesh, c: THREE.Color): void {
-  const hull = m.children.find((o) => o.name === "hull") as THREE.Mesh | undefined;
-  if (hull) hull.material = lineMaterial(lineColor(c, tmpE));
 }
 
 // ---- bun: sesame classic --------------------------------------------------------

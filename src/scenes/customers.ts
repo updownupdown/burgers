@@ -5,7 +5,7 @@ import { disposeObject, faceted, mesh, toon } from "../render/materials";
 import { lookColours } from "../screens/truckart";
 import { CABIN } from "../render/cabin";
 import { wallMaterial } from "../render/walls";
-import { buildScenery } from "../render/scenery";
+import { buildScenery, type Mover } from "../render/scenery";
 import { bakeStatic } from "../render/bake";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
@@ -221,6 +221,7 @@ export class CustomersView {
     const sill = mesh(faceted(new THREE.BoxGeometry(hw * 2 + tw * 2, px(6), 0.5)), trimCol, { ink: false, shadow: false });
     sill.position.set(0, bot - px(3), ZF + 0.1);
     this.frame.add(sill);
+    this.frame.add(this.innerShadow(hw * 2, top - bot, upp, rad, (top + bot) / 2, ZF - T - 0.01));
 
     // The awning: hem behind the customers, raised clear of their heads so the view shows under
     // it (scenery study, 2026-11-02; it used to hang at head height and hid most of the view).
@@ -261,6 +262,46 @@ export class CustomersView {
   /** Band height in CSS px, for pixel-sized trim. */
   bandPx = 287;
 
+  /**
+   * The opening's inner shadow (DESIGN §45): one plane just inside the wall, soft at the jambs and
+   * deeper under the window head, where the wall's thickness and the awning shade the view. It
+   * draws over the scenery and the soffit, inside the trim, so the view reads as seen through an
+   * opening rather than pasted on the wall.
+   */
+  private innerShadow(ow: number, oh: number, upp: number, rad: number, y: number, z: number): THREE.Mesh {
+    const cw = Math.min(512, Math.round((ow / upp) * 2));
+    const ch = Math.min(512, Math.round((oh / upp) * 2));
+    const c = document.createElement("canvas");
+    c.width = cw;
+    c.height = ch;
+    const x = c.getContext("2d")!;
+    const r = (rad / upp) * 2;
+    x.beginPath();
+    x.roundRect(0, 0, cw, ch, r);
+    x.clip();
+    x.shadowColor = "rgba(44,32,44,0.62)";
+    x.shadowBlur = 30;
+    x.shadowOffsetY = 10;
+    x.lineWidth = 80;
+    x.strokeStyle = "#000";
+    x.beginPath();
+    x.roundRect(-40, -40, cw + 80, ch + 80, r + 40);
+    x.stroke();
+    // A second, softer pass along the top only.
+    x.shadowBlur = 44;
+    x.shadowOffsetY = 26;
+    x.beginPath();
+    x.roundRect(-40, -140, cw + 80, 100, 10);
+    x.stroke();
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(ow, oh), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, depthTest: false, fog: false }));
+    m.position.set(0, y, z);
+    m.renderOrder = 20;
+    m.raycast = () => {};
+    return m;
+  }
+
   /** Dress the view out of the window for an area (see render/scenery.ts). */
   setBackdrop(kind: Backdrop): void {
     this.kind = kind;
@@ -271,7 +312,12 @@ export class CustomersView {
     (this.scene.background as THREE.Texture | null)?.dispose?.();
     this.scene.background = b.background;
     this.scene.fog = b.fog;
+    this.movers = b.movers;
+    this.moverT = 0;
   }
+  /** The few things out of the window that move (sails, windmill blades, birds, a tumbleweed). */
+  private movers: Mover[] = [];
+  private moverT = 0;
 
   /**
    * The band shows the HUD strip at the top, the customers, then the window sill where the
@@ -375,6 +421,8 @@ export class CustomersView {
   }
 
   update(dt: number, activeSlot: number): void {
+    this.moverT += dt;
+    for (const m of this.movers) m.update(dt, this.moverT);
     this.slots.forEach((sl, i) => {
       if (!sl.fig) return;
       const home = this.slotX[i];

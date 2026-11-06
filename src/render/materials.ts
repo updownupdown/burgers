@@ -226,6 +226,13 @@ export function outline<T extends THREE.Mesh>(mesh: T, _scale = LINE, color?: TH
   return mesh;
 }
 
+const _line = new THREE.Color();
+/** Retint an outlined mesh's line to follow its colour as it changes (food as it cooks). */
+export function setLine(m: THREE.Mesh, c: THREE.Color): void {
+  const hull = m.children.find((o) => o.name === "hull") as THREE.Mesh | undefined;
+  if (hull) hull.material = lineMaterial(lineColor(c, _line));
+}
+
 export function faceted(geo: THREE.BufferGeometry): THREE.BufferGeometry {
   const g = geo.index ? geo.toNonIndexed() : geo;
   g.computeVertexNormals();

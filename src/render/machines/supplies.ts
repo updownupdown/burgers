@@ -298,13 +298,15 @@ export interface PackPadObject extends THREE.Group {
 const padBody = cached(() => {
   const p = new Parts();
   const w = PAD.w * 2 + 0.4;
-  p.add(rbox(w, 0.16, PAD.d + 0.4, 0.04), "#b8c2c0", { p: [0, 0.08, 0] });
-  for (const x of [-PAD.gap / 2 - 0.15, PAD.gap / 2 + 0.15]) {
-    p.add(box(PAD.w, 0.02, PAD.d), "#f3e9d3", { p: [x, 0.17, 0], ink: false });
-    for (const [bw, bd, dx, dz] of [[PAD.w, 0.06, 0, -PAD.d / 2 + 0.03], [PAD.w, 0.06, 0, PAD.d / 2 - 0.03], [0.06, PAD.d, -PAD.w / 2 + 0.03, 0], [0.06, PAD.d, PAD.w / 2 - 0.03, 0]]) {
-      p.add(box(bw, 0.025, bd), "#e07a3a", { p: [x + dx, 0.18, dz], ink: false });
-    }
+  // A small steel dump station (DESIGN §45): a rolled rim, a dark warming plate, and a sheet of
+  // greaseproof paper on each pad, a little askew, in the same vocabulary as the trays and fryer.
+  p.add(rbox(w, 0.16, PAD.d + 0.4, 0.04), "#c9d1cf", { p: [0, 0.08, 0] });
+  p.add(rbox(w - 0.16, 0.05, PAD.d + 0.24, 0.03), "#3a4043", { p: [0, 0.165, 0], ink: false });
+  for (const [i, x] of [-PAD.gap / 2 - 0.15, PAD.gap / 2 + 0.15].entries()) {
+    p.add(box(PAD.w - 0.1, 0.01, PAD.d - 0.1), "#f3e9d3", { p: [x, 0.195, 0], r: [0, i ? -0.05 : 0.04, 0], ink: 0.01 });
   }
+  // A row of small vent dots along the front lip.
+  for (let i = 0; i < 9; i++) p.add(cyl(0.025, 0.025, 0.01, 6), "#8a9290", { p: [-w / 2 + 0.3 + (i * (w - 0.6)) / 8, 0.165, PAD.d / 2 + 0.16], ink: false });
   return p;
 });
 
@@ -313,7 +315,7 @@ export function makePackPad(): PackPadObject {
   const g = new THREE.Group() as PackPadObject;
   g.add(bakedMesh(padBody()));
   const xs = [-PAD.gap / 2 - 0.15, PAD.gap / 2 + 0.15];
-  machine(g, PAD.w * 2 + 0.4, PAD.d + 0.4, 0.2, { pads: xs.map((x) => ({ x: x * STUDY, y: 0.19 * STUDY, z: 0 })) });
+  machine(g, PAD.w * 2 + 0.4, PAD.d + 0.4, 0.2, { pads: xs.map((x) => ({ x: x * STUDY, y: 0.2 * STUDY, z: 0 })) });
   return g;
 }
 
@@ -327,7 +329,7 @@ export function makeTrashChute(w: number, d = 0.45): THREE.Group {
   const sd = d / STUDY;
   const lip = 0.16;
   const p = new Parts();
-  p.add(box(sw, 0.03, sd), "#000000", { p: [0, 0.01, 0], ink: false });
+  p.add(box(sw, 0.03, sd), "#2a2329", { p: [0, 0.01, 0], ink: false });
   for (const k of [-1, 1]) {
     p.add(box(sw + 0.04, 0.1, lip), "#d3d7d4", { p: [0, 0.05, k * (sd / 2 + lip / 2)], ink: false });
     p.add(box(sw + 0.04, 0.09, 0.045), "#6b716e", { p: [0, 0.045, k * (sd / 2 + lip + 0.022)], ink: false });
@@ -338,8 +340,8 @@ export function makeTrashChute(w: number, d = 0.45): THREE.Group {
   const fd = sd / 2 - 0.025;
   for (let i = 0; i < n; i++) {
     const x = -sw / 2 + fw * (i + 0.5);
-    p.add(box(fw - 0.06, 0.03, fd), "#1f201f", { p: [x, 0.045, -sd / 4 - 0.012], ink: false });
-    p.add(box(fw - 0.06, 0.03, fd), "#141514", { p: [x, 0.04, sd / 4 + 0.012], ink: false });
+    p.add(box(fw - 0.06, 0.03, fd), "#4a4148", { p: [x, 0.045, -sd / 4 - 0.012], ink: false });
+    p.add(box(fw - 0.06, 0.03, fd), "#3d353b", { p: [x, 0.04, sd / 4 + 0.012], ink: false });
   }
   // Rounded steel end caps: the chute stops just inside the outer counters, bookending the line.
   const r = sd / 2 + lip;

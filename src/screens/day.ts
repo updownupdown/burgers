@@ -5,7 +5,7 @@ import { DIFFICULTIES, DIFFICULTY, type Difficulty } from "../game/difficulty";
 import { criticChance, type PressPiece } from "../game/press";
 import type { Save } from "../game/progress";
 import { ratingPull, reviewAverage, reviewTotal, REVIEW_CHANCE } from "../game/reviews";
-import { clockLabel, FIRST_HOUR, hourRate, LAST_HOUR, MIN_SHIFT, shiftHours, type ShiftWindow } from "../game/shift";
+import { clockLabel, shiftHours, shiftKind, type ShiftWindow } from "../game/shift";
 import { eventOn, REGIONS, type Recipe, type Stop } from "../game/stops";
 import { askFor } from "../game/asks";
 import { icon } from "../ui/icons";
@@ -17,10 +17,11 @@ import "./day.css";
 /**
  * The screens on either side of a shift, and the small ones off the map (see game/day.ts):
  *
- * - **Prep & Open**, before opening: one scrolling page around one big number, the people to
- *   expect and who they are, beside what draws them. Under it: the shift window on the day's lunch
- *   curve with a two-thumb slider, the menu one burger a row (a chevron opens its recipe), pacing,
- *   and up to three bonuses to bring. Everything here is fixed once the window opens.
+ * - **Prep & Open**, before opening (DESIGN §51): it opens folded, showing only the people to
+ *   expect, pacing and the shift (Lunch or Full day), the local ask, the bonuses brought last time
+ *   and Open. "Change menu or bonuses" unfolds the menu, one dish a row, and the bonuses to pick
+ *   from; once unfolded it stays open for the rest of the day. Everything here is fixed once the
+ *   window opens.
  * - After the shift, the report card on the evening map lives in report.ts.
  * - **Popularity & reviews**, reached from the map: popularity, the rating and its breakdown by
  *   stars, and the critics' clippings.
@@ -42,64 +43,34 @@ const hourLabel = (h: number) => clockLabel(h);
 /** The shift's hours as one label: "11:00am – 3:00pm · 4 h". */
 export const shiftLabel = (w: ShiftWindow) => `${hourLabel(w.start)} – ${hourLabel(w.end)} · ${shiftHours(w)} h`;
 
-/**
- * The day's arrivals as bars by the hour, with the shift's window lit, over a two-thumb slider
- * for opening and closing. Thumbs sit on the hour lines between bars; the window is at least
- * MIN_SHIFT hours.
- */
-function rangeHtml(w: ShiftWindow): string {
-  const hours: number[] = [];
-  for (let h = FIRST_HOUR; h < LAST_HOUR; h++) hours.push(h);
-  const bw = 100 / hours.length;
-  const bars = hours
-    .map((h, i) => {
-      const r = hourRate(h);
-      const on = h >= w.start && h < w.end;
-      const ht = 8 + r * 40;
-      return `<rect class="${on ? "on" : ""}" data-h="${h}" x="${i * bw + 1}" y="${50 - ht}" width="${bw - 2}" height="${ht}" rx="1.5"/>`;
-    })
-    .join("");
-  const span = LAST_HOUR - FIRST_HOUR;
-  const pos = (h: number) => ((h - FIRST_HOUR) / span).toFixed(4);
-  const input = (end: "start" | "end", v: number) =>
-    `<input type="range" min="${FIRST_HOUR}" max="${LAST_HOUR}" step="1" value="${v}" data-range="${end}" aria-label="${end === "start" ? "Open at" : "Close at"}" aria-valuetext="${hourLabel(v)}">`;
-  return `<div class="prep-range" style="--a:${pos(w.start)};--b:${pos(w.end)}">
-    <svg viewBox="0 0 100 50" preserveAspectRatio="none" aria-hidden="true">${bars}</svg>
-    <div class="rng"><div class="track"><i></i></div>${input("start", w.start)}${input("end", w.end)}</div>
-  </div>`;
-}
+/** The shift choice's two buttons: what each brings, in a line. */
+const SHIFT_OPTS = [
+  { v: "lunch", label: "Lunch", small: "11 to 3" },
+  { v: "full", label: "Full day", small: "10 to 4" },
+];
 
 /**
- * Drag a thumb: keep the window at least MIN_SHIFT hours (the thumb being dragged stops), then
- * light the bars and the label to match. Returns the window shown.
+ * Prep's fold ("Change menu or bonuses"): once opened it stays open for the rest of that day in
+ * that town, also across a reload. Remembered on this device as "day:town".
  */
-export function syncRange(root: HTMLElement, moved: "start" | "end"): ShiftWindow {
-  const a = root.querySelector<HTMLInputElement>('input[data-range="start"]')!;
-  const b = root.querySelector<HTMLInputElement>('input[data-range="end"]')!;
-  let start = Number(a.value);
-  let end = Number(b.value);
-  if (end - start < MIN_SHIFT) {
-    if (moved === "start") start = end - MIN_SHIFT;
-    else end = start + MIN_SHIFT;
-    if (start < FIRST_HOUR) [start, end] = [FIRST_HOUR, FIRST_HOUR + MIN_SHIFT];
-    if (end > LAST_HOUR) [start, end] = [LAST_HOUR - MIN_SHIFT, LAST_HOUR];
-    a.value = String(start);
-    b.value = String(end);
+const FOLD_KEY = "bv-prep-fold";
+export function prepUnfolded(day: number, town: string): boolean {
+  try {
+    return localStorage.getItem(FOLD_KEY) === `${day}:${town}`;
+  } catch {
+    return unfoldedHere === `${day}:${town}`;
   }
-  a.setAttribute("aria-valuetext", hourLabel(start));
-  b.setAttribute("aria-valuetext", hourLabel(end));
-  const w = { start, end };
-  const box = root.querySelector<HTMLElement>(".prep-range");
-  const span = LAST_HOUR - FIRST_HOUR;
-  box?.style.setProperty("--a", ((start - FIRST_HOUR) / span).toFixed(4));
-  box?.style.setProperty("--b", ((end - FIRST_HOUR) / span).toFixed(4));
-  root.querySelectorAll<SVGRectElement>(".prep-range rect").forEach((r) => {
-    const h = Number(r.dataset.h);
-    r.classList.toggle("on", h >= start && h < end);
-  });
-  const label = root.querySelector(".prep-shift-label");
-  if (label) label.textContent = shiftLabel(w);
-  return w;
+}
+let unfoldedHere = "";
+export function togglePrepFold(day: number, town: string): void {
+  const open = !prepUnfolded(day, town);
+  unfoldedHere = open ? `${day}:${town}` : "";
+  try {
+    if (open) localStorage.setItem(FOLD_KEY, unfoldedHere);
+    else localStorage.removeItem(FOLD_KEY);
+  } catch {
+    // Storage can be unavailable; the fold still holds for this session.
+  }
 }
 
 /** Prep's "Show ingredients" switch. Remembered on this device. */
@@ -170,6 +141,12 @@ export function prepHtml(p: PrepInput): string {
         ? `<span class="day-hint">${icon(here.icon)}<span><b>${esc(here.name)}</b> is unlocked here: ${money(here.price)} in the Garage.</span></span>`
         : `<span class="day-hint">${icon("lock")}<span>A great shift here (${goal}) unlocks <b>${esc(here.name)}</b>: ${esc(here.text.charAt(0).toLowerCase() + here.text.slice(1))}</span></span>`
     : "";
+  const unfolded = prepUnfolded(save.day, stop.id);
+  const kind = shiftKind(w);
+  // Folded: the bonuses brought (last time's picks, still owned) as a line of chips.
+  const brought = picks.length
+    ? `<div class="prep-brought">${picks.map((id) => bonusById(id)!).map((b) => `<span class="bv-chip pill">${icon(b.icon)}${esc(b.name)}</span>`).join("")}</div>`
+    : `<span class="day-hint">${owned.length ? "No bonus brought today." : "No bonuses yet. Each town has one: a great shift there unlocks it, then it's bought in the Garage."}</span>`;
   const bonusBody = owned.length
     ? `<div class="prep-bonuses">${owned
         .map(
@@ -200,18 +177,34 @@ export function prepHtml(p: PrepInput): string {
         ${ev ? `<div class="bv-callout">${icon("flag")}<span><b>${esc(ev.name)}.</b> ${esc(ev.blurb)}${ev.special ? ` Special: ${esc(ev.special.name)}.` : ""}</span></div>` : ""}
       </section>
 
-      <section class="prep-sec prep-card">
+      <section class="prep-sec prep-card prep-today">
         <h3 class="prep-h">${icon("timer")}Pacing</h3>
         ${seg("prep-pace", pacing, DIFFICULTIES.map((k) => ({ v: k, label: DIFFICULTY[k].label })))}
         <span class="day-hint">${esc(DIFFICULTY[pacing].blurb)}</span>
-      </section>
-
-      <section class="prep-sec prep-card">
         <h3 class="prep-h">${icon("clock")}Shift <span class="prep-shift-label bv-mono">${shiftLabel(w)}</span></h3>
-        ${rangeHtml(w)}
+        ${seg("prep-shift", kind, SHIFT_OPTS)}
+        <span class="day-hint">${kind === "full" ? "Half as long again as lunch, with more customers and more takings." : "The lunch rush, about five minutes. A full day runs longer and pays more."}</span>
       </section>
 
-      <section class="prep-sec prep-card">
+      ${askHtml(stop, menu, save.day, expect, !!save.shiftsIn[stop.id])}
+
+      ${
+        unfolded
+          ? ""
+          : `<section class="prep-sec prep-card prep-bring">
+        <h3 class="prep-h">${icon("sparkle")}Bonuses</h3>
+        ${brought}
+        ${hereLine}
+      </section>`
+      }
+
+      <button class="prep-fold" data-act="prep-fold" aria-expanded="${unfolded}">
+        <span><b>Change menu or bonuses</b><small>${menu.length} dishes on the menu${owned.length ? ` · ${picks.length} of ${Math.min(MAX_PICKS, owned.length)} bonuses` : ""}</small></span>${icon("down")}
+      </button>
+
+      ${
+        unfolded
+          ? `<section class="prep-sec prep-card">
         <h3 class="prep-h">${icon("food-menu")}Menu
           <button class="bv-toggle prep-ing" role="switch" aria-checked="${showIngredients}" data-act="prep-ing"><span class="lbl">Show ingredients</span><span class="sw"></span></button>
         </h3>
@@ -219,13 +212,13 @@ export function prepHtml(p: PrepInput): string {
         <div class="prep-rows">${rows}</div>
       </section>
 
-      ${askHtml(stop, menu, save.day, expect, !!save.shiftsIn[stop.id])}
-
       <section class="prep-sec prep-card">
         <h3 class="prep-h">${icon("sparkle")}Bonuses${owned.length > 1 ? `<span>Pick up to ${MAX_PICKS}</span>` : ""}</h3>
         ${bonusBody}
         ${hereLine}
-      </section>
+      </section>`
+          : ""
+      }
     </div>
     <footer class="day-foot">
       <div class="sum"><span class="bv-eyebrow">${picks.length === 1 ? esc(bonusById(picks[0])!.name) : picks.length ? `${picks.length} bonuses` : "No bonus"}</span><b><span class="bv-mono">~${expect}</span> customers</b></div>

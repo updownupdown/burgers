@@ -6,7 +6,7 @@ import { makeOrder, orderFromRecipe, seededRng, type Rng } from "./game/menu";
 import { expectedCustomers, regionShifts, sleep } from "./game/day";
 import { greatShift, togglePick, townBonus, validPicks, type BonusId } from "./game/bonus";
 import { cookTime, shiftStretch } from "./game/pace";
-import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, validShift, type ShiftWindow } from "./game/shift";
+import { arrivalGap, clockAt, clockLabel, shiftProgress, shiftSeconds, SHIFTS, validShift, type ShiftWindow } from "./game/shift";
 import { freshSave, loadSave, passed, passTown, todaysClosing, writeSave, type Closing } from "./game/progress";
 import { eventOn, fountainFor, fryerOf, garnishFor, garnishOf, middleOf, townById, withEvent, withLearned, type TownEvent } from "./game/stops";
 import { criticChance, fadePopularity, pieceFor, type PressPiece } from "./game/press";
@@ -51,7 +51,7 @@ import { Dusk } from "./render/dusk";
 import { GARAGE_START, garageHtml, type GarageView } from "./screens/garage";
 import { buyBonus, buyLook, wearLook } from "./game/garage";
 import type { Slot as LookSlot } from "./game/looks";
-import { renderPrep, reviewsHtml, syncRange, toggleIngredients } from "./screens/day";
+import { renderPrep, reviewsHtml, toggleIngredients, togglePrepFold } from "./screens/day";
 import { buildUi, cookMeter, patienceMood, peekHtml, setDrinkLabels, setTabArt, ticketHtml, tortillaMeter } from "./ui";
 import { icon } from "./ui/icons";
 import { DRINK_TINT } from "./render/machines";
@@ -4702,22 +4702,6 @@ function fitTicket(t: HTMLElement, render: (level: number) => string, levels = 5
 // Screens
 
 let screenShownAt = 0;
-// The shift window's two-thumb slider on Prep: follow the drag, then keep the window when let go.
-ui.root.addEventListener("input", (e) => {
-  const el = e.target as HTMLInputElement;
-  const end = el.dataset?.range as "start" | "end" | undefined;
-  if (!end || !prepOpen) return;
-  syncRange(ui.summary, end);
-});
-ui.root.addEventListener("change", (e) => {
-  const el = e.target as HTMLInputElement;
-  const end = el.dataset?.range as "start" | "end" | undefined;
-  if (!end || !prepOpen) return;
-  save.shift = validShift(syncRange(ui.summary, end));
-  writeSave(save);
-  showPrep();
-});
-
 ui.root.addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-act]");
   const act = btn?.dataset.act;
@@ -4763,6 +4747,19 @@ ui.root.addEventListener("click", (e) => {
     }
     case "prep-ing":
       toggleIngredients();
+      showPrep();
+      break;
+    // Lunch or Full day (DESIGN §51): kept in the save as the window itself.
+    case "prep-shift": {
+      const v = btn!.dataset.v;
+      if (v !== "lunch" && v !== "full") break;
+      save.shift = { ...SHIFTS[v] };
+      writeSave(save);
+      showPrep();
+      break;
+    }
+    case "prep-fold":
+      togglePrepFold(save.day, save.town);
       showPrep();
       break;
     case "prep-bonus": {

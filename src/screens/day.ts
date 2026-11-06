@@ -225,7 +225,7 @@ export function prepHtml(p: PrepInput): string {
       </section>
     </div>
     <footer class="day-foot">
-      <div class="sum"><span class="bv-eyebrow">${picks.length === 1 ? esc(bonusById(picks[0])!.name) : picks.length ? `${picks.length} bonuses` : "No bonus"}</span><b>~${expect} customers</b></div>
+      <div class="sum"><span class="bv-eyebrow">${picks.length === 1 ? esc(bonusById(picks[0])!.name) : picks.length ? `${picks.length} bonuses` : "No bonus"}</span><b><span class="bv-mono">~${expect}</span> customers</b></div>
       <button class="bv-btn primary lg" data-act="open">${icon("bell")}Open</button>
     </footer>
   </div>`;

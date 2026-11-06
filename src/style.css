@@ -132,7 +132,7 @@ html, body {
   border-radius: 10px;
   background: var(--bv-ink);
   color: var(--bv-paper);
-  font: 600 12px var(--bv-font-mono);
+  font: 500 12px var(--bv-font-mono);
   font-variant-numeric: tabular-nums;
   display: grid;
   place-items: center;
@@ -223,7 +223,7 @@ html, body {
 .ticket .name .ast { font: 800 16px/1 var(--bv-font-ui); color: var(--t-mod); flex: none; }
 /* A town's regular: their name before the dish (after build #78). */
 /* The tip coin: whole while the customer looks calm, half once sad, gone once angry. */
-.ticket .pat .tipc { flex: none; width: 14px; height: 14px; border-radius: 50%; display: grid; place-items: center; font: 800 9px/1 var(--bv-font-mono); font-style: normal; color: #6b4a07; background: #e9c25a; box-shadow: inset 0 0 0 1px rgb(107 74 7 / 0.55); transition: background 0.3s, opacity 0.3s; }
+.ticket .pat .tipc { flex: none; width: 14px; height: 14px; border-radius: 50%; display: grid; place-items: center; font: 500 9px/1 var(--bv-font-mono); font-style: normal; color: #6b4a07; background: #e9c25a; box-shadow: inset 0 0 0 1px rgb(107 74 7 / 0.55); transition: background 0.3s, opacity 0.3s; }
 .ticket .pat .tipc.half { background: linear-gradient(90deg, #e9c25a 50%, rgb(42 38 34 / 0.08) 50%); }
 .ticket .pat .tipc.none { background: transparent; color: rgb(42 38 34 / 0.35); box-shadow: inset 0 0 0 1px rgb(42 38 34 / 0.3); text-decoration: line-through; }
 .ticket .pat .tipc.lost { animation: tip-lost 0.6s ease-out; }
@@ -242,7 +242,7 @@ html, body {
 .ticket .ic .yolk { fill: #f1ae2a; }
 .ticket .ic .st { fill: #f3d36b; }
 .ticket .ic .lid { fill: #f4f1ea; }
-.ticket li .n { font: 700 12px var(--bv-font-mono); flex: none; }
+.ticket li .n { font: 500 12px var(--bv-font-mono); flex: none; }
 .ticket li .dpill { flex: none; min-width: 0; font-size: 11.5px; line-height: 1.15; padding: 0 6px 1px; vertical-align: 0; }
 /* Modifiers in small coloured boxes: Toast, Melt, Grill, Smash (an icon), Ice / No ice. */
 .ticket .mb { flex: none; display: inline-grid; place-items: center; font: 800 11.5px/1.15 var(--bv-font-ui); font-style: normal; border-radius: 4px; padding: 0 4px 1px; background: var(--mb-bg); color: var(--mb-fg); }
@@ -264,7 +264,7 @@ html, body {
 .ticket .mb.add { --mb-bg: var(--t-mod); --mb-fg: #fff; }
 /* "NO Ketchup", "ADD Bacon": the keyword in caps, then the item; "x3" right after the name. */
 .ticket .kw { font: 800 0.82em/1 var(--bv-font-ui); letter-spacing: 0.04em; }
-.ticket .cnt { font: 800 0.92em/1 var(--bv-font-mono); white-space: nowrap; }
+.ticket .cnt { font: 500 0.92em/1 var(--bv-font-mono); white-space: nowrap; }
 .ticket .mb.noice { --mb-bg: #f8dfcb; --mb-fg: #a24c12; }
 /* Changed from the menu (extra, add-on, "− Ketchup"): orange. */
 .ticket li.mod { color: var(--t-mod); font-weight: 800; }
@@ -297,7 +297,7 @@ html, body {
 .ticket .sd .sl { display: flex; align-items: center; gap: 3px; min-width: 0; max-width: 100%; }
 .ticket .sd .dn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ticket .sd .sm { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
-.ticket .sz { font: 700 11px/1.2 var(--bv-font-mono); font-style: normal; border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; flex: none; }
+.ticket .sz { font: 500 11px/1.2 var(--bv-font-mono); font-style: normal; border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; flex: none; }
 .ticket .sd.done .sl, .ticket .sd.wrong .sl { text-decoration: line-through; text-decoration-thickness: 1.5px; }
 .ticket .sd.done { color: var(--t-done); }
 .ticket .sd.done .mb { filter: grayscale(1); opacity: 0.45; }
@@ -330,7 +330,7 @@ html, body {
   cursor: default;
   z-index: 1;
 }
-.ticket.peek .nx { font: 600 10px/1 var(--bv-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--bv-mute); }
+.ticket.peek .nx { font: 500 10px/1 var(--bv-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--bv-mute); }
 /* Stubs: patience, short name, doneness, how much is left. */
 .ticket.stub { padding: 9px 5px 12px; gap: 4px; cursor: pointer; }
 .ticket.stub .bar { min-width: 0; }
@@ -338,7 +338,7 @@ html, body {
 .ticket.stub .name .l { font-size: 14px; letter-spacing: -0.01em; line-height: 1.05; white-space: normal; overflow-wrap: normal; }
 .ticket .pp { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 3px; }
 .ticket .pp .dpill { min-width: 0; font-size: 12px; padding: 0 6px 1px; }
-.ticket .pp .x { font: 700 12px var(--bv-font-mono); }
+.ticket .pp .x { font: 500 12px var(--bv-font-mono); }
 /* A stub's exceptions under its name: "NO Pickles", "ADD Bacon". */
 .ticket .ex { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; color: var(--t-mod); font: 700 11.5px/1.15 var(--bv-font-ui); }
 .ticket .ex li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; min-height: 0; padding: 0; margin: 0; }
@@ -356,7 +356,7 @@ html, body {
 .ticket.stub .sc .kw { flex-basis: 100%; padding-left: 15px; }
 .ticket.stub .sc .sz { padding: 0 1px; }
 .ticket.stub .sc .dn { flex: 1 1 0; }
-.ticket .left { margin-top: 2px; font: 600 12px/1 var(--bv-font-mono); color: var(--bv-ink-2); }
+.ticket .left { margin-top: 2px; font: 500 12px/1 var(--bv-font-mono); color: var(--bv-ink-2); }
 .ticket .left b { color: var(--bv-ink); }
 /* A list that still has to scroll fades out at the top, where the finished end of the burger is. */
 .ticket .tb.up { -webkit-mask-image: linear-gradient(transparent, #000 14px); mask-image: linear-gradient(transparent, #000 14px); }
@@ -473,7 +473,7 @@ html, body {
 .coin {
   position: absolute;
   font-family: var(--bv-font-mono);
-  font-weight: 700;
+  font-weight: 500;
   font-size: 20px;
   color: var(--bv-amber);
   text-shadow: 0 1px 0 var(--bv-paper), 0 2px 4px rgb(0 0 0 / 0.3);
@@ -748,7 +748,7 @@ html, body {
   color: var(--bv-paper);
   border-radius: var(--bv-r-sm);
   padding: 2px 7px;
-  font: 700 11px var(--bv-font-mono);
+  font: 500 11px var(--bv-font-mono);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -859,7 +859,7 @@ html, body {
 .gtag.pt.bay .melt.on { background: #f9d95b; opacity: 1; }
 /* A stack on the grill: how many are in it, beside its meter. */
 .gtag.pt .sc { position: absolute; right: -8px; top: -6px; }
-.gtag .sc { font: 800 11px/1 var(--bv-font-mono); background: var(--bv-ink); color: var(--bv-paper); border-radius: 4px; padding: 2px 4px; align-self: flex-end; }
+.gtag .sc { font: 500 11px/1 var(--bv-font-mono); background: var(--bv-ink); color: var(--bv-paper); border-radius: 4px; padding: 2px 4px; align-self: flex-end; }
 .gtag.pt.warm .cmeter, .gtag.pt.off .cmeter { opacity: 0.85; }
 .ftag .scoops { display: flex; gap: 3px; }
 .ftag .scoops b { width: 7px; height: 7px; border-radius: 50%; background: rgb(255 255 255 / 0.5); box-shadow: 0 0 0 1px rgb(42 38 34 / 0.7); }

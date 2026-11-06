@@ -38,7 +38,9 @@
 .day-scroll > * { flex-shrink: 0; }
 .day-foot { display: flex; align-items: center; gap: 10px; padding: 10px 14px calc(var(--safe-b) + 12px); border-top: 1px solid var(--bv-rule); background: var(--bv-paper); box-shadow: 0 -6px 14px rgb(42 38 34 / 0.06); }
 .day-foot .sum { display: grid; line-height: 1.1; min-width: 0; flex: 1; }
-.day-foot .sum b { font-family: var(--bv-font-mono); font-weight: 500; font-size: 20px; white-space: nowrap; }
+/* Words in Hanken, only the number in mono ("~9 customers"). */
+.day-foot .sum b { font-family: var(--bv-font-ui); font-weight: 700; font-size: 20px; white-space: nowrap; }
+.day-foot .sum b .bv-mono { font-weight: 500; }
 .day-foot .bv-btn.lg { min-width: 140px; }
 .day-hint { font-size: 12.5px; font-weight: 600; color: var(--bv-ink-2); line-height: 1.4; }
 .day-hint b { color: var(--bv-ink); }

@@ -237,7 +237,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
       fig: `<div class="hw-tk ex">${ticketFor(ex, { fries: true, drink: "water", ice: false, mods: [{ type: "no", kind: "ketchup" }, { type: "extra", kind: "tomato" }] })}</div>
         ${ticketKey()}`,
       points: [
-        "<b>Tap a ticket</b> to make that order active and open it. Tap it again to fold it, so you can see the others.",
+        "<b>Tap a ticket or its tray</b> to make that order active and open it. Tap it again to fold it: every ticket goes small, with just the changes and the sides, so you can see them all.",
         "The tray with the blue outline is the one you're building.",
         "Lines tick off as they land on the tray. The ticket is forgiving: a piece ticks off its line wherever it went. The stars are not.",
         "Now and then someone wants <b>just a drink or just a side</b>. Their tray has no ring for food.",
@@ -386,12 +386,13 @@ function ticketKey(): string {
   return `<dl class="hw-key ticket">
     <dt><span class="kbar"><i></i></span></dt><dd>Patience: green, amber, then red. At the end they walk off.</dd>
     <dt><span class="ln nx">Lettuce</span></dt><dd>Next to go on.</dd>
-    <dt><span class="ln dn">Bun</span></dt><dd>On the tray.</dd>
-    <dt><span class="ln wr">Onion</span></dt><dd>Not wanted, or in the wrong place.</dd>
-    <dt><span class="ln mod"><span class="kw">NO</span> Ketchup</span></dt><dd>A change from the menu. A <b>*</b> on a folded ticket.</dd>
+    <dt><span class="ln dn">Bun ✓</span></dt><dd>On the tray.</dd>
+    <dt><span class="ln wr">Onion ✕</span></dt><dd>Not wanted, or in the wrong place.</dd>
+    <dt><span class="ln mod"><span class="kw">ADD</span> Bacon</span></dt><dd>A change from the menu. A small ticket lists just the changes and the sides.</dd>
+    <dt><span class="ln mod nm"><span class="kw">NO</span> Ketchup</span></dt><dd>Leave it off.</dd>
     <dt><i class="mb toast">Toast</i><i class="mb melt">Melt</i></dt><dd>How to cook that layer.</dd>
     <dt><span class="how"><i class="mb toast">Press</i><i>›</i><i class="mb cut">Cut</i></span></dt><dd>Steps for the whole dish.</dd>
-    <dt><i class="sz">M</i></dt><dd>Sides and drinks, size first.</dd>
+    <dt><i class="sz">M</i></dt><dd>Sides and drinks, size first, then Ice or No ice.</dd>
   </dl>`;
 }
 

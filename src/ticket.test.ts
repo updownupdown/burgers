@@ -52,17 +52,26 @@ describe("forgiving ticket", () => {
     const o: Order = { ...order, mods: [{ type: "no", kind: "lettuce" }, { type: "add", kind: "onion" }], layers: [{ kind: "bun" }, { kind: "patty" }, { kind: "onion", count: 2 }, { kind: "tomato", count: 2 }, { kind: "bun" }], removed: [{ kind: "lettuce", at: 2 }] };
     const html = ticketHtml(o, plate(), 1, true);
     expect(html).toContain('<b class="kw">NO</b> Lettuce');
-    expect(html).toContain('<b class="kw">ADD</b> Onion <b class="cnt">x2</b>');
+    expect(html).toContain('<span class="l"><b class="kw">ADD</b> Onion</span><span class="ct">×2</span>');
     const stub = ticketHtml(o, plate(), 1, false);
     expect(stub).toContain('<b class="kw">NO</b> Lettuce');
     expect(stub).not.toContain("left");
+  });
+  it("puts each side's size, flavour and ice on the small ticket, and each side once on the open one", () => {
+    const o: Order = { ...order, fries: true, friesSize: "L", drink: "cola", drinkSize: "S", ice: false };
+    const stub = ticketHtml(o, plate(), 1, false, 0, 90);
+    expect(stub).toMatch(/<i class="sz">L<\/i><span class="sn">Fries<\/span>/);
+    expect(stub).toMatch(/<i class="sz">S<\/i><span class="sn">[^<]+<\/span><span class="sm"><span class="mb noice"/);
+    const open = ticketHtml(o, plate(), 1, true);
+    expect(open.match(/<svg class="ic"[^>]*style="--c:[^"]*"[^>]*>/g)!.length).toBe(o.layers.length + 2);
+    expect(open).not.toContain("Rosa");
   });
 });
 
 describe("method line and step chips (after build #76)", () => {
   const recipe = (town: string, name: string) => townById(town).menu.find((r) => r.name === name)!;
   const html = (o: Order) => ticketHtml(o, plate(), 1, true);
-  const how = (o: Order) => (html(o).match(/<li class="how">(.*?)<\/li>/)?.[1] ?? "").replace(/<[^>]+>/g, "");
+  const how = (o: Order) => (html(o).match(/<div class="how">(.*?)<\/div>/)?.[1] ?? "").replace(/<[^>]+>/g, "");
   /** The chips on the line for one kind, as text. */
   const chips = (o: Order, label: string) => {
     const li = html(o).split("<li").slice(1).find((x) => x.includes(`<span class="l">${label}`)) ?? "";
@@ -104,7 +113,7 @@ describe("counts on the ticket (review #78 B10)", () => {
     const tacos = orderFromRecipe(1, townById("redmesa").menu.find((r) => r.name === "Street Tacos")!, false, null);
     const html = ticketHtml(tacos, plate(), 1, true);
     const line = (label: string) => html.split("<li").slice(1).find((x) => x.includes(`<span class="l">${label}`)) ?? "";
-    expect(line("Onion")).not.toContain("x1");
-    expect(line("Pork")).toContain("x3");
+    expect(line("Onion")).not.toContain("×1");
+    expect(line("Pork")).toContain("×3");
   });
 });

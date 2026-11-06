@@ -114,6 +114,17 @@ export interface Closing {
   pacing?: "chill" | "balanced" | "stressful";
 }
 
+/**
+ * The Orders line as the report card's ledger shows it. Takings are rounded once from the exact
+ * sums, while each line shows its own rounding, so the lines could come to a dollar off the
+ * total; the orders (the only line in cents) take up the difference. A day that floored at $0
+ * can't add up, so its orders show as they were.
+ */
+export function ordersShown(c: Pick<Closing, "earned" | "tips" | "comped" | "spills" | "takings">): number {
+  const fit = c.takings - Math.round(c.tips) + Math.round(c.comped) + Math.round(c.spills);
+  return Math.abs(fit - c.earned) < 1 ? fit : Math.round(c.earned);
+}
+
 const KEY = "bv-save-v1";
 
 export function freshSave(): Save {

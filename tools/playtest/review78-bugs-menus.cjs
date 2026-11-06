@@ -94,8 +94,8 @@ const tests = {
     await step(p, 400);
     await p.evaluate(() => window.__bv.manual(false));
     await p.waitForTimeout(4500);
-    // hide the results sheet if it's up
-    if (await p.$('[data-home=results-close]:visible')) await p.click('[data-home=results-close]');
+    // Continue past the report card (DESIGN §39), which comes up over the evening map.
+    if (await p.$('.report-card [data-rep=continue]')) await p.click('.report-card [data-rep=continue]');
     await p.waitForTimeout(400);
     const s0 = await saveOf(p);
     // hop to a neighbour within range
@@ -164,13 +164,15 @@ const tests = {
     await step(p, 400);
     await p.evaluate(() => window.__bv.manual(false));
     await p.waitForTimeout(4500);
-    const verdict = await p.evaluate(() => document.querySelector('.home-res-verdict')?.textContent || '');
+    // The verdict line on the report card (DESIGN §39), up over the evening map.
+    const verdict = await p.evaluate(() => document.querySelector('.report-card .rep-verdict')?.textContent || '');
     await p.screenshot({ path: OUT + 'b7-results-walkouts.png' });
     ok('B7 verdict when all walked out', verdict.includes('walked out'), verdict);
     const s = await saveOf(p);
     ok('B8 no 0.0 best', s.best.pinecrest === undefined, JSON.stringify(s.best));
-    if (await p.$('.home-res-foot [data-home=results]')) {
-      await p.click('.home-res-foot [data-home=results]');
+    // The old Closing screen's detail is the card's Orders row now, opened in place.
+    if (await p.$('.report-card [data-rep=sec][data-v=take]')) {
+      await p.click('.report-card [data-rep=sec][data-v=take]');
       await p.waitForTimeout(700);
       await p.screenshot({ path: OUT + 'm14-closing.png' });
     }
@@ -178,7 +180,7 @@ const tests = {
   },
   // M4 pause Today's menu outside the Pines
   async pausemenu() {
-    for (const [town, needle] of [['redmesa', 'Corn tortilla ×3'], ['sunvalley', 'Quesadilla'], ['portamber', 'Mushroom'], ['saltwater', 'Avocado']]) {
+    for (const [town, needle] of [['redmesa', 'Corn tortilla'], ['sunvalley', 'Quesadilla'], ['portamber', 'Mushroom'], ['saltwater', 'Avocado']]) {
       const p = await page({ town, unlocked: ['pinecrest', town], day: 20, shiftsIn: { pinecrest: 3 } });
       await enterShift(p);
       await step(p, 3);

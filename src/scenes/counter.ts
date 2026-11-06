@@ -16,7 +16,7 @@ import { makeTacoRack } from "../render/dishes";
 import { ageLayers, goesStale, RACK_SLOTS, WARM_AGE } from "../game/hold";
 import { brushedSteel, counterTop } from "../render/wear";
 import { CUP_DIMS, cupSurfaceY, makeCarton, makeCartonStack, makeCup, makeFood, makeBasketFries, makeFries, stackBases, stackHeight, type CupObject, type FoodObject, type FriesObject } from "../render/food";
-import { makeGarnishDish } from "../render/models/garnish";
+import { makeGarnish, makeGarnishDish } from "../render/models/garnish";
 import { dressCup } from "../render/cup";
 import { CURD_TRAY, FREEZER, GRAVY_WELL, makeCurdHandful, makeCurdTray, makeFreezer, makeGravyWell, makeLadle, makeShaker } from "../render/fryer";
 import { disposeObject, faceted, mesh, toon } from "../render/materials";
@@ -346,6 +346,8 @@ export interface DrinkCup {
   fill: number;
   ice: boolean;
   lid: boolean;
+  /** The local drink's garnish, kept when a garnished drink is stood back on the counter. */
+  garnish?: Garnish;
   /** World position on the counter. */
   x: number;
   z: number;
@@ -1879,6 +1881,13 @@ export class CounterView {
     cup.obj.position.set(x, ti >= 0 ? CUP_Y : 0, z);
     cup.obj.userData.setFill(cup.fill);
     dressCup(cup.obj, cup);
+    // A garnished drink set down off the tray keeps its garnish on the rim, as on the tray.
+    if (cup.garnish) {
+      const gn = makeGarnish(cup.garnish);
+      gn.position.set(CUP_DIMS[cup.size].r * 0.75, CUP_DIMS[cup.size].h + 0.02, CUP_DIMS[cup.size].r * 0.5);
+      gn.scale.setScalar(1.4);
+      cup.obj.add(gn);
+    }
     this.scene.add(cup.obj);
     this.cups.push(cup);
     if (ti >= 0) this.taps[ti].cup = cup;

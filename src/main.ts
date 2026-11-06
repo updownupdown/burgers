@@ -573,6 +573,11 @@ function customerLeaves(i: number, stars: number, say: string | null, reviewed: 
   const s = game.slots[i];
   s.leaving = true;
   s.fig?.setMood(stars >= 4 ? "happy" : stars === 3 ? "neutral" : stars === 2 ? "sad" : "angry");
+  // The sauce bottle stops offering this tray, and a close-up open on it closes.
+  if (sauceDrag) {
+    sauceDrag.ok[i] = false;
+    if (sauceDrag.slot === i) closeSauce();
+  }
   // Move straight on to the next order so nothing gets dropped on the departing plate.
   if (game.active === i) {
     const other = game.slots.findIndex((sl) => sl.order && !sl.leaving);
@@ -1611,7 +1616,7 @@ function restorePayload(payload: Payload): void {
     if (fromPlate !== undefined && flavor) {
       game.slots[fromPlate].plate.drink = { flavor, fill, size, ice, lid, ...(garnish ? { garnish } : {}) };
       syncTray(fromPlate, false);
-    } else if (from) counter.placeCup({ flavor, fill, size, ice, lid }, new THREE.Vector3(from.x, 0.3, from.z), true);
+    } else if (from) counter.placeCup({ flavor, fill, size, ice, lid, ...(garnish ? { garnish } : {}) }, new THREE.Vector3(from.x, 0.3, from.z), true);
   }
   if (payload.type === "carton") {
     const { size, cook, fill, salt, curds, gravy, fromPlate } = payload;
@@ -1915,7 +1920,7 @@ function takeBack(m: Move<Moved>): { show: Payload | THREE.Object3D; put: () => 
       syncTray(to.slot, false);
     } else if (to.at === "cup") {
       const cup = w.ref as DrinkCup;
-      c = { flavor: cup.flavor, fill: cup.fill, size: cup.size, ice: cup.ice, lid: cup.lid };
+      c = { flavor: cup.flavor, fill: cup.fill, size: cup.size, ice: cup.ice, lid: cup.lid, ...(cup.garnish ? { garnish: cup.garnish } : {}) };
       counter.removeCup(cup);
     } else c = pp.type === "drink" ? { flavor: pp.flavor, fill: pp.fill, size: pp.size, ice: pp.ice, lid: pp.lid, ...(pp.garnish ? { garnish: pp.garnish } : {}) } : { flavor: null, fill: 0, size: pp.size, ice: !!pp.ice, lid: false };
     const put = () => {
@@ -2598,7 +2603,7 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
     // A cup stands anywhere on the drinks counter; over a drip tray it goes under that nozzle.
     if (counter.page !== 0 || counter.overTrash(g)) return false;
     const c = payload.type === "drink" ? payload : { flavor: null, fill: 0, size: payload.size, ice: !!payload.ice, lid: false };
-    const { cup, why } = counter.placeCup({ flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid }, g);
+    const { cup, why } = counter.placeCup({ flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid, ...(payload.type === "drink" && payload.garnish ? { garnish: payload.garnish } : {}) }, g);
     if (!cup) {
       if (why) showHint(why, 2);
       return false;
@@ -2718,7 +2723,8 @@ function sauceFinal(): Rect {
   return { x: (w - side) / 2, y, w: side, h: side };
 }
 
-const sauceTargets = () => game.slots.map((s) => s.plate.layers.length > 0);
+// Not a tray whose customer is on their way out: that burger is done with.
+const sauceTargets = () => game.slots.map((s) => s.plate.layers.length > 0 && !s.leaving);
 
 function startSauce(pt: Pointer, kind: SauceKind): void {
   const ok = sauceTargets();
@@ -3180,7 +3186,8 @@ canvas.addEventListener("pointerdown", (e) => {
   if (knifeArm && pt.band !== "counter") disarm();
   if (sauceArm && pt.band !== "counter") {
     const slot = pt.band === "tray" ? trayView.pick(ndcIn(bands.tray, x, y)) : -1;
-    if (slot >= 0 && game.slots[slot].plate.layers.length) openTapSauce(slot);
+    if (slot >= 0 && game.slots[slot].leaving) disarm();
+    else if (slot >= 0 && game.slots[slot].plate.layers.length) openTapSauce(slot);
     else if (slot >= 0) showHint("Start a burger on that tray first.", 1.8);
     else disarm();
     return;
@@ -3341,7 +3348,7 @@ canvas.addEventListener("pointerdown", (e) => {
     } else if (hit.type === "cup") {
       // Pick any cup up, full or empty, to move it or take it to the tray.
       const c = counter.cups[hit.idx];
-      startHold(pt, { type: "drink", flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid, from: { x: c.x, z: c.z } });
+      startHold(pt, { type: "drink", flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid, from: { x: c.x, z: c.z }, ...(c.garnish ? { garnish: c.garnish } : {}) });
       counter.removeCup(c);
     } else if (hit.type === "spill") {
       const t = counter.taps[hit.idx];
@@ -4808,13 +4815,14 @@ ui.root.addEventListener("click", (e) => {
       writeSave(save);
       showTitle();
       break;
-    case "update-now":
-      if (game.pendingUpdate) reloadTo(game.pendingUpdate.build, true);
-      break;
-    case "update-later":
-      ui.update.hidden = true;
-      break;
   }
+});
+
+// The update notice sits outside the game's layer (see buildUi), so it has its own buttons' handler.
+ui.update.addEventListener("click", (e) => {
+  const act = (e.target as HTMLElement).closest<HTMLElement>("[data-act]")?.dataset.act;
+  if (act === "update-now" && game.pendingUpdate) reloadTo(game.pendingUpdate.build, true);
+  else if (act === "update-later") ui.update.hidden = true;
 });
 
 // The game menu (src/screens/menu.ts). In a shift it pauses; closing it resumes.
@@ -5157,8 +5165,9 @@ function showTitle(night: NightShow | null = null, arrive: Arrival | null = null
   ui.title.hidden = false;
   ui.summary.hidden = true;
   ui.summary.classList.remove("prep-host", "card-host");
-  // Whatever Back was pointing at (a shift, Prep, a screen over the map) is gone now.
-  for (const k of ["shift", "prep", "overlay"]) dropBack(k);
+  // Whatever Back was pointing at (a shift, Prep, a screen over the map) is gone now. Straight
+  // after a shift the shift's guard holds until the report card takes over (see screens/home.ts).
+  for (const k of arrive ? ["prep", "overlay"] : ["shift", "prep", "overlay"]) dropBack(k);
   prepOpen = false;
   game.overlay = null;
   mountHome(ui.title, {
@@ -5234,7 +5243,8 @@ function resetGold(): void {
 
 function startSundown(): void {
   cancelPointer();
-  dropBack("shift");
+  // The shift's Back guard stays up through the sundown and the pull-back (it does nothing once
+  // play has stopped), so Back can't leave the page before the report card is up to catch it.
   game.phase = "sundown";
   hintUntil = 0;
   for (const s of game.slots) {
@@ -5320,7 +5330,6 @@ window.addEventListener(
 function endShift(arrive: Arrival): void {
   cancelPointer();
   resetHands();
-  dropBack("shift");
   game.phase = "summary";
   // The shift fills the day; the evening follows, and only sleeping turns the day (see game/day.ts).
   save.time = "evening";

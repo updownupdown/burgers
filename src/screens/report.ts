@@ -1,5 +1,5 @@
 import { bonusById, GREAT, townBonus, type BonusId } from "../game/bonus";
-import { PASS_STARS, type Closing, type Save } from "../game/progress";
+import { ordersShown, PASS_STARS, type Closing, type Save } from "../game/progress";
 import { addReviews, noReviews, reviewAverage, reviewTotal } from "../game/reviews";
 import { clockLabel } from "../game/shift";
 import { townById } from "../game/stops";
@@ -124,15 +124,16 @@ export function reportHtml(c: Closing, save: Save): string {
   const newBest = c.takings > 0 && (c.bestBefore === null || c.takings > c.bestBefore);
   const gone = c.lost + c.leftLine;
   const secs: Sec[] = [];
+  const orders = ordersShown(c);
 
   const row = (dt: string, dd: string, cls = "", sub = "") => `<dt class="${cls}">${dt}${sub ? `<small>${sub}</small>` : ""}</dt><dd class="${cls}">${dd}</dd>`;
   secs.push({
     id: "take",
     icon: "receipt",
     label: "Orders",
-    value: `${money(c.earned)}${c.tips ? ` + ${money(c.tips)} tips` : ""}`,
+    value: `${money(orders)}${c.tips ? ` + ${money(c.tips)} tips` : ""}`,
     body: `<div class="day-ledger"><dl>
-      ${row("Orders", money(c.earned), "", `${plural(c.served, "order")}${c.lost ? ` · ${c.lost} walked out` : ""}${c.leftLine ? ` · ${c.leftLine} left the line` : ""}`)}
+      ${row("Orders", money(orders), "", `${plural(c.served, "order")}${c.lost ? ` · ${c.lost} walked out` : ""}${c.leftLine ? ` · ${c.leftLine} left the line` : ""}`)}
       ${row("Tips", money(c.tips), "", "for speed")}
       ${c.comped ? row("On the house", `−${money(c.comped)}`, "neg", "sides and extras nobody ordered") : ""}
       ${c.spills ? row("Spilled soda", `−${money(c.spills)}`, "neg") : ""}

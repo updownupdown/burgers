@@ -211,8 +211,8 @@ const CHICKEN = {
     const s2 = await pressUntil(t, 1, 0.5);
     console.log('sandwich pressed', s2, 's');
     await openBay(t, 1);
-    // Out of the bay onto the board, cut with the knife (DESIGN §31: tap the knife, tap the
-    // panini, slice across in the cut view), then up to the tray.
+    // Out of the bay onto the board, cut with the knife (DESIGN §38: tap the knife, then the
+    // panini, and it's cut in half; there's no cut view any more), then up to the tray.
     const pb = await t.press();
     const [bx, by] = await t.proj(pb.bays[1].plate);
     const [dx, dy] = await t.proj(pb.board.at);
@@ -221,8 +221,7 @@ const CHICKEN = {
     await t.p.screenshot({ path: `${out}harbor-on-board.png` });
     await t.tap(await t.hp('knife'));
     await t.tap([dx, dy]);
-    const [sx, sy, sw, sh] = (await t.ev(() => window.__bv.knife())).square;
-    await t.drag(line(sx + sw * 0.05, sy + sh * 0.5, sx + sw * 0.95, sy + sh * 0.5, 16));
+    await t.p.waitForTimeout(600);
     await t.hideHint();
     await t.p.screenshot({ path: `${out}harbor-cut.png` });
     await step(t.p, 1);

@@ -1096,3 +1096,29 @@ James's picks from the build #88 UI study (§43 to §45 are taken by other work)
 - **Quieter Garage lists and real empty states.** A bonus in a town the road hasn't reached is one quiet line (town name, "Further down the road", price) instead of a "?" card; the intro is a one-line count and a one-sentence rule. Popularity & reviews before the first review shows one empty state (grey stars, "No reviews yet", who tends to write one) instead of zero bars and the "0 reviews · 0 clippings" line.
 - **Zoom capsule.** Zoom in and out share one 40 px capsule (44 px tap) with a hairline between; find the truck is a separate 44 px button under it.
 - **A first-run title card.** The welcome card opens with the cloche mark (`public/logo.svg`) and the stacked Bun / Voyage wordmark, Voyage in butter, on a slate band, with "Welcome aboard" under it. Switches (welcome card and Settings) no longer print "On"/"Off" beside them.
+
+## 47. Difficulty: Relaxed, Steady and Busy (difficulty study, recommendation A)
+
+The study (doc "Bun Voyage difficulty curve study", reports in project files difficulty-study/) found Chill was hard because of hands, food cooking out of sight and small slips adding up, never patience. So each tier now changes something a player notices, and the trip carries what you cook. Ids stay chill / balanced / stressful.
+
+| | Relaxed | Steady | Busy |
+| --- | --- | --- | --- |
+| Patience | 2.4x (was 3.6x) | 1.3x | 0.8x (was 0.92x) |
+| Crowd | x0.8, never under six where six would come | x1 | x1.28 |
+| Window | 3 (was 2); the bell calls by itself while fewer than 2 are up | 3 | 3 |
+| Ready alerts | yes | yes (James) | no |
+| Holding | 1.67x as long (holdRate), bars agree | as before | as before |
+| Small slips (salt, lid, ice, garnish, one piece short, messy stack, sauce) | half penalty (`setSmallSlips`) | full | full |
+| Helpers | fountain stops at the line and lids; the first of a counted topping brings the ticket's whole count (one Undo takes them all) | none | none |
+| Burning | half pace past over-done | full | full |
+| Tips | x0.9 | x1 | x1.3, and "A great shift on Busy!" |
+| Send-back refund | 20% of patience | 20% | 10% |
+| Send back / refuse | 40 / 12 | 55 / 22 | 68 / 32 |
+
+- **Ready alerts.** When something reaches done on a counter you aren't looking at: a soft tick, a short "Ready on the grill!" word for the middle counter (fries keep "Fries are golden!"), and the middle counter's button lamp lights amber for food done on the grill, comal or in the press. The Kitchen timer bonus keeps its countdown ring and ticks on every counter.
+- **Patience** (`line.ts windowPatience`) now counts an egg on anything but a burger (22 s x cook time), pineapple (12), bacon (8), a tostada shell (14), each taco's tortilla (6) plus 10 s of taco work, and a 40 s floor for orders with no main. At the window an order also gets a quarter of the patience left on each order already there, up to a minute (`spawnCustomer`).
+- **Complexity** follows the orders taken, not the clock, so a shift running past closing stops escalating. A town's first passed shift caps it at half, the second at three quarters; the regular and the local ask start from a town's second shift. A dish never served at 4★ comes plain (no changes, no sides) with 1.5x patience.
+- **New regions.** The first three passed shifts in a region after the Pines bring 0.6 / 0.75 / 0.9 of the crowd (`newRegionCrowd`); Prep says word hasn't reached the region yet. The map card's estimate now uses the saved pacing and this too.
+- **Fame** (`popularityTraffic`) is 0.5 + 0.65 x popularity: the same at the start, 1.15x at 100 (was 1.3x).
+- **Fixes.** `spawnGap` (never spaced arrivals) is gone. The Comfy bench also stops anyone in line giving up. An order put right after a send-back tips half. One person in line puts off at most a quarter of passers-by. Guided first orders use normal patience whose bar stops at half (was a fixed 900 s). Mushrooms on a pie roast at 0.85 (were pale at the crust's Perfect line). §26's note that Chill stops pours is now true again, on Relaxed.
+

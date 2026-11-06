@@ -8,6 +8,7 @@ import { ratingPull, reviewAverage, reviewTotal, REVIEW_CHANCE } from "../game/r
 import { clockLabel, FIRST_HOUR, hourRate, LAST_HOUR, MIN_SHIFT, shiftHours, type ShiftWindow } from "../game/shift";
 import { eventOn, REGIONS, type Recipe, type Stop } from "../game/stops";
 import { askFor } from "../game/asks";
+import { newHere, roadsAhead } from "../game/teaching";
 import { icon } from "../ui/icons";
 import { buildLine, methodTags, stackArt } from "./menuref";
 import { scrollShadows } from "./modal";
@@ -198,6 +199,7 @@ export function prepHtml(p: PrepInput): string {
         </ul>
         ${newRegionCrowd(fresh) < 1 ? `<div class="bv-callout">${icon("people")}<span>Word hasn't reached ${esc(region?.name ?? "these parts")} yet, so it's a quieter day while you find your feet.</span></div>` : ""}
         ${ev ? `<div class="bv-callout">${icon("flag")}<span><b>${esc(ev.name)}.</b> ${esc(ev.blurb)}${ev.special ? ` Special: ${esc(ev.special.name)}.` : ""}</span></div>` : ""}
+        ${newHere(stop, save.shiftsIn) ? `<div class="bv-callout new">${icon("new")}<span>${esc(newHere(stop, save.shiftsIn)!)}</span></div>` : ""}
       </section>
 
       <section class="prep-sec prep-card">
@@ -219,7 +221,7 @@ export function prepHtml(p: PrepInput): string {
         <div class="prep-rows">${rows}</div>
       </section>
 
-      ${askHtml(stop, menu, save.day, expect, !!save.shiftsIn[stop.id])}
+      ${askHtml(stop, menu, save.day, expect, !!save.shiftsIn[stop.id], roadsAhead(stop, save.unlocked))}
 
       <section class="prep-sec prep-card">
         <h3 class="prep-h">${icon("sparkle")}Bonuses${owned.length > 1 ? `<span>Pick up to ${MAX_PICKS}</span>` : ""}</h3>
@@ -258,15 +260,15 @@ export function renderPrep(host: HTMLElement, p: PrepInput, again: boolean): voi
   if (card && sc) scrollShadows(card, sc);
 }
 
-/** Today's local ask (game/asks.ts): optional, a little extra money, and the shift counts as two. */
-function askHtml(stop: Stop, menu: readonly Recipe[], day: number, expect: number, beenBefore: boolean): string {
+/** Today's local ask (game/asks.ts): optional, a little extra money, and the shift counts as two while it can still open a road. */
+function askHtml(stop: Stop, menu: readonly Recipe[], day: number, expect: number, beenBefore: boolean, roads: boolean): string {
   // No local ask on a town's first shift (one new thing at a time; main.ts startShift agrees).
   if (!beenBefore) return "";
   const a = askFor(stop, menu, day, expect);
   return `<section class="prep-sec prep-card prep-ask">
         <h3 class="prep-h">${icon("flag")}Local ask <span class="prep-shift-label bv-mono">+${money(a.reward)}</span></h3>
         <p class="ask-text">${esc(a.text)}.</p>
-        <span class="day-hint">Optional. Met, it pays ${money(a.reward)} and this shift counts as two toward opening the roads.</span>
+        <span class="day-hint">Optional. Met, it pays ${money(a.reward)}${roads ? " and this shift counts as two toward opening the roads" : ""}.</span>
       </section>`;
 }
 

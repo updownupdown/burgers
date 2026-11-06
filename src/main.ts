@@ -62,7 +62,7 @@ import { devOn, simulate, type SimLevel } from "./game/devmode";
 import { coachOn, coachShowing, coachState, setCoachOn, skipLessonsFor, startCoach } from "./tutorial/coach";
 import { lessons } from "./tutorial/lessons";
 import { ACTION_TIPS, HintLane, type TipOpts } from "./game/hintlane";
-import { newHere } from "./game/teaching";
+import { newHere, roadsAhead } from "./game/teaching";
 import { showWelcome, welcomeDue } from "./tutorial/welcome";
 import { modalClosedAt, modalOpen } from "./screens/modal";
 
@@ -416,11 +416,11 @@ function spawnCustomer(slotIdx: number, seed: number, early?: Order): void {
   const s = game.slots[slotIdx];
   let order = early ?? nextOrder();
   // The first shift's guided orders (tutorial/lessons.ts): the simplest burger, then the same with a
-  // small drink (so the counters get swiped), then once more on its own.
+  // small drink (so the counters get swiped), then with small fries (the fryer lesson: two timers at once).
   const lesson = game.tutorial && game.ordered < GUIDED ? game.ordered : -1;
   if (lesson >= 0) {
     const drink = lesson === 1 ? fountainFor(stop().region)[0] : null;
-    order = orderFromRecipe(order.id, stop().menu[0], false, drink, [], "S", "S");
+    order = orderFromRecipe(order.id, stop().menu[0], lesson === 2, drink, [], "S", "S");
     if (drink) order.ice = null;
   }
   s.lesson = lesson;
@@ -601,7 +601,7 @@ function noteServed(order: Order, r: { stars: number; touches: string[] }, patie
   if (!askMet()) showHint(`Local ask ${game.askCount}/${a.need}: ${a.text}`, 3);
   if (askMet()) {
     game.money += a.reward;
-    showHint(`Local ask done: ${a.text}. +$${a.reward}, and today counts as two shifts here.`, 4);
+    showHint(`Local ask done: ${a.text}. +$${a.reward}${roadsAhead(stop(), save.unlocked) ? ", and today counts as two shifts here" : ""}.`, 4);
     setTimeout(() => sfx.coin(), 700);
   }
 }
@@ -1047,6 +1047,10 @@ function tutorialHint(): string | null {
   if (!s) return null;
   const layers = s.plate.layers;
   const pattyOnGrill = counter.grillItems.find((g) => g.piece.kind === "patty");
+  const fries = !!s.order?.fries && !s.plate.fries;
+  // The fryer's own tips (scoop, lower, carton) take it from there.
+  if (fries && counter.page === 2) return null;
+  if (fries && !counter.baskets.some((b) => b.loaded)) return "This one wants small fries. Start them first: tap the fryer button on the right.";
   if (counter.page !== HOME_PAGE) return "Tap the grill button at the edge of the counter to go back.";
   if (layers.length === 0) return "Drag a bun up onto the plate on the tray.";
   const hasPatty = layers.some((l) => l.piece.kind === "patty");
@@ -1058,6 +1062,7 @@ function tutorialHint(): string | null {
     return "A bit past done. Grab it now, before it burns.";
   }
   if (layers[layers.length - 1].piece.kind !== "bun" || layers.length < 3) return "Add the top bun.";
+  if (fries) return "Now the fries: tap the fryer button on the right.";
   return "Tap Serve (or swipe the tray up) to hand it to the customer!";
 }
 

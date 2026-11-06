@@ -238,7 +238,7 @@ function basicsSecs(town: Stop | undefined): Sec[] {
         ${ticketKey()}`,
       points: [
         "<b>Tap a ticket or its tray</b> to make that order active and open it. Tap it again to fold it: every ticket goes small, with just the changes and the sides, so you can see them all.",
-        "The tray with the blue outline is the one you're building.",
+        "The tray with the dark ring around it is the one you're building.",
         "Lines tick off as they land on the tray. The ticket is forgiving: a piece ticks off its line wherever it went. The stars are not.",
         "Now and then someone wants <b>just a drink or just a side</b>. Their tray has no ring for food.",
       ],

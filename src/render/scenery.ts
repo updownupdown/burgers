@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { Backdrop } from "../game/stops";
 import { bakeStatic } from "./bake";
 import { faceted, grade, mesh, toon } from "./materials";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 /*
  * The view out of the serving window ("Valley view", picked by James from the scenery study on
@@ -35,6 +36,89 @@ export interface Built {
   background: THREE.Texture;
   /** Haze toward the horizon colour. */
   fog: THREE.Fog;
+  /** The few things out there that move (DESIGN §45), each in a group the bake leaves alone. */
+  movers: Mover[];
+}
+
+/** Something in the view that moves a little: `t` is seconds since the view was built. */
+export interface Mover {
+  update: (dt: number, t: number) => void;
+}
+
+/** A group for a mover: left out of the bake, so it can move. */
+function moverGroup(g: THREE.Group, x = 0, y = 0, z = 0): THREE.Group {
+  const m = new THREE.Group();
+  m.userData.noBake = true;
+  m.position.set(x, y, z);
+  g.add(m);
+  return m;
+}
+
+/**
+ * The Pines: two birds gliding over the near tree line now and then, small ink chevrons against
+ * the far slopes that flap a little. Left to right across the view, then a long rest off to the side.
+ */
+function birds(g: THREE.Group): Mover {
+  const grp = moverGroup(g, 0, 0, -16);
+  const wing = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0, 0), new THREE.Vector3(-0.5, 0.12, 0), new THREE.Vector3(-0.42, 0.27, 0),
+    new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.42, 0.27, 0), new THREE.Vector3(0.5, 0.12, 0),
+    new THREE.Vector3(0, 0, 0), new THREE.Vector3(-0.42, 0.27, 0), new THREE.Vector3(0, 0.11, 0),
+    new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.11, 0), new THREE.Vector3(0.42, 0.27, 0),
+  ]);
+  wing.scale(1.1, 1.1, 1.1);
+  const mat = new THREE.MeshBasicMaterial({ color: grade("#4a4148"), side: THREE.DoubleSide });
+  const pair = [new THREE.Mesh(wing, mat), new THREE.Mesh(wing, mat)];
+  pair[1].position.set(-1.4, -0.35, 0.4);
+  pair[1].scale.setScalar(0.85);
+  for (const b of pair) grp.add(b);
+  const SPAN = 10;
+  const REST = 40;
+  const SPEED = 0.9;
+  return {
+    update: (_dt, t) => {
+      // One pass every (2 SPAN / SPEED + REST) seconds; between passes they're off to the side.
+      const cycle = (2 * SPAN) / SPEED + REST;
+      const u = (t + 4) % cycle;
+      grp.position.x = -SPAN + u * SPEED;
+      grp.position.y = 3.8 + Math.sin(t * 0.4) * 0.15;
+      grp.visible = grp.position.x < SPAN;
+      pair.forEach((b, i) => (b.scale.y = (i ? 0.85 : 1) * (0.75 + 0.25 * Math.sin(t * 3.1 + i * 1.7))));
+    },
+  };
+}
+
+/**
+ * Red Rock: a tumbleweed bowling along behind the fence about every half minute, hopping a little:
+ * a tangle of thin twig rings round a dry core, one mesh.
+ */
+function tumbleweed(g: THREE.Group, z: number): Mover {
+  const grp = moverGroup(g, 0, G, z);
+  const twigs: THREE.BufferGeometry[] = [new THREE.IcosahedronGeometry(0.3, 0)];
+  const e = new THREE.Euler();
+  for (let i = 0; i < 7; i++) {
+    const ring = new THREE.TorusGeometry(0.46 + (i % 3) * 0.05, 0.035, 4, 14).toNonIndexed();
+    twigs.push(ring.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(e.set(i * 0.9, i * 1.7, i * 0.4))));
+  }
+  const geo = mergeGeometries(twigs.map((t) => (t.index ? t.toNonIndexed() : t)), false);
+  for (const t of twigs) t.dispose();
+  const ball = mesh(faceted(geo), "#8f6a3c", { ink: false, shadow: false });
+  grp.add(ball);
+  const SPAN = 20;
+  const SPEED = 2.2;
+  const REST = 14;
+  return {
+    update: (_dt, t) => {
+      const cycle = (2 * SPAN) / SPEED + REST;
+      const u = (t + 4) % cycle;
+      const x = -SPAN + u * SPEED;
+      grp.visible = x < SPAN;
+      grp.position.x = x;
+      // Small hops, and the roll that goes with the distance covered.
+      ball.position.y = 0.5 + Math.abs(Math.sin(u * 2.6)) * 0.35;
+      ball.rotation.z = -x / 0.5;
+    },
+  };
 }
 
 /** A vertical sky gradient keyed to the band: horizon colour low, sky colour above the hem. */
@@ -249,7 +333,7 @@ function buildRaw(g: THREE.Group, kind: Backdrop): Built {
       k.cone(w, h, "#8aa0b4", x, f(x, -66) + h / 2 - 1, -66, 6, false);
       k.cone(w * 0.33, h * 0.33, "#f4f7f8", x, f(x, -66) + h - 1 - h * 0.16, -65.6, 6, false);
     }
-    return { background: sky("#9fd3e8", "#dcecf2"), fog: new THREE.Fog(grade("#dcecf2"), 38, 162) };
+    return { background: sky("#9fd3e8", "#dcecf2"), fog: new THREE.Fog(grade("#dcecf2"), 16, 78), movers: [birds(g)] };
   }
   if (kind === "beach") {
     k.ground("#e9d6a2", G, NEAR_Z, edge - 1);
@@ -277,14 +361,29 @@ function buildRaw(g: THREE.Group, kind: Backdrop): Built {
     k.cyl(0.5, 0.5, 0.6, "#fff1c2", lx, ly + 5.3, lz, 8, false);
     k.cone(0.75, 0.6, "#e5604f", lx, ly + 5.9, lz, 8);
     k.box(1.2, 1.1, 1.2, "#faf6ee", lx - 1.3, ly + 0.55, lz, 1.02);
+    // Sails crossing the bay, slowly, out from behind the headland and away to the left.
+    const boats: THREE.Group[] = [];
     for (const [x, z, c] of [[-6, -30, "#faf6ee"], [-1, -48, "#f3a33d"], [-14, -42, "#faf6ee"]] as const) {
-      k.box(1.4, 0.35, 0.45, "#faf6ee", x, G - 0.4, z, false);
+      const boat = moverGroup(g, x, 0, z);
+      const kb = new Kit(boat);
+      kb.box(1.4, 0.35, 0.45, "#faf6ee", 0, G - 0.4, 0, false);
       const sail = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 2, 0), new THREE.Vector3(1.1, 0, 0)]);
-      const m = k.put(sail, c, x - 0.2, G - 0.2, z, false);
+      const m = kb.put(sail, c, -0.2, G - 0.2, 0, false);
       (m.material as THREE.Material).side = THREE.DoubleSide;
+      boats.push(boat);
     }
+    const sails: Mover = {
+      update: (dt, t) =>
+        boats.forEach((b, i) => {
+          b.position.x -= (0.14 + i * 0.02) * dt;
+          // Off the left of the view: back in behind the headland on the right.
+          if (b.position.x < -34) b.position.x = 22;
+          b.position.y = Math.sin(t * 1.3 + i) * 0.04;
+          b.rotation.z = Math.sin(t * 1.1 + i * 2) * 0.03;
+        }),
+    };
     k.put(new THREE.SphereGeometry(7, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2), "#9fb7a8", -22, G - 0.6, -90, false).scale.y = 0.4;
-    return { background: sky("#8fd6f0", "#e6f4f4"), fog: new THREE.Fog(grade("#e6f4f4"), 42, 288) };
+    return { background: sky("#8fd6f0", "#e6f4f4"), fog: new THREE.Fog(grade("#e6f4f4"), 42, 288), movers: [sails] };
   }
   if (kind === "desert") {
     // A step darker than the haze, so the customers stand out against it.
@@ -322,7 +421,7 @@ function buildRaw(g: THREE.Group, kind: Backdrop): Built {
     for (let i = 0; i < 10; i++) k.bush(rr(-14, 14), rr(-12, -22), rr(0.2, 0.35), "#9aa86a", false);
     // A clear desert blue above a warm horizon, so the mesas stand against blue rather than peach,
     // and the haze starts further back so the near mesas keep their red.
-    return { background: sky("#8ec3dc", "#f3dcc0"), fog: new THREE.Fog(grade("#f3dcc0"), 70, 234) };
+    return { background: sky("#8ec3dc", "#f3dcc0"), fog: new THREE.Fog(grade("#f3dcc0"), 70, 234), movers: [tumbleweed(g, edge - 1.4)] };
   }
   // Orchard Isle
   k.ground("#a8c97a", G, NEAR_Z, edge - 1);
@@ -363,13 +462,17 @@ function buildRaw(g: THREE.Group, kind: Backdrop): Built {
   const mx = -9, mz = -34, my = f(mx, mz);
   k.cyl(0.45, 0.8, 4.4, "#f2ede2", mx, my + 2.2, mz, 8, 1.01);
   k.cone(0.7, 0.9, "#7a3a32", mx, my + 4.8, mz, 8, false);
+  // The windmill's blades turn, slowly.
+  const blades = moverGroup(g, mx, my + 4.1, mz + 0.85);
+  const kb = new Kit(blades);
   for (let b = 0; b < 4; b++) {
     const geo = new THREE.BoxGeometry(0.4, 3, 0.06);
     geo.translate(0, 1.5, 0);
-    const bl = k.put(geo, "#e8dccb", mx, my + 4.1, mz + 0.85, false);
+    const bl = kb.put(geo, "#e8dccb", 0, 0, 0, false);
     bl.rotation.z = b * (Math.PI / 2) + 0.4;
   }
-  return { background: sky("#a9d8e6", "#e6f1ea"), fog: new THREE.Fog(grade("#e6f1ea"), 38, 216) };
+  const turn: Mover = { update: (dt) => void (blades.rotation.z -= dt * 0.45) };
+  return { background: sky("#a9d8e6", "#e6f1ea"), fog: new THREE.Fog(grade("#e6f1ea"), 18, 95), movers: [turn] };
 }
 
 /**

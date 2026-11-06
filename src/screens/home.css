@@ -44,10 +44,9 @@
   box-shadow: var(--bv-shadow-3);
 }
 .home-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-/* The wordmark: the logo mark (public/logo.svg, cream cloche, white knob), then two stacked lines of the serif, "Voyage" in butter. */
-.home-logo { display: grid; grid-template-columns: auto auto; column-gap: 8px; align-items: center; font-family: var(--bv-font-serif); font-weight: 400; font-size: 19px; line-height: 0.92; letter-spacing: 0; white-space: nowrap; }
-.home-logo .mark { grid-row: 1 / 3; width: 30px; height: 30px; display: block; }
-.home-logo .w2 { color: var(--bv-amber); }
+/* The logo: the stacked lockup drawn as one unit (src/ui/logo.ts, DESIGN §44), 36 px tall = the serif at 19 px. */
+.home-logo { display: block; flex: none; }
+.home-logo .bv-logo { height: 36px; }
 .home-brand .bv-eyebrow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-actions { margin-left: auto; display: flex; gap: 8px; }
 .home-actions .bv-btn.icon { width: 44px; min-height: 44px; border: 0; background: var(--bv-paper-2); color: var(--bv-ink); }
@@ -330,7 +329,7 @@
   .home-toast { bottom: 100px; }
 }
 @media (max-width: 379px) {
-  .home-logo { font-size: 17px; }
+  .home-logo .bv-logo { height: 32px; }
   .home-pill { padding: 6px 8px; gap: 10px; }
   .home-pill b { font-size: 15px; }
   .home-pill small { letter-spacing: 0.02em; }

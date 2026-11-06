@@ -1,0 +1,29 @@
+/* The Bun Voyage logo (src/ui/logo.ts, DESIGN §44). The two butters are logo-only colours:
+   #f2c262 is Voyage on slate (the night --bv-amber), #a37419 is Voyage on cream (3.6:1; the
+   kit's #d9a93f is 1.9:1 there). */
+:root {
+  --bv-logo-voyage: #f2c262;
+  --bv-logo-voyage-paper: #a37419;
+}
+.bv-logo {
+  --logo-mark: #f1ece2;
+  --logo-knob: #ffffff;
+  --logo-bun: #f1ece2;
+  --logo-voyage: var(--bv-logo-voyage);
+  display: block;
+  width: auto;
+  flex: none;
+  overflow: visible;
+}
+.bv-logo.stack { height: 36px; }
+.bv-logo.line { height: 18px; }
+.bv-logo.paper {
+  --logo-mark: #232a33;
+  --logo-knob: #232a33;
+  --logo-bun: #232a33;
+  --logo-voyage: var(--bv-logo-voyage-paper);
+}
+.bv-logo .lg-m { stroke: var(--logo-mark); }
+.bv-logo .lg-k { fill: var(--logo-knob); }
+.bv-logo .lg-b { fill: var(--logo-bun); }
+.bv-logo .lg-v { fill: var(--logo-voyage); }

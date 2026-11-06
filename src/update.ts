@@ -2,6 +2,8 @@
  * Keeps the web build current. Every deploy writes version.json with its build number;
  * the game polls it and offers (or, outside a shift, performs) a reload when it changes.
  */
+import { isNative } from "./platform";
+
 export interface VersionInfo {
   build: string;
   commit: string;
@@ -47,7 +49,7 @@ export function reloadTo(build: string, force = false): void {
  * native WebView), and not in dev where Vite serves unhashed modules.
  */
 export function registerServiceWorker(): void {
-  if (CURRENT.build === "dev" || !("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
+  if (CURRENT.build === "dev" || isNative() || !("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").catch(() => {
       // Not fatal: the game works the same without it.
@@ -56,6 +58,8 @@ export function registerServiceWorker(): void {
 }
 
 export function startUpdateChecks(onNewer: (v: VersionInfo) => void): () => Promise<VersionInfo | null> {
+  // In the Android app the bundle ships with the app: updates come from the store, not from here.
+  if (isNative()) return async () => null;
   let notified = "";
   const check = async () => {
     const v = await fetchLatest();

@@ -1,0 +1,11 @@
+/* The toast (src/ui/toast.ts, DESIGN §52). */
+.bv-toast {
+  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); z-index: 10050;
+  max-width: min(340px, calc(100vw - 32px)); padding: 10px 14px; border-radius: var(--bv-r-lg);
+  background: var(--bv-night); color: var(--bv-on-night); box-shadow: var(--bv-shadow-3);
+  font: 700 0.875rem/1.35 var(--bv-font-ui); text-align: center;
+  opacity: 0; transform: translate(-50%, 12px); pointer-events: none;
+  transition: opacity var(--bv-mid) var(--bv-ease), transform var(--bv-mid) var(--bv-ease);
+}
+.bv-toast.on { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .bv-toast { transition: opacity var(--bv-mid); transform: translate(-50%, 0); } }

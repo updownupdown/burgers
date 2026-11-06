@@ -63,7 +63,7 @@ export interface Save {
   tutorialDone: boolean;
   /** Trips finished (all stops). */
   trips: number;
-  /** Times each recipe was served well; familiar recipes get compact tickets. */
+  /** Dishes served well at least once (1 each), so a dish's first order comes plain (main.ts nextOrder). Older saves hold counts; any number above 0 reads the same. */
   known: Record<string, number>;
   /** How well known the truck is, 10..100. Word of mouth and the press move it. */
   popularity: number;

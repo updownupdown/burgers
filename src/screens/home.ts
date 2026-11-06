@@ -121,7 +121,7 @@ export function mountHome(root: HTMLElement, deps: HomeDeps): void {
     // Only the map itself pans; the dock, sheet, stats and buttons float over it.
     ignore: (target) => target !== map && !world.contains(target),
   });
-  const m: Mounted = { root, el, map, world, pz, base: 1, deps, selected: null, at: performance.now(), driving: false, night: !!deps.night, arriving: null, observer: null!, onResize: () => fitMap(true) };
+  const m: Mounted = { root, el, map, world, pz, base: 1, deps, selected: null, at: performance.now(), driving: false, night: !!deps.night, arriving: null, observer: null!, onResize: () => (fitMap(true), fitDockName(m)) };
   cur = m;
   // If something else takes over the root (the business plan card), let go of it.
   m.observer = new MutationObserver(() => {
@@ -340,6 +340,7 @@ function deselect(m: Mounted, fromBack = false): void {
   m.world.querySelector<SVGPathElement>(".home-route")!.setAttribute("d", "");
   m.el.querySelector<HTMLElement>(".home-sheet")!.hidden = true;
   m.el.querySelector<HTMLElement>(".home-dock")!.hidden = false;
+  fitDockName(m);
 }
 
 /** Pan so the town sits in the part of the map the sheet doesn't cover. */
@@ -368,8 +369,33 @@ function shiftsLine(save: Save, t: Stop): string {
   // Short enough for the dock beside Prep & Open at 320px (the town sheet says more).
   if (!t.roads.length) return `<span class="t">${n ? `${n} shift${n === 1 ? "" : "s"} here` : t.id === FINAL_TOWN ? "Last stop of the trip" : "A side road"}</span>`;
   const { done, need } = unlockProgress(save.shiftsIn, t.id);
-  const left = need - done;
-  return done >= need ? `${pipsHtml(done, need)}<span class="t">roads open</span>` : `${pipsHtml(done, need)}<span class="t">${left} more shift${left === 1 ? "" : "s"}</span>`;
+  // The pips carry the count; the words say what it's for.
+  return `${pipsHtml(done, need)}<span class="t">${done >= need ? "roads open" : "to open the road"}</span>`;
+}
+
+/**
+ * The dock's town name steps down a pixel at a time when it's too long for the room beside Prep &
+ * Open (Saltwater Bay, Cactus Junction on a narrow phone) instead of losing its end to an ellipsis
+ * (DESIGN §43); a long event's line loses its "today". Measured, so it holds for any name and width; it runs again once the serif has
+ * loaded, on resize and when the dock comes back from under the town sheet.
+ */
+function fitDockName(m: Mounted): void {
+  const b = m.el.querySelector<HTMLElement>(".home-dock-info b");
+  if (!b) return;
+  b.style.fontSize = "";
+  if (!b.clientWidth) return;
+  let size = parseFloat(getComputedStyle(b).fontSize);
+  while (b.scrollWidth > b.clientWidth && size > 15) {
+    size -= 1;
+    b.style.fontSize = `${size}px`;
+  }
+  // An event's line drops its "today" (the flag and the morning already say it) rather than cut off.
+  const t = m.el.querySelector<HTMLElement>(".home-dock-info .bv-caption .t");
+  const today = t?.querySelector<HTMLElement>(".today");
+  if (t && today) {
+    today.hidden = false;
+    today.hidden = t.scrollWidth > t.clientWidth;
+  }
 }
 
 function renderDock(m: Mounted): void {
@@ -385,7 +411,7 @@ function renderDock(m: Mounted): void {
       <button class="home-dock-info" data-home="here" aria-label="About ${esc(here.name)}">
         <span class="bv-eyebrow home-dayline">${icon(evening ? "moon" : "sun")}Day ${s.day} · ${evening ? "Evening in" : "Morning in"}</span>
         <b>${esc(here.name)}</b>
-        <span class="bv-caption">${evening ? esc(today) : ev ? `${icon("flag")}<span class="t">${esc(ev.name)} today</span>` : shiftsLine(s, here)}</span>
+        <span class="bv-caption">${evening ? esc(today) : ev ? `${icon("flag")}<span class="t">${esc(ev.name)}<span class="today"> today</span></span>` : shiftsLine(s, here)}</span>
       </button>
       ${
         evening
@@ -393,6 +419,8 @@ function renderDock(m: Mounted): void {
           : `<button class="bv-btn primary lg" data-home="open">${icon("bell")}Prep &amp; Open</button>`
       }
     </div>`;
+  fitDockName(m);
+  document.fonts?.ready.then(() => cur === m && fitDockName(m));
 }
 
 function when(day: number, d: number): string {

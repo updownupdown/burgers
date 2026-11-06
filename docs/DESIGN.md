@@ -1034,3 +1034,11 @@ James, after build #88 (he picked C on the carry-back question).
 - **The board at every press and oven town, cutting optional.** `press.slice` and `oven.board` are on everywhere. An uncut or crooked panini or flatbread costs nothing; a clean cut earns the "Clean cut" touch (+$1 on a 4★+ order). The ticket's method chip reads "Cut?" / "Cut 4?" in an outline box. Help, the menu reference, dish tips and hints say it's optional.
 - **Learned recipes travel.** Recipes still roll out town by town, but once a shift has been worked in a town, its recipes are on the menu in every town cooking on the same counter, with the pantry bins they need (`withLearned`: the fullest pantry among them, plus anything missing). Prep can take them off as before. Fryer sides and drinks stay each town's own. Towns stay distinct through their bonus, events, local ask, crowd and regulars.
 - **Three bays, each mapped to its tray**, on every pacing, Chill included. While a tray is empty and its bay holds the panini, the ticket ticks off what's in the bay (and re-renders as it toasts).
+
+## 42. Bug hunt after build #89
+
+Fixes only, no design changes.
+
+- **Progress and money.** A new trip resets regulars. The report card's popularity change starts from the morning value, so a regular won mid-shift is counted. The Guest book doubles what happy customers spread, not the day's net. With the Press pass the critic is the second person to order. A rush still to come keeps the shift open, and comes early once the window is empty.
+- **Kitchen.** Undo brings a moved drink back with its garnish. A customer leaving closes a sauce close-up open on their tray. A cup put back under a nozzle with a spill, or carried back by Undo, no longer vanishes. An empty carton on a fryer pad can be picked up and binned. A pie carried up by hand only goes on an empty tray.
+- **Menus.** A new build reloads only once nothing is open over the map. The Prep lesson names the pacing actually chosen. Captions and labels fit at 320 px. Double taps no longer skip the night, reopen Settings under a closing card, change counter under Resume, or start the shift on the fryer.

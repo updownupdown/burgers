@@ -6,10 +6,11 @@
 //   garage   the Garage card is an OK card at the top, clear of Prep & Open, gone with a sheet open
 //   action   the fryer's "tap the basket to lower it" tip stays until the basket goes down; the HUD's
 //            last-tip button shows it again
+//   ahead    two orders at the window: the coach's one Work ahead card
 //   nudge    three great Relaxed shifts in a row: the report card offers Steady, and the tap sets it
-// ONLY=prep,ask,... picks sections. Prints PASS/FAIL; screenshots to OUT (default out/) as t49-*.png.
+// ONLY=prep,ask,... picks sections; W and H set the viewport. Prints PASS/FAIL; screenshots to OUT (default out/) as t49-*.png.
 const { open, out } = require('./lib.cjs');
-const only = (process.env.ONLY || 'prep,event,ask,town,garage,action,nudge').split(',');
+const only = (process.env.ONLY || 'prep,event,ask,town,garage,action,ahead,nudge').split(',');
 const LEARNED = ['map-open', 'prep-open', 'closing', 'evening-sleep', 'map-pips', 'town-tap', 'town-drive', 'garage', 'first-ticket', 'bell', 'ticket-fold', 'ticket-open', 'work-ahead', 'drinks', 'fries', 'first-egg', 'first-toast', 'first-melt', 'first-sauce', 'first-smash', 'sent-back', 'back-to-grill'];
 let fails = 0;
 const check = (ok, what, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} ${what}${extra ? ' · ' + extra : ''}`); if (!ok) fails++; };
@@ -58,8 +59,7 @@ async function drag(p, a, z, n = 14) {
 async function tap(p, a) { await touch(p, 'pointerdown', a[0], a[1]); await p.waitForTimeout(60); await touch(p, 'pointerup', a[0], a[1]); }
 
 (async () => {
-  const { b, p } = await open({ w: 390, h: 844 });
-  await p.context().grantPermissions([]).catch(() => {});
+  const { b, p } = await open({ w: +(process.env.W || 390), h: +(process.env.H || 844) });
 
   if (only.includes('prep')) {
     await fresh(p, { town: 'saltwater', day: 8, unlocked: ['pinecrest', 'cedarfalls', 'summit', 'saltwater'], shiftsIn: { pinecrest: 3, cedarfalls: 3, summit: 3 } }, { coach: false });
@@ -147,9 +147,11 @@ async function tap(p, a) { await touch(p, 'pointerdown', a[0], a[1]); await p.wa
     await p.waitForTimeout(600);
     const t2 = await tip(p);
     check(t2 !== t0, 'lowering the basket puts it away', t2);
-    await p.waitForTimeout(5000);
+    // Once the lane is empty, the last-tip button shows at its right end.
+    for (let i = 0; i < 60 && (await tip(p)); i++) await p.waitForTimeout(500);
+    await p.waitForTimeout(400);
     const btn = await p.$('[data-r=tipBtn]:not([hidden])');
-    check(!!btn, 'the last-tip button shows in the HUD');
+    check(!!btn, 'the last-tip button shows with the lane empty');
     if (btn) {
       await p.screenshot({ path: `${out}t49-tip-button.png` });
       await btn.click();
@@ -157,6 +159,26 @@ async function tap(p, a) { await touch(p, 'pointerdown', a[0], a[1]); await p.wa
       const t3 = await tip(p);
       check(!!t3, 'it shows the last tip again', t3);
       await p.screenshot({ path: `${out}t49-tip-again.png` });
+    }
+  }
+
+  if (only.includes('ahead')) {
+    await fresh(p, { town: 'pinecrest', shiftsIn: { pinecrest: 1 }, passedTowns: ['pinecrest'], day: 2 }, { learned: LEARNED.filter((x) => x !== 'work-ahead') });
+    await prep(p);
+    await openShift(p);
+    await p.evaluate(() => window.__bv.manual(true));
+    for (let i = 0; i < 40 && !(await p.evaluate(() => window.__bv.game.slots.some((s) => s.order))); i++) await p.evaluate(() => window.__bv.step(0.5));
+    await p.evaluate(() => { const g = window.__bv.game; const i = g.slots.findIndex((s) => !s.order && !s.fig); window.__bv.spawnCustomer(i, 3); window.__bv.step(0.5); });
+    await p.evaluate(() => window.__bv.manual(false));
+    let c = null;
+    for (let i = 0; i < 20 && !(c = await p.evaluate(() => window.__bv.coach())); i++) await p.waitForTimeout(300);
+    check(c?.id === 'work-ahead' && !!c.show.ok, 'two orders up: the Work ahead card', c?.show.text);
+    await p.screenshot({ path: `${out}t49-work-ahead.png` });
+    if (c?.show.ok) {
+      await p.click('.coach-ok');
+      await p.waitForTimeout(500);
+      const c2 = await p.evaluate(() => window.__bv.coach());
+      check(c2?.id !== 'work-ahead', 'it shows once');
     }
   }
 

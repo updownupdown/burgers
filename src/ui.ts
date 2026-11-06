@@ -118,13 +118,13 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     <span class="bell-btn line-chip" data-r="bell" hidden role="status" aria-label="People waiting in line">
       ${icon("people")}<span class="bell-count" data-r="bellCount">0</span><span class="bell-label" data-r="bellLabel">in line</span>
     </span>
-    <button class="icon-btn tip-btn" data-r="tipBtn" hidden aria-label="Show the last tip again" title="Last tip">${icon("help")}</button>
     <button class="icon-btn" data-r="menuBtn" aria-label="Pause">${icon("pause")}</button>
   </div>
   <div class="rail" data-r="rail"></div>
   ${[0, 1, 2].map((i) => `<div class="ticket" data-r="ticket" data-slot="${i}" hidden></div>`).join("")}
   <div class="ticket stub peek" data-r="peek" aria-label="Next in line" hidden></div>
   ${[0, 1, 2].map(() => `<div class="sentback" data-r="sentback" hidden></div>`).join("")}
+  <button class="icon-btn tip-btn" data-r="tipBtn" hidden aria-label="Show the last tip again" title="Last tip">${icon("help")}</button>
   <div class="hint" data-r="hint" role="status" hidden><span data-r="hintText"></span><button class="hint-x" data-r="hintClose" aria-label="Dismiss tip">${icon("close")}</button></div>
   ${fountainFor("mountains").map((d) => `<div class="dlabel" data-r="dlabel" style="--c:${DRINK_COLOR[d]}">${DRINK_SHORT[d]}</div>`).join("")}
   <nav class="cnav" aria-label="Counters">

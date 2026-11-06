@@ -1132,7 +1132,7 @@ From the scope review of build #93 (pick-list rows 6, 11, 14 and 20). The rules 
 - **Lead tips** own the lane for their 6 s: an event's intro, and a town's "New here" line until a shift there has been passed. On an event day in a new town both show, the event first. Tips that come up meanwhile wait (at most three, the oldest plain one dropped first) and show after, unless they waited more than 15 s; a quick reaction under 2.5 s ("That tray is empty!") is about that moment and is dropped.
 - **Action tips** stay until the action happens or 10 s: the press handle down and up, fold, flip a quesadilla, the peel in and under, cut and the knife, crack the egg and bin the shells, lower the basket, fries into the carton, the lid, the pour, sauce on, Serve (`ACTION_TIPS` maps each tip to its action; main.ts calls `acted()` where the action happens). A passing one-liner ("Ham 2 of 3") can show over one, which comes back after if it's still waiting.
 - **Plain tips** show at once for their own seconds, as before.
-- **Last tip.** Once a tip has been up in a shift, a small ? button in the HUD, before Pause, shows the last tip worth rereading (2.5 s or longer) again for 6 s.
+- **Last tip.** Once a tip has been up in a shift, a small round ? button sits at the right end of the tip lane, just under the HUD, whenever no tip or coach card is up (the HUD row itself is full at 320 px). A tap shows the last tip worth rereading (2.5 s or longer) again for 6 s.
 
 **New here, with the clock stopped.** Prep shows the town's "New here" line as a callout under the crowd (beside the event's, on an event day) until a shift there has been passed, as the town sheet already did.
 

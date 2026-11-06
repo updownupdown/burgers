@@ -384,6 +384,7 @@ function layout(): void {
   const hudEl = ui.root.querySelector<HTMLElement>(".hud");
   const hudBottom = hudEl?.offsetHeight ? hudEl.offsetTop + hudEl.offsetHeight : hudH;
   ui.hint.style.top = `${hudBottom + 6}px`;
+  ui.tipBtn.style.top = `${hudBottom + 8}px`;
   // Turned sideways mid-shift: pause behind the "turn your phone" overlay.
   if (W > H && H < 500 && game.phase === "playing") {
     cancelPointer();
@@ -5935,8 +5936,6 @@ function updateUi(dt = 0): void {
 
   const tut = tutorialHint();
   const text = lane.text(laneNow()) ?? tut;
-  const tipBtn = game.phase === "playing" && !!lane.last;
-  if (ui.tipBtn.hidden === tipBtn) ui.tipBtn.hidden = !tipBtn;
   // The tutorial's card says it better while it's up.
   const show = !!text && text !== hintDismissed && game.phase === "playing" && !coachShowing();
   if (show && ui.hintText.textContent !== text) {
@@ -5944,6 +5943,9 @@ function updateUi(dt = 0): void {
     ui.hint.style.transform = "";
   }
   ui.hint.hidden = !show;
+  // The last-tip button sits at the right end of the tip lane while the lane is empty.
+  const tipBtn = game.phase === "playing" && !!lane.last && !show && !coachShowing();
+  if (ui.tipBtn.hidden === tipBtn) ui.tipBtn.hidden = !tipBtn;
 }
 
 /**

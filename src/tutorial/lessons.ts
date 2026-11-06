@@ -669,7 +669,8 @@ function lessonStepsKitchen(w: CoachWorld): Step[] {
       show: () => ({
         title: "Work ahead",
         text: "With two orders up, start the next patty now, while you finish this one. Park done food on the warm end on the right: it keeps there without cooking on.",
-        ring: ringAround(zoneAt(2), 120, 80),
+        // The warm end sits at the screen's edge: keep the ring on screen.
+        ring: ((r) => ({ ...r, x: Math.min(r.x, window.innerWidth - r.w - 6) }))(ringAround(zoneAt(2), 96, 80)),
         ok: "Got it",
         place: "bottom",
       }),

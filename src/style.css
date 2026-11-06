@@ -631,8 +631,9 @@ html, body {
 .hint-x .bv-icon { width: 18px; height: 18px; }
 .hint-x:active { background: rgb(255 255 255 / 0.12); }
 .hint[hidden] { display: flex !important; opacity: 0; pointer-events: none; }
-/* The HUD's last-tip button (DESIGN §49): quieter than Pause, shown once a tip has been up this shift. */
-.icon-btn.tip-btn { flex: none; border-color: var(--bv-rule); color: var(--bv-mute); -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+/* The last-tip button (DESIGN §49): a small round button at the right end of the tip lane, under the
+   HUD, while no tip is up and once one has been this shift. Out of the HUD row, which is full at 320px. */
+.icon-btn.tip-btn { position: absolute; right: 12px; z-index: 7; background: rgb(246 242 234 / 0.96); border-color: var(--bv-rule-2); color: var(--bv-mute); box-shadow: var(--bv-shadow-2); -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 .icon-btn.tip-btn[hidden] { display: none; }
 
 /* ---- Counter buttons (T17 from the tabs study) ----------------------------

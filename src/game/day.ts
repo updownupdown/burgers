@@ -4,35 +4,22 @@ import { DIFFICULTY, type Difficulty } from "./difficulty";
 import { popularityTraffic } from "./press";
 import { crowdShare, DEFAULT_SHIFT, type ShiftWindow } from "./shift";
 import { STOPS, type Stop } from "./stops";
-import { MILES_PER_UNIT } from "./travel";
 
 /**
  * The shape of one day on the road.
  *
  * A day has two halves the player can act in. In the **morning** the truck is parked on the
  * map in daylight: open the window (after the Prep screen), or set off. In the **evening**, after
- * the shift's Closing screen, the map is dark: see the results, hop to a town within tonight's
- * range, or sleep. Sleeping is the only thing that turns the day. A drive further than the
- * range takes the whole day, so it lands on the evening map without a shift.
+ * the shift's Closing screen, the map is dark: see the results, drive to any open town, or sleep.
+ * Sleeping is the only thing that turns the day; a drive never costs one (DESIGN §51).
  */
 export type TimeOfDay = "morning" | "evening";
-
-/**
- * Overnight range in miles: any single road, highways and the Old Pass road (about 120 mi, the
- * longest) included, is one night's drive, and two ordinary roads usually fit.
- */
-export const RANGE_MI = 130;
-
-/** Overnight range in map units, which is what roads are measured in. */
-export function rangeUnits(): number {
-  return RANGE_MI / MILES_PER_UNIT;
-}
 
 /** The part of a save that sleeping touches. */
 export interface Sleeper {
   day: number;
   time: TimeOfDay;
-  /** Map units driven since the last shift or sleep; hops tonight add up against the range. */
+  /** Kept in the save from the days of the overnight range; always 0 after a sleep. */
   driven: number;
 }
 

@@ -5,25 +5,16 @@ import { fadePopularity } from "./press";
 import { buyBonus, buyLook, readyToBuy, wearLook } from "./garage";
 import { DEFAULT_LOOK, LOOKS, SLOTS } from "./looks";
 import { roadOrder } from "./devmode";
-import { expectedCustomers, NEW_REGION, RANGE_MI, rangeUnits, regionShifts, sleep } from "./day";
+import { expectedCustomers, NEW_REGION, regionShifts, sleep } from "./day";
 import { migrateSave, freshSave, START_POPULARITY } from "./progress";
 import { arrivalGap, clockAt, crowdShare, DEFAULT_SHIFT, shiftSeconds, validShift } from "./shift";
-import { distance } from "./travel";
-import { LINKS, STOPS, townById } from "./stops";
+import { STOPS, townById } from "./stops";
 
 describe("sleeping", () => {
   it("turns the day and resets the night's driving", () => {
     const s = { day: 4, time: "evening" as const, driven: 12 };
     expect(sleep(s)).toEqual({ day: 4 });
     expect(s).toEqual({ day: 5, time: "morning", driven: 0 });
-  });
-});
-
-describe("range", () => {
-  it("fits any single road, highways and late links included", () => {
-    expect(RANGE_MI).toBe(130);
-    for (const t of STOPS) for (const r of t.roads) expect(distance(t.id, r)).toBeLessThanOrEqual(rangeUnits());
-    for (const l of LINKS) expect(distance(l.a, l.b)).toBeLessThanOrEqual(rangeUnits());
   });
 });
 

@@ -12,7 +12,6 @@
 import { cookTime } from "../game/pace";
 import "./howto.css";
 import { CROWD } from "../game/business";
-import { RANGE_MI } from "../game/day";
 import { DIFFICULTIES, DIFFICULTY } from "../game/difficulty";
 import { DRINK_PRICE, EXTRA_PRICE, FRIES_PRICE, orderFromRecipe } from "../game/menu";
 import { GREAT } from "../game/bonus";
@@ -526,18 +525,18 @@ function tripSecs(): Sec[] {
         <li>${mk(MK.lock)}Not open yet</li>
         <li>${mk(MK.prize)}A bonus still to win there</li>
         <li>${mk(MK.gated)}A highway that opens later: its note says when</li>
-        <li>${mk(MK.reach)}At night: what you can still reach</li>
+        <li>${mk(MK.reach)}At night: where you can drive before you sleep</li>
       </ul>
       <div class="hw-drive">
-        <span>${icon("moon")}<b>Tonight</b><small>Short hops, ${RANGE_MI} miles in all</small></span>
-        <span>${icon("sun")}<b>Further away</b><small>A whole day on the road</small></span>
+        <span>${icon("sun")}<b>Morning</b><small>Drive, then open there</small></span>
+        <span>${icon("moon")}<b>Evening</b><small>Drive, then sleep there</small></span>
       </div>
       <div class="hw-cal" aria-label="A town's calendar">${[1, 2, 3, 4, 5, 6, 7].map((d) => `<span class="${d === 2 ? "today" : ""} ${d === 5 ? "ev" : ""}"><b class="bv-mono">${d}</b>${d === 5 ? "<i>Fair</i>" : ""}</span>`).join("")}</div>
       <p class="hw-cap">A town's week ahead: today is day 2, and there's a fair on day 5.</p>`,
       points: [
         `Pass <b>${SHIFTS_TO_UNLOCK} shifts</b> in a town to open the roads to its neighbours.`,
-        `${icon("moon")} After a shift, roads within tonight's range glow. Hop along them before you sleep: the hops add up to ${RANGE_MI} miles.`,
-        `${icon("sun")} Going <b>further</b> takes a whole day on the road, with no shift that day.`,
+        `${icon("truck")} Any open town is <b>one drive</b> away, morning or evening, however far. A drive never costs a day.`,
+        `${icon("moon")} Only sleeping turns the day, so events still fall on their days.`,
         `${icon("calendar")} <b>Tap a town</b> to see its crowd and calendar. Events bring bigger crowds and sometimes a special.`,
         "Good shifts spread the word. Every few customers who give 4★ or more bring in a little more <b>popularity</b>. Walk-outs, and people who give up on the line, cost some.",
       ],

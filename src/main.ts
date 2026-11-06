@@ -4996,7 +4996,6 @@ function startShift(): void {
   game.customers = expectedCustomers({ stop: stop(), popularity: save.popularity, rating: ratingPull(save.reviewCounts), hidden: save.hidden, shift: game.shift, bonuses: game.bonuses, pacing: game.pacing, regionShifts: regionShifts(save.shiftsIn, stop()) });
   // A town's first shift is simpler (fewer changes and sides), then a little more, then as usual.
   game.townEase = [0.5, 0.75, 1][Math.min(2, save.shiftsIn[game.town] ?? 0)];
-  // The range is refuelled by endShift, not here: a shift quit or reloaded half way doesn't count.
   // Today's local ask, the same one Prep showed (not on the guided first shift).
   // Not on a town's first shift either: one new thing at a time.
   game.ask = game.tutorial || !save.shiftsIn[game.town] ? null : askFor(stop(), menuFor(stop(), save.hidden), save.day, game.customers);

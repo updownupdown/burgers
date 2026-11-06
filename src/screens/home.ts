@@ -1,10 +1,10 @@
 import { CROWD } from "../game/business";
-import { expectedCustomers, rangeUnits, regionShifts } from "../game/day";
+import { expectedCustomers, regionShifts } from "../game/day";
 import { savedPacing } from "../game/difficulty";
 import { todaysClosing, type Save } from "../game/progress";
 import { ratingPull, reviewAverage } from "../game/reviews";
 import { EVENTS, eventOn, FINAL_TOWN, nextDay, STOPS, townById, withEvent, type Stop } from "../game/stops";
-import { applyTrip, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Legs, type Trip } from "../game/travel";
+import { applyTrip, miles, openedBy, planTrip, SHIFTS_TO_UNLOCK, unlockProgress, type Trip } from "../game/travel";
 import { icon } from "../ui/icons";
 import { logoStack } from "../ui/logo";
 import { simLevel } from "../game/devmode";
@@ -23,8 +23,8 @@ import "./home.css";
  * The home screen: a full-screen road map with the truck's numbers always in view. Tap a town
  * for its sheet (crowd, upcoming events, shifts worked, the drive there). The map has two
  * states (see game/day.ts): in the morning it is daylight and the dock leads to Prep and the
- * shift; in the evening it goes dark, the roads within tonight's range are lit, and the dock
- * leads to a short hop or sleep, and the dashboard's Results brings back today's report card.
+ * shift; in the evening it goes dark, every open town is lit (any of them is one drive away), and
+ * the dock leads to a drive or sleep, and the dashboard's Results brings back today's report card.
  */
 
 export interface HomeDeps {
@@ -230,18 +230,13 @@ function statsHtml(save: Save): string {
 // ---------------------------------------------------------------------------
 // The map
 
-/** The time of day and the range left, which decide when a drive can happen. */
-function legs(s: Save): Legs {
-  return { time: s.time, range: rangeUnits(), driven: s.driven };
-}
-
-/** Towns a drive reaches right now without the day passing. */
+/** Towns a drive reaches right now: every open town (no overnight range since DESIGN §51). */
 function reachable(s: Save): { id: string; path: string[] }[] {
   const out: { id: string; path: string[] }[] = [];
   for (const id of s.unlocked) {
     if (id === s.town) continue;
-    const t = planTrip(s.town, id, s.unlocked, legs(s));
-    if (t && t.when === "now") out.push({ id, path: t.path });
+    const t = planTrip(s.town, id, s.unlocked);
+    if (t) out.push({ id, path: t.path });
   }
   return out;
 }
@@ -329,7 +324,7 @@ function select(m: Mounted, id: string, pan: boolean): void {
   for (const t of m.world.querySelectorAll<SVGGElement>(".home-town")) t.classList.toggle("sel", t.dataset.town === id);
   // Route preview from the truck.
   const s = m.deps.save;
-  const trip = planTrip(s.town, id, s.unlocked, legs(s));
+  const trip = planTrip(s.town, id, s.unlocked);
   const route = m.world.querySelector<SVGPathElement>(".home-route")!;
   route.setAttribute("d", trip ? trip.path.slice(1).map((b, i) => roadPath(trip.path[i], b)).join(" ") : "");
   renderSheet(m, id);
@@ -465,7 +460,7 @@ function renderSheet(m: Mounted, id: string): void {
   const open = s.unlocked.includes(id);
   const ev = eventOn(id, s.day);
   const crowd = CROWD[ev?.crowd ?? t.crowd];
-  const trip = here || !open ? null : planTrip(s.town, id, s.unlocked, legs(s));
+  const trip = here || !open ? null : planTrip(s.town, id, s.unlocked);
   const best = s.best[id];
   const evening = s.time === "evening";
 
@@ -477,9 +472,7 @@ function renderSheet(m: Mounted, id: string): void {
       : `<button class="bv-btn primary lg block" data-home="open">${icon("bell")}Prep &amp; Open${ev ? ` · ${esc(ev.name)}` : ""}</button>
       ${ev ? `<span class="bv-caption">Event day: a longer, busier shift with its own crowd.</span>` : ""}`;
   } else if (trip) {
-    const can = trip.when !== "tomorrow";
-    const how = trip.when === "now" ? (evening ? "tonight" : "this morning") : trip.when === "day" ? "takes the day" : "tomorrow";
-    action = `<button class="bv-btn primary lg block" data-home="drive" data-id="${id}" ${can ? "" : "disabled"}>${icon("truck")}Drive here · ${how}</button>`;
+    action = `<button class="bv-btn primary lg block" data-home="drive" data-id="${id}">${icon("truck")}Drive here · ${evening ? "tonight" : "this morning"}</button>`;
   } else if (!open) {
     const gates = openedBy(id).map((g) => ({ t: townById(g), ...unlockProgress(s.shiftsIn, g) }));
     const reachable = gates.filter((g) => s.unlocked.includes(g.t.id));
@@ -610,9 +603,9 @@ function onClick(e: Event): void {
 function drive(m: Mounted, to: string): void {
   const s = m.deps.save;
   if (m.driving) return;
-  const trip = planTrip(s.town, to, s.unlocked, legs(s));
-  if (!trip || trip.when === "tomorrow") return;
-  if (!applyTrip(s, trip)) return;
+  const trip = planTrip(s.town, to, s.unlocked);
+  if (!trip) return;
+  applyTrip(s, trip);
   m.deps.commit();
   m.deps.sfx?.whoosh();
   animateDrive(m, trip);
@@ -646,7 +639,6 @@ function animateDrive(m: Mounted, trip: Trip): void {
   const finish = () => {
     m.driving = false;
     m.el.classList.remove("driving");
-    // A day on the road lands on the evening map, and the lit roads change with what's left of the range.
     m.el.classList.toggle("evening", m.deps.save.time === "evening");
     renderMapInto(m);
     m.el.querySelector(".home-stats")!.outerHTML = statsHtml(m.deps.save);

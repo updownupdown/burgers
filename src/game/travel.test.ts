@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { rangeUnits } from "./day";
 import { freshSave, migrateSave, passTown, type Save } from "./progress";
-import { LINKS, STOPS, townById } from "./stops";
+import { STOPS, townById } from "./stops";
 import {
   applyTrip,
   distance,
@@ -14,9 +13,6 @@ import {
 } from "./travel";
 
 const ALL = STOPS.map((t) => t.id);
-const BASE = rangeUnits();
-const morning = { time: "morning" as const, range: BASE, driven: 0 };
-const evening = { time: "evening" as const, range: BASE, driven: 0 };
 
 describe("the map", () => {
   it("has fourteen towns in four regions, and the Pines' five burgers by Summit", () => {
@@ -59,63 +55,34 @@ describe("roads", () => {
   });
 });
 
-describe("overnight hops", () => {
-  it("make any single road, highways and late links included, a hop tonight", () => {
-    const pairs = [...STOPS.flatMap((t) => t.roads.map((r) => [t.id, r])), ...LINKS.map((l) => [l.a, l.b])];
-    for (const [a, b] of pairs) {
-      const hop = planTrip(a, b, ALL, evening)!;
-      expect(hop.hops).toBe(1);
-      expect(hop.when).toBe("now");
-    }
-  });
-});
-
 describe("planTrip", () => {
   it("returns null for the current town or a locked one", () => {
-    expect(planTrip("pinecrest", "pinecrest", ALL, morning)).toBeNull();
-    expect(planTrip("pinecrest", "summit", ["pinecrest", "elkpass"], morning)).toBeNull();
-    expect(planTrip("elkpass", "cactus", ["pinecrest", "elkpass"], morning)).toBeNull();
+    expect(planTrip("pinecrest", "pinecrest", ALL)).toBeNull();
+    expect(planTrip("pinecrest", "summit", ["pinecrest", "elkpass"])).toBeNull();
+    expect(planTrip("elkpass", "cactus", ["pinecrest", "elkpass"])).toBeNull();
   });
 
-  it("takes the whole day for a long drive, and waits for morning in the evening", () => {
-    const far = planTrip("pinecrest", "portamber", ALL, morning)!;
+  it("reaches every open town in one drive, however far (no overnight range)", () => {
+    for (const a of ALL)
+      for (const b of ALL) {
+        if (a === b) continue;
+        const trip = planTrip(a, b, ALL)!;
+        expect(trip.path[0]).toBe(a);
+        expect(trip.path[trip.path.length - 1]).toBe(b);
+      }
+    const far = planTrip("pinecrest", "portamber", ALL)!;
     expect(far.hops).toBeGreaterThanOrEqual(5);
-    expect(far.when).toBe("day");
-    expect(planTrip("pinecrest", "portamber", ALL, evening)!.when).toBe("tomorrow");
-  });
-
-  it("counts tonight's hops against the range", () => {
-    const used = BASE - 1;
-    expect(planTrip("cedarfalls", "summit", ALL, { ...evening, driven: used })!.when).toBe("tomorrow");
-    expect(planTrip("cedarfalls", "summit", ALL, { ...evening, driven: 0 })!.when).toBe("now");
   });
 });
 
 describe("applyTrip", () => {
-  const traveller = () => ({ town: "pinecrest", time: "evening" as const, driven: 0 });
-
-  it("moves the truck tonight and uses up range", () => {
-    const s = traveller();
-    const hop = planTrip("pinecrest", "elkpass", ALL, evening)!;
-    expect(applyTrip(s, hop)).toBe(true);
-    expect(s).toEqual({ town: "elkpass", time: "evening", driven: hop.distance });
-    // A drive that doesn't fit what's left of the night waits for the morning.
-    const next = planTrip("elkpass", "portamber", ALL, { ...evening, driven: s.driven })!;
-    expect(next.when).toBe("tomorrow");
-    expect(applyTrip(s, next)).toBe(false);
-    expect(s.town).toBe("elkpass");
+  it("moves the truck and keeps the time of day, so no day is lost", () => {
+    for (const time of ["morning", "evening"] as const) {
+      const s = { town: "pinecrest", time, day: 6, driven: 0 };
+      applyTrip(s, planTrip("pinecrest", "portamber", ALL)!);
+      expect(s).toEqual({ town: "portamber", time, day: 6, driven: 0 });
+    }
   });
-
-  it("spends the day on a long morning drive and lands in the evening", () => {
-    const s = { ...traveller(), time: "morning" as const };
-    const far = planTrip("pinecrest", "portamber", ALL, morning)!;
-    expect(far.when).toBe("day");
-    expect(applyTrip(s, far)).toBe(true);
-    expect(s.town).toBe("portamber");
-    expect(s.time).toBe("evening");
-    expect(s.driven).toBe(0);
-  });
-
 });
 
 describe("unlocking", () => {

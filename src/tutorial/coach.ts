@@ -477,7 +477,8 @@ function placeCard(show: Show, g: Gesture | null): void {
   const avoid = [...(show.avoid ?? []), ...busy];
   const fits = (y: number) => y >= 8 && y + H <= vh - 8 && !avoid.some((b) => overlaps({ x: left, y, w: W, h: H }, b));
   let y: number;
-  if (show.place === "top") y = 64;
+  // Pinned to the top, but under a ring up there (the map's Garage button), not over it.
+  if (show.place === "top") y = show.ring && show.ring.y < 64 + H ? Math.max(64, show.ring.y + show.ring.h + 14) : 64;
   else if (show.place === "bottom") y = bottom;
   else {
     const cands: number[] = [];

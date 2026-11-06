@@ -1122,3 +1122,28 @@ The study (doc "Bun Voyage difficulty curve study", reports in project files dif
 - **Fame** (`popularityTraffic`) is 0.5 + 0.65 x popularity: the same at the start, 1.15x at 100 (was 1.3x).
 - **Fixes.** `spawnGap` (never spaced arrivals) is gone. The Comfy bench also stops anyone in line giving up. An order put right after a send-back tips half. One person in line puts off at most a quarter of passers-by. Guided first orders use normal patience whose bar stops at half (was a fixed 900 s). Mushrooms on a pie roast at 0.85 (were pale at the crust's Perfect line). §26's note that Chill stops pours is now true again, on Relaxed.
 
+
+## 49. Teaching fixes after the scope review
+
+From the scope review of build #93 (pick-list rows 6, 11, 14 and 20). The rules as they stand:
+
+**The tip lane** (`src/game/hintlane.ts`). One lane of black tips under the HUD, with three kinds of tip:
+
+- **Lead tips** own the lane for their 6 s: an event's intro, and a town's "New here" line until a shift there has been passed. On an event day in a new town both show, the event first. Tips that come up meanwhile wait (at most three, the oldest plain one dropped first) and show after, unless they waited more than 15 s; a quick reaction under 2.5 s ("That tray is empty!") is about that moment and is dropped.
+- **Action tips** stay until the action happens or 10 s: the press handle down and up, fold, flip a quesadilla, the peel in and under, cut and the knife, crack the egg and bin the shells, lower the basket, fries into the carton, the lid, the pour, sauce on, Serve (`ACTION_TIPS` maps each tip to its action; main.ts calls `acted()` where the action happens). A passing one-liner ("Ham 2 of 3") can show over one, which comes back after if it's still waiting.
+- **Plain tips** show at once for their own seconds, as before.
+- **Last tip.** Once a tip has been up in a shift, a small ? button in the HUD, before Pause, shows the last tip worth rereading (2.5 s or longer) again for 6 s.
+
+**New here, with the clock stopped.** Prep shows the town's "New here" line as a callout under the crowd (beside the event's, on an event day) until a shift there has been passed, as the town sheet already did.
+
+**The coach.**
+
+- The first "A new town!" lesson points at the newly opened, unworked town with the most roads on: Cedar Falls, not the Elk Pass spur.
+- "Treat the truck" (the Garage) is a one-time OK card at the top, ringing the Garage button, and only while no town sheet is open, so it never covers Prep & Open.
+- The selected tray is described as "the tray with the dark ring around it" (lessons and How to Play), since the ring is slate (§46).
+- **Guided order 3 brings small fries.** The fries lesson starts them first ("they take the longest"), then once they're frying sends the player back to build the burger while they cook, steps aside while they fry, and calls them back when golden (urgent). The coach-off walkthrough says to start the fries too.
+- **Work ahead.** The first time two orders are at the window, once the ticket lessons are done and the player is at the grill: an OK card, "start the next patty now, while you finish this one; park done food on the warm end", ringing the warm end.
+
+**The local ask** only says the shift counts as two toward opening the roads where a road is still to open (`roadsAhead`): not at Port Amber or Elk Pass, nor in a town whose roads are all open. The same goes for its "done" tip.
+
+**A nudge off Relaxed.** Great shifts in a row on Relaxed are counted (`save.paceNudge`, optional; a shift that isn't great, or on another pacing, resets it). At three, if the pacing is still Relaxed and it has never been offered, the report card shows one line: "You're making this look easy. Try Steady tomorrow: more customers and full tips." Its button sets tomorrow's pacing to Steady (as Prep would) and the line says so. It's offered once per save. Steady's blurb now says what it gives: the full lunch crowd, more customers than Relaxed and full tips, patient, sending back only what's clearly off.

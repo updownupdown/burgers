@@ -976,7 +976,12 @@ function syncTray(i: number, animate: boolean): void {
 
 /** The tip lane's rules (game/hintlane.ts): lead tips, action tips that wait, the last tip again. */
 const lane = new HintLane();
-const laneNow = () => performance.now() / 1000;
+/**
+ * The lane's own clock: seconds of shift play (frames are capped, so a stall while the kitchen
+ * loads or a pause doesn't eat a tip's time).
+ */
+let laneClock = 0;
+const laneNow = () => laneClock;
 /** A tip the player closed: it stays hidden until a different one comes up. */
 let hintDismissed = "";
 
@@ -5535,6 +5540,7 @@ let guideGap = 0;
 
 function tick(dt: number): void {
   if (game.phase === "playing") {
+    laneClock += dt;
     // The first shift's guided orders (tutorial/lessons.ts): the clock waits while the first two are
     // talked through, and people come one at a time. The first customer; once they're served, the
     // next; and once that burger is under way, one more waits in line so the bell gets rung.

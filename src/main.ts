@@ -534,6 +534,8 @@ function setActive(i: number): void {
 function clearSlot(i: number): void {
   const s = game.slots[i];
   history.forgetTray(i);
+  // A sauce close-up open on this tray closes: there's no burger left under it.
+  if (sauceDrag?.slot === i) closeSauce();
   s.order = null;
   s.plate = emptyPlate();
   s.fig = null;
@@ -1317,6 +1319,10 @@ function addToPlate(slot: number, payload: Payload, spread: number): boolean {
       showHint("This tray already has fries.", 2);
       return false;
     }
+    if (payload.fill < 0.02) {
+      showHint("Fill it first!", 1.5);
+      return false;
+    }
     const { cook, size, fill, salt, curds, gravy, held } = payload;
     s.plate.fries = { cook, size, fill, salt, curds, gravy, held: held ?? 0, ...(payload.fry && payload.fry !== "fries" ? { fry: payload.fry } : {}) };
     dropped = { place: { at: "tray", slot }, ref: s.plate.fries };
@@ -1370,6 +1376,11 @@ function finishHold(pt: Pointer): void {
   if (!pt.moved && dur < 450 && (from.at === "supply" || payload.type === "drink")) {
     nameBubble(pt, nameOf(payload));
     if (payload.type === "drink") restorePayload(payload);
+    return;
+  }
+  if (!pt.moved && dur < 450 && payload.type === "carton" && payload.pack >= 0 && payload.fill < 0.02) {
+    restorePayload(payload);
+    showHint("Drag fries from the basket into the carton.", 2);
     return;
   }
 
@@ -1552,7 +1563,7 @@ function restorePayload(payload: Payload): void {
     if (fromPlate !== undefined && flavor) {
       game.slots[fromPlate].plate.drink = { flavor, fill, size, ice, lid, ...(garnish ? { garnish } : {}) };
       syncTray(fromPlate, false);
-    } else if (from) counter.placeCup({ flavor, fill, size, ice, lid }, new THREE.Vector3(from.x, 0.3, from.z));
+    } else if (from) counter.placeCup({ flavor, fill, size, ice, lid }, new THREE.Vector3(from.x, 0.3, from.z), true);
   }
   if (payload.type === "carton") {
     const { size, cook, fill, salt, curds, gravy, fromPlate } = payload;
@@ -1654,7 +1665,7 @@ function noteFood(layers: Layer[], from: Place, to: Place): void {
 const restPlace = (): Place => (counter.rest === counter.board ? { at: "board" } : { at: "bench" });
 
 /** The drink or carton a move left, as it is now. */
-type CupData = { flavor: DrinkId | null; fill: number; size: Size; ice: boolean; lid: boolean };
+type CupData = { flavor: DrinkId | null; fill: number; size: Size; ice: boolean; lid: boolean; garnish?: Garnish };
 type CartonData = { size: FriesSize; cook: number; fill: number; salt: number; curds: boolean; gravy: boolean; fry: FryKind; held?: number };
 
 /** Is the moved thing still where the move put it? */
@@ -1847,19 +1858,19 @@ function takeBack(m: Move<Moved>): { show: Payload | THREE.Object3D; put: () => 
     const pp = w.p as Extract<Payload, { type: "drink" | "empty" }>;
     if (to.at === "tray") {
       const d = game.slots[to.slot].plate.drink!;
-      c = { flavor: d.flavor, fill: d.fill, size: d.size, ice: !!d.ice, lid: !!d.lid };
+      c = { flavor: d.flavor, fill: d.fill, size: d.size, ice: !!d.ice, lid: !!d.lid, ...(d.garnish ? { garnish: d.garnish } : {}) };
       game.slots[to.slot].plate.drink = null;
       syncTray(to.slot, false);
     } else if (to.at === "cup") {
       const cup = w.ref as DrinkCup;
       c = { flavor: cup.flavor, fill: cup.fill, size: cup.size, ice: cup.ice, lid: cup.lid };
       counter.removeCup(cup);
-    } else c = pp.type === "drink" ? { flavor: pp.flavor, fill: pp.fill, size: pp.size, ice: pp.ice, lid: pp.lid } : { flavor: null, fill: 0, size: pp.size, ice: !!pp.ice, lid: false };
+    } else c = pp.type === "drink" ? { flavor: pp.flavor, fill: pp.fill, size: pp.size, ice: pp.ice, lid: pp.lid, ...(pp.garnish ? { garnish: pp.garnish } : {}) } : { flavor: null, fill: 0, size: pp.size, ice: !!pp.ice, lid: false };
     const put = () => {
       if (from.at === "tray") {
-        if (c.flavor) game.slots[from.slot].plate.drink = { flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid };
+        if (c.flavor) game.slots[from.slot].plate.drink = { flavor: c.flavor, fill: c.fill, size: c.size, ice: c.ice, lid: c.lid, ...(c.garnish ? { garnish: c.garnish } : {}) };
         syncTray(from.slot, true);
-      } else if (from.at === "cup") counter.placeCup(c, new THREE.Vector3(from.x, 0.3, from.z));
+      } else if (from.at === "cup") counter.placeCup(c, new THREE.Vector3(from.x, 0.3, from.z), true);
     };
     return { show: { type: "drink", ...c, from: null }, put };
   }
@@ -2802,6 +2813,7 @@ function paintSauce(pt: Pointer): void {
   const q = r > 1 ? { x: raw.x / r, z: raw.z / r } : raw;
   const layers = game.slots[slot].plate.layers;
   let top = layers[layers.length - 1];
+  if (!top) return;
   // Carrying on with the same sauce keeps drawing the same squiggle rather than adding a layer.
   if (top.piece.kind !== s.kind || !top.piece.stroke) {
     const p = newPiece(s.kind);
@@ -3093,11 +3105,12 @@ canvas.addEventListener("pointerdown", (e) => {
     else if (hit.type === "garnish" && counter.garnish) startHold(pt, { type: "garnish", kind: counter.garnish });
     else if (hit.type === "pack") {
       const p = counter.packs[hit.idx];
-      if (p.size && p.fill > 0) {
+      // An empty carton lifts off too, so one of the wrong size can go in the trash.
+      if (p.size) {
         startHold(pt, { type: "carton", size: p.size, cook: p.cook, fill: p.fill, pack: hit.idx, salt: p.salt, curds: p.curds, gravy: p.gravy, fry: p.fry, held: p.held });
         Object.assign(p, EMPTY_PACK);
         counter.syncPack(hit.idx);
-      } else showHint(p.size ? "Drag fries from the basket into the carton." : "Grab a carton from the stacks, front left.", 2);
+      } else showHint("Grab a carton from the stacks, front left.", 2);
     }
     else if (hit.type === "basket") pt.mode = "basket";
     else if (hit.type === "shaker" || hit.type === "curds" || hit.type === "gravy") {

@@ -1856,14 +1856,15 @@ export class CounterView {
    * Stand a cup on the drinks counter at a world point: under a nozzle if it's over one's drip
    * tray, otherwise right where it was dropped. Returns null (and why) if there's no room.
    */
-  placeCup(c: Omit<DrinkCup, "obj" | "x" | "z" | "tap">, world: THREE.Vector3): { cup: DrinkCup | null; why?: string } {
+  /** `back`: the cup is going back where it was just picked up from (a spill there doesn't stop it). */
+  placeCup(c: Omit<DrinkCup, "obj" | "x" | "z" | "tap">, world: THREE.Vector3, back = false): { cup: DrinkCup | null; why?: string } {
     const ti = this.overTap(world);
     let x = world.x;
     let z = world.z;
     if (ti >= 0) {
       const t = this.taps[ti];
       if (t.cup) return { cup: null, why: "There's already a cup there." };
-      if (t.puddle > 0.05) return { cup: null, why: "Wipe up the spill first: scrub it with your finger." };
+      if (t.puddle > 0.05 && !back) return { cup: null, why: "Wipe up the spill first: scrub it with your finger." };
       [x, z] = [t.x, CUP_Z];
     } else {
       // Anywhere on the counter between the machines and the front row.

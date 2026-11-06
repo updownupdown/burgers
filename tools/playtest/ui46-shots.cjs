@@ -24,8 +24,9 @@ async function load(p, save, welcomed = true) {
   if (want('map') || want('sheet') || want('garage') || want('reviews') || want('settings') || want('prep')) await load(p, base);
   if (want('map')) {
     await shot('map');
-    await shot('dock', { x: 0, y: 700, width: 390, height: 144 });
-    await shot('zoom', { x: 240, y: 120, width: 150, height: 260 });
+    const vp = p.viewportSize();
+    await shot('dock', { x: 0, y: vp.height - 144, width: vp.width, height: 144 });
+    await shot('zoom', { x: vp.width - 150, y: 120, width: 150, height: 260 });
   }
   if (want('sheet')) {
     const town = await p.$('.home-town.here');
@@ -59,13 +60,13 @@ async function load(p, save, welcomed = true) {
     await p.addStyleTag({ content: '.hint{transition:none!important}' });
     await p.evaluate(() => { document.querySelector('.hint').hidden = true; });
     await shot('kitchen');
-    await shot('hud', { x: 0, y: 0, width: 390, height: 140 });
+    await shot('hud', { x: 0, y: 0, width: p.viewportSize().width, height: 140 });
     const chip = await p.$('.askchip:not([hidden])');
     if (chip) {
       await chip.click();
       await step(p, 0.1); await p.waitForTimeout(200);
       await shot('kitchen-tip');
-      await shot('tip', { x: 0, y: 0, width: 390, height: 220 });
+      await shot('tip', { x: 0, y: 0, width: p.viewportSize().width, height: 220 });
     } else console.log('no ask chip at pinecrest day 5');
     await p.click('[data-r=menuBtn]'); await p.waitForTimeout(600); await shot('pause');
   }

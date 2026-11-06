@@ -61,6 +61,8 @@ import { dropBack, pushBack } from "./screens/nav";
 import { devOn, simulate, type SimLevel } from "./game/devmode";
 import { coachOn, coachShowing, coachState, setCoachOn, skipLessonsFor, startCoach } from "./tutorial/coach";
 import { lessons } from "./tutorial/lessons";
+import { ACTION_TIPS, HintLane, type TipOpts } from "./game/hintlane";
+import { newHere } from "./game/teaching";
 import { showWelcome, welcomeDue } from "./tutorial/welcome";
 import { modalClosedAt, modalOpen } from "./screens/modal";
 
@@ -632,6 +634,7 @@ function serve(i: number): void {
     showHint("That tray is empty!", 1.5);
     return;
   }
+  acted("serve");
   // Serving can't be undone: whatever was put on this tray stays put (even if it comes back).
   finishFly();
   history.forgetTray(i);
@@ -971,16 +974,24 @@ function syncTray(i: number, animate: boolean): void {
 // ---------------------------------------------------------------------------
 // Hints
 
-let hintUntil = 0;
-let hintText = "";
+/** The tip lane's rules (game/hintlane.ts): lead tips, action tips that wait, the last tip again. */
+const lane = new HintLane();
+const laneNow = () => performance.now() / 1000;
 /** A tip the player closed: it stays hidden until a different one comes up. */
 let hintDismissed = "";
 
 function dismissHint(): void {
   hintDismissed = ui.hintText.textContent ?? "";
-  if (hintText === hintDismissed) hintUntil = 0;
+  if (lane.text(laneNow()) === hintDismissed) lane.dismiss(laneNow());
   ui.hint.hidden = true;
 }
+// The HUD's last-tip button shows the last tip again.
+ui.tipBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (game.phase !== "playing") return;
+  hintDismissed = "";
+  lane.recall(laneNow());
+});
 // Close a tip with its X, or flick it away sideways or up.
 ui.hintClose.addEventListener("click", (e) => {
   e.stopPropagation();
@@ -1013,15 +1024,20 @@ ui.hintClose.addEventListener("click", (e) => {
   ui.hint.addEventListener("pointerup", end);
   ui.hint.addEventListener("pointercancel", end);
 }
-function showHint(text: string, seconds = 3): void {
-  hintText = text;
+function showHint(text: string, seconds = 3, opts?: TipOpts): void {
   if (text === hintDismissed) hintDismissed = "";
-  hintUntil = performance.now() + seconds * 1000;
+  lane.show(text, seconds, laneNow(), opts);
 }
+/** A one-time tip. One that asks for an action (ACTION_TIPS) stays until it's done, or 10 s. */
 function hintOnce(key: string, text: string, seconds = 4): void {
   if (game.hintsShown.has(key)) return;
   game.hintsShown.add(key);
-  showHint(text, seconds);
+  const until = ACTION_TIPS[key];
+  showHint(text, seconds, until ? { until } : undefined);
+}
+/** The player did `tag` (ACTION_TIPS): a tip waiting for it goes. */
+function acted(tag: string): void {
+  lane.done(tag, laneNow());
 }
 
 /** The old text walkthrough of the first burger, for when tutorial mode (the thumb) is off. */
@@ -2342,6 +2358,7 @@ function releaseEgg(pt: Pointer, dt: number, cancelled: boolean): void {
   const justPicked = pt.hit?.type === "bin" && pt.hit.kind === "egg" && !pt.moved;
   if (justPicked) return;
   if (counter.overTrash(counter.groundPoint(ndc, 0.3))) {
+    if (e.stage === "shells") acted("shells");
     dropEggHand();
     sfx.thud();
     buzz(20);
@@ -2392,6 +2409,7 @@ function releaseEgg(pt: Pointer, dt: number, cancelled: boolean): void {
   counter.addGrillItem(newPiece("egg"), over.x, over.z);
   sfx.sizzleHit();
   setEggStage("shells");
+  acted("egg-crack");
   if (inOne) showHint("Clean crack!", 1.2);
   hintOnce("egg-shells", "Now drop the shells in the trash, along the front edge.", 3);
   zoneHint(over.x);
@@ -2594,6 +2612,7 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
       return false;
     }
     counter.dressCupAt(c, payload.type);
+    if (payload.type === "lid") acted("lid");
     dropped = { place: { at: "cup", x: c.x, z: c.z }, ref: c };
     if (payload.type === "ice") sfx.ice();
     else sfx.plop();
@@ -2657,6 +2676,7 @@ function dropAtStation(payload: Payload, g: THREE.Vector3): boolean {
     p.held = p.fill > 0 ? Math.max(p.held, payload.held ?? 0) : (payload.held ?? 0);
     p.fill = Math.min(1, p.fill + moved / portion);
     counter.syncPack(pi);
+    acted("pack");
     sfx.plop();
     // Whatever didn't fit stays in the basket for the next carton.
     const left = payload.amount - moved;
@@ -3040,6 +3060,7 @@ function closeSauce(): void {
   if (s.piece && (s.piece.stroke?.length ?? 0) > s.before) {
     const to = whereFood(s.piece);
     if (to) history.push({ what: { k: "sauce", piece: s.piece, before: s.before, kind: s.kind }, from: SUPPLY, to });
+    acted("sauce-on");
   }
   counter.liftSauce(null);
   if (s.bench) benchZoomOn = false;
@@ -3344,6 +3365,7 @@ canvas.addEventListener("pointerdown", (e) => {
         if (c.flavor !== t.flavor) counter.setCupFlavor(c, t.flavor);
         pt.mode = "pour";
         t.pouring = true;
+        acted("pour");
       }
     } else if (hit.type === "cup") {
       // Pick any cup up, full or empty, to move it or take it to the tray.
@@ -3626,6 +3648,7 @@ function foldMove(pt: Pointer, it: GrillItem): boolean {
   if (along < -R * 0.2) {
     // Folding keeps the meter where it was (the half that goes over brings its cooked face up).
     setFolded(it.piece, true);
+    acted("fold");
     // The half moon lies on the side the finger went, its crease across the drag.
     it.piece.foldYaw = Math.atan2(-ux, -uz);
     pt.foldFrom = undefined;
@@ -3647,6 +3670,7 @@ function foldMove(pt: Pointer, it: GrillItem): boolean {
 function closeBay(i: number): void {
   const b = counter.bays[i];
   counter.setLid(i, true);
+  acted("press-close");
   sfx.thud();
   if (b.layers.length) sfx.sizzleHit();
   buzz(18);
@@ -3674,6 +3698,7 @@ function tryCloseBay(i: number): void {
 /** Lift a press bay's lid. */
 function openBay(i: number): void {
   counter.setLid(i, false);
+  acted("press-open");
   sfx.whoosh();
   if (counter.bays[i].layers.length) hintOnce("press-out", "Drag it out of the bay to the tray.", 2.5);
 }
@@ -3746,6 +3771,7 @@ function cutNow(at: { x: number; y: number }): boolean {
     counter.setBoard([...h.layers]);
   }
   history.push({ what: { k: "cut", pieces: c.pieces, was }, from: { at: "knife" }, to: h === counter.peel ? { at: "peel" } : { at: "board" } });
+  acted("cut");
   sfx.flip();
   buzz(25);
   nameBubble(at, c.round ? "In four" : "Cut in half", 1100);
@@ -3915,6 +3941,7 @@ function foldPie(h: PieHolder): void {
   const d = ls[0]?.piece;
   if (!d) return;
   d.folded = true;
+  acted("fold");
   h.layers = [...ls];
   syncHolder(h);
   sfx.doughFold();
@@ -4013,6 +4040,7 @@ function slideScoop(init: boolean): void {
     if (!init && armed && !counter.peel.layers.length && slidUnder(b, place, PEEL)) {
       slideArm.set(key, false);
       take();
+      acted("peel-lift");
       return;
     }
     slideArm.set(key, armed);
@@ -4024,6 +4052,7 @@ function scoopSpot(i: number): void {
   const layers = counter.ovenSpots[i].layers;
   counter.setSpot(i, []);
   counter.setPeel(layers);
+  acted("peel-lift");
   noteFood(layers, { at: "spot", i }, { at: "peel" });
   justDid(`spot${i}`, "down");
   sfx.peelScrape();
@@ -4189,6 +4218,7 @@ function peelFlick(pt: Pointer, f: Flick): void {
   act(`spot${si}`);
   counter.setSpot(si, layers);
   counter.setPeel([]);
+  acted("peel-launch");
   noteFood(layers, { at: "peel" }, { at: "spot", i: si });
   sfx.pieDown(true);
   buzz(10);
@@ -4397,6 +4427,7 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
         if (flickUp || dt < 400) {
           const it = pt.hit.item;
           if (counter.flip(it)) {
+            acted("flip");
             sfx.flip();
             buzz(15);
             hintOnce("flip-done", it.piece.kind === "egg" ? "Flipped: over easy. Leave it sunny side up for orders that want it." : "Nice flip! Flipping cooks it evenly.", 2);
@@ -4413,6 +4444,7 @@ function endPointer(e: PointerEvent, cancelled: boolean): void {
         if (!b.loaded) showHint(counter.redRock ? "Drag tortilla wedges into the basket, or a corn tortilla to fry a tostada." : "Drag frozen fries into the basket.", 2);
         else if (!pt.moved || flickUp) {
           b.down = !b.down;
+          if (b.down) acted("basket-down");
           if (b.down) sfx.sizzleHit();
           else sfx.whoosh();
           if (b.down) hintOnce("fries-ding", "Watch the meter on the fryer: it beeps at perfect until you lift the basket.", 3.5);
@@ -5029,10 +5061,15 @@ function startShift(): void {
   setSmallSlips(spec.small);
   counter.setPage(HOME_PAGE);
   playShiftReveal();
-  const intro = game.event
-    ? `${game.event.name} today! ${game.event.blurb}${game.event.special ? ` Special: ${game.event.special.name}.` : ""}`
-    : stop().newThing;
-  if (intro && !game.tutorial) showHint(intro, 6);
+  // The event and a new kitchen's "New here" lead the tip lane for their 6 s each, both on an event
+  // day in a new town; the first order's tips wait behind them (game/hintlane.ts). Prep and the town
+  // sheet say "New here" too, with the clock stopped.
+  lane.clear();
+  const intros = [
+    game.event ? `${game.event.name} today! ${game.event.blurb}${game.event.special ? ` Special: ${game.event.special.name}.` : ""}` : null,
+    newHere(stop(), save.shiftsIn),
+  ];
+  if (!game.tutorial) for (const t of intros) if (t) showHint(t, 6, { lead: true });
   ui.title.hidden = true;
   closeAll();
   ui.summary.hidden = true;
@@ -5246,7 +5283,7 @@ function startSundown(): void {
   // The shift's Back guard stays up through the sundown and the pull-back (it does nothing once
   // play has stopped), so Back can't leave the page before the report card is up to catch it.
   game.phase = "sundown";
-  hintUntil = 0;
+  lane.clear();
   for (const s of game.slots) {
     s.bubble?.remove();
     s.bubble = null;
@@ -5872,8 +5909,9 @@ function updateUi(dt = 0): void {
   });
 
   const tut = tutorialHint();
-  const now = performance.now();
-  const text = now < hintUntil ? hintText : tut;
+  const text = lane.text(laneNow()) ?? tut;
+  const tipBtn = game.phase === "playing" && !!lane.last;
+  if (ui.tipBtn.hidden === tipBtn) ui.tipBtn.hidden = !tipBtn;
   // The tutorial's card says it better while it's up.
   const show = !!text && text !== hintDismissed && game.phase === "playing" && !coachShowing();
   if (show && ui.hintText.textContent !== text) {

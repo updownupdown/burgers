@@ -631,6 +631,9 @@ html, body {
 .hint-x .bv-icon { width: 18px; height: 18px; }
 .hint-x:active { background: rgb(255 255 255 / 0.12); }
 .hint[hidden] { display: flex !important; opacity: 0; pointer-events: none; }
+/* The HUD's last-tip button (DESIGN §49): quieter than Pause, shown once a tip has been up this shift. */
+.icon-btn.tip-btn { flex: none; border-color: var(--bv-rule); color: var(--bv-mute); -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.icon-btn.tip-btn[hidden] { display: none; }
 
 /* ---- Counter buttons (T17 from the tabs study) ----------------------------
    No tab bar. The next counter each way is a round paper button at the screen edge, level with the

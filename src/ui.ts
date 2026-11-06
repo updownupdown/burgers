@@ -24,6 +24,8 @@ export interface Ui {
   hint: HTMLElement;
   hintText: HTMLElement;
   hintClose: HTMLButtonElement;
+  /** The HUD's button that shows the last tip again (DESIGN §49). */
+  tipBtn: HTMLButtonElement;
   tabs: HTMLButtonElement[];
   menuBtn: HTMLButtonElement;
   /** The service bell: a ring calls the next person in line. */
@@ -116,6 +118,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     <span class="bell-btn line-chip" data-r="bell" hidden role="status" aria-label="People waiting in line">
       ${icon("people")}<span class="bell-count" data-r="bellCount">0</span><span class="bell-label" data-r="bellLabel">in line</span>
     </span>
+    <button class="icon-btn tip-btn" data-r="tipBtn" hidden aria-label="Show the last tip again" title="Last tip">${icon("help")}</button>
     <button class="icon-btn" data-r="menuBtn" aria-label="Pause">${icon("pause")}</button>
   </div>
   <div class="rail" data-r="rail"></div>
@@ -157,6 +160,7 @@ export function buildUi(root: HTMLElement, pages: readonly string[]): Ui {
     hint: q("hint"),
     hintText: q("hintText"),
     hintClose: q("hintClose") as HTMLButtonElement,
+    tipBtn: q("tipBtn") as HTMLButtonElement,
     tabs,
     menuBtn: q("menuBtn") as HTMLButtonElement,
     bell: q("bell"),

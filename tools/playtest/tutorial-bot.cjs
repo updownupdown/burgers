@@ -82,11 +82,13 @@ const { open, step, out } = require('./lib.cjs');
       if (g.kind === 'dragCircle') {
         await path(seg(g.from, g.to, 14), 20);
         // Sauce: the view zooms in; circle around the zoomed burger instead.
-        const z = await p.evaluate(() => { const s = window.__bv.sauceCentre(); return { x: s[0], y: s[1], r: s[2] }; });
+        const z = await p.evaluate(() => { if ((window.__bv.ptr() || {}).mode !== 'sauce') return null; const s = window.__bv.sauceCentre(); return { x: s[0], y: s[1], r: s[2] }; });
         if (z && z.r > 50) ctr = { x: z.x, y: z.y + 34 };
       }
-      const r = g.kind === 'dragCircle' && ctr !== g.to ? 70 : g.r + 30;
-      for (let i = 0; i <= 48; i++) { const a = (i / 48) * Math.PI * 4; await m.move(ctr.x + Math.sin(a) * r * (0.4 + i / 80), ctr.y - Math.cos(a) * r * 0.6 * (0.4 + i / 80)); await p.waitForTimeout(18); }
+      const r = g.kind === 'dragCircle' && ctr !== g.to ? 70 : g.kind === 'dragCircle' ? 18 : g.r + 30;
+      // The salt shaker needs game time to pour (the clock is held between moves); sauce doesn't.
+      const timed = !(g.kind === 'dragCircle' && ctr !== g.to);
+      for (let i = 0; i <= 48; i++) { const a = (i / 48) * Math.PI * 4; await m.move(ctr.x + Math.sin(a) * r * (0.4 + i / 80), ctr.y - Math.cos(a) * r * 0.6 * (0.4 + i / 80)); await p.waitForTimeout(18); if (timed) await step(p, 0.05); }
       await m.up();
     }
     await p.waitForTimeout(150);

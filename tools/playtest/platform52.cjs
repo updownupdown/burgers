@@ -1,5 +1,5 @@
 // Saves, Android readiness, sound and access (DESIGN §52). Prints PASS/FAIL per check; screenshots to OUT.
-// PORT=4185 [OUT=dir/] node tools/playtest/platform52.cjs [fonts,gfx,settings,code,native,large,hand,glyphs,ambience,stepdown,log,storage]
+// PORT=4185 [OUT=dir/] node tools/playtest/platform52.cjs [fonts,gfx,settings,code,native,large,glyphs,ambience,stepdown,log,storage]
 const { chromium } = require('playwright');
 const { out } = require('./lib.cjs');
 const PORT = process.env.PORT || 4173;
@@ -82,7 +82,7 @@ async function endShift(p) {
       await settings(p);
       const labels = await p.$$eval('.settings .lbl, .settings .main b', (els) => els.map((e) => e.textContent.trim()));
       const has = (s) => labels.some((l) => l.startsWith(s));
-      check(`settings ${w}: Effects, Ambience, Text size, Hand, Copy and Paste save code`, ['Effects', 'Ambience', 'Text size', 'Hand', 'Copy save code', 'Paste save code'].every(has));
+      check(`settings ${w}: Effects, Ambience, Text size, Copy and Paste save code, no Hand`, !has('Hand') && ['Effects', 'Ambience', 'Text size', 'Copy save code', 'Paste save code'].every(has));
       const over = await p.evaluate(() => { const c = document.querySelector('.settings .menu-body'); return c.scrollWidth - c.clientWidth; });
       check(`settings ${w}: no sideways scroll`, over <= 0, String(over));
       await shot(p, `settings-${w}`);
@@ -189,18 +189,6 @@ async function endShift(p) {
     }
     check('large: tickets grow', sizes.large.ticket > sizes.normal.ticket * 1.1, JSON.stringify(sizes));
     check('large: tips grow', sizes.large.hint > sizes.normal.hint * 1.1);
-  }
-
-  if (want('hand')) {
-    const { p, ctx } = await page(b);
-    await load(p, { ...base, town: 'pinecrest' }, { 'bv-hand': 'left' });
-    await enterShift(p);
-    await p.evaluate(() => window.__bv.manual(true));
-    await p.evaluate(() => window.__bv.step(3));
-    const pos = await p.evaluate(() => ({ undo: document.querySelector('.undo-btn').getBoundingClientRect().x, pause: document.querySelector('[aria-label=Pause]').getBoundingClientRect().x }));
-    check('hand: left puts Pause left of Undo', pos.pause < pos.undo, JSON.stringify(pos));
-    await shot(p, 'hand-left', { x: 0, y: 0, width: 390, height: 120 });
-    await ctx.close();
   }
 
   if (want('glyphs')) {

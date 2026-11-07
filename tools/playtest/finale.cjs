@@ -2,8 +2,8 @@
 // From a prepared save one shift short of Port Amber's first pass: the stamps on the map at 390 and
 // 320 px, the postcard book (and Back closing it), Port Amber's sheet and Prep (signature dish first),
 // the pass ("Road done"), sleep, the last night on the dock and Prep, the trip card, the night's
-// report over it, the drive-off, the credits and Start trip 2 (looks and stamps kept, popularity 40,
-// header "Trip 2"). A second run with reduced motion checks Back through the trip card and credits.
+// report over it, the drive-off, Where next? and Start trip 2 (looks and stamps kept, popularity 40,
+// header "Trip 2"). A second run with reduced motion checks Back through the trip card and Where next?.
 // Prints PASS/FAIL per check; screenshots to OUT (default tools/playtest/out/) as fin-*.png.
 //   npm run build && npx vite preview --port 4183 &
 //   PORT=4183 [OUT=dir/] node tools/playtest/finale.cjs
@@ -131,18 +131,19 @@ const back = async (p) => { await p.evaluate(() => history.back()); await p.wait
   const drive = await p.evaluate(() => new Promise((res) => {
     const at = () => { const r = document.querySelector('.home-truck').getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y)]; };
     const t0 = at();
-    setTimeout(() => res({ trail: !!document.querySelector('.home-trail'), moving: document.querySelector('.home-truck').getAnimations().length > 0, from: t0, to: at(), credits: !!document.querySelector('.fin-credits') }), 2600);
+    setTimeout(() => res({ trail: !!document.querySelector('.home-trail'), moving: document.querySelector('.home-truck').getAnimations().length > 0, from: t0, to: at(), next: !!document.querySelector('.fin-next') }), 2600);
   }));
   check(drive.trail, 'the trip trail is drawn on the map');
-  check(drive.moving && !drive.credits && Math.hypot(drive.to[0] - drive.from[0], drive.to[1] - drive.from[1]) > 20, `the truck drives off before the credits (${drive.from} -> ${drive.to})`);
+  check(drive.moving && !drive.next && Math.hypot(drive.to[0] - drive.from[0], drive.to[1] - drive.from[1]) > 20, `the truck drives off before the choice (${drive.from} -> ${drive.to})`);
   await shot(p, '12-drive-off');
-  await p.waitForSelector('.menu-card.fin-credits', { state: 'attached', timeout: 15000 }).catch(() => {});
-  check(!!(await p.$('.menu-card.fin-credits')), 'credits after the drive-off');
-  await p.waitForTimeout(3000);
-  await shot(p, '14-credits');
-  await tap(p, '.fin-credits [data-fin=trip2]');
-  check(/Tap again/.test(await p.textContent('.fin-credits [data-fin=trip2]')), 'Start trip 2 asks once more');
-  await tap(p, '.fin-credits [data-fin=trip2]');
+  await p.waitForSelector('.menu-card.fin-next', { state: 'attached', timeout: 15000 }).catch(() => {});
+  check(!!(await p.$('.menu-card.fin-next')), 'Where next? after the drive-off, no credits');
+  check(!(await p.$('.fin-credits, .fin-roll')), 'no credits roll');
+  await p.waitForTimeout(600);
+  await shot(p, '14-where-next');
+  await tap(p, '.fin-next [data-fin=trip2]');
+  check(/Tap again/.test(await p.textContent('.fin-next [data-fin=trip2]')), 'Start trip 2 asks once more');
+  await tap(p, '.fin-next [data-fin=trip2]');
   await p.waitForTimeout(800);
   const s2 = await p.evaluate(() => JSON.parse(localStorage.getItem('bv-save-v1')));
   check(s2.tripNo === 2 && s2.popularity === 40 && s2.town === 'pinecrest', `trip 2 starts at Pinecrest, popularity 40 (got ${s2.tripNo}, ${s2.popularity}, ${s2.town})`);
@@ -169,17 +170,16 @@ const back = async (p) => { await p.evaluate(() => history.back()); await p.wait
   check(!!(await p.$('.menu-card.fin-card')), 'reduced motion: trip card');
   await shot(p, '23-trip-card-320');
   await back(p);
-  check(!(await p.$('.menu-card.fin-card')) && !!(await p.$('.menu-card.fin-credits')), 'Back on the trip card goes to the credits');
-  check(await p.$eval('.fin-roll', (e) => getComputedStyle(e).animationName === 'none'), 'reduced motion: the credits stand still');
-  await shot(p, '24-credits-320');
+  check(!(await p.$('.menu-card.fin-card')) && !!(await p.$('.menu-card.fin-next')), 'Back on the trip card goes to Where next?');
+  await shot(p, '24-where-next-320');
   await back(p);
-  check(!(await p.$('.menu-card.fin-credits')), 'Back on the credits keeps touring');
+  check(!(await p.$('.menu-card.fin-next')), 'Back on Where next? keeps touring');
   const s3 = await p.evaluate(() => JSON.parse(localStorage.getItem('bv-save-v1')));
   check(s3.finale && s3.finale.done && (s3.tripNo ?? 1) === 1 && s3.town === 'portamber', 'keep touring: same trip, finale done');
   await tap(p, '.home-stats [data-home=results]');
   check(!!(await p.$('.menu-card.fin-card')) && !!(await p.$('.fin-card [data-fin=close]')), 'Results brings the trip card back, with Close');
   await tap(p, '.fin-card [data-fin=close]');
-  check(!(await p.$('.menu-card.fin-credits')), 'closing the replayed trip card does not replay the credits');
+  check(!(await p.$('.menu-card.fin-next')), 'closing the replayed trip card does not ask again');
   await b.close();
   console.log(fails ? `${fails} FAILED` : 'ALL PASS');
   process.exit(fails ? 1 : 0);

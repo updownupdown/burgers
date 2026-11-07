@@ -29,7 +29,7 @@ import { middleOf, type MiddleCounter, type Stop } from "../game/stops";
 const MIDDLE_LABEL: Record<MiddleCounter, string> = { grill: "Grill", press: "Press", comal: "Comal", oven: "Oven" };
 import { devOn, setDevOn, SIM_LEVELS, simLevel } from "../game/devmode";
 import { coachOn, setCoachOn } from "../tutorial/coach";
-import { handedness, setHand, setTextSize, textSize, type Hand, type TextSize } from "../a11y";
+import { setTextSize, textSize, type TextSize } from "../a11y";
 import { isNative } from "../platform";
 import { bindSaveCode, bindShiftLog, saveCodeHtml, shiftLogHtml } from "./settings-extra";
 
@@ -313,7 +313,6 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
           ${hapticsSupported() ? toggle("haptics", "vibrate", "Vibration", hapticsOn(), "A buzz on flips, dings and burns") : ""}
           ${field("gfx", "sparkle", "Graphics", GFX.find((g) => g.id === gfx)!.blurb, GFX.map((g) => ({ v: g.id, label: g.label })), gfx)}
           ${field("text", "text-size", "Text size", TEXT.find((t) => t.id === textSize())!.blurb, TEXT.map((t) => ({ v: t.id, label: t.label })), textSize())}
-          ${field("hand", "hand", "Hand", HAND.find((h) => h.id === handedness())!.blurb, HAND.map((h) => ({ v: h.id, label: h.label })), handedness())}
         </section>
         ${d.saveCode && d.loadTrip ? saveCodeHtml(inShift) : ""}
         <section class="menu-group">
@@ -380,12 +379,6 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
         pickSeg(card, btn, TEXT.find((t) => t.id === v)!.blurb);
         // The game lays itself out again at the new size.
         window.dispatchEvent(new Event("resize"));
-        break;
-      }
-      case "hand": {
-        const v = btn.dataset.v as Hand;
-        setHand(v);
-        pickSeg(card, btn, HAND.find((h) => h.id === v)!.blurb);
         break;
       }
       case "tutorial": {
@@ -458,10 +451,6 @@ export function openSettings(over: Partial<MenuDeps> = {}): void {
 const TEXT: { id: TextSize; label: string; blurb: string }[] = [
   { id: "normal", label: "Normal", blurb: "Text at its usual size." },
   { id: "large", label: "Large", blurb: "All text a size up, tickets and tips too." },
-];
-const HAND: { id: Hand; label: string; blurb: string }[] = [
-  { id: "right", label: "Right", blurb: "Undo on the left of the top bar, Pause on the right." },
-  { id: "left", label: "Left", blurb: "Pause on the left of the top bar, Undo on the right." },
 ];
 
 const SIM_NOTE: Record<string, string> = {

@@ -1,4 +1,4 @@
-/* The end of the trip (finale.ts, DESIGN §50): the trip card, then the credits and the choice. */
+/* The end of the trip (finale.ts, DESIGN §50): the trip card, then the choice. */
 .menu-card.fin-card { width: min(calc(var(--gw, 100vw) - 24px), 420px); }
 .fin-head .bv-eyebrow { white-space: normal; }
 .fin-body { gap: 12px; padding-top: 2px; padding-bottom: 12px; }
@@ -21,25 +21,14 @@
 .fin-foot { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
 .fin-foot .bv-btn { min-width: 0; }
 
-/* The credits: a short roll over the night sky, then the two ways on. */
-.menu-card.fin-credits { width: min(calc(var(--gw, 100vw) - 24px), 400px); max-height: min(92vh, 720px); background: linear-gradient(#1b2036, #2a3356 80%); color: var(--bv-on-night); }
-.fin-credits-body { position: relative; height: min(48vh, 380px); overflow: hidden; padding: 0; -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent); mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent); }
-.fin-roll { display: grid; justify-items: center; gap: 14px; padding: 40px 20px; text-align: center; animation: fin-roll 11s linear 0.3s both; }
-.fin-roll .bv-eyebrow { color: #e2b84a; }
-.fin-roll .bv-title { color: #faf3e6; font-size: 1.75rem; }
-.fin-roll p { margin: 0; display: grid; gap: 2px; }
-.fin-roll small { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.7; }
-.fin-roll b { font: 400 1.125rem/1.25 var(--bv-font-serif); color: #faf3e6; }
-.fin-roll.still { animation: none; }
-@keyframes fin-roll { from { transform: translateY(18%); } to { transform: translateY(-14%); } }
-@media (prefers-reduced-motion: reduce) { .fin-roll { animation: none; } }
-.fin-choice { display: grid; gap: 6px; padding: 12px 16px 16px; background: var(--bv-paper); color: var(--bv-ink); border-top: 1px solid var(--bv-rule); }
+/* The choice after the drive-off: the two ways on. */
+.menu-card.fin-next { width: min(calc(var(--gw, 100vw) - 24px), 400px); }
+.fin-choice { display: grid; gap: 6px; padding: 4px 16px 16px; }
 .fin-note { margin: 0 0 4px; font-size: 0.75rem; line-height: 1.3; color: var(--bv-ink-2); }
 
 /* The trail of the trip on the map while the truck drives off (home.ts driveOff). */
 .home-svg .home-trail { fill: none; stroke: #e2b84a; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.9; }
 .home-svg .home-trail.draw { stroke-dasharray: 400; stroke-dashoffset: 400; animation: fin-trail 1.6s ease-out forwards; }
 @keyframes fin-trail { to { stroke-dashoffset: 0; } }
-.fin-credits-body.still { height: auto; max-height: min(46vh, 380px); overflow-y: auto; -webkit-mask-image: none; mask-image: none; }
 /* A narrow phone keeps Drive off whole: the report button keeps only its icon. */
 @media (max-width: 370px) { .fin-foot [data-fin="report"] span { display: none; } }

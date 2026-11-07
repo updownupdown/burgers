@@ -1,28 +1,26 @@
 # Bun Voyage
 
-A touch-first, portrait burger grilling and stacking game. Your food truck is on a road
-trip through three stops: Pinecrest (mountains), Saltwater Bay (beach, grilled pineapple)
-and Red Mesa (desert, jalapeños and smash burgers). Pass a shift to drive on and pick a
-truck upgrade; progress is saved in the browser.
+**A cozy burger-grilling and stacking game for your phone, served from a food truck on a road trip.**
 
-Play it at https://updownupdown.github.io/burgers/ (deployed from `main` by GitHub Actions).
-The build number shows on the title screen and in the pause menu, and the game reloads
-itself when a newer build is deployed.
+▶ **Play it at [updownupdown.github.io/burgers](https://updownupdown.github.io/burgers/)** — made for phones held upright; add it to your home screen to play like an app.
 
-## Develop
+Grill patties, stack orders and keep the line moving. Your truck travels through three stops, each with its own scenery and menu: Pinecrest in the mountains, Saltwater Bay on the beach (grilled pineapple), and Red Mesa in the desert (jalapeños and smash burgers). Finish a shift to drive on and pick a truck upgrade. Progress is saved in your browser.
+
+## Built with
+
+TypeScript, Vite and three.js. Everything you see is generated in code (toon shading and ink outlines) and every sound is synthesised, so there are no image or audio files at all. The game has its own small UI kit, unit tests for the scoring and order rules, and scripted bot playtests. Every push to `main` deploys through GitHub Actions, and an open game reloads itself when a new build goes live.
+
+## Running locally
 
 ```sh
 npm install
-npm run dev      # local server, open on your phone via the LAN address
+npm run dev      # local server; open the LAN address on your phone
 npm test         # scoring and order rules
 npm run build    # type-check and build to dist/
 ```
 
+More detail:
+
 - Design doc: [docs/DESIGN.md](docs/DESIGN.md)
 - Scripted playtests: [tools/playtest](tools/playtest)
-- Art style spike: [spikes/render-test.html](spikes/render-test.html)
-- UI kit ("Dusk"): tokens, components and icons in [src/ui](src/ui); review every component and
-  its states at `/ui.html` (deployed beside the game, or `npm run dev` then open `/ui.html`).
-
-Everything visual is generated in code with three.js (toon shading and ink outlines);
-there are no image or audio assets.
+- UI kit ("Dusk"): tokens, components and icons in [src/ui](src/ui); browse every component at `/ui.html`

@@ -12,10 +12,10 @@ import "./finale.css";
  * The end of the trip (DESIGN §50). After the last night at Port Amber the evening map shows the
  * trip card instead of the report card: the trip in numbers, every town worked with its best
  * shift, and the truck as it looks now. Drive off plays the truck leaving on the map (home.ts),
- * then the credits, then Keep touring or Start trip 2.
+ * then the choice: Keep touring or Start trip 2.
  *
- * Back, × and the scrim never lose the way: on the trip card they skip the drive to the credits;
- * on the credits they mean Keep touring. Reduced motion skips the drive and the credits' roll.
+ * Back, × and the scrim never lose the way: on the trip card they skip the drive to the choice;
+ * on the choice they mean Keep touring. Reduced motion skips the drive.
  */
 
 export interface FinaleDeps {
@@ -27,8 +27,6 @@ export interface FinaleDeps {
   /** Start the next trip (already confirmed). */
   newTrip(): void;
 }
-
-const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export function tripCardHtml(save: Save, c: Closing, replay: boolean): string {
   const st = tripStats(save);
@@ -42,7 +40,7 @@ export function tripCardHtml(save: Save, c: Closing, replay: boolean): string {
         <span class="bv-eyebrow">Trip ${no} · Day ${st.days}</span>
         <h2 class="bv-title">The end of the road</h2>
       </div>
-      <button class="bv-btn icon sm ghost menu-x" data-m="close" aria-label="${replay ? "Close" : "Skip to the credits"}">${icon("close")}</button>
+      <button class="bv-btn icon sm ghost menu-x" data-m="close" aria-label="${replay ? "Close" : "Skip ahead"}">${icon("close")}</button>
     </header>
     <div class="menu-body menu-scroll fin-body">
       <div class="fin-stage">${truckSvg(save.look, { night: true, cls: "fin-truck" })}</div>
@@ -73,24 +71,24 @@ export function tripCardHtml(save: Save, c: Closing, replay: boolean): string {
 
 /**
  * Open the trip card. `replay`: brought back from the map's Results later that evening, when it
- * only closes (the drive and the credits played already).
+ * only closes (the drive and the choice came already).
  */
 export function openTripCard(c: Closing, d: FinaleDeps, replay: boolean): void {
   if (document.querySelector(".menu-card.fin-card")) return;
   let leaving = false;
-  const toCredits = () => {
+  const toChoice = () => {
     if (leaving) return;
     leaving = true;
-    d.driveOff(() => openCredits(d));
+    d.driveOff(() => openChoice(d));
   };
   const card = pushModal({
     key: "trip",
     label: "The end of the road",
     cls: "fin-card",
     html: tripCardHtml(d.save, c, replay),
-    // ×, the scrim and Back skip the drive and go to the credits (or just close on a replay).
+    // ×, the scrim and Back skip the drive and go to the choice (or just close on a replay).
     onDismiss: () => {
-      if (!replay) openCredits(d);
+      if (!replay) openChoice(d);
     },
   });
   // The tap that skipped the pull-back lands just after the card is up: don't let it close the card.
@@ -118,30 +116,21 @@ export function openTripCard(c: Closing, d: FinaleDeps, replay: boolean): void {
         break;
       case "drive":
         popModal(true);
-        toCredits();
+        toChoice();
         break;
     }
   });
 }
 
-const CREDITS: [string, string][] = [
-  ["A game by", "James"],
-  ["Built with", "Claude"],
-  ["3D", "three.js"],
-  ["Type", "Young Serif, Hanken Grotesk and DM Mono, under the SIL Open Font License"],
-  ["Tested by", "a lot of very patient bots"],
-  ["And", "everyone who waited in line"],
-];
-
-export function creditsHtml(save: Save): string {
+export function choiceHtml(save: Save): string {
   const next = nextTripNo(save);
-  return `<div class="menu-body fin-credits-body ${reduced() ? "still menu-scroll" : ""}">
-      <div class="fin-roll ${reduced() ? "still" : ""}">
-        <span class="bv-eyebrow">Bun Voyage</span>
-        <h2 class="bv-title">Thanks for driving</h2>
-        ${CREDITS.map(([k, v]) => `<p><small>${esc(k)}</small><b>${esc(v)}</b></p>`).join("")}
+  return `<header class="menu-head bar">
+      <div class="menu-headtext">
+        <span class="bv-eyebrow">The end of the road</span>
+        <h2 class="bv-title">Where next?</h2>
       </div>
-    </div>
+      <button class="bv-btn icon sm ghost menu-x" data-m="close" aria-label="Keep touring">${icon("close")}</button>
+    </header>
     <footer class="fin-choice">
       <button class="bv-btn primary lg block" data-fin="trip2">${icon("flag")}Start trip ${next}</button>
       <p class="fin-note" data-fin-note>Looks, stamps and the postcard book come with you. Savings, bonuses, popularity and reviews start again, at popularity ${LAP.popularity}, with busier towns and stamps in gold.</p>
@@ -150,14 +139,14 @@ export function creditsHtml(save: Save): string {
     </footer>`;
 }
 
-/** The credits, then the choice. Any way of closing it but Start trip is Keep touring. */
-export function openCredits(d: FinaleDeps): void {
-  if (document.querySelector(".menu-card.fin-credits")) return;
-  const card = pushModal({ key: "credits", label: "Credits", cls: "fin-credits", html: creditsHtml(d.save) });
+/** The choice after the drive-off. Any way of closing it but Start trip is Keep touring. */
+export function openChoice(d: FinaleDeps): void {
+  if (document.querySelector(".menu-card.fin-next")) return;
+  const card = pushModal({ key: "next", label: "Where next?", cls: "fin-next", html: choiceHtml(d.save) });
   card.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-fin]");
+    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-fin], [data-m]");
     if (!btn) return;
-    if (btn.dataset.fin === "tour") popModal();
+    if (btn.dataset.m === "close" || btn.dataset.fin === "tour") popModal();
     else if (btn.dataset.fin === "trip2") {
       // A new trip can't be undone: the first tap asks.
       if (btn.dataset.armed !== "1") {

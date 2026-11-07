@@ -6,8 +6,8 @@ require('fs').mkdirSync(out, { recursive: true });
 async function open(opts = {}) {
   const b = await chromium.launch({ args: ['--use-gl=swiftshader','--enable-unsafe-swiftshader'] });
   const p = await (await b.newContext({ viewport: { width: opts.w || 390, height: opts.h || 844 }, deviceScaleFactor: opts.dpr || 1 })).newPage();
-  // TEXT=large / HAND=left run any script with that Settings choice (DESIGN §52); it survives the scripts' localStorage.clear().
-  if (process.env.TEXT || process.env.HAND) await p.addInitScript(({ t, h }) => { if (t) localStorage.setItem('bv-text', t); if (h) localStorage.setItem('bv-hand', h); }, { t: process.env.TEXT, h: process.env.HAND });
+  // TEXT=large runs any script with that Settings choice (DESIGN §52); it survives the scripts' localStorage.clear().
+  if (process.env.TEXT) await p.addInitScript((t) => localStorage.setItem('bv-text', t), process.env.TEXT);
   p.on('pageerror', e => console.log('PAGEERR', e.message, e.stack));
   p.on('console', m => { if (m.type() === 'error') console.log('CONSOLE', m.text().slice(0, 300)); });
   await p.goto('http://localhost:' + (process.env.PORT || 4173) + '/' + (opts.query || ''));

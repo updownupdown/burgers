@@ -46,7 +46,6 @@ export const ICONS: Record<string, IconDef> = {
   restart: { group: "system", svg: P("M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"), tags: "retry again refresh" },
   update: { group: "system", svg: P("M12 4v10M8 10l4 4 4-4M5 19h14"), tags: "download new build" },
   "text-size": { group: "system", svg: P("M3 18l5-12 5 12M4.7 14h6.6M14 18l3.5-8 3.5 8M15.2 15.4h4.6"), tags: "type font larger letters accessibility" },
-  hand: { group: "system", svg: P("M8 13V5.5a1.5 1.5 0 0 1 3 0V11M11 10.5V4.5a1.5 1.5 0 0 1 3 0v6M14 10.5v-4a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-.6a5 5 0 0 1-4-2L4 14.6a1.5 1.5 0 0 1 2.3-1.9L8 14.5"), tags: "left right handed thumb accessibility" },
   copy: { group: "system", svg: P("M9 9h10v11H9zM15 9V4H5v11h4"), tags: "duplicate save code clipboard" },
   paste: { group: "system", svg: P("M9 5H6v15h12V5h-3M9 3.5h6V7H9z"), tags: "clipboard save code load" },
   settings: { group: "system", svg: P("M4 8h2.6M11.4 8H20M4 16h8.6M17.4 16H20") + C(9, 8, 2.4) + C(15, 16, 2.4), tags: "sliders toggles options" },

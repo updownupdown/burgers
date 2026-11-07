@@ -49,7 +49,7 @@ export interface HomeDeps {
   openHowTo(): void;
   /** Set tomorrow's pacing (the report card's Try Steady). */
   setPacing?(d: Difficulty): void;
-  /** Start the next trip from the end of the trip's credits (DESIGN §50). */
+  /** Start the next trip from the choice at the end of the trip (DESIGN §50). */
   newTrip?(): void;
   /** A town to open the sheet on straight away, e.g. one the last shift unlocked. */
   focus?: string | null;

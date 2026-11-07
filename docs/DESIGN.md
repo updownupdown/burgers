@@ -29,7 +29,7 @@ This doc is a history: sections 1 to 52 record each decision as it was made, and
 
 **Pacing** (§47, §51). Relaxed / Steady / Busy (ids chill / balanced / stressful). Relaxed is the default from the welcome card; three great Relaxed shifts in a row offer Steady once (§49). On every tier: ready alerts, and one drag lays a counted topping's whole count. A region's first three passed shifts after the Pines bring 0.6 / 0.75 / 0.9 of the crowd; a town's first shifts and a dish's first order come simpler.
 
-**The road.** 14 towns in 4 regions (Pines 4, Coast 4, Red Rock 3, Orchard Isle 3). Three passed shifts in a town open its roads; a great shift or a met local ask counts as two. Elk Pass is a spur that opens nothing. Port Amber is the last stop: its first pass queues the **Last night of the trip** festival shift, which ends on the trip card, a drive-off and credits, then Start trip 2 or Keep touring (§50).
+**The road.** 14 towns in 4 regions (Pines 4, Coast 4, Red Rock 3, Orchard Isle 3). Three passed shifts in a town open its roads; a great shift or a met local ask counts as two. Elk Pass is a spur that opens nothing. Port Amber is the last stop: its first pass queues the **Last night of the trip** festival shift, which ends on the trip card and a drive-off, then Start trip 2 or Keep touring (§50). No credits (James, 2026-11-07).
 
 **Each town has** a crowd type, a signature dish (1.8x as often there), a local ask drawn from its own shortlist, a regular (name tag and "usual" ticket when at the window; +5 popularity on the third good visit), a bonus, and in 7 towns an event on fixed days (§50, §51).
 
@@ -39,7 +39,7 @@ This doc is a history: sections 1 to 52 record each decision as it was made, and
 
 **Teaching** (§26, §48, §49). Tutorial mode is on by default. The coach's thumb guides the first shift at the grill (three orders, the third with fries) and the first order at the press, comal and oven, with the clock held. Map lessons arrive one at a time. Lead tips ("New here", an event) own the tip lane for 6 s; action tips wait for the action; the ? button replays the last tip. How to Play is per region with animated walkthroughs.
 
-**Device and access** (§52). Fonts are bundled. Graphics start on Standard and step down once on slow frames. Save codes copy and paste a trip in Settings. Effects and Ambience (a generated bed per region) have separate switches; there is no music. Text size Normal / Large (all UI type is rem); Hand Right / Left mirrors the top bar; urgent lamps and red hold bars carry a shape as well as a colour. Reduced motion is honoured throughout. The phone's Back button works on every screen (`src/screens/nav.ts`).
+**Device and access** (§52). Fonts are bundled. Graphics start on Standard and step down once on slow frames. Save codes copy and paste a trip in Settings. Effects and Ambience (a generated bed per region) have separate switches; there is no music. Text size Normal / Large (all UI type is rem); no left-hand mode (removed 2026-11-07); urgent lamps and red hold bars carry a shape as well as a colour. Reduced motion is honoured throughout. The phone's Back button works on every screen (`src/screens/nav.ts`).
 
 **Platform.** Web first (GitHub Pages from `main`, PWA with a build-stamped service worker). Android later through Capacitor; under Capacitor the web update paths turn off. Free or one-off price, no ads, no paid looks.
 
@@ -1201,12 +1201,12 @@ The scope review after build #93 (rows 2, 3, 4 and 13) found the trip ended on o
 - The first pass at Port Amber finishes the road. The report card's road row says "Road done": from tomorrow Port Amber throws a festival for the last night of the trip. `save.finale = { from: day + 1, done: false }`.
 - From that day Port Amber holds the **Last night of the trip** (`FINALE` in stops.ts, outside `EVENTS`): a party crowd, 1.5x the people, 40 s longer, and a special, Harbor Lights (oil, mozzarella, ham, pear and fig, honey after the oven; $16). It stays on until it is worked, so a player who drives off first finds it when they come back. The dock, the town's calendar, Prep and the map's flag show it like any event.
 - That shift ends on the **trip card** instead of the report card: trip number and day, days on the road, shifts worked (`save.worked`), stamps, the best order of the trip (`save.tripBest`, its score and town), regulars won, bonuses found, savings, every town worked with its best shift, and the truck as it looks now (truckart.ts, at night). "Report" opens the night's own report card over it.
-- **Drive off** pulls the map out to the island, draws every road between two towns worked this trip in gold, and the truck leaves Port Amber along the ferry line and fades out (about 3.6 s; a tap or Back ends it). Then the **credits**, a short roll over the night sky, and the choice: **Start trip 2** (asks once more: a new trip can't be undone) or **Keep touring** (every town stays open; the next trip is in Settings).
-- Back and × on the trip card skip the drive to the credits; Back, × or the scrim on the credits mean Keep touring. With reduced motion the drive and the roll are skipped (the trail is drawn, the credits stand still and scroll). The evening's Results brings the trip card back with Close only.
+- **Drive off** pulls the map out to the island, draws every road between two towns worked this trip in gold, and the truck leaves Port Amber along the ferry line and fades out (about 3.6 s; a tap or Back ends it). Then **Where next?**, a small card with the choice (no credits: James removed them on 2026-11-07): **Start trip 2** (asks once more: a new trip can't be undone) or **Keep touring** (every town stays open; the next trip is in Settings).
+- Back and × on the trip card skip the drive to Where next?; Back, × or the scrim there mean Keep touring. With reduced motion the drive is skipped (the trail is drawn). The evening's Results brings the trip card back with Close only.
 - Saves from before this: a truck that has passed Port Amber is still on that trip and gets the last night offered there; one that started over after reaching it is on trip 2.
 
 **A new trip and the lap after a finish.**
-- A new trip (the credits or Settings) keeps the looks and what the truck wears, the postcard book, the five-star dish counts, town bests, trips finished and tutorial progress. Savings, bonuses, popularity, reviews, the road and the regulars start again.
+- A new trip (Where next? or Settings) keeps the looks and what the truck wears, the postcard book, the five-star dish counts, town bests, trips finished and tutorial progress. Savings, bonuses, popularity, reviews, the road and the regulars start again.
 - `save.tripNo` counts laps. A new trip after Port Amber has been passed is the next lap; starting over before that is the same lap again. On lap 2 and after: popularity starts at 40 (not 25), every town's crowd is x1.2 (`tripState.crowd` in `expectedCustomers`), and stamps earned come in gold. Busy already pays 1.3x tips (§47). The map header shows "Trip N" from lap 2 (it used to count finishes).
 
 **Stamps and the postcard book.**
@@ -1288,7 +1288,7 @@ From the scope review of build #93 (pick-list rows 15 to 18 and part of 21). No 
 
 **Access.**
 - **Text size.** Every UI font size is in rem (16 px = 1 rem; `tools/a11y/px-to-rem.cjs` converts any px size that comes in later, and `--check` lists them). Settings → *Text size* Normal / Large sets the root to 115%, so every line of text grows, tickets and tips included; a phone's own larger-text setting scales it the same way. Sizes under 6 px (SVG units on the paper map) stay as they are. Under Large the map dock's line may wrap to two lines, and below 380 px its big button keeps its normal size so the town name keeps its room (`dock-fit.cjs` passes at 320, 360 and 390 with `TEXT=large`).
-- **Hand.** Settings → *Hand* Right / Left. Left mirrors the top bar: Pause on the left, Undo on the right, the clock and money between. The counters' sauce caddy and knife stay where they are: moving them means mirroring each 3D counter's layout and hit proxies, which this pass didn't take on.
+- **No left-hand mode.** A Hand setting that mirrored the top bar shipped in build #94 and was removed on 2026-11-07 at James's request; a stored `bv-hand` is ignored.
 - **Shapes as well as colour.** A counter button's lamp shows a dot when amber (that counter wants you) and a steady "!" when coral (something there is about to spoil). A hold bar gone red is taller and striped.
 
 **Housekeeping.**

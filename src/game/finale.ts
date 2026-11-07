@@ -9,7 +9,7 @@ import { tripState } from "./tripstate";
  *
  * The first pass at Port Amber finishes the road; from the next morning Port Amber holds the last
  * night of the trip (the FINALE event in stops.ts) until it's worked. That shift ends on the trip
- * card, a drive-off and credits, then Keep touring or Start trip 2. A new trip keeps the looks,
+ * card, a drive-off, then Keep touring or Start trip 2. A new trip keeps the looks,
  * the postcard book and town bests; savings, bonuses, popularity and reviews start again. A trip
  * after a finish is a lap with a twist: a known truck (popularity 40), a fifth more people
  * everywhere, and gold stamps.

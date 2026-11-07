@@ -1,11 +1,7 @@
-/* Reading and reach (src/a11y.ts, DESIGN §52). */
+/* Reading (src/a11y.ts, DESIGN §52). */
 
 /* Text size: every UI font size is in rem, so this grows all of it. */
 :root[data-text="large"] { font-size: 115%; }
-
-/* Left hand: the top bar mirrors, so Pause sits under the left thumb and Undo on the right. */
-:root[data-hand="left"] #ui .hud { flex-direction: row-reverse; padding: 5px 10px 5px 6px; }
-:root[data-hand="left"] #ui .undo-btn { margin-left: 0; margin-right: -4px; }
 
 /* Signals that were colour only get a shape too. */
 /* The counter buttons' lamps: amber (that counter wants you) shows a dot, coral (something there is
